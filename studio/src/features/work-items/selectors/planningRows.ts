@@ -1,0 +1,39 @@
+import type { WorkItemRow } from "./taskTree";
+
+export interface ScratchRow {
+  kind: "scratch";
+  moduleId: string;
+}
+
+export interface InstantRunRow {
+  kind: "instant-run";
+  runId: string;
+  moduleId: string;
+  name: string;
+  startedAt: string;
+}
+
+export type PlanningRow = WorkItemRow | ScratchRow | InstantRunRow;
+
+export const LOADING_PLACEHOLDER = Symbol("loading-placeholder");
+export const STATE_HEADER = Symbol("state-header");
+/** Collapse key for the Conversations section, which has no workflow state. */
+export const CONVERSATIONS_SECTION_ID = "conversations";
+
+export type PlanningTreeRow =
+  | PlanningRow
+  | { kind: typeof LOADING_PLACEHOLDER; key: string; depth: number }
+  | {
+      kind: typeof STATE_HEADER;
+      key: string;
+      stateId?: string | null;
+      stateName: string;
+      stateColor: string;
+      count: number;
+    };
+
+export function isPlanningRow(row: PlanningTreeRow): row is PlanningRow {
+  return row.kind === "work-item" ||
+    row.kind === "scratch" ||
+    row.kind === "instant-run";
+}

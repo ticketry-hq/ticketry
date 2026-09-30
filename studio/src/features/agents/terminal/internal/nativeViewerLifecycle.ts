@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-import { releasePooledTransport } from "./entryPool";
 import { serializeNativeAttach } from "./nativeAttachQueue";
 import { clippedNativeTerminalFrame } from "./nativeTerminalFrame";
 import {
@@ -44,6 +43,17 @@ type NativeViewerLifecycleOptions = {
   outputActivity?: OutputActivityClient;
 };
 
+/** Tauri's runtime unlisten may reject during WebView teardown despite its void type. */
+function releaseListener(unlisten: UnlistenFn | null): void {
+  if (!unlisten) return;
+  try {
+    const completion = unlisten() as void | Promise<void>;
+    void Promise.resolve(completion).catch(() => {});
+  } catch {
+    // The document is already unloading, so there is no listener left to use.
+  }
+}
+
 /**
  * Starts the one native attachment lifecycle retained by the terminal pool.
  *
@@ -64,7 +74,7 @@ export function ensureNativeViewerLifecycle({
   let completedHandle: string | null = null;
   let handle: string | null = null;
   let tornDown = false;
-  const viewerLease = createViewerLease(desktopViewerLease, runId);
+  const viewerLease = createViewerLease(desktopViewerLease, runId, "native");
   let leaseTimer: ReturnType<typeof setInterval> | null = null;
 
   const releaseLease = () => {
@@ -83,9 +93,9 @@ export function ensureNativeViewerLifecycle({
     disposed = true;
     window.removeEventListener("pagehide", unload);
     window.removeEventListener("beforeunload", unload);
-    unlistenFailure?.();
+    releaseListener(unlistenFailure);
     unlistenFailure = null;
-    unlistenCompletion?.();
+    releaseListener(unlistenCompletion);
     unlistenCompletion = null;
     const detachedHandle = handle;
     handle = null;
@@ -101,13 +111,7 @@ export function ensureNativeViewerLifecycle({
     releaseLease();
   }
 
-  function fail(reason: string) {
-    if (tornDown) return;
-    teardown();
-    failNativeViewerMount(runId, reason);
-  }
-
-  if (!startNativeViewerLifecycle(runId, token, fail, teardown)) return;
+  if (!startNativeViewerLifecycle(runId, token, teardown)) return;
 
   const closeCompletedViewer = (completion: NativeTerminalCompletion) => {
     completedHandle = completion.handle;
@@ -126,6 +130,7 @@ export function ensureNativeViewerLifecycle({
             failNativeViewerMount(
               runId,
               event.payload.reason ?? "the native terminal process disconnected",
+              { origin: "native-worker-event", handle: event.payload.handle },
             );
           }
         },
@@ -137,9 +142,9 @@ export function ensureNativeViewerLifecycle({
         },
       );
       if (disposed || tornDown) {
-        unlistenFailure();
+        releaseListener(unlistenFailure);
         unlistenFailure = null;
-        unlistenCompletion();
+        releaseListener(unlistenCompletion);
         unlistenCompletion = null;
         return;
       }
@@ -157,7 +162,7 @@ export function ensureNativeViewerLifecycle({
             if (disposed || tornDown) return null;
             const attached = await invoke<NativeTerminalStatus>(
               "native_terminal_attach",
-              { runId, frame },
+              { runId, viewerId: viewerLease.viewerId, frame },
             );
             if (disposed || tornDown) {
               await invoke("native_terminal_detach", {
@@ -211,7 +216,7 @@ export function ensureNativeViewerLifecycle({
       // makes the backend evict that socket as `replaced_by_another_viewer`.
       // The socket then marks the shared session exited and React tears down
       // the native surface that was meant to replace it.
-      releasePooledTransport(sessionId);
+      (await import("./entryPool")).releasePooledTransport(sessionId);
       const acquired = await viewerLease.acquire();
       if (!acquired || disposed || tornDown) {
         const detachedHandle = handle;
@@ -262,12 +267,21 @@ export function ensureNativeViewerLifecycle({
       reportNativeViewerAttached(outputActivity, runId);
       leaseTimer = setInterval(() => {
         void viewerLease.renew().catch((error) => {
-          if (!disposed) failNativeViewerMount(runId, nativeFailureMessage(error));
+          if (!disposed) {
+            failNativeViewerMount(runId, nativeFailureMessage(error), {
+              origin: "lease-renewal",
+              error,
+              handle,
+            });
+          }
         });
       }, 10_000);
     } catch (error) {
-      console.error("native libghostty attach failed", error);
-      failNativeViewerMount(runId, nativeFailureMessage(error));
+      failNativeViewerMount(runId, nativeFailureMessage(error), {
+        origin: "attach",
+        error,
+        handle,
+      });
     }
   };
 

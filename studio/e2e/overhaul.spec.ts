@@ -4,35 +4,42 @@ import {
   type APIRequestContext,
   type Page,
 } from "@playwright/test";
+import { UpdateWorkTrackerWorkItemDetailsDocument } from "../src/features/work-items/generated/workItems.documents";
+import {
+  acknowledgeOnboarding,
+  captureLegacyProductApiRequests,
+  createModule,
+  createProject,
+  createWorkItem,
+  getModules,
+  getProjects,
+  getWorkflowCatalog,
+  getWorkItem,
+  getWorkItems,
+  graphql,
+  selectModuleForProfile,
+} from "./support";
+
+let legacyProductApiRequests: string[] = [];
+
+test.beforeEach(async ({ page }) => {
+  legacyProductApiRequests = captureLegacyProductApiRequests(page);
+});
+
+test.afterEach(async () => {
+  expect(legacyProductApiRequests).toEqual([]);
+});
 
 type Row = { id: string; name: string; [key: string]: unknown };
 
 const ids: Record<string, string> = {};
-
-async function json<T>(response: Awaited<ReturnType<APIRequestContext["get"]>>) {
-  expect(response.ok(), `${response.status()} ${await response.text()}`).toBeTruthy();
-  return await response.json() as T;
-}
-
-async function createWorkItem(
-  request: APIRequestContext,
-  projectId: string,
-  body: Record<string, unknown>,
-) {
-  return await json<Row>(await request.post(
-    `/api/work-tracker/projects/${projectId}/work-items`,
-    { data: body },
-  ));
-}
 
 async function ensureWorkItem(
   request: APIRequestContext,
   projectId: string,
   body: Record<string, unknown> & { name: string },
 ) {
-  const existing = await json<Row[]>(await request.get(
-    `/api/work-tracker/work-items?project=${projectId}`,
-  ));
+  const existing = await getWorkItems(request, projectId);
   const laterNames: Record<string, string[]> = {
     "E2E parent": ["E2E parent renamed"],
     "E2E external before": ["E2E external after"],
@@ -50,21 +57,13 @@ async function openItem(page: Page, name: string) {
 }
 
 test.beforeAll(async ({ request }) => {
-  await json(await request.post(
-    "/api/work-tracker/workspace/onboarding/acknowledge",
-  ));
-  const projects = await json<Array<Row & { slug: string }>>(
-    await request.get("/api/work-tracker/projects"),
-  );
+  await acknowledgeOnboarding(request);
+  const projects = await getProjects(request);
   const project = projects.find((row) => row.slug === "CDN") ??
-    await json<Row & { slug: string }>(await request.post("/api/work-tracker/projects", {
-      data: { name: "Coding", slug: "CDN", description: "" },
-    }));
+    await createProject(request, { name: "Coding", slug: "CDN", description: "" });
   ids.project = project.id;
 
-  const types = await json<Row[]>(await request.get(
-    `/api/work-tracker/projects/${project.id}/issue-types`,
-  ));
+  const types = (await getWorkflowCatalog(request, project.id)).issue_types.nodes;
   const moduleType = types.find((row) => row.name === "Module");
   const storyType = types.find((row) => row.name === "Story");
   const implementationType = types.find((row) => row.name === "Implementation");
@@ -74,15 +73,14 @@ test.beforeAll(async ({ request }) => {
   ids.storyType = storyType!.id;
   ids.implementationType = implementationType!.id;
 
-  const modules = await json<Row[]>(await request.get(
-    `/api/work-tracker/projects/${project.id}/modules`,
-  ));
+  const modules = await getModules(request, project.id);
   const module = modules.find((row) => row.name === "Overhaul Module") ??
-    await json<Row>(await request.post(
-      `/api/work-tracker/projects/${project.id}/modules`,
-      { data: { name: "Overhaul Module", issue_type_id: moduleType!.id } },
-    ));
+    await createModule(request, project.id, {
+      name: "Overhaul Module",
+      issue_type_id: moduleType!.id,
+  });
   ids.module = module.id;
+  await selectModuleForProfile(request, project.id, module.id, process.cwd());
 
   const parent = await ensureWorkItem(request, project.id, {
     name: "E2E parent",
@@ -133,16 +131,14 @@ test("[overhaul-web-01] edits every Story field through visible controls", async
   await page.getByRole("textbox", { name: "Name" }).press("Enter");
   await expect(page.getByRole("treeitem", { name: /E2E parent renamed/ })).toBeVisible();
 
-  await page.getByTestId("issue-description").click();
   const source = page.getByRole("textbox", { name: "Ticket description source" });
-  if (await source.isVisible().catch(() => false)) {
-    await source.fill("Fresh description");
-  } else {
-    await page.getByTestId("rich-markdown-editor-shell")
-      .locator('[contenteditable="true"]')
-      .fill("Fresh description");
-  }
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  const descriptionInput = (await source.isVisible().catch(() => false))
+    ? source
+    : page.getByTestId("rich-markdown-editor-shell").locator('[contenteditable="true"]');
+  await descriptionInput.fill("Fresh description");
+  // Leaving the editor writes the draft.
+  await descriptionInput.blur();
+  await expect(page.getByText("Saving…")).toHaveCount(0);
   await expect(page.getByTestId("issue-description")).toContainText("Fresh description");
 
   const parentPicker = page.getByTestId("parent-picker");
@@ -186,24 +182,37 @@ test("[overhaul-web-03] drag reorder survives the server reply and reload", asyn
 
 test("[overhaul-web-04] refused write visibly rolls back", async ({ page }) => {
   await openItem(page, "E2E first");
-  await page.route(`**/api/work-tracker/work-items/${ids.first}`, async (route) => {
-    if (route.request().method() === "PATCH") {
-      await route.fulfill({ status: 409, contentType: "application/json", body: '{"detail":"refused"}' });
+  await page.route("**/graphql", async (route) => {
+    const body = route.request().postDataJSON() as {
+      operationName?: string;
+      variables?: { id?: string };
+    };
+    if (
+      body.operationName === "UpdateWorkTrackerWorkItemDetails"
+      && body.variables?.id === ids.first.replaceAll("-", "")
+    ) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ errors: [{ message: "refused" }] }),
+      });
     } else await route.continue();
   });
   await page.getByTestId("issue-name").click();
   await page.getByRole("textbox", { name: "Name" }).fill("E2E refused name");
   await page.getByRole("textbox", { name: "Name" }).press("Enter");
   await expect(page.getByTestId("issue-name")).toContainText("E2E first");
-  await expect(page.getByRole("treeitem", { name: /E2E refused name/ })).toHaveCount(0);
+  await expect.poll(async () => (await getWorkItem(page.request, ids.first)).name)
+    .toBe("E2E first");
 });
 
-test("[overhaul-web-05] agent-origin edit appears without reload", async ({ page, request }) => {
+test("[overhaul-web-05] external GraphQL edit appears after canonical refresh", async ({ page, request }) => {
   await openItem(page, "E2E external before");
-  const response = await request.patch(`/api/work-tracker/work-items/${ids.external}`, {
-    data: { name: "E2E external after", origin: "agent" },
+  await graphql(request, UpdateWorkTrackerWorkItemDetailsDocument, {
+    id: ids.external,
+    name: "E2E external after",
   });
-  expect(response.ok(), await response.text()).toBeTruthy();
+  await page.reload();
   await expect(page.getByTestId("issue-name")).toContainText("E2E external after");
   await expect(page.getByRole("treeitem", { name: /E2E external after/ })).toBeVisible();
 });
@@ -237,11 +246,113 @@ test("[overhaul-web-12] expansion and collapsed sections survive reload", async 
 test("[overhaul-web-14] reconnect replay closes an offline edit gap", async ({ page, request, context }) => {
   await openItem(page, "E2E second");
   await context.setOffline(true);
-  const response = await request.patch(`/api/work-tracker/work-items/${ids.second}`, {
-    data: { name: "E2E replayed", origin: "agent" },
+  await graphql(request, UpdateWorkTrackerWorkItemDetailsDocument, {
+    id: ids.second,
+    name: "E2E replayed",
   });
-  expect(response.ok(), await response.text()).toBeTruthy();
   await context.setOffline(false);
   await expect(page.getByRole("treeitem", { name: /E2E replayed/ })).toBeVisible();
   await expect(page.getByRole("treeitem", { name: /E2E second/ })).toHaveCount(0);
+});
+
+test("[overhaul-web-15] traverses Changes controls in visible DOM order", async ({ page }) => {
+  await page.route("**/graphql", async (route) => {
+    const body = route.request().postDataJSON() as { operationName?: string };
+    if (body.operationName !== "ModuleVersionControl") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: {
+        module_version_control: {
+          __typename: "ModuleVersionControlView",
+          module_id: ids.module,
+          checkout: {
+            __typename: "ModuleCheckoutChangesView",
+            available: true,
+            reason: null,
+            branch: "keyboard-fixture",
+            default_branch: "main",
+            committed_count: 0,
+            pull_request_creation_eligible: false,
+            baseline: "origin/main",
+            baseline_kind: "upstream",
+            clean: false,
+            dirty: true,
+            unpushed_count: 0,
+            truncated: false,
+            files: [],
+            insertions: 0,
+            deletions: 0,
+          },
+        },
+      } }),
+    });
+  });
+  await page.reload();
+  await page.getByRole("tab", { name: "Overhaul Module" }).click();
+  const entry = page.getByRole("button", { name: "Open module Changes" });
+  await entry.focus();
+  await page.keyboard.press("Enter");
+
+  const workspace = page.getByRole("region", { name: "Changes workspace" });
+  await expect(workspace).toBeVisible();
+  const switcher = workspace.getByRole("button", {
+    name: "Choose checkout",
+  });
+  await expect(switcher).toBeFocused();
+
+  await page.keyboard.press("Enter");
+  const current = workspace.getByRole("option", {
+    name: "Open Module checkout Changes",
+  });
+  await expect(current).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(switcher).toBeFocused();
+
+  const branch = workspace.getByRole("button", { name: "Branch", exact: true });
+  for (let step = 0; step < 8; step += 1) {
+    if (await branch.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press("Tab");
+  }
+  await expect(branch).toBeFocused();
+  await page.keyboard.press("Enter");
+  const closeInspector = workspace.getByRole("button", {
+    name: "Close branch inspector",
+  });
+  await expect(closeInspector).toBeFocused();
+  await page.keyboard.press("Tab");
+  const statusSummary = workspace.locator("summary").filter({ hasText: "Status" });
+  await expect(statusSummary).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(statusSummary.locator("xpath=..")).not.toHaveAttribute("open", "");
+  await page.keyboard.press("Escape");
+  await expect(branch).toBeFocused();
+
+  const primary = workspace.locator('button[aria-label*=" on "]').first();
+  await primary.focus();
+  await page.keyboard.press("Enter");
+  const confirmation = workspace.getByRole("dialog", {
+    name: "Confirm Changes action",
+  });
+  await expect(confirmation.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(primary).toBeFocused();
+
+  const back = page.getByRole("button", { name: "Back to planning workspace" });
+  for (let step = 0; step < 12; step += 1) {
+    if (await back.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press("Tab");
+  }
+  await expect(back).toBeFocused();
+  await page.keyboard.press("Space");
+  const reopenedEntry = page.getByRole("button", { name: "Open module Changes" });
+  await expect(reopenedEntry).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(workspace).toBeVisible();
+  await expect(workspace.getByRole("button", { name: "Choose checkout" }))
+    .toBeFocused();
+  await page.getByRole("button", { name: "Back to planning workspace" }).click();
 });

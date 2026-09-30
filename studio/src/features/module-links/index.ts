@@ -1,10 +1,14 @@
-export { setModuleFolder } from "./mutations";
-export { isAbsoluteFolderPath } from "./path";
 export {
+  clearModuleFolder,
   getModuleFolder,
-  getModuleLinksSnapshot,
+  getModuleLinks,
   loadModuleLinks,
-  moduleLinksHaveLoaded,
+  recentModuleFolders,
   seedModuleLinks,
+  setModuleFolder,
+  useModuleFolder,
   useModuleLinks,
-} from "./queries";
+  type ModuleLink,
+} from "./moduleLinkStore";
+export { eraseModuleLink, writeModuleLink } from "./moduleLinkTransport";
+export { moduleFolderSaveError, prepareDirectoryTrust } from "./moduleFolderTrust";

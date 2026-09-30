@@ -59,7 +59,6 @@ describe("Studio work-item behaviour", () => {
         name: "After MCP",
         description: "Fresh description",
         parent_id: "module-1",
-        state_revision: 2,
       }),
     ]);
     http.notifications.workItemChanged("story-1", 2);
@@ -88,7 +87,6 @@ describe("Studio work-item behaviour", () => {
         name: "Created while offline",
         sequence_id: 2,
         key: "MEML-2",
-        state_revision: 2,
       }),
     ]);
     http.tree("module-1", {

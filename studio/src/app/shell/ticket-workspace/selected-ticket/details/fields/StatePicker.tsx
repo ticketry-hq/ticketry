@@ -2,15 +2,16 @@ import {
   getStatesSnapshot,
   stateById,
   useCachedStates,
-} from "../../../../../../shared/query/stateCatalog";
+} from "../../../../../../features/projects";
 import { compareStateOrder, stateColor, stateLabel } from "../../../../../../shared/utilities/display";
 import type { State } from "../../../../../../shared/api/types";
-import Popover, { PopoverOption } from "./Popover";
+import Popover, { PopoverOption } from "../../../../../../shared/ui/Popover";
 import PickerTrigger from "./PickerTrigger";
 
 interface Props {
   projectId: string;
   value: string | null;
+  permittedStateIds: ReadonlySet<string>;
   onChange: (state: State & { id: string }) => void;
   saving?: boolean;
   /** Neutral trigger text for the bulk bar ("Set state…") — overrides the label. */
@@ -27,12 +28,21 @@ function Dot({ color }: { color: string }) {
 }
 
 // Status picker grouped by the five workflow groups.
-export default function StatePicker({ projectId, value, onChange, saving, triggerLabel }: Props) {
+export default function StatePicker({
+  projectId,
+  value,
+  permittedStateIds,
+  onChange,
+  saving,
+  triggerLabel,
+}: Props) {
   const states = useCachedStates(projectId);
   const selected = stateById(states, value);
   // Ordered by canonical workflow position (sort_order primary), so Refinement
   // precedes Ready and Implement precedes Review within their shared groups.
-  const ordered = [...states].sort(compareStateOrder);
+  const ordered = states
+    .filter((state) => state.id && permittedStateIds.has(state.id))
+    .sort(compareStateOrder);
 
   return (
     <Popover
@@ -49,7 +59,7 @@ export default function StatePicker({ projectId, value, onChange, saving, trigge
     >
       {(close) =>
         ordered.length === 0 ? (
-          <div className="px-3 py-2 text-sm text-text-muted">No states</div>
+          <div className="px-3 py-2 text-sm text-text-muted">No permitted transitions</div>
         ) : (
           ordered.map((s) => (
             <PopoverOption

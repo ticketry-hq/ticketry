@@ -1,5 +1,12 @@
-import { act, render, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { loadXtermTerminal } from "../features/agents/terminal/xtermTerminalLoader";
+
+// The compatibility renderer is a lazily fetched chunk; preload it so the
+// xterm host can be queried synchronously after render.
+beforeEach(async () => {
+  await loadXtermTerminal();
+});
 
 import { NativeGhosttyTerminal } from "../features/agents/terminal/NativeGhosttyTerminal";
 import { Terminal } from "../features/agents/terminal/Terminal";
@@ -8,6 +15,12 @@ import { useTerminalForegroundStore } from "../features/agents/terminal/internal
 import { releasePooledTransport } from "../features/agents/terminal/internal/entryPool";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useClientStore } from "../state/clientStore";
+import {
+  grantsEveryLease,
+  installDesktopGraphQlRuntime,
+} from "./desktopGraphQlRuntime";
+import { documentOperationName } from "../graphql-foundation/typedDocument";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -38,10 +51,14 @@ class ResizeObserverStub {
 describe("native viewer attachment acceptance", () => {
   afterEach(() => {
     useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
+    useAgentStatusStore.setState({ runs: {} });
   });
 
   beforeEach(() => {
+    window.history.replaceState({}, "", "/?terminalRenderer=native");
     vi.resetAllMocks();
+    localStorage.setItem("ticketry:terminal-renderer", "native");
+    installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       x: 0,
@@ -68,7 +85,7 @@ describe("native viewer attachment acceptance", () => {
           moduleId: "module-1",
           agent: "codex",
           status: "ready",
-          transport: "ready",
+          transport: "connecting",
           isPlanning: false,
           isInstant: false,
           initialPrompt: null,
@@ -119,14 +136,11 @@ describe("native viewer attachment acceptance", () => {
         return () => listeners.delete(event);
       },
     );
-    const requests: string[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-      requests.push(String(input));
-      return new Response("{}", {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }));
+    // Viewer ownership is claimed and released on the Rust lease contract, so
+    // what a test counts is lease operations, not host requests.
+    const leaseOperations = installDesktopGraphQlRuntime();
+    const leases = (operationName: string) =>
+      leaseOperations.filter((operation) => operation.operationName === operationName);
     tauri.invoke.mockImplementation((command: string) => {
       if (command === "native_terminal_available") return Promise.resolve(true);
       if (command === "native_terminal_attach") {
@@ -188,7 +202,7 @@ describe("native viewer attachment acceptance", () => {
       );
     });
     await waitFor(() => {
-      expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(1);
+      expect(leases("DeleteViewerLease")).toHaveLength(1);
     });
     expect(tauri.invoke.mock.calls.filter(([command]) =>
       command === "native_terminal_attach"
@@ -216,14 +230,11 @@ describe("native viewer attachment acceptance", () => {
   });
 
   it("tears down terminal completion and later dismissal idempotently", async () => {
-    const requests: string[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-      requests.push(String(input));
-      return new Response("{}", {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }));
+    // Viewer ownership is claimed and released on the Rust lease contract, so
+    // what a test counts is lease operations, not host requests.
+    const leaseOperations = installDesktopGraphQlRuntime();
+    const leases = (operationName: string) =>
+      leaseOperations.filter((operation) => operation.operationName === operationName);
     const view = render(<Terminal sessionId="session-1" />);
     await waitFor(() => {
       expect(releasePooledTransport).toHaveBeenCalledWith("session-1");
@@ -235,29 +246,63 @@ describe("native viewer attachment acceptance", () => {
     view.rerender(<Terminal sessionId={null} />);
 
     await waitFor(() => {
-      expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(1);
+      expect(leases("DeleteViewerLease")).toHaveLength(1);
     });
     expect(tauri.invoke.mock.calls.filter(([command]) =>
       command === "native_terminal_detach"
     )).toHaveLength(1);
   });
 
+  it("[overhaul-325] presents a completed instant run without a terminal error", () => {
+    useTerminalStore.setState({
+      sessions: {
+        "session-1": {
+          ...useTerminalStore.getState().sessions["session-1"],
+          status: "session_lost",
+          transport: "closed",
+          isInstant: true,
+        },
+      },
+      sessionByRun: { "run-1": "session-1" },
+    });
+    useAgentStatusStore.setState({
+      projectId: "project-1",
+      runs: {
+        "run-1": {
+          agent_run_id: "run-1",
+          project_id: "project-1",
+          task_id: null,
+          module_id: "module-1",
+          agent: "codex",
+          scope: "instant",
+          state: "exited",
+          started_at: "2026-09-20T10:00:00Z",
+          updated_at: "2026-09-20T10:01:00Z",
+        },
+      },
+      automationAttempts: {},
+      automationByTask: {},
+    });
+
+    render(<Terminal sessionId="session-1" active />);
+
+    expect(screen.getByTestId("terminal-ended-state")).toHaveTextContent(
+      "Conversation ended",
+    );
+    expect(screen.queryByText(/session lost/i)).not.toBeInTheDocument();
+  });
+
   it("treats lease-renewal failures as terminal native failures", async () => {
-    const requests: string[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      requests.push(url);
-      if (url.endsWith("/renew")) {
-        return new Response(JSON.stringify({ detail: { error: "lease renewal failed" } }), {
-          status: 409,
-          headers: { "Content-Type": "application/json" },
-        });
+    // Viewer ownership is claimed and released on the Rust lease contract, so
+    // what a test counts is lease operations, not host requests.
+    const leaseOperations = installDesktopGraphQlRuntime(async (document, variables) => {
+      if (documentOperationName(document) === "UpdateViewerLease") {
+        throw new Error("lease renewal failed");
       }
-      return new Response("{}", {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }));
+      return grantsEveryLease(document, variables);
+    });
+    const leases = (operationName: string) =>
+      leaseOperations.filter((operation) => operation.operationName === operationName);
     let renewal: (() => void) | null = null;
     let markRenewalReady!: () => void;
     const renewalReady = new Promise<void>((resolve) => {
@@ -279,7 +324,7 @@ describe("native viewer attachment acceptance", () => {
         "lease renewal failed",
       );
     });
-    expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(1);
+    expect(leases("DeleteViewerLease")).toHaveLength(1);
     interval.mockRestore();
   });
 
@@ -334,15 +379,15 @@ describe("native viewer attachment acceptance", () => {
     )).toHaveLength(1);
   });
 
-  it("releases a retained viewer once when the WebView lifecycle ends", async () => {
-    const requests: string[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-      requests.push(String(input));
-      return new Response("{}", {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }));
+  it("[overhaul-162] releases a retained viewer once when the WebView lifecycle ends even if Tauri rejects listener cleanup", async () => {
+    tauri.listen.mockResolvedValue(() =>
+      Promise.reject(new Error("the WebView document already unloaded")),
+    );
+    // Viewer ownership is claimed and released on the Rust lease contract, so
+    // what a test counts is lease operations, not host requests.
+    const leaseOperations = installDesktopGraphQlRuntime();
+    const leases = (operationName: string) =>
+      leaseOperations.filter((operation) => operation.operationName === operationName);
     const ready = vi.fn();
     render(
       <NativeGhosttyTerminal
@@ -357,7 +402,7 @@ describe("native viewer attachment acceptance", () => {
     window.dispatchEvent(new Event("beforeunload"));
 
     await waitFor(() => {
-      expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(1);
+      expect(leases("DeleteViewerLease")).toHaveLength(1);
     });
     expect(tauri.invoke.mock.calls.filter(([command]) =>
       command === "native_terminal_detach"

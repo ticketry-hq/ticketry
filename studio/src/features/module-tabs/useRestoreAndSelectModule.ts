@@ -1,29 +1,29 @@
 import { useCallback } from "react";
 
+import { useStudioStore } from "../projects";
 import { useClientStore } from "../../state/clientStore";
-import type { ModulePresentation } from "../../shared/api/types";
-import { queryKeys } from "../../shared/query/keys";
-import { queryClient } from "../../shared/query/queryClient";
-import { useSetModuleTabHidden } from "./mutations";
-import { hiddenModuleIds } from "./queries";
+import {
+  getModulePresentationsSnapshot,
+  hiddenModuleIds,
+} from "./modulePresentation";
+import { useSetModuleTabHidden } from "./useSetModuleTabHidden";
 
-/** Restore a hidden Module tab when needed, then select the Module. */
 export function useRestoreAndSelectModule() {
-  const { mutate: setTabHidden } = useSetModuleTabHidden();
+  const projectId = useStudioStore((state) => state.selectedProjectId);
   const selectModule = useClientStore((state) => state.selectModule);
+  const setTabHidden = useSetModuleTabHidden();
 
   return useCallback(
-    (moduleId: string) => {
+    async (moduleId: string) => {
       const hiddenIds = hiddenModuleIds(
-        queryClient.getQueryData<ModulePresentation[]>(
-          queryKeys.modulePresentations.all,
-        ),
+        getModulePresentationsSnapshot(projectId),
       );
       if (hiddenIds.has(moduleId)) {
-        setTabHidden({ moduleId, tabHidden: false });
+        const restored = await setTabHidden(moduleId, false);
+        if (!restored) return;
       }
-      void selectModule(moduleId);
+      await selectModule(moduleId);
     },
-    [selectModule, setTabHidden],
+    [projectId, selectModule, setTabHidden],
   );
 }

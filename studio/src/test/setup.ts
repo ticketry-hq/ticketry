@@ -1,24 +1,30 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach } from "vitest";
 import { cleanup } from "@testing-library/react";
-import { notifyManager } from "@tanstack/react-query";
-
-// jsdom does not implement scrolling, but tab strips use this browser method
-// to keep their active item visible.
-Element.prototype.scrollIntoView ??= () => {};
-
-// TanStack Query defers subscriber notifications to a scheduler tick; the
-// suite's interaction patterns (act + synchronous assertion) predate that and
-// assume zustand's synchronous set→render. Notify synchronously under test.
-notifyManager.setScheduler((callback) => callback());
 
 // Launch surfaces read activation from the provider-capabilities payload
 // (ADR-0015). Default every test to the server's first-run answer — the three
 // built-in providers activated, `agy` absent as the payload always omits it —
 // so only tests that are *about* activation have to set this themselves.
+//
+// The reasoning levels mirror `worktracker/launch_capabilities.py`, including
+// the fact that they do *not* all overlap: `max` is claude-only, `minimal` is
+// codex-only, and gemini declares none. Seeding every provider with an empty
+// list made it impossible for any test to exercise a reasoning value at all,
+// which is why nothing caught a provider switch carrying one across.
+const PROVIDER_REASONING_LEVELS: Record<string, string[]> = {
+  claude: ["low", "medium", "high", "xhigh", "max"],
+  codex: ["minimal", "low", "medium", "high", "xhigh"],
+  gemini: [],
+};
+
 const FIRST_RUN_CAPABILITIES = ["claude", "codex", "gemini"].map((agent) => ({
   agent,
-  models: [],
+  accepts_model: true,
+  accepts_any_model: false,
+  model_aliases: [],
+  model_prefixes: [],
+  reasoning_levels: PROVIDER_REASONING_LEVELS[agent] ?? [],
 }));
 
 // This jsdom build ships without localStorage (which is why the app guards every
@@ -43,6 +49,10 @@ if (typeof globalThis.localStorage === "undefined") {
 // Imported lazily: a static import here would bind the real API module before
 // a test file's `vi.mock` of it is registered.
 beforeEach(async () => {
+  // Most acceptance cases exercise Studio behavior independent of a terminal
+  // renderer. Keep those cases on the lightweight compatibility renderer;
+  // renderer-specific acceptance cases replace this query value explicitly.
+  window.history.replaceState({}, "", "/?terminalRenderer=xterm");
   const { setProviderCapabilities } = await import(
     "../features/workflows/providerQueries"
   );
@@ -56,9 +66,8 @@ afterEach(async () => {
   } catch {
     /* no storage in this env */
   }
-  // Server-state cache isolation: every test starts with an empty TanStack
-  // Query cache, mirroring the zustand-store resets tests do themselves.
-  const { queryClient } = await import("../shared/query/queryClient");
-  queryClient.cancelQueries();
-  queryClient.clear();
+  // Server-state cache isolation: every test starts with empty Apollo and
+  // transitional TanStack caches.
+  const { resetStudioApolloClient } = await import("../shared/apollo/client");
+  await resetStudioApolloClient();
 });

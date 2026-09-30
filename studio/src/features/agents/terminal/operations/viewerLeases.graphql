@@ -1,0 +1,50 @@
+fragment ViewerLeaseFields on AgentRunViewerLeases {
+  agent_run_id: agentRunId
+  viewer_id: viewerId
+  transport
+  generation
+  acquired_at: acquiredAt
+  expires_at: expiresAt
+}
+
+mutation CreateViewerLease(
+  $agentRunId: String!
+  $viewerId: String!
+  $transport: String!
+) {
+  viewer_lease: create_viewer_lease(
+    agent_run_id: $agentRunId
+    viewer_id: $viewerId
+    transport: $transport
+  ) {
+    ...ViewerLeaseFields
+  }
+}
+
+mutation UpdateViewerLease(
+  $agentRunId: String!
+  $viewerId: String!
+  $generation: String!
+) {
+  viewer_lease: update_viewer_lease(
+    agent_run_id: $agentRunId
+    viewer_id: $viewerId
+    generation: $generation
+  ) {
+    ...ViewerLeaseFields
+  }
+}
+
+mutation DeleteViewerLease(
+  $agentRunId: String!
+  $viewerId: String!
+  $generation: String!
+) {
+  viewer_lease: delete_viewer_lease(
+    agent_run_id: $agentRunId
+    viewer_id: $viewerId
+    generation: $generation
+  ) {
+    ...ViewerLeaseFields
+  }
+}

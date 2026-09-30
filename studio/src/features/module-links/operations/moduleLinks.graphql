@@ -1,0 +1,29 @@
+# Where each Module's code lives on this machine.
+#
+# The link is a typed row the Rust host owns, not a slot inside the profile
+# snapshot: reads come from the generated ModuleLinks graph and the only write
+# binds its Module and carries the local path alone.
+
+fragment ModuleLinkFields on ModuleLinks {
+  id
+  moduleId
+  path
+}
+
+query LoadModuleLinks {
+  moduleLinks(orderBy: { updatedAt: ASC }) {
+    nodes {
+      ...ModuleLinkFields
+    }
+  }
+}
+
+mutation SetModuleLink($moduleId: String!, $path: String!) {
+  set_module_link(module_id: $moduleId, link: { path: $path }) {
+    ...ModuleLinkFields
+  }
+}
+
+mutation ClearModuleLink($moduleId: String!) {
+  clear_module_link(module_id: $moduleId)
+}

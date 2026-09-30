@@ -20,12 +20,19 @@ import {
 } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { loadXtermTerminal } from "../features/agents/terminal/xtermTerminalLoader";
+
+// The compatibility renderer is a lazily fetched chunk; preload it so the
+// xterm host can be queried synchronously after render.
+beforeEach(async () => {
+  await loadXtermTerminal();
+});
 
 import { StudioFooter } from "../app/shell/StudioFooter";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useStudioStore } from "../features/projects/store";
-import { seedConfig } from "../features/studio/stores/configStore";
+import { seedModuleLinks } from "../features/module-links";
 import { useModuleShellStore } from "../features/terminal-panel/moduleShellStore";
 import { useTerminalPanelStore } from "../features/terminal-panel/panelStore";
 import { TerminalPanel } from "../features/terminal-panel/TerminalPanel";
@@ -33,6 +40,7 @@ import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { useModalStore } from "../app/modal/modalStore";
 import { TERMINAL_PANEL_KEY } from "../state/persistence";
 import { useClientStore } from "../state/clientStore";
+import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
 
 const runtime = vi.hoisted(() => ({ desktop: false, nativeAvailable: false }));
 
@@ -253,7 +261,10 @@ function nudgeGrip(key: "ArrowUp" | "ArrowDown"): void {
 
 describe("terminal panel furniture acceptance", () => {
   beforeEach(() => {
+    window.history.replaceState({}, "", "/?terminalRenderer=native");
     localStorage.clear();
+    localStorage.setItem("ticketry:terminal-renderer", "xterm");
+    installDesktopGraphQlRuntime();
     vi.useFakeTimers();
     runtime.desktop = false;
     runtime.nativeAvailable = false;
@@ -281,21 +292,11 @@ describe("terminal panel furniture acceptance", () => {
       sidebarVisible: false,
       editViewZone: "active-tab-body",
       editViewBodyEngaged: false,
-      modalStack: [],
     });
     useStudioStore.setState({ selectedProjectId: "project-1" });
-    seedConfig({
-      profiles: [
-        {
-          name: "local",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_links: [{ module_id: "module-1", path: "/repo/module-1" }],
-          recent_project_id: null,
-        },
-      ],
-      recentProfileIndex: 0,
-    });
+    seedModuleLinks([
+      { id: "link-module-1", moduleId: "module-1", path: "/repo/module-1" },
+    ]);
   });
 
   afterEach(() => {
@@ -447,6 +448,7 @@ describe("terminal panel furniture acceptance", () => {
     // The same controls drive the desktop build's native viewer, so the
     // presentation boundary is where minimising is observed, not what it means.
     browser.unmount();
+    localStorage.setItem("ticketry:terminal-renderer", "native");
     runtime.desktop = true;
     runtime.nativeAvailable = true;
     shellApi.createModuleShell.mockClear();
@@ -674,6 +676,7 @@ describe("terminal panel furniture acceptance", () => {
     // The desktop build's native viewer is resized in place by the same
     // control: no second attach, no detach, no new run, no terminal input.
     browser.unmount();
+    localStorage.setItem("ticketry:terminal-renderer", "native");
     runtime.desktop = true;
     runtime.nativeAvailable = true;
     shellApi.createModuleShell.mockClear();

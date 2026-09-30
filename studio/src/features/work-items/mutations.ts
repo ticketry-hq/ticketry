@@ -1,253 +1,225 @@
+import { useCallback, useState } from "react";
+import type { IssueType, State, WorkItem, WorkItemCreate } from "../../shared/api/types";
+import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
+import { studioApolloClient } from "../../shared/apollo/client";
 import {
-  useMutation,
-  useQueryClient,
-  type QueryClient,
-} from "@tanstack/react-query";
-import * as api from "../../shared/api/client";
-import type {
-  IssueType,
-  State,
-  WorkItem,
-  WorkItemCreate,
-} from "../../shared/api/types";
-import { queryKeys } from "../../shared/query/keys";
+  GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
+  WorkTrackerModuleOpenDocument,
+} from "./generated/workItems.documents";
+import type { GeneratedWorkTrackerWorkItemFieldsFragment } from "./generated/workItems.documents";
 import { rankBetween } from "./utilities/rank";
+import {
+  createWorkItem,
+  reparentWorkItem,
+  reorderWorkItem,
+  setWorkItemBlockers,
+  transitionWorkItem,
+  updateWorkItem,
+} from "./mutationTransport";
+import {
+  recordStoryMove,
+  storyMoveError,
+} from "./internal/storyMoveDiagnostics";
+import { optimisticCreatedIssue } from "./internal/optimisticCreation";
+import { optimisticTransitionedIssue } from "./internal/optimisticTransition";
 
 export interface ModuleMembership {
   projectId: string;
   moduleId: string;
 }
 
-interface MutationContext {
-  id: string | null;
-  previous: WorkItem | undefined;
-  relatedIds: string[];
+interface MutationCallbacks<TResult> {
+  onSuccess?: (data: TResult) => void;
+  onError?: (error: Error) => void;
+  onSettled?: (data: TResult | undefined, error: Error | null) => void;
 }
 
-interface OptimisticMutation<TVariables> {
-  mutationFn: (variables: TVariables) => Promise<WorkItem>;
-  id: (variables: TVariables) => string | null;
-  update?: (
-    current: WorkItem,
-    variables: TVariables,
-    queryClient: QueryClient,
-  ) => WorkItem;
-  memberships?: readonly ModuleMembership[];
-  relatedIds?: (
-    variables: TVariables,
-    previous: WorkItem | undefined,
-  ) => readonly string[];
-}
+type OptimisticIssue<TVariables> = (
+  current: GeneratedWorkTrackerWorkItemFieldsFragment,
+  variables: TVariables,
+) => GeneratedWorkTrackerWorkItemFieldsFragment;
 
-/**
- * The one work-item write sequence.
- *
- * TanStack Mutation owns the pre-write value in its onMutate result. Nothing
- * copies that baseline into a store or another cache entry. Writes with no id
- * yet (creation) use the same lifecycle but deliberately skip the optimistic
- * record update and wait for membership to be refreshed.
- */
-function useOptimisticWorkItemMutation<TVariables>({
-  mutationFn,
-  id: mutationId,
-  update,
-  memberships = [],
-  relatedIds = () => [],
-}: OptimisticMutation<TVariables>) {
-  const queryClient = useQueryClient();
-
-  return useMutation<WorkItem, Error, TVariables, MutationContext>({
-    mutationFn,
-
-    async onMutate(variables) {
-      const id = mutationId(variables);
-      if (id === null) {
-        return {
-          id,
-          previous: undefined,
-          relatedIds: [...relatedIds(variables, undefined)],
-        };
-      }
-
-      await queryClient.cancelQueries({
-        queryKey: queryKeys.workItems.byId(id),
-        exact: true,
-      });
-      const previous = queryClient.getQueryData<WorkItem>(
-        queryKeys.workItems.byId(id),
-      );
-      if (previous && update) {
-        queryClient.setQueryData(
-          queryKeys.workItems.byId(id),
-          update(previous, variables, queryClient),
-        );
-      }
-      return {
-        id,
-        previous,
-        relatedIds: [...relatedIds(variables, previous)],
-      };
-    },
-
-    onError(_error, _variables, context) {
-      if (context?.id && context.previous !== undefined) {
-        queryClient.setQueryData(
-          queryKeys.workItems.byId(context.id),
-          context.previous,
-        );
-      }
-    },
-
-    onSuccess(authoritative, _variables, context) {
-      // A response may reconcile only the entry that was mutated. Creation has
-      // no such entry yet and is discovered through the refreshed membership.
-      if (context.id && authoritative.id === context.id) {
-        queryClient.setQueryData(
-          queryKeys.workItems.byId(context.id),
-          authoritative,
-        );
-      }
-    },
-
-    async onSettled(data, _error, _variables, context) {
-      const invalidations: Promise<unknown>[] = [];
-      // Successful writes return the complete authoritative work item. Keep
-      // that response in the canonical cache instead of starting a redundant
-      // read which can race a follow-up positional write (cross-state drag).
-      // A missing/mismatched response is still revalidated defensively.
-      if (context?.id && data?.id !== context.id) {
-        invalidations.push(
-          queryClient.invalidateQueries({
-            queryKey: queryKeys.workItems.byId(context.id),
-            exact: true,
-          }),
-        );
-      }
-      for (const relatedId of new Set(context?.relatedIds ?? [])) {
-        if (relatedId === context?.id) continue;
-        invalidations.push(
-          queryClient.invalidateQueries({
-            queryKey: queryKeys.workItems.byId(relatedId),
-            exact: true,
-          }),
-        );
-      }
-      for (const membership of memberships) {
-        invalidations.push(
-          queryClient.invalidateQueries({
-            queryKey: queryKeys.tasks.byModule(
-              membership.projectId,
-              membership.moduleId,
-            ),
-            exact: true,
-          }),
-        );
-      }
-      await Promise.all(invalidations);
-    },
+function cachedIssue(id: string): GeneratedWorkTrackerWorkItemFieldsFragment | undefined {
+  const client = studioApolloClient();
+  const cacheId = client.cache.identify({
+    __typename: "WorktrackerIssue",
+    id: compactWorktrackerId(id),
   });
+  if (!cacheId) return undefined;
+  return client.readFragment({
+    id: cacheId,
+    fragment: GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
+    optimistic: true,
+  }) ?? undefined;
 }
 
-export interface RenameWorkItemArgs {
-  id: string;
-  name: string;
+function useApolloWorkItemMutation<TVariables>(
+  execute: (
+    variables: TVariables,
+    optimistic: GeneratedWorkTrackerWorkItemFieldsFragment | undefined,
+  ) => Promise<WorkItem>,
+  identity: (variables: TVariables) => string | null,
+  update?: OptimisticIssue<TVariables>,
+  readCurrent?: (variables: TVariables) => GeneratedWorkTrackerWorkItemFieldsFragment | undefined,
+) {
+  const [pendingCount, setPendingCount] = useState(0);
+  const [variables, setVariables] = useState<TVariables>();
+  const [error, setError] = useState<Error | null>(null);
+  const [isSuccess, setIsSuccess] = useState(false);
+
+  const mutateAsync = useCallback(async (
+    next: TVariables,
+    callbacks: MutationCallbacks<WorkItem> = {},
+  ): Promise<WorkItem> => {
+    setPendingCount((count) => count + 1);
+    setVariables(next);
+    setError(null);
+    setIsSuccess(false);
+    const id = identity(next);
+    const current = readCurrent?.(next) ?? (id ? cachedIssue(id) : undefined);
+    const optimistic = current && update ? update(current, next) : undefined;
+    try {
+      const result = await execute(next, optimistic);
+      setIsSuccess(true);
+      callbacks.onSuccess?.(result);
+      callbacks.onSettled?.(result, null);
+      return result;
+    } catch (cause) {
+      const failure = cause instanceof Error ? cause : new Error(String(cause));
+      setError(failure);
+      callbacks.onError?.(failure);
+      callbacks.onSettled?.(undefined, failure);
+      throw failure;
+    } finally {
+      setPendingCount((count) => Math.max(0, count - 1));
+    }
+  }, [execute, identity, readCurrent, update]);
+
+  const mutate = useCallback((
+    next: TVariables,
+    callbacks: MutationCallbacks<WorkItem> = {},
+  ) => {
+    void mutateAsync(next, callbacks).catch(() => undefined);
+  }, [mutateAsync]);
+
+  return {
+    mutate,
+    mutateAsync,
+    isPending: pendingCount > 0,
+    variables,
+    error,
+    isError: error !== null,
+    isSuccess,
+  };
 }
+
+export interface RenameWorkItemArgs { id: string; name: string }
 
 export function useRenameWorkItem() {
-  return useOptimisticWorkItemMutation<RenameWorkItemArgs>({
-    id: ({ id }) => id,
-    mutationFn: ({ id, name }) => api.patchWorkItem(id, { name }),
-    update: (current, { name }) => ({ ...current, name }),
-  });
+  return useApolloWorkItemMutation(
+    ({ id, name }: RenameWorkItemArgs, optimistic) =>
+      updateWorkItem(id, { name }, { optimistic }),
+    ({ id }: RenameWorkItemArgs) => id,
+    (current, { name }) => ({ ...current, name }),
+  );
 }
 
-export interface EditWorkItemDescriptionArgs {
-  id: string;
-  description: string | null;
-}
+export interface EditWorkItemDescriptionArgs { id: string; description: string | null }
 
 export function useEditWorkItemDescription() {
-  return useOptimisticWorkItemMutation<EditWorkItemDescriptionArgs>({
-    id: ({ id }) => id,
-    mutationFn: ({ id, description }) =>
-      api.patchWorkItem(id, { description }),
-    update: (current, { description }) => ({
-      ...current,
-      description: description ?? "",
-    }),
-  });
+  return useApolloWorkItemMutation(
+    ({ id, description }: EditWorkItemDescriptionArgs, optimistic) =>
+      updateWorkItem(id, { description }, { optimistic }),
+    ({ id }: EditWorkItemDescriptionArgs) => id,
+    (current, { description }) => ({ ...current, description: description ?? "" }),
+  );
 }
 
-export interface ChangeWorkItemTypeArgs {
-  id: string;
-  issueType: IssueType;
-}
+export interface ChangeWorkItemTypeArgs { id: string; issueType: IssueType }
 
 export function useChangeWorkItemType() {
-  return useOptimisticWorkItemMutation<ChangeWorkItemTypeArgs>({
-    id: ({ id }) => id,
-    mutationFn: ({ id, issueType }) =>
-      api.patchWorkItem(id, { issue_type_id: issueType.id }),
-    update: (current, { issueType }) => ({
+  return useApolloWorkItemMutation(
+    ({ id, issueType }: ChangeWorkItemTypeArgs, optimistic) =>
+      updateWorkItem(id, { issue_type_id: issueType.id }, { optimistic }),
+    ({ id }: ChangeWorkItemTypeArgs) => id,
+    (current, { issueType }) => ({
       ...current,
-      issue_type: issueType.id,
+      issue_type_id: compactWorktrackerId(issueType.id),
+      issue_type_record: {
+        id: compactWorktrackerId(issueType.id),
+        name: issueType.name,
+        level: issueType.level,
+        color: issueType.color ?? "",
+        sort_order: issueType.sort_order,
+      },
     }),
-  });
+  );
 }
 
-export interface SetWorkItemStateArgs {
-  id: string;
-  state: State & { id: string };
-}
+export interface SetWorkItemStateArgs { id: string; state: State & { id: string } }
 
 export function useSetWorkItemState() {
-  return useOptimisticWorkItemMutation<SetWorkItemStateArgs>({
-    id: ({ id }) => id,
-    mutationFn: ({ id, state }) =>
-      api.patchWorkItem(id, { state_id: state.id }),
-    update: (current, { state }) => ({ ...current, state: state.id }),
-  });
+  return useApolloWorkItemMutation(
+    ({ id, state }: SetWorkItemStateArgs, optimistic) =>
+      transitionWorkItem(id, state.id, {
+        optimistic,
+        moduleId: optimistic?.module_id ?? undefined,
+      }),
+    ({ id }: SetWorkItemStateArgs) => id,
+    (current, { state }) => optimisticTransitionedIssue(
+      studioApolloClient().cache,
+      current,
+      state,
+    ),
+  );
 }
 
 export interface SetWorkItemParentArgs {
   id: string;
   parentId: string | null;
+  moduleId?: string;
 }
 
-export function useSetWorkItemParent(
-  memberships: readonly ModuleMembership[],
-) {
-  return useOptimisticWorkItemMutation<SetWorkItemParentArgs>({
-    id: ({ id }) => id,
-    mutationFn: ({ id, parentId }) =>
-      api.patchWorkItem(id, { parent_id: parentId }),
-    update: (current, { parentId }) => ({
+export function useSetWorkItemParent(memberships: readonly ModuleMembership[]) {
+  return useApolloWorkItemMutation(
+    ({ id, parentId, moduleId }: SetWorkItemParentArgs, optimistic) =>
+      reparentWorkItem(id, parentId, {
+        optimistic,
+        moduleIds: [
+          ...memberships.map((membership) => membership.moduleId),
+          ...(moduleId ? [moduleId] : []),
+        ],
+      }),
+    ({ id }: SetWorkItemParentArgs) => id,
+    (current, { parentId }) => ({
       ...current,
-      parent_id: parentId,
+      parent_id: parentId ? compactWorktrackerId(parentId) : null,
     }),
-    memberships,
-  });
+  );
 }
 
-export interface SetWorkItemBlockersArgs {
-  id: string;
-  blockedByIds: string[];
-}
+export interface SetWorkItemBlockersArgs { id: string; blockedByIds: string[] }
+
+let optimisticBlockerEdgeSequence = 0;
 
 export function useSetWorkItemBlockers() {
-  return useOptimisticWorkItemMutation<SetWorkItemBlockersArgs>({
-    id: ({ id }) => id,
-    mutationFn: ({ id, blockedByIds }) =>
-      api.patchWorkItem(id, { blocked_by_ids: blockedByIds }),
-    update: (current, { blockedByIds }) => ({
+  return useApolloWorkItemMutation(
+    ({ id, blockedByIds }: SetWorkItemBlockersArgs, optimistic) =>
+      setWorkItemBlockers(id, blockedByIds, {
+        optimistic,
+        moduleId: optimistic?.module_id ?? undefined,
+      }),
+    ({ id }: SetWorkItemBlockersArgs) => id,
+    (current, { blockedByIds }) => ({
       ...current,
-      blocked_by_ids: blockedByIds,
+      blocked_by_edges: {
+        nodes: blockedByIds.map((id) => ({
+          id: -(++optimisticBlockerEdgeSequence),
+          to_issue_id: compactWorktrackerId(id),
+        })),
+      },
     }),
-    relatedIds: ({ blockedByIds }, previous) => [
-      ...(previous?.blocked_by_ids ?? []),
-      ...blockedByIds,
-    ],
-  });
+  );
 }
 
 export interface ReorderWorkItemArgs {
@@ -256,47 +228,77 @@ export interface ReorderWorkItemArgs {
   afterId: string | null;
 }
 
-function cachedRank(
-  queryClient: QueryClient,
-  id: string | null,
-): string | null {
+function cachedRank(id: string | null): string | null {
   if (id === null) return null;
-  const rank = queryClient.getQueryData<WorkItem>(
-    queryKeys.workItems.byId(id),
-  )?.rank;
+  const rank = cachedIssue(id)?.rank;
   if (rank === undefined) {
     throw new Error(`Cannot optimistically reorder without rank for ${id}`);
   }
   return rank;
 }
 
-export function useReorderWorkItem(
+function cachedModuleIssue(
   membership: ModuleMembership,
-) {
-  return useOptimisticWorkItemMutation<ReorderWorkItemArgs>({
-    id: ({ id }) => id,
-    mutationFn: ({ id, beforeId, afterId }) =>
-      api.reorderWorkItem(id, {
-        before_id: beforeId,
-        after_id: afterId,
-      }),
-    update: (current, { beforeId, afterId }, queryClient) => ({
-      ...current,
-      rank: rankBetween(
-        cachedRank(queryClient, beforeId),
-        cachedRank(queryClient, afterId),
-      ),
-    }),
-    memberships: [membership],
-  });
+  id: string,
+): GeneratedWorkTrackerWorkItemFieldsFragment | undefined {
+  return studioApolloClient().readQuery({
+    query: WorkTrackerModuleOpenDocument,
+    variables: { moduleId: compactWorktrackerId(membership.moduleId) },
+    optimistic: true,
+    returnPartialData: true,
+  })?.work_items?.nodes.find(
+    (candidate) => candidate.id === compactWorktrackerId(id) || candidate.id === id,
+  );
 }
 
-export function useCreateWorkItem(
-  membership: ModuleMembership,
-) {
-  return useOptimisticWorkItemMutation<WorkItemCreate>({
-    id: () => null,
-    mutationFn: (body) => api.createWorkItem(membership.projectId, body),
-    memberships: [membership],
-  });
+export function useReorderWorkItem(membership: ModuleMembership) {
+  return useApolloWorkItemMutation(
+    ({ id, beforeId, afterId }: ReorderWorkItemArgs, optimistic) =>
+      reorderWorkItem(
+        id,
+        { before_id: beforeId, after_id: afterId },
+        { optimistic, moduleId: membership.moduleId },
+      ),
+    ({ id }: ReorderWorkItemArgs) => id,
+    (current, { beforeId, afterId }) => {
+      try {
+        const beforeRank =
+          beforeId ? cachedModuleIssue(membership, beforeId)?.rank ?? cachedRank(beforeId) : null;
+        const afterRank =
+          afterId ? cachedModuleIssue(membership, afterId)?.rank ?? cachedRank(afterId) : null;
+        // Imported data can contain duplicate sibling ranks. The server repairs
+        // that collision transactionally; skip only the optimistic move so the
+        // authoritative reorder still reaches it.
+        if (beforeRank !== null && beforeRank === afterRank) return current;
+        return {
+          ...current,
+          rank: rankBetween(beforeRank, afterRank),
+        };
+      } catch (error) {
+        recordStoryMove("optimistic-reorder-failed", {
+          id: current.id,
+          beforeId,
+          afterId,
+          moduleId: membership.moduleId,
+          error: storyMoveError(error),
+        }, "error");
+        throw error;
+      }
+    },
+    ({ id }) => cachedModuleIssue(membership, id),
+  );
+}
+
+export function useCreateWorkItem(membership: ModuleMembership) {
+  return useApolloWorkItemMutation(
+    (body: WorkItemCreate) => createWorkItem(
+      membership.projectId,
+      body,
+      {
+        optimistic: optimisticCreatedIssue(studioApolloClient().cache, membership, body),
+        moduleId: membership.moduleId,
+      },
+    ),
+    () => null,
+  );
 }

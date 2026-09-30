@@ -1,66 +1,23 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { formatChordSymbols } from "../../app/navigation/chordLabel";
-import {
-  studioKeymapRegistry,
-  type KeyChord,
-} from "../../app/navigation/keymapRegistry";
+import { studioKeymapRegistry } from "../../app/navigation/keymapRegistry";
 import { onNativeTerminalKeyboardEngaged } from "../../runtime/nativeTerminalKeyboard";
+import {
+  chordMatchesModifiers,
+  modifierStateFromEvent,
+  NO_MODIFIERS,
+  sameModifierState,
+} from "./moduleJumpBadgeState";
 
 const MODULE_JUMP_ACTION_PREFIX = "modules.select-position-";
 const MODULE_JUMP_POSITION_COUNT = 10;
-
-interface ModifierState {
-  alt: boolean;
-  control: boolean;
-  meta: boolean;
-  shift: boolean;
-}
 
 export interface ModuleJumpBadgePresentation {
   label: string;
   position: number;
 }
 
-const NO_MODIFIERS: ModifierState = {
-  alt: false,
-  control: false,
-  meta: false,
-  shift: false,
-};
-
-function modifierState(event: KeyboardEvent): ModifierState {
-  return {
-    alt: event.altKey,
-    control: event.ctrlKey,
-    meta: event.metaKey,
-    shift: event.shiftKey,
-  };
-}
-
-function modifiersMatch(left: ModifierState, right: ModifierState): boolean {
-  return (
-    left.alt === right.alt &&
-    left.control === right.control &&
-    left.meta === right.meta &&
-    left.shift === right.shift
-  );
-}
-
-function hasExactModifiers(chord: KeyChord, held: ModifierState): boolean {
-  return (
-    chord.alt === held.alt &&
-    chord.control === held.control &&
-    chord.meta === held.meta &&
-    chord.shift === held.shift
-  );
-}
-
-/**
- * Tracks the window's held modifiers and exposes truthful labels for the
- * effective module-position bindings. The binding registry decides whether a
- * position exists on this runtime and which chord its badge names.
- */
 export function useModuleJumpBadges(
   enabled = true,
 ): ReadonlyMap<number, ModuleJumpBadgePresentation> {
@@ -78,9 +35,9 @@ export function useModuleJumpBadges(
     }
 
     const updateModifiers = (event: KeyboardEvent) => {
-      const nextModifiers = modifierState(event);
+      const nextModifiers = modifierStateFromEvent(event);
       setHeldModifiers((currentModifiers) =>
-        modifiersMatch(currentModifiers, nextModifiers)
+        sameModifierState(currentModifiers, nextModifiers)
           ? currentModifiers
           : nextModifiers,
       );
@@ -94,6 +51,7 @@ export function useModuleJumpBadges(
     document.addEventListener("visibilitychange", clearModifiers);
     const stopNativeTerminalWatch =
       onNativeTerminalKeyboardEngaged(clearModifiers);
+
     return () => {
       window.removeEventListener("keydown", updateModifiers, true);
       window.removeEventListener("keyup", updateModifiers, true);
@@ -113,7 +71,10 @@ export function useModuleJumpBadges(
         "capture",
         `${MODULE_JUMP_ACTION_PREFIX}${position}`,
       );
-      if (!binding || !hasExactModifiers(binding.chord, heldModifiers)) continue;
+      if (
+        !binding ||
+        !chordMatchesModifiers(binding.chord, heldModifiers)
+      ) continue;
       badges.set(position, {
         label: formatChordSymbols(binding.chord),
         position,

@@ -1,0 +1,10 @@
+mutation WorktreeMergePreparation($taskId: String!, $operationId: String!) {
+  worktree_pull_request_merge_prepare(task_id: $taskId, operation_id: $operationId) {
+    operation_id
+    top_level_task_id
+    agent_run_id
+    agent
+    branch
+    pull_request_url
+  }
+}

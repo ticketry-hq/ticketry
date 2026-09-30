@@ -1,8 +1,7 @@
-import { create } from "zustand";
+import { createApolloStore } from "../../../../shared/apollo/localState";
 import * as api from "../../api/agentApi";
 import {
   TEMP_TASK_ID,
-  type PersistedTerminalSession,
   type SessionId,
   type TaskId,
 } from "../../types";
@@ -12,8 +11,10 @@ import {
 } from "./foregroundStore";
 import { useClientStore as useWorkspaceTabsStore } from "../../../../state/clientStore";
 import { readVersionedItem } from "../../../../shared/storage/versioned";
-import { isAgentlessRun, useAgentStatusStore } from "../../status";
+import { readAgentRun } from "../../status/apolloHolding";
+import type { RunRecord } from "../../status";
 import { rekeyTerminalFocus } from "./terminalRegistry";
+import { isTerminalProvider } from "../presentation/providerPresentation";
 
 export type SessionStatus =
   | "connecting"
@@ -35,8 +36,8 @@ export type SessionStatus =
 export type TerminalTransport = "connecting" | "ready" | "reconnecting" | "closed";
 
 // App-scoped set of agent_run_ids whose tabs were live (reached `ready`).
-// Persisted to localStorage so a reload can silently re-attach exactly those
-// sessions (and only those) once their task's persisted list is fetched.
+// Persisted to localStorage so a reload can silently re-attach those sessions
+// once ProjectRunStatus publishes their runs.
 // Versioned key (client-localstorage-schema); reads migrate the legacy
 // unversioned spelling once and require an array of strings.
 const LIVE_RUNS_KEY = "muxed:live-agent-runs:v1";
@@ -168,6 +169,10 @@ export interface SessionMeta {
   // Set when this tab reattaches to a persisted tmux session rather than
   // spawning a fresh agent. Drives the attach-mode init frame in ws.ts.
   agentRunId: string | null;
+  // A status event can publish a new run before its launch command has
+  // finished creating tmux. Keep the selected tab visible, but do not attach
+  // a viewer until that command acknowledges the runtime is ready.
+  viewerAttachmentDeferred?: boolean;
 }
 
 export interface OpenSessionArgs {
@@ -180,6 +185,7 @@ export interface OpenSessionArgs {
   isInstant?: boolean;
   agentRunId?: string | null;
   select?: boolean;
+  viewerAttachmentDeferred?: boolean;
 }
 
 export interface OpenShellSessionArgs {
@@ -211,36 +217,6 @@ export function bucketOfMeta(
   return bucketFor(meta.taskId, meta.moduleId);
 }
 
-// Live running-agent count for the synthetic scratch bucket (#496). The count
-// is derived purely from local sessions (including reattached scratch tabs) —
-// never from task-bound persisted-session hydration.
-export function selectScratchAgentCount(
-  state: TerminalStoreState,
-  moduleId?: string,
-  projectId?: string,
-): number {
-  let count = 0;
-
-  // Count only active no-task (scratch) sessions.
-  for (const meta of Object.values(state.sessions)) {
-    if (meta.taskId !== null) continue;
-    // A shell is not an agent. It shares the taskless shape of a scratch run,
-    // so without this it would silently inflate a module's agent count (#667).
-    if (meta.isShell) continue;
-    if (moduleId && meta.moduleId !== moduleId) continue;
-    if (projectId && meta.projectId !== projectId) continue;
-    if (
-      meta.status === "connecting" ||
-      meta.status === "ready" ||
-      meta.status === "reconnecting"
-    ) {
-      count += 1;
-    }
-  }
-
-  return count;
-}
-
 interface TerminalStoreState {
   sessions: Record<SessionId, SessionMeta>;
   sessionByRun: Record<string, SessionId>;
@@ -262,6 +238,7 @@ interface TerminalStoreState {
     agentRunId?: string | null,
   ) => void;
   bindRun: (sessionId: SessionId, agentRunId: string) => void;
+  allowViewerAttachment: (agentRunId: string) => void;
   setTransport: (sessionId: SessionId, transport: TerminalTransport) => void;
   setExited: (sessionId: SessionId) => void;
   setViewerClosed: (sessionId: SessionId) => void;
@@ -278,11 +255,12 @@ interface TerminalStoreState {
   // pass false.
   closeTab: (sessionId: SessionId, opts?: { dismiss?: boolean }) => void;
   focusSession: (sessionId: SessionId) => void;
-  restoreLiveSessions: (
+  reconcileRunTabs: (
     taskId: TaskId,
-    sessions: readonly PersistedTerminalSession[],
+    runs: readonly RunRecord[],
+    excludedRunIds?: ReadonlySet<string>,
   ) => void;
-  attachPersisted: (session: PersistedTerminalSession) => SessionId;
+  attachRun: (agentRunId: string) => SessionId;
   // `dismiss` defaults to true for the same reason `closeTab` does: an agent
   // run's kill can race a listing that still reports it live. Callers whose run
   // never appears in that listing — a module shell, which `list_scratch_terminals`
@@ -302,7 +280,7 @@ function makeTempId(): string {
   return `tmp_${Date.now().toString(36)}_${_tempCounter}`;
 }
 
-export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
+export const useTerminalStore = createApolloStore<TerminalStoreState>("terminal-sessions", (set, get) => ({
   sessions: {},
   sessionByRun: {},
 
@@ -320,6 +298,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       isInstant: args.isInstant ?? false,
       initialPrompt: args.initialPrompt ?? null,
       agentRunId: args.agentRunId ?? null,
+      viewerAttachmentDeferred: args.viewerAttachmentDeferred,
     };
     set((s) => ({ sessions: { ...s.sessions, [tempId]: meta } }));
     useWorkspaceTabsStore
@@ -410,6 +389,21 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
           [sessionId]: { ...existing, agentRunId },
         },
         sessionByRun,
+      };
+    });
+  },
+
+  allowViewerAttachment(agentRunId) {
+    const sessionId = get().sessionByRun[agentRunId];
+    if (!sessionId) return;
+    set((state) => {
+      const existing = state.sessions[sessionId];
+      if (!existing?.viewerAttachmentDeferred) return state;
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: { ...existing, viewerAttachmentDeferred: false },
+        },
       };
     });
   },
@@ -601,7 +595,14 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     useWorkspaceTabsStore.getState().tabFocused(bucketOfMeta(meta), sessionId);
   },
 
-  restoreLiveSessions(taskId, persistedSessions) {
+  reconcileRunTabs(taskId, runs, excludedRunIds = new Set()) {
+    for (const runId of excludedRunIds) {
+      const sessionId = get().sessionByRun[runId];
+      const session = sessionId ? get().sessions[sessionId] : undefined;
+      if (session && bucketOfMeta(session) === taskId) {
+        get().closeTab(sessionId, { dismiss: false });
+      }
+    }
     const { sessions, sessionByRun } = get();
     // Ids already held by a live (or reconnecting) tab must not be duplicated.
     const attached = new Set(
@@ -616,65 +617,60 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     );
     // A spawn initiated from this bucket exists before its durable run id is
     // known. Defer unknown server rows until that connecting tab binds its id;
-    // otherwise a reconcile fetch can attach the same run into a second tab.
+    // otherwise a projection update can attach the same run into a second tab.
     const hasUnboundSpawn = Object.values(sessions).some(
       (meta) =>
         bucketOfMeta(meta) === taskId &&
         meta.status === "connecting" &&
         meta.agentRunId === null,
     );
-    // The server's persisted list is the source of truth for which sessions
-    // are live and reattachable — not the localStorage live-set. A session
-    // confirmed live server-side must get a tab even if this browser never
-    // recorded it: a relaunched run, a reload that raced the `ready` write, or
-    // a different browser entirely. The live-set is only a hint for which tabs
-    // *this* browser had open; it must never gate showing a live session.
+    // ProjectRunStatus is the source of truth for which runs need terminal
+    // tabs, not the localStorage live-set. A live run must get a tab even if
+    // this browser never recorded it: a relaunched run, a reload that raced
+    // the `ready` write, or a different browser entirely. The live-set is only
+    // a hint for which tabs this browser had open; it must never gate showing
+    // a live run.
     //
     // Exactly one exception (CODIN-1436): an id the user explicitly dismissed
     // in this browser stays dismissed. A dismissal is a deliberate per-id
     // instruction recorded at close time, not a stale cache, which is why it
-    // may override the list; the reasoning above still governs every id *not*
+    // may override the projection; the reasoning above still governs every id *not*
     // dismissed, so this must not be widened into gating on the live-set.
     const dismissed = dismissedRunsFor(taskId);
-    for (const session of persistedSessions) {
-      const run = useAgentStatusStore.getState().runs[session.agent_run_id];
-      if (!run) continue;
-      // Liveness is read only from the pushed run projection. The immutable
-      // terminal row can therefore never disagree with a lifecycle frame.
+    for (const run of runs) {
+      // ProjectRunStatus decides whether a new tab may be restored. An already
+      // mounted dead tab stays mounted until a terminal outcome event settles
+      // it, because a later authoritative snapshot may repair false liveness.
       if (run.state === "exited" || run.state === "lost" || run.state === "error") {
-        removeLiveRun(session.agent_run_id);
-        removeDismissedRun(taskId, session.agent_run_id);
+        removeLiveRun(run.agent_run_id);
+        removeDismissedRun(taskId, run.agent_run_id);
         continue;
       }
       // A run with no provider is not an agent run. It has its own surface and
       // must never be restored as an agent terminal tab (#665).
-      if (isAgentlessRun(run)) continue;
-      if (attached.has(session.agent_run_id)) continue;
-      if (dismissed.has(session.agent_run_id)) continue;
-      if (hasUnboundSpawn && !sessionByRun[session.agent_run_id]) continue;
-      get().attachPersisted(session);
+      if (!isTerminalProvider(run.agent)) continue;
+      if (attached.has(run.agent_run_id)) continue;
+      if (dismissed.has(run.agent_run_id)) continue;
+      if (hasUnboundSpawn && !sessionByRun[run.agent_run_id]) continue;
+      get().attachRun(run.agent_run_id);
     }
   },
 
-  attachPersisted(session) {
-    const run = useAgentStatusStore.getState().runs[session.agent_run_id];
+  attachRun(agentRunId) {
+    // Live runs come from the projection, ended ones from the WorkItem read
+    // that retained them on the shared cache entity; both reopen the same way.
+    const run = readAgentRun(agentRunId);
     if (!run) {
-      throw new Error(`run projection missing for terminal ${session.agent_run_id}`);
+      throw new Error(`run projection missing for terminal ${agentRunId}`);
     }
-    if (isAgentlessRun(run)) {
+    if (!isTerminalProvider(run.agent)) {
       // Refused rather than papered over with a substitute provider: an agent
       // terminal tab is labelled, spawned and resumed by its provider, so a run
       // that has none cannot be represented as one (#665).
-      throw new Error(`run ${session.agent_run_id} has no agent to attach`);
-    }
-    // Background hydration honors a deliberately closed tab before it calls
-    // this method. A direct caller is an explicit reopen action, so the old
-    // dismissal must not hide the newly attached tab.
-    if (run.scope === "task" && run.task_id) {
-      removeDismissedRun(run.task_id, session.agent_run_id);
+      throw new Error(`run ${agentRunId} has no agent to attach`);
     }
     const { sessions } = get();
-    const existingId = get().sessionByRun[session.agent_run_id];
+    const existingId = get().sessionByRun[agentRunId];
     const existing = existingId ? sessions[existingId] : undefined;
     if (existing) {
       // A live (connecting/ready) tab already views this tmux session;
@@ -696,8 +692,8 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       taskId: isScratch ? null : run.task_id,
       projectId: run.project_id ?? "",
       moduleId: run.module_id,
-      agent: run.agent as SessionMeta["agent"],
-      agentRunId: session.agent_run_id,
+      agent: run.agent,
+      agentRunId,
       isPlanning: run.scope === "plan",
       isInstant: run.scope === "instant",
       select: false,
@@ -710,8 +706,8 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     removeLiveRun(agentRunId);
     // Close any live tab attached to the now-killed session so it does not
     // linger with a dead socket. This close counts as a dismissal by default on
-    // purpose: a re-fetch whose response raced the kill still reports the run
-    // live, and the tab must not come back. `restoreLiveSessions` spends the
+    // purpose: a status frame whose response raced the kill still reports the
+    // run live, and the tab must not come back. `reconcileRunTabs` spends the
     // dismissal as soon as the server reports the run ended.
     //
     // `dismiss: false` is for runs no restore listing ever reports: with no

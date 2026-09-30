@@ -1,37 +1,52 @@
-import { renderHook } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { queryClient } from "../../shared/query/queryClient";
-import { queryKeys } from "../../shared/query/keys";
-import { useWorkspaceTabLifecycleOrder } from "./useWorkspaceTabLifecycleOrder";
 import type { WorkspaceTabIdentity } from "./types";
 
-describe("useWorkspaceTabLifecycleOrder", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    queryClient.clear();
-  });
+const save = vi.hoisted(() => vi.fn(async () => ({ order: [] })));
 
-  it("does not rerun the lifecycle work for a fresh equivalent identity array", () => {
-    const workItemId = "work-1";
-    const savedOrder: WorkspaceTabIdentity[] = [{ kind: "details" }];
-    queryClient.setQueryData(queryKeys.workspaceTabs.byWorkItem(workItemId), {
-      order: savedOrder,
-    });
-    const cacheReads = vi.spyOn(queryClient, "getQueryData");
+vi.mock("./mutations", () => ({ appendWorkspaceTabs: save }));
+
+import { useWorkspaceTabLifecycleOrder } from "./useWorkspaceTabLifecycleOrder";
+
+describe("useWorkspaceTabLifecycleOrder", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it("appends new visible identities without removing dormant ones", async () => {
+    const savedOrder: WorkspaceTabIdentity[] = [
+      { kind: "terminal", id: "dormant" },
+      { kind: "details" },
+    ];
     const { rerender } = renderHook(
-      ({ visibleIdentities }: { visibleIdentities: WorkspaceTabIdentity[] }) =>
+      ({ visible }: { visible: WorkspaceTabIdentity[] }) =>
         useWorkspaceTabLifecycleOrder({
-          workItemId,
+          workItemId: "work-1",
           savedOrder,
           orderReady: true,
-          visibleIdentities,
+          visibleIdentities: visible,
         }),
-      { initialProps: { visibleIdentities: [{ kind: "details" }] } },
+      { initialProps: { visible: [{ kind: "details" }] } },
     );
-    const readsAfterFirstEffect = cacheReads.mock.calls.length;
+    expect(save).not.toHaveBeenCalled();
 
-    rerender({ visibleIdentities: [{ kind: "details" }] });
+    rerender({
+      visible: [
+        { kind: "details" },
+        { kind: "doc", id: "design" },
+      ],
+    });
 
-    expect(cacheReads).toHaveBeenCalledTimes(readsAfterFirstEffect);
+    await waitFor(() => expect(save).toHaveBeenCalledWith("work-1", [
+      { kind: "doc", id: "design" },
+    ]));
+  });
+
+  it("waits until the saved order and identity catalogs are ready", () => {
+    renderHook(() => useWorkspaceTabLifecycleOrder({
+      workItemId: "work-1",
+      savedOrder: [],
+      orderReady: false,
+      visibleIdentities: [{ kind: "details" }],
+    }));
+    expect(save).not.toHaveBeenCalled();
   });
 });

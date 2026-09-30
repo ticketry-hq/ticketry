@@ -1,50 +1,112 @@
 # Ticketry desktop application
 
+Keep user-facing responses very concise. Lead with the direct answer or blocker;
+add detail only when the user asks for it.
+
 This repository owns the complete Ticketry desktop application: the React
-frontend, Tauri shell, supervised Python backend sidecar, MCP service, and
-generated SDKs required by that application.
+frontend, Tauri shell, in-process Rust services, MCP listener, and generated
+GraphQL contracts required by that application.
 
 Use `npm run desktop:dev` or `pnpm run dev` from the repository root for local
-desktop development. Both commands rebuild and launch the sidecar. Keep browser-
+desktop development. Both commands rebuild and launch Ticketry. Keep browser-
 only service commands as supporting development tools, not as a separate product.
 
 Code structure is a governing constraint, not a preference: keep files small
 and single-purpose, place frontend code in `studio/src/features/<domain>/`
 (with `app/` for the shell and `shared/` for cross-feature plumbing only), and
-give each backend capability its own Django app under `backend/apps/` with the
-core domain split across `worktracker/`'s `models/`, `rest/`, and `services/`.
+give each Rust backend capability its own focused module under
+`studio/src-tauri/src/`, with database-backed GraphQL composed through
+SeaORM and Seaography.
+Workspace crates live under `studio/src-tauri/crates/<tier>/<crate>/` in
+dependency order: `foundation`, `config`, `worktracking`, `execution`,
+`surfaces`, then `app`. Crates may depend within their tier or on a lower tier,
+never on a higher tier.
+Each Rust crate exposes its external contract only from `src/lib.rs`:
+implementation modules are private, crate-internal seams use `pub(crate)`, and
+the crate root explicitly re-exports approved public items. Do not expose
+nested module paths. Update the public API boundary contract test for every
+deliberate export.
 When a file outgrows one concern, split it rather than extend it. The full
 rules live in [`CLAUDE.md`](CLAUDE.md) under "Code structure — governing
 rules"; keep the two documents consistent.
 
-Backend HTTP endpoints must use Django REST Framework's native machinery, not
-handwritten views. Before adding or changing any backend REST endpoint,
-serializer, or view, read
-[`.codex/skills/drf-rest-api/SKILL.md`](.codex/skills/drf-rest-api/SKILL.md);
-to review the backend for framework drift, follow
-[`.codex/skills/drf-rest-api-audit/SKILL.md`](.codex/skills/drf-rest-api-audit/SKILL.md).
-The same skills are exposed to Claude via symlinks in `.claude/skills/`.
+Database-backed GraphQL Models are migration-first and generated-contract-first.
+Start with generated Seaography CRUD and caller-specific GraphQL operations.
+Each public write must bind a concrete identity and allowlist only the fields
+that the caller may change. If unrestricted generated CRUD would expose protected
+fields or bypass a Ticketry invariant, keep that mutator private and expose one
+restricted, model-shaped create/update/delete seam instead. Keep validation,
+locking, revisions, derived-field repair, cascades, and event planning behind
+that seam.
 
-Keep the Tauri/webview boundary narrow. The native terminal renderer consumes a
-pinned libghostty revision through its C API, while tmux remains responsible for
-durable sessions. Preserve the existing fallback unless a deliberate migration
-removes it.
+Do not replace model CRUD with per-field or per-relationship RPCs. In
+particular, WorkItem parent, blocker, classification, archive, and state requests
+enter through the restricted WorkItem update contract; hierarchy, dependency,
+transition, and revision code remains internal and transactional. Only behavior
+that cannot be represented as model CRUD may become a named domain operation,
+and it must be recorded in the route/operation registry with the reason. The
+current exceptions are work-item reorder, module-presentation reorder, state
+reorder, issue-type reorder, remove-state-from-workflow, and onboarding
+acknowledgement. Do not add
+replacement CRUD, DAO/repository layers that mirror SeaORM, mirrored DTOs,
+`mutation: false`, or generated-file patches without a written exception that
+identifies the missing behavior, rejected framework/database facilities, the
+smallest custom seam, and its drift-prevention test.
+
+The MCP listener binds `<data-directory>/mcp.sock` under the data-directory
+ownership guard. Provider MCP uses the packaged `ticketry-hook mcp` stdio bridge;
+there is no MCP TCP port or port override.
+
+Ticketry has no product REST API. Browser development may use the Rust GraphQL
+adapter, but it must not grow into a second backend or external compatibility
+contract.
+
+Apollo's `InMemoryCache` is the frontend's one state owner for server records
+and client-only state. Selector and persistence adapters may write cache rows,
+but must not retain a second application-state snapshot.
+
+Keep the Tauri/webview boundary narrow. Embedded native libghostty is the
+terminal renderer in development desktop and packaged desktop builds. It runs
+the validated tmux attach command in its own PTY and draws in a native view
+inside the Ticketry window, so terminal output stays out of the webview;
+lifecycle, layout, visibility and focus control messages still use IPC. It links
+from the shipping Cargo package's default features, and `npm run
+libghostty:prepare --workspace @worktracker/studio` stages the pinned static
+library that every desktop and release build needs. Browser development renders
+with xterm over the `browserTerminalClient` WebSocket adapter to the Rust
+terminal adapter. xterm is also the compatibility fallback everywhere, including
+when native rendering is unavailable or fails. CODING-1487 removed the
+`ghostty-wasm` renderer, its prepare hooks, and its selectable override; the
+snapshot and recovery steps are in `docs/archive/ghostty-wasm-restore.md`. tmux
+remains responsible for durable sessions, and a renderer change must not change
+a run, tmux session identity, or persisted terminal record.
 
 Development data must remain isolated from live application data. Generated
-databases, caches, sidecars, native libraries, and build output must not be
+databases, caches, native libraries, and build output must not be
 committed.
 
-Development frontend, backend, and MCP output is persisted at
+Development frontend, Rust runtime, and MCP output is persisted at
 `.ticketry-dev/logs/ticketry.log`. Use `npm run logs` to inspect recent output,
 `npm run logs:follow` while reproducing a problem, and `npm run logs:clear` to
 start a clean capture. This directory is generated and must not be committed.
-
-Ticketry currently exposes one installation project. Agents using WorkTracker
-MCP must use the Project ID from their launch context. Do not list projects,
-ask the user to choose one, or look for another project. `list_projects` exists
-only for clients without launch context and returns the installation project.
 
 Every user-visible Studio UI behavior change must add or update an automated
 acceptance case in `studio/src/test/*Acceptance.test.tsx`. Keep the numbered
 overhaul gate current and run `npm run test:overhaul --workspace
 @worktracker/studio` before handing the change off.
+
+## LLD authoring
+
+Use the repository's [lld-html-authoring skill](.agents/skills/lld-html-authoring/SKILL.md)
+for all new or revised standalone HTML LLDs. Start from its
+[dark template](.agents/skills/lld-html-authoring/assets/lld-template.html).
+Keep the compact file-change browser, search, action filters, file inspector,
+keyboard navigation, and deep links. Dark mode is the default for every LLD,
+including on systems that prefer light mode; set it before the first paint.
+
+Author `LLD.html` directly unless the task explicitly requires Markdown as the
+source of truth. For a required Markdown LLD, provide a matching dark HTML
+review artifact using the same layout, with authority labeled accurately.
+Use Ticketry's supplied design directory exactly and keep supporting assets
+inside it. Run the skill's HTML and applicable Ticketry location checks and
+inspect both desktop and narrow layouts before handing off.

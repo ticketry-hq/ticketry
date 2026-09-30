@@ -35,11 +35,11 @@ const mappings = [
   },
   {
     concept: 'Dependency execution',
-    backend: 'Issue.blocked_by · GraphRun · EngineRun',
+    backend: 'Issue.blocked_by · GraphRun · LaunchedTask',
     contract: 'Graph execution and status payloads',
     frontend: 'AgentStatusStore plus task/module views',
     identity: 'root_id · task_id · agent_run_id',
-    coherence: 'Graph edges are derived from blockers; node status is persisted in EngineRun',
+    coherence: 'Current blockers determine readiness; LaunchedTask records one direct child claim',
   },
   {
     concept: 'Agent activity',
@@ -102,10 +102,10 @@ const backendGroups = [
   {
     name: 'Agent Execution',
     tone: 'violet',
-    source: 'backend/apps/execution/models.py · backend/apps/runs/models.py',
+    source: 'studio/src-tauri/src/entities/execution/ · backend/apps/runs/models.py',
     models: [
       ['GraphRun', 'root · project · module · agent · timestamps', 'one durable graph header per root Issue'],
-      ['EngineRun', 'task · project · module · agent · phase · status · agent_run_id · error · timestamps', 'one durable execution row per task Issue'],
+      ['LaunchedTask', 'task · graph root · agent run · launch effect · generation · timestamps', 'one durable launch claim per direct child'],
       ['AgentRun', 'id · workspace_slug · project/module/task ids · ticket_seq · agent · status · lifecycle · timing · cwd · provider session · scope', 'launched coding-agent run'],
       ['AutomationAttempt', 'id · transition_id · issue · from/to states · workflow_revision · status · agent · agent_run_id · retry links · error · timestamps', 'correlates auto-launch with a committed transition'],
     ],

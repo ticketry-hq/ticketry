@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { bootstrapStudio, type BootstrapOutcome } from "./bootstrapStudio";
+import { SettingsAccess } from "./SettingsAccess";
 
 type BootstrapStatus = "connecting" | BootstrapOutcome;
 type ConnectingStatus = Exclude<BootstrapStatus, "ready">;
@@ -21,14 +22,21 @@ const STATUS_MESSAGES: Record<ConnectingStatus, string> = {
 export function BootstrapGate({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<BootstrapStatus>("connecting");
   const latestAttempt = useRef(0);
+  const inFlight = useRef<Promise<BootstrapOutcome> | null>(null);
 
   const attemptBootstrap = useCallback(() => {
     const attempt = ++latestAttempt.current;
     setStatus("connecting");
 
-    void bootstrapStudio().then((outcome) => {
-      if (attempt === latestAttempt.current) setStatus(outcome);
-    });
+    const pending = inFlight.current ?? bootstrapStudio();
+    inFlight.current = pending;
+    void pending
+      .then((outcome) => {
+        if (attempt === latestAttempt.current) setStatus(outcome);
+      })
+      .finally(() => {
+        if (inFlight.current === pending) inFlight.current = null;
+      });
   }, []);
 
   useEffect(() => {
@@ -70,15 +78,19 @@ function ConnectingScreen({ status, onRetry }: ConnectingScreenProps) {
             Start the local server, then retry. Retrying…
           </div>
         ) : null}
-        {isWaiting ? null : (
-          <button
-            type="button"
-            onClick={onRetry}
-            className="border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent hover:bg-pane-bg"
-          >
-            Retry
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {isWaiting ? null : (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent hover:bg-pane-bg"
+            >
+              Retry
+            </button>
+          )}
+          {/* Settings is otherwise unreachable while this gate owns the screen. */}
+          <SettingsAccess />
+        </div>
       </div>
     </div>
   );

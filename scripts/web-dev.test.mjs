@@ -1,328 +1,362 @@
 import assert from "node:assert/strict";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { Readable } from "node:stream";
 import test from "node:test";
-
-import { createDevelopmentLogCapture } from "./dev-log-capture.mjs";
+import { productIdentity } from "./product-identity.mjs";
 import {
-  buildWebFrontendCommand,
-  buildWebMcpCommand,
-  buildWebRuntimeEnvironment,
+  formatWebFrontendLogPayload,
+  webFrontendLogPlugin,
+} from "../studio/scripts/web-frontend-log-plugin.mjs";
+import { loadWebDevDefaults } from "./web-dev-defaults.mjs";
+
+import {
   buildWebDevelopmentEnvironment,
+  buildWebFrontendCommand,
+  buildWebHookRunnerCommand,
   cleanupTemporaryWebLaunch,
+  configuredWebPort,
   parseWebDevOptions,
-  readProvisionedApiToken,
-  selectTemporaryMcpPort,
-  selectWebMcpPort,
   selectWebPort,
+  waitUntilGraphqlReady,
+  withWebFileLogging,
 } from "./web-dev.mjs";
-import { removeTemporarySqliteProfile } from "../studio/scripts/desktop-dev.mjs";
 
-const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url));
+const installedDataDirectory = path.join(
+  "/users/ticketry/.config",
+  productIdentity.defaultDataDirectoryName,
+);
 
-test("web development preserves terminal output and persists labeled service logs", () => {
-  const directory = mkdtempSync(path.join(tmpdir(), "ticketry-web-logs-"));
-  const logPath = path.join(directory, "ticketry.log");
-  const terminal = { stdout: [], stderr: [] };
-  const capture = createDevelopmentLogCapture({
-    logPath,
-    stdout: { write: (chunk) => terminal.stdout.push(String(chunk)) },
-    stderr: { write: (chunk) => terminal.stderr.push(String(chunk)) },
-    now: () => new Date("2026-08-10T00:00:00.000Z"),
-  });
-
-  capture.write("backend", "stdout", "ready\npartial");
-  capture.write("backend", "stdout", " response\n");
-  capture.write("MCP", "stderr", "fatal error\n");
-  capture.close();
-
-  assert.deepEqual(terminal, {
-    stdout: ["ready\npartial", " response\n"],
-    stderr: ["fatal error\n"],
-  });
-  assert.equal(
-    readFileSync(logPath, "utf8"),
-    [
-      "2026-08-10T00:00:00.000Z [backend:stdout] ready",
-      "2026-08-10T00:00:00.000Z [backend:stdout] partial response",
-      "2026-08-10T00:00:00.000Z [MCP:stderr] fatal error",
-      "",
-    ].join("\n"),
-  );
-  rmSync(directory, { recursive: true });
-});
-
-test("web development logs rotate through the shared retained generations", () => {
-  const directory = mkdtempSync(path.join(tmpdir(), "ticketry-web-logs-"));
-  const logPath = path.join(directory, "ticketry.log");
-  const discard = { write() {} };
-  const capture = createDevelopmentLogCapture({
-    logPath,
-    stdout: discard,
-    stderr: discard,
-    now: () => new Date("2026-08-10T00:00:00.000Z"),
-    limitBytes: 80,
-  });
-
-  capture.write("backend", "stderr", "first failure\n");
-  capture.write("backend", "stderr", "second failure\n");
-  capture.write("backend", "stderr", "third failure\n");
-  capture.close();
-
-  assert.equal(existsSync(`${logPath}.1`), true);
-  assert.match(readFileSync(`${logPath}.1`, "utf8"), /second failure/);
-  assert.match(readFileSync(logPath, "utf8"), /third failure/);
-  rmSync(directory, { recursive: true });
-});
-
-test("web development uses an isolated explicit data directory", () => {
-  const launch = buildWebDevelopmentEnvironment({
-    cwd: "/repository",
+test("local web defaults apply without overriding explicit environment", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ticketry-web-defaults-test-"));
+  const configPath = path.join(directory, "web-defaults.json");
+  writeFileSync(configPath, JSON.stringify({
     environment: {
-      MUXED_DATA_DIR: "../ticketry-web-data",
+      MUXED_DATA_DIR: "/configured/data",
+      TICKETRY_GRAPHQL_ADAPTER_PORT: "8794",
+      MUXED_TMUX_SOCKET: "configured-socket",
+    },
+    logToFile: true,
+  }));
+
+  assert.deepEqual(loadWebDevDefaults({
+    configPath,
+    environment: { MUXED_DATA_DIR: "/explicit/data", PRESERVED: "yes" },
+  }), {
+    environment: {
+      MUXED_DATA_DIR: "/explicit/data",
+      TICKETRY_GRAPHQL_ADAPTER_PORT: "8794",
+      MUXED_TMUX_SOCKET: "configured-socket",
       PRESERVED: "yes",
     },
+    logToFile: true,
+    reuseGraphqlAdapter: false,
+  });
+  rmSync(directory, { recursive: true });
+});
+
+test("missing local web defaults preserve the existing launcher behavior", () => {
+  assert.deepEqual(loadWebDevDefaults({
+    configPath: "/missing/ticketry-web-defaults.json",
+    environment: { PRESERVED: "yes" },
+  }), {
+    environment: { PRESERVED: "yes" },
+    logToFile: false,
+    reuseGraphqlAdapter: false,
+  });
+});
+
+test("authoritative local web defaults replace inherited profile settings", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ticketry-web-override-test-"));
+  const configPath = path.join(directory, "web-defaults.json");
+  writeFileSync(configPath, JSON.stringify({
+    environment: {
+      MUXED_DATA_DIR: "/configured/data",
+      TICKETRY_GRAPHQL_ADAPTER_PORT: "8794",
+    },
+    overrideEnvironment: true,
+    reuseGraphqlAdapter: true,
+  }));
+
+  const defaults = loadWebDevDefaults({
+    configPath,
+    environment: { MUXED_DATA_DIR: "/inherited/data" },
+  });
+  assert.deepEqual(defaults.environment, {
+    MUXED_DATA_DIR: "/configured/data",
+    TICKETRY_GRAPHQL_ADAPTER_PORT: "8794",
+  });
+  assert.equal(defaults.reuseGraphqlAdapter, true);
+  rmSync(directory, { recursive: true });
+});
+
+test("adapter reuse validates configured ports without requiring availability", () => {
+  assert.equal(configuredWebPort("8799", "adapter"), 8799);
+  assert.throws(() => configuredWebPort("occupied", "adapter"), /adapter must be a port/);
+  assert.throws(() => configuredWebPort("70000", "adapter"), /adapter must be a port/);
+});
+
+test("web development accepts the disposable-data and file-logging options", () => {
+  assert.deepEqual(parseWebDevOptions([]), {
+    developmentProfile: false,
+    temporarySqlite: false,
+    logToFile: false,
+  });
+  assert.deepEqual(parseWebDevOptions(["--temp-sqlite"]), {
+    developmentProfile: false,
+    temporarySqlite: true,
+    logToFile: false,
+  });
+  assert.deepEqual(parseWebDevOptions(["--", "--log-to-file"]), {
+    developmentProfile: false,
+    temporarySqlite: false,
+    logToFile: true,
+  });
+  assert.deepEqual(parseWebDevOptions(["--log-to-file", "--temp-sqlite"]), {
+    developmentProfile: false,
+    temporarySqlite: true,
+    logToFile: true,
+  });
+  assert.deepEqual(parseWebDevOptions(["--development-profile"]), {
+    developmentProfile: true,
+    temporarySqlite: false,
+    logToFile: false,
+  });
+  assert.throws(() => parseWebDevOptions(["--unknown"]), /usage: npm run web/);
+});
+
+test("web file logging reaches the browser and Rust adapter only when requested", () => {
+  const inherited = {
+    PRESERVED: "yes",
+    MUXED_DEVELOPMENT_LOG_PATH: "/stale/log",
+    VITE_TICKETRY_WEB_FILE_LOGGING: "true",
+  };
+  assert.deepEqual(withWebFileLogging(inherited, {
+    enabled: false,
+    logPath: "/workspace/ticketry.log",
+  }), { PRESERVED: "yes" });
+  assert.deepEqual(withWebFileLogging(inherited, {
+    enabled: true,
+    logPath: "/workspace/ticketry.log",
+  }), {
+    PRESERVED: "yes",
+    MUXED_DEVELOPMENT_LOG_PATH: "/workspace/ticketry.log",
+    VITE_TICKETRY_WEB_FILE_LOGGING: "true",
+  });
+});
+
+test("web frontend logging validates and flattens browser records", () => {
+  assert.equal(
+    formatWebFrontendLogPayload({ level: "error", message: "move failed\nconflict" }),
+    "[frontend][error] move failed\\nconflict",
+  );
+  assert.equal(formatWebFrontendLogPayload({ level: "fatal", message: "no" }), null);
+  assert.equal(formatWebFrontendLogPayload({ level: "info", message: 42 }), null);
+});
+
+test("web frontend logging exposes its route only when enabled", async () => {
+  let disabledMiddleware;
+  webFrontendLogPlugin({ enabled: false }).configureServer({
+    middlewares: { use(candidate) { disabledMiddleware = candidate; } },
+  });
+  assert.equal(disabledMiddleware, undefined);
+
+  let middleware;
+  const lines = [];
+  webFrontendLogPlugin({
+    enabled: true,
+    writeLine(line) { lines.push(line); },
+  }).configureServer({
+    middlewares: { use(candidate) { middleware = candidate; } },
   });
 
+  const request = Readable.from([
+    Buffer.from(JSON.stringify({ level: "info", message: "story move complete" })),
+  ]);
+  request.url = "/__ticketry/frontend-log";
+  request.method = "POST";
+  const headers = new Map();
+  const response = {
+    statusCode: 0,
+    setHeader(name, value) { headers.set(name, value); },
+    end(body = "") { this.body = body; },
+  };
+  await middleware(request, response, () => assert.fail("route should be handled"));
+
+  assert.equal(response.statusCode, 204);
+  assert.equal(response.body, "");
+  assert.equal(headers.get("cache-control"), "no-store");
+  assert.deepEqual(lines, ["[frontend][info] story move complete"]);
+});
+
+test("an explicit data directory bypasses product data discovery", () => {
+  let discoveryCalls = 0;
+  const launch = buildWebDevelopmentEnvironment({
+    cwd: "/repository",
+    environment: { MUXED_DATA_DIR: "../ticketry-web-data", PRESERVED: "yes" },
+    resolveProductData() {
+      discoveryCalls += 1;
+    },
+  });
   assert.equal(launch.dataDirectory, "/ticketry-web-data");
+  assert.equal(launch.productDataDirectory, null);
+  assert.equal(launch.temporaryProfile, false);
+  assert.equal(discoveryCalls, 0);
   assert.equal(launch.environment.PRESERVED, "yes");
   assert.equal(launch.environment.MUXED_DATA_DIR, "/ticketry-web-data");
-  assert.equal(
-    launch.environment.MUXED_STATE_DB,
-    path.join("/ticketry-web-data", "state.db"),
-  );
-  assert.equal(launch.environment.WORKTRACKER_DISABLE_AUTH, "true");
-  assert.match(
-    launch.environment.MUXED_TMUX_SOCKET,
-    /^muxed-dev-[0-9a-f]{16}$/,
-  );
+  assert.equal("MUXED_FORCE_SQLITE" in launch.environment, false);
+  assert.match(launch.environment.MUXED_TMUX_SOCKET, /^muxed-dev-[0-9a-f]{16}$/);
+  assert.equal("WORKTRACKER_BASE_URL" in launch.environment, false);
 });
 
-test("web development accepts a disposable SQLite launch flag", () => {
-  assert.deepEqual(parseWebDevOptions([]), { temporarySqlite: false });
-  assert.deepEqual(parseWebDevOptions(["--temp-sqlite"]), {
-    temporarySqlite: true,
+test("web development uses the installed desktop profile and tmux namespace", () => {
+  const calls = [];
+  const launch = buildWebDevelopmentEnvironment({
+    cwd: "/repository",
+    environment: { HOME: "/users/ticketry" },
+    resolveProductData(options) {
+      calls.push(options);
+      return installedDataDirectory;
+    },
   });
-  assert.deepEqual(parseWebDevOptions(["--", "--temp-sqlite"]), {
-    temporarySqlite: true,
-  });
-  assert.throws(
-    () => parseWebDevOptions(["--unknown"]),
-    /usage: npm run web -- \[--temp-sqlite\]/,
-  );
+
+  assert.deepEqual(calls, [{
+    cwd: "/repository",
+    environment: { HOME: "/users/ticketry" },
+  }]);
+  assert.equal(launch.dataDirectory, installedDataDirectory);
+  assert.equal(launch.productDataDirectory, installedDataDirectory);
+  assert.equal(launch.temporaryProfile, false);
+  assert.equal(launch.temporarySqlite, false);
+  assert.equal("MUXED_FORCE_SQLITE" in launch.environment, false);
+  assert.equal(launch.environment.MUXED_TMUX_SOCKET, "muxed");
 });
 
-test("temporary web development forces a fresh isolated SQLite profile", () => {
-  const temporaryRoot = mkdtempSync(path.join(tmpdir(), "ticketry-web-test-"));
+test("web development mode uses the desktop per-worktree profile", () => {
+  const calls = [];
+  const developmentDataDirectory = "/users/ticketry/.config/ticketry-development/repository";
+  const launch = buildWebDevelopmentEnvironment({
+    cwd: "/repository",
+    environment: { HOME: "/users/ticketry" },
+    developmentProfile: true,
+    resolveProductData() {
+      assert.fail("development mode must not resolve product data");
+    },
+    resolveDevelopmentData(options) {
+      calls.push(options);
+      return developmentDataDirectory;
+    },
+  });
+
+  assert.deepEqual(calls, [{
+    cwd: "/repository",
+    environment: { HOME: "/users/ticketry" },
+  }]);
+  assert.equal(launch.dataDirectory, developmentDataDirectory);
+  assert.equal(launch.developmentProfile, true);
+  assert.equal(launch.productDataDirectory, null);
+  assert.match(launch.environment.MUXED_TMUX_SOCKET, /^muxed-dev-[0-9a-f]{16}$/);
+});
+
+test("an explicit tmux namespace is preserved for the product profile", () => {
   const launch = buildWebDevelopmentEnvironment({
     cwd: "/repository",
     environment: {
-      MUXED_DATABASE_URL: "postgresql:///ticketry",
-      MUXED_ENABLE_LOCAL_POSTGRES: "true",
+      HOME: "/users/ticketry",
+      MUXED_TMUX_SOCKET: "ticketry-product-test",
     },
-    temporarySqlite: true,
-    temporaryRoot,
+    resolveProductData() {
+      return installedDataDirectory;
+    },
   });
 
-  assert.equal(launch.temporarySqlite, true);
-  assert.equal(existsSync(launch.dataDirectory), true);
-  assert.equal(launch.environment.MUXED_FORCE_SQLITE, "true");
-  assert.equal(
-    launch.environment.MUXED_STATE_DB,
-    path.join(launch.dataDirectory, "state.db"),
-  );
-  assert.match(launch.environment.MUXED_TMUX_SOCKET, /^muxed-dev-[0-9a-f]{16}$/);
-
-  removeTemporarySqliteProfile(launch.dataDirectory, { temporaryRoot });
-  rmSync(temporaryRoot, { recursive: true });
+  assert.equal(launch.environment.MUXED_TMUX_SOCKET, "ticketry-product-test");
 });
 
-test("temporary web shutdown stops its tmux server before removing its profile", () => {
-  const calls = [];
-  cleanupTemporaryWebLaunch(
-    {
-      dataDirectory: "/tmp/ticketry-temp-sqlite-example",
-      environment: { MUXED_TMUX_SOCKET: "muxed-dev-temporary" },
-    },
-    {
-      stopTmux(socket) {
-        calls.push(["stop-tmux", socket]);
-      },
-      removeProfile(dataDirectory) {
-        calls.push(["remove-profile", dataDirectory]);
-      },
-      log(message) {
-        calls.push(["log", message]);
-      },
-    },
-  );
+test("temporary web development creates and cleans one isolated profile", () => {
+  const launch = buildWebDevelopmentEnvironment({
+    cwd: "/repository",
+    environment: {},
+    temporarySqlite: true,
+  });
+  assert.equal(launch.temporarySqlite, true);
+  assert.equal(launch.temporaryProfile, true);
+  assert.equal(launch.productDataDirectory, null);
+  assert.equal(launch.environment.MUXED_FORCE_SQLITE, "true");
+  assert.equal(existsSync(launch.dataDirectory), true);
+  cleanupTemporaryWebLaunch(launch);
+  assert.equal(existsSync(launch.dataDirectory), false);
+});
 
-  assert.deepEqual(calls, [
-    ["stop-tmux", "muxed-dev-temporary"],
-    ["remove-profile", "/tmp/ticketry-temp-sqlite-example"],
-    ["log", "[web] Removed temporary SQLite profile: /tmp/ticketry-temp-sqlite-example"],
+test("web shutdown leaves the shared product profile in place", () => {
+  const dataDirectory = mkdtempSync(path.join(tmpdir(), "ticketry-shared-profile-test-"));
+  const marker = path.join(dataDirectory, "state.db");
+  writeFileSync(marker, "product data");
+
+  cleanupTemporaryWebLaunch({
+    dataDirectory,
+    temporaryProfile: false,
+    environment: { MUXED_TMUX_SOCKET: "muxed" },
+  });
+
+  assert.equal(existsSync(marker), true);
+  rmSync(dataDirectory, { recursive: true });
+});
+
+test("frontend command opens a strict local Vite port", () => {
+  assert.deepEqual(buildWebFrontendCommand(5191), [
+    "npm", "run", "dev", "--workspace", "@worktracker/studio", "--",
+    "--host", "127.0.0.1", "--port", "5191", "--strictPort", "--open",
   ]);
 });
 
-test("an explicit authentication choice is preserved", () => {
-  const launch = buildWebDevelopmentEnvironment({
+test("web development builds the hook runner beside Cargo debug binaries", () => {
+  assert.deepEqual(buildWebHookRunnerCommand({
     cwd: "/repository",
-    environment: {
-      MUXED_DATA_DIR: "/tmp/ticketry-authenticated-web",
-      WORKTRACKER_DISABLE_AUTH: "false",
-    },
+    platform: "darwin",
+  }), {
+    command: "cargo",
+    args: [
+      "build",
+      "--locked",
+      "--manifest-path",
+      "/repository/studio/src-tauri/Cargo.toml",
+      "-p",
+      "ticketry-hook",
+      "--bin",
+      "ticketry-hook",
+    ],
+    output: "/repository/studio/src-tauri/target/debug/ticketry-hook",
   });
-
-  assert.equal(launch.environment.WORKTRACKER_DISABLE_AUTH, "false");
 });
 
-test("the frontend opens the ready page in the default browser", () => {
-  const command = buildWebFrontendCommand(5191);
-
-  assert.match(command, /(?:^|\s)--open(?:\s|$)/);
-  assert.match(command, /--strictPort/);
-  assert.match(command, /--port 5191/);
-});
-
-test("web development launches the owned WorkTracker MCP package", () => {
-  assert.equal(
-    buildWebMcpCommand(),
-    "uv run --project surfaces/worktracker-agent python -m worktracker_agent.mcp.main",
-  );
-});
-
-test("web development serves the backend through its ASGI application", () => {
-  const devScript = readFileSync(path.join(scriptsDirectory, "dev.sh"), "utf8");
-
-  assert.match(
-    devScript,
-    /uv run uvicorn studio_server\.asgi:application[^\n]*--reload/,
-  );
-  assert.doesNotMatch(devScript, /manage\.py runserver/);
-});
-
-test("web services share one backend and the pinned MCP endpoint", () => {
-  const environment = buildWebRuntimeEnvironment({
-    environment: { PRESERVED: "yes", WORKTRACKER_API_TOKEN: "development-token" },
-    backendPort: 8788,
-  });
-
-  assert.equal(environment.PRESERVED, "yes");
-  assert.equal(environment.MCP_HOST, "127.0.0.1");
-  assert.equal(environment.MCP_PORT, "8123");
-  assert.equal(environment.WORKTRACKER_API_KEY, "development-token");
-  assert.equal(environment.WORKTRACKER_API_TOKEN, "development-token");
-  assert.equal(environment.VITE_WT_API_KEY, "development-token");
-  assert.equal(
-    environment.WORKTRACKER_BASE_URL,
-    "http://127.0.0.1:8788/api/work-tracker",
-  );
-  assert.equal(environment.WORKTRACKER_MCP_URL, "http://127.0.0.1:8123/mcp");
-});
-
-test("web development reuses the token written during provisioning", () => {
-  const directory = mkdtempSync(path.join(tmpdir(), "ticketry-web-token-"));
-  const tokenPath = path.join(directory, "worktracker_token");
-  writeFileSync(tokenPath, "provisioned-token\n");
-
-  assert.equal(
-    readProvisionedApiToken({ dataDirectory: directory, environment: {} }),
-    "provisioned-token",
-  );
-  assert.equal(
-    readProvisionedApiToken({
-      dataDirectory: directory,
-      environment: { WORKTRACKER_API_TOKEN: "configured-token" },
-    }),
-    "configured-token",
-  );
-
-  rmSync(directory, { recursive: true });
-});
-
-test("temporary web MCP tries 8123 once and skips when it is occupied", async () => {
-  const checked = [];
-  const selected = await selectTemporaryMcpPort({
-    isAvailable: async (port) => {
-      checked.push(port);
-      return false;
-    },
-  });
-
-  assert.equal(selected, null);
-  assert.deepEqual(checked, [8123]);
-});
-
-test("persistent web development selects the next free MCP port", async () => {
-  const checked = [];
-  const selected = await selectWebMcpPort({
-    environment: {},
-    isAvailable: async (port) => {
-      checked.push(port);
-      return port !== 8123;
-    },
-  });
-
-  assert.equal(selected, 8124);
-  assert.deepEqual(checked, [8123, 8124]);
-});
-
-test("a skipped temporary MCP removes inherited MCP configuration", () => {
-  const environment = buildWebRuntimeEnvironment({
-    environment: {
-      MCP_HOST: "stale-host",
-      MCP_PORT: "9999",
-      MCP_TRANSPORT: "http",
-      WORKTRACKER_MCP_URL: "http://stale.invalid/mcp",
-    },
-    backendPort: 8787,
-    mcpPort: null,
-  });
-
-  assert.equal(environment.MCP_HOST, undefined);
-  assert.equal(environment.MCP_PORT, undefined);
-  assert.equal(environment.MCP_TRANSPORT, undefined);
-  assert.equal(environment.WORKTRACKER_MCP_URL, undefined);
-});
-
-test("web services select the next free ports", async () => {
-  const occupied = new Set([5174, 5175, 8787]);
+test("Rust adapter and frontend port selection shift independently", async () => {
+  const occupied = new Set([5174, 8790]);
   const isAvailable = async (port) => !occupied.has(port);
-
-  assert.equal(
-    await selectWebPort({
-      name: "frontend port",
-      firstPort: 5174,
-      isAvailable,
-    }),
-    5176,
-  );
-  assert.equal(
-    await selectWebPort({
-      name: "backend port",
-      firstPort: 8787,
-      isAvailable,
-    }),
-    8788,
+  assert.equal(await selectWebPort({ firstPort: 5174, isAvailable }), 5175);
+  assert.equal(await selectWebPort({ firstPort: 8790, isAvailable }), 8791);
+  await assert.rejects(
+    selectWebPort({ requestedPort: 8790, firstPort: 8790, isAvailable }),
+    /Requested port 8790 is unavailable/,
   );
 });
 
-test("an unavailable explicit web port fails instead of silently shifting", async () => {
+
+test("web development stops waiting when the GraphQL adapter exits", async () => {
   await assert.rejects(
-    selectWebPort({
-      name: "backend port",
-      requestedPort: "43210",
-      firstPort: 8787,
-      isAvailable: async () => false,
-    }),
-    /Requested backend port 43210 is unavailable/,
+    waitUntilGraphqlReady(8790, 180_000, () => true),
+    /GraphQL adapter stopped before it became ready/,
   );
+});
+
+test("web defaults reject the retired MCP TCP override", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ticketry-web-retired-port-"));
+  const configPath = path.join(directory, "web-defaults.json");
+  try {
+    writeFileSync(configPath, JSON.stringify({ environment: { MUXED_DESKTOP_MCP_PORT: "8123" } }));
+    assert.throws(() => loadWebDevDefaults({ configPath, environment: {} }), /unsupported setting/);
+  } finally {
+    rmSync(directory, { recursive: true });
+  }
 });

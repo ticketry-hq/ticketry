@@ -1,21 +1,26 @@
 import { execFileSync, spawn } from "node:child_process";
-import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
+import {
+  productIdentity,
+  resolveProductDataDirectory,
+} from "../../scripts/product-identity.mjs";
+import { awaitStartupRegressionReport } from "../../scripts/startup-trace-regression.mjs";
+import { prepareDesktopHookRunner } from "./desktop-hook-runner.mjs";
+
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
 const require = createRequire(import.meta.url);
 const defaultFrontendPort = 5174;
 const frontendPortCandidates = 10;
-const defaultBackendPort = 8787;
-const defaultMcpPort = 8123;
-const servicePortCandidates = 10;
-const connectMode = "connect";
 const isolatedMode = "isolated";
+const productionDataMode = "production-data";
+const productionTmuxSocket = "muxed";
 const temporarySqlitePrefix = "ticketry-temp-sqlite-";
 const workspaceRoot = path.resolve(studioRoot, "..");
 
@@ -54,7 +59,7 @@ export function resolveDevelopmentDataDirectory({
   return path.join(
     environment.HOME,
     ".config",
-    "worktracker-studio-development",
+    `${productIdentity.defaultDataDirectoryName}-development`,
     `${sanitizedBasename(worktreeRoot)}-${identity}`,
   );
 }
@@ -75,6 +80,29 @@ export function prepareDevelopmentLog({ root = workspaceRoot } = {}) {
   const logPath = resolveDevelopmentLogPath({ root });
   mkdirSync(path.dirname(logPath), { recursive: true });
   return logPath;
+}
+
+export function createStartupTrace({
+  logPath,
+  id = randomUUID(),
+  startedAt = Date.now(),
+  now = Date.now,
+} = {}) {
+  let previousAt = startedAt;
+  const record = (stage) => {
+    const recordedAt = now();
+    const details = JSON.stringify({
+      startup_id: id,
+      stage,
+      elapsed_ms: recordedAt - startedAt,
+      duration_ms: recordedAt - previousAt,
+    });
+    appendFileSync(logPath, `${new Date(recordedAt).toISOString()} [launcher][info] startup.timeline ${details}\n`, {
+      mode: 0o600,
+    });
+    previousAt = recordedAt;
+  };
+  return { id, record };
 }
 
 function parseFrontendPort(value) {
@@ -124,54 +152,43 @@ export async function selectFrontendPort({
   );
 }
 
-async function selectServicePort({
-  name,
-  requestedPort,
-  firstPort,
-  excluded = [],
-  isAvailable = canListen,
-}) {
-  if (requestedPort !== undefined) {
-    const port = parsePort(name, String(requestedPort));
-    if (excluded.includes(port) || !await isAvailable(port)) {
-      throw new Error(`Requested ${name} port ${port} is unavailable`);
-    }
-    return port;
-  }
-  for (let offset = 0; offset < servicePortCandidates; offset += 1) {
-    const port = firstPort + offset;
-    if (!excluded.includes(port) && await isAvailable(port)) return port;
-  }
-  throw new Error(
-    `No ${name} port is available in ${firstPort}-${firstPort + servicePortCandidates - 1}`,
-  );
-}
-
-function parsePort(name, value) {
-  if (!/^\d+$/.test(value ?? "") || Number(value) < 1 || Number(value) > 65_535) {
-    throw new Error(`${name} port must be a valid TCP port (1-65535)`);
-  }
-  return Number(value);
-}
-
 export function parseDesktopDevOptions(args = []) {
   const normalized = args[0] === "--" ? args.slice(1) : args;
   if (normalized.length === 0) {
     return { mode: isolatedMode, temporarySqlite: false };
   }
-  if (normalized.length === 1 && normalized[0] === "--connect") {
-    return { mode: connectMode, temporarySqlite: false };
-  }
   if (normalized.length === 1 && normalized[0] === "--temp-sqlite") {
     return { mode: isolatedMode, temporarySqlite: true };
   }
+  if (normalized.length === 1 && normalized[0] === "--production-data") {
+    return { mode: productionDataMode, temporarySqlite: false };
+  }
   throw new Error(
-    "usage: pnpm --filter @worktracker/studio desktop:dev -- [--connect | --temp-sqlite]",
+    "usage: pnpm --filter @worktracker/studio desktop:dev -- [--production-data | --temp-sqlite]",
   );
 }
 
 export function parseDesktopDevMode(args = []) {
   return parseDesktopDevOptions(args).mode;
+}
+
+export function resolveDesktopDevelopmentProfile({
+  options,
+  cwd = workspaceRoot,
+  environment = process.env,
+  temporaryRoot = tmpdir(),
+  resolveProductData = resolveProductDataDirectory,
+  resolveDevelopmentData = resolveDevelopmentDataDirectory,
+} = {}) {
+  const dataDirectory = options.temporarySqlite
+    ? createTemporarySqliteProfile({ temporaryRoot })
+    : options.mode === productionDataMode
+      ? resolveProductData({ cwd, environment })
+      : resolveDevelopmentData({ cwd, environment });
+  const tmuxSocket = options.mode === productionDataMode
+    ? environment.MUXED_TMUX_SOCKET ?? productionTmuxSocket
+    : resolveDevelopmentTmuxSocket(dataDirectory);
+  return { dataDirectory, tmuxSocket };
 }
 
 export function createTemporarySqliteProfile({ temporaryRoot = tmpdir() } = {}) {
@@ -207,90 +224,47 @@ export function stopTemporaryTmuxServer(
   }
 }
 
-export async function selectDevelopmentServicePorts({
-  environment = process.env,
-  isAvailable = canListen,
-  temporarySqlite = false,
-} = {}) {
-  const backend = await selectServicePort({
-    name: "backend",
-    requestedPort: environment.MUXED_DESKTOP_BACKEND_PORT,
-    firstPort: defaultBackendPort,
-    isAvailable,
-  });
-  if (temporarySqlite) {
-    // The desktop supervisor treats MCP as optional. Let it make exactly one
-    // attempt on the public endpoint; an occupied 8123 keeps the backend usable.
-    return { backend, mcp: defaultMcpPort };
-  }
-  const mcp = await selectServicePort({
-    name: "MCP",
-    requestedPort: environment.MUXED_DESKTOP_MCP_PORT,
-    firstPort: defaultMcpPort,
-    excluded: [backend],
-    isAvailable,
-  });
-  return { backend, mcp };
-}
-
 export function buildTauriDevelopmentConfig(port) {
   const origin = `http://127.0.0.1:${port}`;
+  // CODIN-1514 diagnostic hook. Native libghostty is the desktop default and
+  // needs no flag; the override exists to force the xterm compatibility
+  // renderer for comparisons.
+  const renderer = process.env.MUXED_TERMINAL_RENDERER;
+  const devUrl = renderer
+    ? `${origin}/?terminalRenderer=${encodeURIComponent(renderer)}`
+    : origin;
   return {
+    productName: "Ticketry Dev",
+    identifier: "com.ticketry.desktop.dev",
     build: {
       beforeDevCommand: `npm run dev -- --host 127.0.0.1 --port ${port} --strictPort`,
-      devUrl: origin,
+      devUrl,
     },
-  };
-}
-
-export function buildConnectLaunch({ environment = process.env } = {}) {
-  const dataDirectory = environment.MUXED_DATA_DIR ||
-    (environment.HOME
-      ? path.join(environment.HOME, ".config", "worktracker-studio")
-      : null);
-  if (!dataDirectory) {
-    throw new Error("could not determine HOME for the established data directory");
-  }
-
-  const frontendOrigin = `http://127.0.0.1:${defaultFrontendPort}`;
-  const frontendWebSocketOrigin = `ws://127.0.0.1:${defaultFrontendPort}`;
-  return {
-    backendPort: defaultBackendPort,
-    dataDirectory,
-    frontendOrigin,
-    config: {
-      build: {
-        beforeDevCommand: null,
-        devUrl: frontendOrigin,
-      },
-    },
-    environment: {
-      ...environment,
-      MUXED_DATA_DIR: dataDirectory,
-      MUXED_DESKTOP_DEVELOPMENT_MODE: connectMode,
-      MUXED_DESKTOP_ORIGIN: frontendOrigin,
-      MUXED_DESKTOP_BACKEND_PORT: String(defaultBackendPort),
-      MUXED_DESKTOP_WORKTRACKER_API: `${frontendOrigin}/api/work-tracker`,
-      MUXED_DESKTOP_AGENT_API: `${frontendOrigin}/api`,
-      MUXED_DESKTOP_STATUS_API: `${frontendOrigin}/api`,
-      MUXED_DESKTOP_STATUS_WEBSOCKET: `${frontendWebSocketOrigin}/ws/status`,
-      MUXED_DESKTOP_TERMINAL_WEBSOCKET: `${frontendWebSocketOrigin}/ws/terminal`,
+    app: {
+      windows: [{
+        label: "main",
+        title: "Ticketry Dev",
+        width: 1440,
+        height: 960,
+        minWidth: 1024,
+        minHeight: 700,
+        resizable: true,
+        zoomHotkeysEnabled: true,
+        dragDropEnabled: false,
+      }],
     },
   };
 }
 
 export function formatDevelopmentIdentity({
   frontendOrigin,
-  backendPort,
-  mcpPort,
   dataDirectory,
   tmuxSocket,
 }) {
   return [
-    "Ticketry desktop development instance:",
+    "Ticketry Dev instance:",
     `frontend=${frontendOrigin}`,
-    `backend=http://127.0.0.1:${backendPort}`,
-    `mcp=http://127.0.0.1:${mcpPort}/mcp`,
+    "runtime=in-process-rust",
     `data=${dataDirectory}`,
     `tmux=${tmuxSocket}`,
   ].join(" ");
@@ -331,146 +305,51 @@ export function resolveTauriCliPath(resolver = require.resolve) {
   return resolver("@tauri-apps/cli/tauri.js");
 }
 
-export function findRunningInstalledTicketry({
-  platform = process.platform,
-  runner = execFileSync,
-} = {}) {
-  if (platform !== "darwin") return [];
-
-  const processTable = runner("ps", ["-axo", "pid=,comm="], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  return processTable
-    .split("\n")
-    .map((line) => line.match(/^\s*(\d+)\s+(.+?)\s*$/))
-    .filter((match) =>
-      match?.[2].endsWith("/Ticketry.app/Contents/MacOS/ticketry")
-    )
-    .map((match) => ({ pid: Number(match[1]), executable: match[2] }));
-}
-
-export function stopInstalledTicketryProcesses(
-  processes,
-  { runner = execFileSync } = {},
-) {
-  for (const { pid, executable } of processes) {
-    try {
-      runner("kill", ["-15", String(pid)], { stdio: "ignore" });
-    } catch (error) {
-      console.warn(`Could not stop ${executable} (PID ${pid}): ${error.message}`);
-    }
-  }
-}
-
-export function describeInstalledTicketryProcesses(processes) {
-  return processes.map(({ pid, executable }) => `${executable} (PID ${pid})`).join(", ");
-}
-
-export function assertInstalledTicketryIsNotRunning(options) {
-  const {
-    terminateInstalled = false,
-    platform = process.platform,
-    runner = execFileSync,
-  } = options ?? {};
-  const running = findRunningInstalledTicketry({ platform, runner });
-  if (running.length === 0) return;
-
-  if (terminateInstalled) {
-    stopInstalledTicketryProcesses(running, { runner });
-    const remaining = findRunningInstalledTicketry({ platform, runner });
-    if (remaining.length > 0) {
-      throw new Error(
-        `could not stop the installed Ticketry app(s): ${describeInstalledTicketryProcesses(remaining)}`,
-      );
-    }
-    console.log(`Stopped installed Ticketry process(es): ${describeInstalledTicketryProcesses(running)}`);
-    return;
-  }
-
-  const processes = describeInstalledTicketryProcesses(running);
-  throw new Error(
-    `the installed Ticketry app is still running: ${processes}. ` +
-    "Quit it with Command-Q; closing its window is not enough. " +
-    "Then rerun pnpm run dev, or set MUXED_DEV_KILL_INSTALLED_TICKETRY=1",
-  );
-}
-
 export async function main() {
   const options = parseDesktopDevOptions(process.argv.slice(2));
-  assertInstalledTicketryIsNotRunning({
-    terminateInstalled:
-      process.env.MUXED_DEV_KILL_INSTALLED_TICKETRY === "1",
-  });
-  if (options.mode === connectMode) {
-    const launch = buildConnectLaunch();
-    console.log(
-      [
-        "Ticketry desktop development connection:",
-        `frontend=${launch.frontendOrigin}`,
-        `backend=http://127.0.0.1:${launch.backendPort}`,
-        `data=${launch.dataDirectory}`,
-      ].join(" "),
-    );
-    await run(process.execPath, [
-      resolveTauriCliPath(),
-      "dev",
-      "--no-watch",
-      "--features",
-      "native-libghostty",
-      "--config",
-      JSON.stringify(launch.config),
-    ], launch.environment);
-    return;
-  }
-
-  const frontendPort = await selectFrontendPort({
-    requestedPort: process.env.MUXED_FRONTEND_PORT,
-  });
-  const { backend: backendPort, mcp: mcpPort } = await selectDevelopmentServicePorts({
-    temporarySqlite: options.temporarySqlite,
-  });
-  const dataDirectory = options.temporarySqlite
-    ? createTemporarySqliteProfile()
-    : resolveDevelopmentDataDirectory();
-  const tmuxSocket = resolveDevelopmentTmuxSocket(dataDirectory);
+  const { dataDirectory, tmuxSocket } = resolveDesktopDevelopmentProfile({ options });
   const logPath = prepareDevelopmentLog();
-  const frontendOrigin = `http://127.0.0.1:${frontendPort}`;
-  const environment = {
+  const startupTrace = createStartupTrace({ logPath });
+  startupTrace.record("launcher-started");
+  const buildEnvironment = {
     ...process.env,
     MUXED_DATA_DIR: dataDirectory,
     MUXED_DEVELOPMENT_LOG_PATH: logPath,
+    MUXED_STARTUP_TRACE_ID: startupTrace.id,
     MUXED_ENABLE_LOCAL_POSTGRES: "true",
     MUXED_TMUX_SOCKET: tmuxSocket,
-    MUXED_DESKTOP_ORIGIN: frontendOrigin,
-    MUXED_DESKTOP_BACKEND_PORT: String(backendPort),
-    MUXED_DESKTOP_MCP_PORT: String(mcpPort),
-    MUXED_VITE_BACKEND_ORIGIN: `http://127.0.0.1:${backendPort}`,
   };
   if (options.temporarySqlite) {
-    environment.MUXED_FORCE_SQLITE = "true";
+    buildEnvironment.MUXED_FORCE_SQLITE = "true";
   }
   try {
-    await run(
-      "bash",
-      [path.join(studioRoot, "..", "backend", "packaging", "build-sidecar.sh")],
-      environment,
-    );
+    prepareDesktopHookRunner({ root: workspaceRoot, environment: buildEnvironment });
+    const frontendPort = await selectFrontendPort({
+      requestedPort: process.env.MUXED_FRONTEND_PORT,
+    });
+    const frontendOrigin = `http://127.0.0.1:${frontendPort}`;
+    startupTrace.record("frontend-port-selected");
+    const environment = {
+      ...buildEnvironment,
+      MUXED_DESKTOP_ORIGIN: frontendOrigin,
+    };
     const config = JSON.stringify(buildTauriDevelopmentConfig(frontendPort));
     console.log(formatDevelopmentIdentity({
       frontendOrigin,
-      backendPort,
-      mcpPort,
       dataDirectory,
       tmuxSocket,
     }));
+    if (options.mode === productionDataMode) {
+      console.log("Ticketry Dev is using writable production data; the installed app must remain closed.");
+    }
     console.log(`Ticketry development logs: ${logPath}`);
+    startupTrace.record("tauri-cli-spawned");
+    // Every launch is a startup measurement; shout into this terminal if it got slower.
+    awaitStartupRegressionReport({ logPath, startupId: startupTrace.id }).then((report) => console.error(`\n${report}\n`));
     await run(process.execPath, [
       resolveTauriCliPath(),
       "dev",
       "--no-watch",
-      "--features",
-      "native-libghostty",
       "--config",
       config,
     ], environment);

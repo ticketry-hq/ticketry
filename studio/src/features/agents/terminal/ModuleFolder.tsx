@@ -1,11 +1,7 @@
 import { useRef, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore, type StandardModalType } from "../../../app/modal/modalStore";
-import {
-  getModuleFolder,
-  setModuleFolder,
-  useModuleLinks,
-} from "../../module-links";
+import { moduleFolderSaveError, setModuleFolder, useModuleFolder } from "../../module-links";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { studioRuntime, type StudioRuntime } from "../../../runtime";
 import {
@@ -21,6 +17,8 @@ export interface ModuleFolderPayload {
   moduleId?: string;
   /** Resume a module switch that was gated on this folder link. */
   resumeModuleSelection?: boolean;
+  /** Continue a non-modal action after the folder is saved. */
+  onSaved?: () => void;
 }
 
 export function ModuleFolder({
@@ -30,19 +28,17 @@ export function ModuleFolder({
   payload?: ModuleFolderPayload;
   runtime?: StudioRuntime;
 }) {
-  const moduleLinks = useModuleLinks();
   const popModal = useModalStore((s) => s.popModal);
   const pushModal = useModalStore((s) => s.pushModal);
 
   const moduleId = payload?.moduleId;
-  const initial = moduleId ? (getModuleFolder(moduleId) ?? "") : "";
+  const initial = useModuleFolder(moduleId) ?? "";
 
   const [savedValue, setSavedValue] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const saveInFlight = useRef(false);
   const selection = useModuleFolderSelection({
-    moduleLinks,
     initialValue: initial,
     runtime,
   });
@@ -60,9 +56,9 @@ export function ModuleFolder({
     setError(null);
     try {
       try {
-        await setModuleFolder(moduleId, trimmedValue);
-      } catch {
-        setError("Could not save the module folder. Retry to continue.");
+        if (!(await setModuleFolder(moduleId, trimmedValue, runtime))) return;
+      } catch (cause) {
+        setError(moduleFolderSaveError(cause, "Could not save the module folder. Retry to continue."));
         return;
       }
       popModal();
@@ -73,6 +69,7 @@ export function ModuleFolder({
       if (payload?.next) {
         pushModal({ type: payload.next, payload: payload.nextPayload });
       }
+      payload?.onSaved?.();
     } finally {
       saveInFlight.current = false;
       setBusy(false);
@@ -80,6 +77,7 @@ export function ModuleFolder({
   }
 
   function onAction(actionId: string): void {
+    if (saveInFlight.current) return;
     if (actionId === MODAL_ACTIONS.next) {
       selection.moveNext();
       return;
@@ -117,7 +115,7 @@ export function ModuleFolder({
       onAction={onAction}
       width="w-[80ch]"
     >
-      <ModuleFolderSelection selection={selection} autoFocus />
+      <ModuleFolderSelection selection={selection} autoFocus disabled={busy} />
       {error && (
         <div className="mt-2 text-sm text-red-400" role="alert">
           {error}

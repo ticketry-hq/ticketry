@@ -1,32 +1,60 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { useStudioStore } from "../features/projects/store";
 import { AgentStateBadge } from "../features/agents/lifecycle";
-import { useAgentStatusStore } from "../features/agents/status";
-import { dispatchStatusFrame } from "../features/agents/status/statusFeed";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
+import { applySnapshotFrame } from "../features/agents/status/stream/statusSnapshot";
+import { applyRunStatusFrame } from "../features/agents/status/stream/runStatusHolding";
+import {
+  lifecycleStatusFrame,
+  terminalStatusFrame,
+} from "../features/agents/status/testing/durableStatusFrames";
 import {
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
 import { deriveTaskSessions } from "../features/agents/terminal/hooks";
 import { reduceLifecycle } from "../features/agents/terminal/lifecycle";
-import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
+import {
+  installDesktopGraphQlRuntime,
+  terminalSessionReadExecutor,
+} from "./desktopGraphQlRuntime";
+import {
+  getDormantItem,
+} from "./dormantTabsFixture";
 
 const terminalApi = vi.hoisted(() => ({
-  getDocuments: vi.fn(),
-  getTerminals: vi.fn(),
-  listResumableTerminals: vi.fn(),
   resumeTerminal: vi.fn(),
+}));
+
+const documentRegistry = vi.hoisted(() => ({
+  listTaskDocuments: vi.fn(),
+  listScratchDocuments: vi.fn(),
+}));
+
+vi.mock("../features/documents", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../features/documents")>()),
+  ...documentRegistry,
 }));
 
 vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../features/agents/api/agentApi")>()),
   ...terminalApi,
 }));
+
+// Terminal session reads moved to the Rust Terminal Session graph, so the seam
+// a test controls is the read transport, not a host API module.
+const terminalReads = vi.hoisted(() => {
+  const resumable = vi.fn();
+  return {
+    readTaskTerminalSessions: vi.fn(),
+    readScratchTerminalSessions: vi.fn(),
+    readTaskResumableTerminalSessions: resumable,
+    readScratchResumableTerminalSessions: resumable,
+  };
+});
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
@@ -77,9 +105,8 @@ function run(
 describe("overhaul acceptance — terminals", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime(terminalSessionReadExecutor(terminalReads));
     localStorage.clear();
-    queryClient.clear();
-    seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
       selectedModuleId: "module-1",
@@ -99,9 +126,11 @@ describe("overhaul acceptance — terminals", () => {
       automationAttempts: {},
       automationByTask: {},
     });
-    terminalApi.getDocuments.mockResolvedValue({ documents: [] });
-    terminalApi.getTerminals.mockResolvedValue([]);
-    terminalApi.listResumableTerminals.mockResolvedValue([]);
+    documentRegistry.listTaskDocuments.mockResolvedValue([]);
+    documentRegistry.listScratchDocuments.mockResolvedValue([]);
+    terminalReads.readTaskTerminalSessions.mockResolvedValue([]);
+    terminalReads.readScratchTerminalSessions.mockResolvedValue([]);
+    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
   });
 
   it("[overhaul-09] keeps an externally killed terminal tab and presents it as dead", () => {
@@ -133,20 +162,30 @@ describe("overhaul acceptance — terminals", () => {
     expect(tabs[0]).toMatchObject({ id: "session-1", lifecycle: "working" });
   });
 
+  it("presents a missing terminal as exited when its run completed", () => {
+    const meta = session("session-1", "story-1", "run-1", "session_lost");
+    const tabs = deriveTaskSessions(
+      "story-1",
+      { "session-1": meta },
+      { "run-1": run("run-1", "story-1", "exited") },
+      new Set(),
+    );
+
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]).toMatchObject({ id: "session-1", lifecycle: "exited" });
+  });
+
   it("[overhaul-10] keeps a closed terminal dismissed across a server refetch", () => {
     const meta = session("session-1", "story-1", "run-1");
-    const persisted = {
-      agent_run_id: "run-1",
-      created_at: "2026-08-07T12:00:00Z",
-    };
+    const liveRun = run("run-1", "story-1");
     useTerminalStore.setState({
       sessions: { "session-1": meta },
       sessionByRun: { "run-1": "session-1" },
     });
-    useAgentStatusStore.setState({ runs: { "run-1": run("run-1", "story-1") } });
+    useAgentStatusStore.setState({ runs: { "run-1": liveRun } });
 
     useTerminalStore.getState().closeTab("session-1");
-    useTerminalStore.getState().restoreLiveSessions("story-1", [persisted]);
+    useTerminalStore.getState().reconcileRunTabs("story-1", [liveRun]);
 
     expect(useTerminalStore.getState().sessions).toEqual({});
   });
@@ -164,13 +203,16 @@ describe("overhaul acceptance — terminals", () => {
     });
     useAgentStatusStore.setState({ runs: { "run-1": liveRun } });
 
-    dispatchStatusFrame({
-      v: 1,
-      type: "snapshot",
-      scope: { project_id: "previous-project", task_id: null },
+    // A project switch tears the subscription down asynchronously, so a
+    // queued snapshot from the previous project can still arrive. The feed
+    // refuses it rather than reconciling this project's runs as absent.
+    applySnapshotFrame({
+      __typename: "RunStatusSnapshot",
+      project_id: "previous-project",
+      cursor: 12,
+      at: "2026-08-07T12:01:00Z",
       runs: [],
       automation_attempts: [],
-      at: "2026-08-07T12:01:00Z",
     });
 
     const tabs = deriveTaskSessions(
@@ -197,7 +239,7 @@ describe("overhaul acceptance — terminals", () => {
     useAgentStatusStore.setState({ runs: { "run-1": exitedRun } });
 
     render(
-      <QueryClientProvider client={queryClient}>
+      <>
         <AgentStateBadge issueId="story-1" />
         <SelectedTicketContent
           bucket="story-1"
@@ -206,31 +248,40 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
-      </QueryClientProvider>,
+      </>,
     );
 
     expect(screen.getByRole("tab", { name: "codex terminal" }))
       .toContainElement(screen.getByLabelText("Agent session has exited"));
     expect(screen.queryByTestId("agent-state-badge")).not.toBeInTheDocument();
 
-    const workingSnapshot = (updatedAt: string) => ({
-      v: 1 as const,
-      type: "snapshot" as const,
-      scope: { project_id: "project-1", task_id: null },
-      runs: [{ ...exitedRun, state: "working" as const, updated_at: updatedAt }],
-      automation_attempts: [],
-      at: updatedAt,
-    });
+    const applyWorkingSnapshot = (updatedAt: string) =>
+      applySnapshotFrame({
+        __typename: "RunStatusSnapshot",
+        project_id: "project-1",
+        cursor: 21,
+        at: updatedAt,
+        runs: [{
+          ...exitedRun,
+          state: "working",
+          updated_at: updatedAt,
+          provider_session_id: null,
+          launch_state: "Implement",
+          launch_model: "gpt-5.6",
+          effective_state: "working",
+          attention_reason: null,
+          output_sequence: 1,
+          last_output_at: updatedAt,
+        }],
+        automation_attempts: [],
+      });
 
     act(() => {
       // A replayed active *delta* cannot revive a run after a real terminal
       // event: at equal timestamps the terminal record retains precedence.
-      dispatchStatusFrame({
-        v: 1,
-        type: "agent_lifecycle",
-        at: exitedRun.updated_at,
-        run: { ...exitedRun, state: "working" },
-      });
+      useAgentStatusStore
+        .getState()
+        .upsertRun({ ...exitedRun, state: "working" });
     });
     expect(screen.getByLabelText("Agent session has exited")).toBeInTheDocument();
     expect(screen.queryByTestId("agent-state-badge")).not.toBeInTheDocument();
@@ -240,25 +291,32 @@ describe("overhaul acceptance — terminals", () => {
       // a quiet run keeps its last hook timestamp, so a repaired snapshot
       // must recover every presentation derived from the shared status-feed
       // holding without recreating the tab.
-      dispatchStatusFrame(workingSnapshot(exitedRun.updated_at));
+      applyWorkingSnapshot(exitedRun.updated_at);
     });
 
     await waitFor(() => {
       expect(screen.queryByLabelText("Agent session has exited"))
         .not.toBeInTheDocument();
-      expect(within(screen.getByRole("tab", { name: "codex terminal" }))
-        .getByLabelText("Agent is actively working")).toBeInTheDocument();
+      expect(within(screen.getByRole("tab", { name: "Implement codex terminal" }))
+        .getByLabelText("Terminal output has not changed for 60 seconds (the session is still live)"))
+        .toBeInTheDocument();
       const workItemLifecycle = screen.getByTestId("agent-state-badge");
-      expect(workItemLifecycle).toHaveAttribute("data-state", "active");
-      expect(within(workItemLifecycle).getByLabelText("Agent is actively working"))
+      expect(workItemLifecycle).toHaveAttribute("data-state", "idle");
+      expect(within(workItemLifecycle).getByLabelText(
+        "Terminal output has not changed for 60 seconds (the session is still live)",
+      ))
         .toBeInTheDocument();
     });
     expect(useTerminalStore.getState().sessions["session-1"]?.status).toBe(
       "ready",
     );
+    expect(useAgentStatusStore.getState().runs["run-1"]).toMatchObject({
+      launch_state: "Implement",
+      launch_model: "gpt-5.6",
+    });
   });
 
-  it("[overhaul-83] presents a stopped Codex run as needing input on its tab and work-item status", async () => {
+  it("[overhaul-137] presents a stopped Codex run as needing input on its tab and work-item status", async () => {
     // Codex's `Stop` hook normalizes to `awaiting_input` (#660): an open Codex
     // terminal has stopped because Codex is waiting for the user. Studio holds
     // no Codex-specific display rule — the shared reducer turns that kind into
@@ -280,7 +338,7 @@ describe("overhaul acceptance — terminals", () => {
     useAgentStatusStore.setState({ runs: { "run-1": workingRun } });
 
     render(
-      <QueryClientProvider client={queryClient}>
+      <>
         <AgentStateBadge issueId="story-1" />
         <SelectedTicketContent
           bucket="story-1"
@@ -289,7 +347,7 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
-      </QueryClientProvider>,
+      </>,
     );
 
     expect(
@@ -299,16 +357,12 @@ describe("overhaul acceptance — terminals", () => {
     ).toBeInTheDocument();
 
     act(() => {
-      dispatchStatusFrame({
-        v: 1,
-        type: "agent_lifecycle",
+      applyRunStatusFrame(lifecycleStatusFrame({
+        projectId: "project-1",
+        agentRunId: "run-1",
+        state: projected,
         at: "2026-08-07T12:05:00Z",
-        run: {
-          ...workingRun,
-          state: projected,
-          updated_at: "2026-08-07T12:05:00Z",
-        },
-      });
+      }));
     });
 
     await waitFor(() => {
@@ -333,7 +387,7 @@ describe("overhaul acceptance — terminals", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("[overhaul-84] moves a gracefully exited terminal from live tabs to resumable sessions", async () => {
+  it("[overhaul-138] moves a gracefully exited terminal from live tabs to resumable sessions", async () => {
     const meta = session("session-1", "story-1", "run-1");
     const workingRun = {
       ...run("run-1", "story-1", "working"),
@@ -347,7 +401,6 @@ describe("overhaul acceptance — terminals", () => {
     useAgentStatusStore.setState({ runs: { "run-1": workingRun } });
 
     render(
-      <QueryClientProvider client={queryClient}>
         <SelectedTicketContent
           bucket="story-1"
           projectId="project-1"
@@ -355,12 +408,11 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<div>Issue details</div>}
         />
-      </QueryClientProvider>,
     );
     expect(screen.getByRole("tab", { name: "codex terminal" })).toBeInTheDocument();
-    await waitFor(() => expect(terminalApi.listResumableTerminals).toHaveBeenCalled());
+    await waitFor(() => expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalled());
 
-    terminalApi.listResumableTerminals.mockResolvedValue([
+    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([
       {
         agent_run_id: "run-1",
         agent: "codex",
@@ -372,19 +424,18 @@ describe("overhaul acceptance — terminals", () => {
       },
     ]);
     act(() => {
-      dispatchStatusFrame({
-        v: 1,
-        type: "backend_session",
-        agent_run_id: "run-1",
-        status: "exited",
+      applyRunStatusFrame(terminalStatusFrame({
+        projectId: "project-1",
+        agentRunId: "run-1",
+        state: "exited",
         at: "2026-08-07T12:05:00Z",
-      });
+      }));
     });
 
     await waitFor(() => {
       expect(screen.queryByRole("tab", { name: "codex terminal" }))
         .not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Resume codex terminal" }))
+      expect(getDormantItem("Resume codex terminal"))
         .toBeInTheDocument();
     });
     expect(useTerminalStore.getState().sessions).toEqual({});

@@ -1,10 +1,28 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { studioApolloClient } from "../shared/apollo/client";
+import { WorkTrackerProjectOpenDocument } from "../features/projects";
+import { projectOpenFixture } from "./projectOpenFixture";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StateCatalog } from "../features/workflows/StateCatalog";
+import { StateConfigurationPanel } from "../features/workflows/StateConfigurationPanel";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
-import { queryClient } from "../shared/query/queryClient";
+import { setStatesSorted, useStudioStore } from "../features/projects";
+import {
+  getWorkflowIssueTypesSnapshot,
+  getWorkflowStatesSnapshot,
+  setWorkflowIssueTypes,
+  setWorkflowStateCounts,
+} from "../features/workflows/queries";
 
 const fetchMock = vi.fn();
+const workflowReads = vi.hoisted(() => ({
+  readWorkflowSettings: vi.fn(),
+}));
+
+vi.mock("../features/workflows/queries/readTransport", async () => ({
+  ...(await vi.importActual("../features/workflows/queries/readTransport")),
+  readWorkflowSettings: workflowReads.readWorkflowSettings,
+}));
 
 const states = [
   { id: "todo", name: "Todo", group: "unstarted", color: null, sort_order: 0 },
@@ -18,8 +36,18 @@ const workflow = {
   start_state_id: "todo",
   workflow_revision: 4,
   transitions: [
-    { from_state_id: "todo", to_state_id: "build", agent_allowed: true },
-    { from_state_id: "build", to_state_id: "done", agent_allowed: true },
+    {
+      from_state_id: "todo",
+      to_state_id: "review",
+      agent_allowed: true,
+      handoff: false,
+    },
+    {
+      from_state_id: "review",
+      to_state_id: "done",
+      agent_allowed: true,
+      handoff: true,
+    },
   ],
   launch_bindings: [],
   warnings: [],
@@ -34,31 +62,9 @@ function jsonResponse(body: unknown): Response {
 
 describe("workflow settings acceptance", () => {
   beforeEach(() => {
-    queryClient.clear();
     fetchMock.mockReset().mockImplementation(
       async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url.endsWith("/work-tracker/projects/project-1/issue-types")) {
-          return jsonResponse([
-            {
-              id: "story",
-              name: "Story",
-              level: "task",
-              sort_order: 0,
-              start_state: "todo",
-              workflow_revision: 4,
-            },
-            {
-              id: "pathfind",
-              name: "PathFind",
-              level: "task",
-              sort_order: 1,
-              is_pathfind: true,
-              start_state: "review",
-              workflow_revision: 2,
-            },
-          ]);
-        }
         if (url.endsWith("/work-tracker/issue-types/story")) {
           return jsonResponse({
             id: "story",
@@ -67,17 +73,6 @@ describe("workflow settings acceptance", () => {
             sort_order: 0,
             start_state: "todo",
             workflow_revision: 4,
-          });
-        }
-        if (url.endsWith("/work-tracker/issue-types/pathfind")) {
-          return jsonResponse({
-            id: "pathfind",
-            name: "PathFind",
-            level: "task",
-            sort_order: 1,
-            is_pathfind: true,
-            start_state: "review",
-            workflow_revision: 2,
           });
         }
         if (url.endsWith("/work-tracker/projects/project-1/states")) {
@@ -90,10 +85,8 @@ describe("workflow settings acceptance", () => {
             from_state: transition.from_state_id,
             to_state: transition.to_state_id,
             agent_allowed: transition.agent_allowed,
+            handoff: transition.handoff,
           })));
-        }
-        if (url.endsWith("/work-tracker/issue-types/pathfind/transitions")) {
-          return jsonResponse([]);
         }
         if (url.endsWith("/work-tracker/projects/project-1/launch-bindings")) {
           return jsonResponse([]);
@@ -112,16 +105,45 @@ describe("workflow settings acceptance", () => {
       },
     );
     vi.stubGlobal("fetch", fetchMock);
+    workflowReads.readWorkflowSettings.mockReset().mockResolvedValue(workflow);
+    const base = projectOpenFixture({ id: "project-1", name: "Project", slug: "PROJECT", description: "" }, []).data;
+    studioApolloClient().writeQuery({
+      query: WorkTrackerProjectOpenDocument,
+      variables: { projectId: "project-1" },
+      data: {
+        ...base,
+        states: { __typename: "WorktrackerStateConnection", nodes: states.map((state) => ({
+          __typename: "WorktrackerState", ...state, project: "project-1",
+          is_protected: false, created_at: "", updated_at: "",
+        })) },
+        issue_types: { __typename: "WorktrackerIssuetypeConnection", nodes: [{
+          __typename: "WorktrackerIssuetype", id: "story", project: "project-1", name: "Story",
+          level: "task", color: "", sort_order: 0, start_state: "todo", workflow_revision: 4,
+          is_pathfind: false, created_at: "", updated_at: "",
+          transitions: { __typename: "WorktrackerIssuetypetransitionConnection", nodes: workflow.transitions.map((edge, id) => ({
+            __typename: "WorktrackerIssuetypetransition", id, issue_type: "story",
+            from_state: edge.from_state_id, to_state: edge.to_state_id,
+            agent_allowed: edge.agent_allowed, handoff: edge.handoff,
+            fromState: null, toState: null,
+          })) },
+          launch_bindings: { __typename: "WorktrackerLaunchbindingConnection", nodes: [] },
+        }] },
+      } as never,
+    });
+    setStatesSorted("project-1", states);
+    setWorkflowIssueTypes("project-1", [
+      { id: "story", name: "Story", level: "task", color: null, sort_order: 0, start_state: "todo", workflow_revision: 4 },
+    ]);
+    setWorkflowStateCounts("project-1", { review: 2 });
     useWorkflowEditorStore.setState({
       projectId: "project-1",
       issueTypes: [
-        { id: "story", name: "Story", level: "task", color: null, sort_order: 0 },
+        { id: "story", name: "Story", level: "task", color: null, sort_order: 0, start_state: "todo", workflow_revision: 4 },
       ],
       states,
       stateWorkItemCounts: { review: 2 },
       providerCapabilities: [],
       selectedTypeId: "story",
-      workflows: { story: workflow },
       stagedStateIds: {},
       loading: false,
       action: null,
@@ -133,7 +155,6 @@ describe("workflow settings acceptance", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    queryClient.clear();
   });
 
   it("[overhaul-19] derives state-delete blockers without deleted impact or composite workflow reads", async () => {
@@ -148,10 +169,91 @@ describe("workflow settings acceptance", () => {
     expect(screen.queryByRole("button", { name: "Delete state" })).toBeNull();
 
     const urls = fetchMock.mock.calls.map(([input]) => String(input));
-    expect(urls).toContain("/api/work-tracker/issue-types/story/transitions");
-    expect(urls).toContain("/api/work-tracker/issue-types/pathfind/transitions");
-    expect(urls).toContain("/api/work-tracker/projects/project-1/launch-bindings");
+    expect(workflowReads.readWorkflowSettings).toHaveBeenCalledWith(
+      "project-1",
+      "story",
+      "cache-first",
+    );
     expect(urls.some((url) => url.includes("/states/review/impact"))).toBe(false);
     expect(urls.some((url) => url.endsWith("/workflow-settings"))).toBe(false);
+  });
+
+  it("retains the visible state catalog while workflow policy starts loading", async () => {
+    useWorkflowEditorStore.setState(useWorkflowEditorStore.getInitialState(), true);
+    setStatesSorted("project-1", states);
+    setWorkflowIssueTypes("project-1", [
+      { id: "story", name: "Story", level: "task", color: null, sort_order: 0, start_state: "todo", workflow_revision: 4 },
+    ]);
+
+    const loading = useWorkflowEditorStore.getState().load("project-1");
+
+    expect(getWorkflowStatesSnapshot("project-1").map((state) => state.name))
+      .toEqual(["Todo", "Build", "Review", "Done"]);
+    expect(getWorkflowIssueTypesSnapshot("project-1").map((type) => type.name))
+      .toEqual(["Story"]);
+
+    await loading;
+  });
+
+  it("loads state policy after an in-flight project catalog becomes ready", async () => {
+    const loadWorkflows = vi.fn().mockResolvedValue(undefined);
+    useStudioStore.setState({ selectedProjectId: "project-1" });
+    useWorkflowEditorStore.setState({
+      projectId: "project-1",
+      issueTypes: [],
+      loading: true,
+      loadWorkflows,
+    });
+
+    render(
+      <StateConfigurationPanel state={states[1]} onClose={vi.fn()} />,
+    );
+    expect(loadWorkflows).not.toHaveBeenCalled();
+
+    act(() => {
+      useWorkflowEditorStore.setState({
+        issueTypes: [
+          { id: "story", name: "Story", level: "task", color: null, sort_order: 0, start_state: "todo", workflow_revision: 4 },
+        ],
+        loading: false,
+      });
+    });
+
+    await waitFor(() => expect(loadWorkflows).toHaveBeenCalledWith(["story"]));
+  });
+
+  it("[overhaul-244] shows and saves handoff for incoming and outgoing transitions", async () => {
+    const setTransitionHandoff = vi.fn().mockResolvedValue(undefined);
+    useStudioStore.setState({ selectedProjectId: "project-1" });
+    useWorkflowEditorStore.setState({ setTransitionHandoff });
+
+    render(
+      <StateConfigurationPanel state={states[2]} onClose={vi.fn()} />,
+    );
+
+    const incoming = await screen.findByRole("listitem", {
+      name: "Incoming Todo to Review",
+    });
+    const outgoing = screen.getByRole("listitem", {
+      name: "Outgoing Review to Done",
+    });
+    const incomingHandoff = within(incoming).getByRole("checkbox", {
+      name: "Handoff Todo to Review",
+    });
+    const outgoingHandoff = within(outgoing).getByRole("checkbox", {
+      name: "Handoff Review to Done",
+    });
+
+    expect(incomingHandoff).not.toBeChecked();
+    expect(outgoingHandoff).toBeChecked();
+    fireEvent.click(incomingHandoff);
+
+    expect(setTransitionHandoff).toHaveBeenCalledWith(
+      "story",
+      "todo",
+      "review",
+      true,
+      "handoff:story:todo:review",
+    );
   });
 });

@@ -1,10 +1,124 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import {
+  documentOperationName,
+  type TypedDocumentNode,
+} from "../graphql-foundation/typedDocument";
 import { fixture, mountStudio, workItem } from "./seam";
-import { dragWorkItemAcrossTransientDocumentLeave } from "./workItemDragGestures";
+import { dragWorkItem } from "./workItemDragGestures";
+
+function visibleWorkItemIds(stories: HTMLElement): Array<string | null> {
+  return within(stories)
+    .getAllByRole("treeitem")
+    .filter((row) => row.getAttribute("data-task-id") !== "__scratch__")
+    .map((row) => row.getAttribute("data-task-id"));
+}
 
 describe("overhaul acceptance — transition landing", () => {
-  it("[overhaul-60] resumes transition landing after a transient document leave", async () => {
+  it("[overhaul-247] keeps a transitioned Story first while pending and after the authoritative reply", async () => {
+    const http = fixture();
+    const sourceId = "11111111111111111111111111111111";
+    const destinationFirstId = "22222222222222222222222222222222";
+    const grill = {
+      id: "grill",
+      name: "Grill",
+      group: "backlog",
+      color: null,
+      sort_order: 2,
+    };
+    const implement = {
+      id: "implement",
+      name: "Implement",
+      group: "started",
+      color: null,
+      sort_order: 4,
+    };
+    http.tree("module-1", {
+      rootIds: [destinationFirstId, sourceId],
+      children: { [sourceId]: [], [destinationFirstId]: [] },
+      order: [destinationFirstId, sourceId],
+    });
+    http.workItems([
+      workItem({
+        id: destinationFirstId,
+        name: "Previous first",
+        key: "MEML-2",
+        rank: "M",
+        state: implement,
+      }),
+      workItem({
+        id: sourceId,
+        name: "Move first",
+        rank: "Z",
+        state: grill,
+      }),
+    ]);
+    http.workflowTransitions("story", [{
+      from_state_id: "grill",
+      to_state_id: "implement",
+      agent_allowed: true,
+      handoff: false,
+    }]);
+    http.transitionRank(sourceId, "A");
+
+    let releaseTransition = (): void => {};
+    const transitionHeld = new Promise<void>((resolve) => {
+      releaseTransition = resolve;
+    });
+    let markTransitionRequested = (): void => {};
+    const transitionRequested = new Promise<void>((resolve) => {
+      markTransitionRequested = resolve;
+    });
+    const graphQlExecute = async <TResult, TVariables>(
+      document: TypedDocumentNode<TResult, TVariables>,
+      variables: TVariables,
+    ): Promise<TResult> => {
+      if (documentOperationName(document) !== "TransitionWorkTrackerWorkItem") {
+        return http.executeGraphQl(document, variables);
+      }
+
+      markTransitionRequested();
+      await transitionHeld;
+      return http.executeGraphQl(document, variables);
+    };
+
+    mountStudio({ http, graphQlExecute });
+    const stories = await screen.findByRole("region", { name: "Stories" });
+    expect(await within(stories).findByText("Previous first")).toBeVisible();
+    fireEvent.click(
+      within(stories).getByRole("treeitem", { name: /Move first/ }),
+    );
+    const details = await screen.findByRole("region", { name: "Details" });
+
+    fireEvent.click(await within(details).findByRole("button", { name: "Grill" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Implement" }));
+    await transitionRequested;
+
+    const statePicker = within(details).getByTestId("state-picker");
+    await waitFor(() => expect(statePicker).toHaveTextContent("…"));
+    await waitFor(() => {
+      expect(visibleWorkItemIds(stories)).toEqual([
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+      ]);
+    });
+
+    releaseTransition();
+
+    await http.expectPatch(sourceId, {
+      state_id: "implement",
+      origin: "human",
+    });
+    await waitFor(() => expect(statePicker).not.toHaveTextContent("…"));
+    await waitFor(() => {
+      expect(visibleWorkItemIds(stories)).toEqual([
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+      ]);
+    });
+  });
+
+  it("[overhaul-60] keeps authoritative transition landing and explicit drag placement", async () => {
     const http = fixture();
     const grill = {
       id: "grill",
@@ -29,6 +143,12 @@ describe("overhaul acceptance — transition landing", () => {
       workItem({ id: "ideas-top", name: "Ideas top", key: "MEML-3", rank: "M" }),
       workItem({ id: "ideas-bottom", name: "Ideas bottom", key: "MEML-4", rank: "Z" }),
     ]);
+    http.workflowTransitions("story", [{
+      from_state_id: "grill",
+      to_state_id: "state-1",
+      agent_allowed: true,
+      handoff: false,
+    }]);
     // This seam supplies the authoritative transition response; rank
     // allocation itself is covered at the backend transition boundary.
     http.transitionRank("picker-move", "mV");
@@ -66,7 +186,7 @@ describe("overhaul acceptance — transition landing", () => {
       before_id: "ideas-top",
       after_id: "ideas-bottom",
     });
-    dragWorkItemAcrossTransientDocumentLeave(dragged, target, "before");
+    dragWorkItem(dragged, target, "before");
 
     await transitioned;
     await reordered;

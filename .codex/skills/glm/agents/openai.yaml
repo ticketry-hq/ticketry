@@ -1,0 +1,7 @@
+interface:
+  display_name: "GLM iterative coding"
+  short_description: "GLM writes code; main agent reviews each slice"
+  default_prompt: "Use $glm to implement this request in small reviewed slices."
+
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,229 @@
+query WorkTrackerOnboarding {
+  projects: worktrackerProject(orderBy: { createdAt: ASC, id: ASC }) {
+    nodes {
+      id
+      slug
+      name
+      onboarding_required: onboardingRequired
+    }
+  }
+}
+
+fragment GeneratedWorkTrackerStateFields on WorktrackerState {
+  id
+  project: projectId
+  name
+  group
+  color
+  sort_order: sortOrder
+  is_protected: isProtected
+  created_at: createdAt
+  updated_at: updatedAt
+}
+
+fragment GeneratedWorkTrackerIssueTypeFields on WorktrackerIssuetype {
+  id
+  project: projectId
+  name
+  level
+  color
+  sort_order: sortOrder
+  start_state: startStateId
+  workflow_revision: workflowRevision
+  is_pathfind: isPathfind
+  created_at: createdAt
+  updated_at: updatedAt
+  transitions: issueTypeTransition {
+    nodes {
+      id
+      issue_type: issueTypeId
+      from_state: fromStateId
+      to_state: toStateId
+      agent_allowed: agentAllowed
+      handoff
+      fromState { id sort_order: sortOrder }
+      toState { id sort_order: sortOrder }
+    }
+  }
+  launch_bindings: launchBinding {
+    nodes {
+      id
+      issue_type: issueTypeId
+      state: stateId
+      prompt
+      required_skills: requiredSkills
+      stage_skills: stageSkills
+      profile
+      model: modelId
+      reasoning: reasoningId
+      auto_start: autoStart
+      subtree_run_enabled: subtreeRunEnabled
+      created_at: createdAt
+      updated_at: updatedAt
+      state_record: state { id sort_order: sortOrder }
+    }
+  }
+}
+
+query WorkTrackerProjects {
+  projects: worktrackerProject {
+    nodes {
+      id
+      name
+      slug
+      description
+      created_at: createdAt
+    }
+  }
+}
+
+query WorkTrackerProjectOpen($projectId: String!) {
+  project: worktrackerProject(filters: { id: { eq: $projectId } }) {
+    nodes {
+      id
+      name
+      slug
+      description
+      created_at: createdAt
+    }
+  }
+  modules: worktrackerIssue(
+    filters: {
+      projectId: { eq: $projectId }
+      type: { eq: "module" }
+      isArchived: { eq: false }
+    }
+    orderBy: { sequenceId: ASC }
+  ) {
+    nodes {
+      id
+      name
+      project_id: projectId
+      sequence_id: sequenceId
+      is_archived: isArchived
+      issue_type: issueTypeId
+      rank
+      project { id slug }
+    }
+  }
+  module_presentations: worktrackerModulepresentation(
+    having: {
+      module: {
+        projectId: { eq: $projectId }
+        type: { eq: "module" }
+        isArchived: { eq: false }
+      }
+    }
+  ) {
+    nodes {
+      module_id: moduleId
+      rank
+      tab_hidden: tabHidden
+      module { id project_id: projectId }
+    }
+  }
+  states: worktrackerState(
+    filters: { projectId: { eq: $projectId } }
+    orderBy: { sortOrder: ASC, createdAt: ASC }
+  ) {
+    nodes { ...GeneratedWorkTrackerStateFields }
+  }
+  issue_types: worktrackerIssuetype(
+    filters: { projectId: { eq: $projectId } }
+    orderBy: { sortOrder: ASC, createdAt: ASC }
+  ) {
+    nodes { ...GeneratedWorkTrackerIssueTypeFields }
+  }
+  provider_catalog {
+    configurable_providers { id slug activated supports_unattended: supportsUnattended }
+    providers { id slug activated supports_unattended: supportsUnattended }
+    agent_models {
+      id
+      provider: providerId
+      name
+      reasoning_levels: agentModelReasoningLevel {
+        nodes { id reasoning_level_id: reasoningLevelId }
+      }
+    }
+    reasoning_levels { id name }
+    codex_profiles
+    global_default { provider profile model reasoning }
+  }
+}
+
+query WorkTrackerProjectStates($projectId: String!) {
+  states: worktrackerState(
+    filters: { projectId: { eq: $projectId } }
+    orderBy: { sortOrder: ASC, createdAt: ASC }
+  ) {
+    nodes { ...GeneratedWorkTrackerStateFields }
+  }
+}
+
+query WorkTrackerProjectIssueTypes($projectId: String!) {
+  issue_types: worktrackerIssuetype(
+    filters: { projectId: { eq: $projectId } }
+    orderBy: { sortOrder: ASC, createdAt: ASC }
+  ) {
+    nodes { ...GeneratedWorkTrackerIssueTypeFields }
+  }
+}
+
+mutation AcknowledgeWorkTrackerOnboarding($projectId: String!) {
+  acknowledge_onboarding(project_id: $projectId) {
+    id
+    slug
+    name
+    onboarding_required: onboardingRequired
+  }
+}
+
+mutation CreateWorkTrackerProject($name: String!, $slug: String!, $description: String) {
+  create_project(name: $name, slug: $slug, description: $description) {
+    id
+    name
+    slug
+    description
+  }
+}
+
+mutation UpdateWorkTrackerProject($id: String!, $name: String, $description: String) {
+  update_project(id: $id, name: $name, description: $description) {
+    id
+    name
+    slug
+    description
+  }
+}
+
+mutation DeleteWorkTrackerProject($id: String!) {
+  delete_project(id: $id)
+}
+
+mutation ReorderWorkTrackerModulePresentation(
+  $moduleId: String!
+  $beforeId: String
+  $afterId: String
+  $initialOrderIds: [String!]
+) {
+  reorder_module_presentation(
+    module_id: $moduleId
+    before_id: $beforeId
+    after_id: $afterId
+    initial_order_ids: $initialOrderIds
+  ) {
+    __typename
+    module_id: moduleId
+    rank
+    tab_hidden: tabHidden
+  }
+}
+
+mutation UpdateWorkTrackerModulePresentation($moduleId: String!, $tabHidden: Boolean!) {
+  update_module_presentation(module_id: $moduleId, tab_hidden: $tabHidden) {
+    __typename
+    module_id: moduleId
+    rank
+    tab_hidden: tabHidden
+  }
+}

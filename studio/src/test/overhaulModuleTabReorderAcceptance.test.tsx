@@ -1,32 +1,50 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../shared/api/client", async () => {
-  const actual = await vi.importActual<typeof import("../shared/api/client")>(
-    "../shared/api/client",
+vi.mock("./legacyApiFixture", async () => {
+  const actual = await vi.importActual<typeof import("./legacyApiFixture")>(
+    "./legacyApiFixture",
   );
   return {
     ...actual,
-    listModulePresentations: vi.fn(),
     listModules: vi.fn(),
     listProjects: vi.fn(),
-    reorderModulePresentation: vi.fn(),
-    updateModulePresentation: vi.fn(),
+    reorderWorkItem: vi.fn(),
   };
 });
+vi.mock("../features/projects/queries/readTransport", async () => {
+  const actual = await vi.importActual<typeof import("../features/projects/queries/readTransport")>(
+    "../features/projects/queries/readTransport",
+  );
+  const api = await import("./legacyApiFixture");
+  const { projectOpenFixture } = await import("./projectOpenFixture");
+  return {
+    ...actual,
+    readProjectOpen: async (projectId: string) => {
+      const [projects, modules] = await Promise.all([api.listProjects(), api.listModules(projectId)]);
+      const project = projects.find((candidate: { id: string }) => candidate.id === projectId) ?? projects[0];
+      if (!project) throw new Error(`Project ${projectId} was not found.`);
+      return projectOpenFixture(project, modules);
+    },
+    readOnboardingProjects: vi.fn(),
+  };
+});
+vi.mock("../features/projects/modulePresentationTransport", async () => {
+  const actual = await vi.importActual<typeof import("../features/projects/modulePresentationTransport")>(
+    "../features/projects/modulePresentationTransport",
+  );
+  const api = await import("./legacyApiFixture");
+  return { ...actual, reorderModulePresentation: api.reorderWorkItem };
+});
 
-import { useAgentStatusStore } from "../features/agents/status";
-import type { ModulePresentation } from "../shared/api/types";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
+import type { WorkItem } from "../shared/api/types";
 import { useClientStore } from "../state/clientStore";
 import {
   dataTransfer,
   dragEvent,
   dragTab,
   dragTabAboveStrip,
-  layoutRows,
-  layoutTabs,
-  transientDocumentDragLeave,
-  transientDocumentDragLeaveTargets,
 } from "./moduleDragGestures";
 import {
   backlogGroupOrder,
@@ -37,7 +55,7 @@ import {
   moved,
   project,
   renderAutomaticProject,
-  reorderModulePresentation,
+  reorderWorkItem,
   resetModuleReorderHarness,
   rows,
   sidebarOrder,
@@ -53,8 +71,8 @@ describe("module tab strip reorder acceptance", () => {
   it("[overhaul-51] places a module by the tab half it is dropped on, and every surface follows", async () => {
     await renderAutomaticProject();
 
-    const settle = deferred<ModulePresentation>();
-    reorderModulePresentation.mockReturnValue(settle.promise);
+    const settle = deferred<WorkItem>();
+    reorderWorkItem.mockReturnValue(settle.promise);
     // The server has taken the project manual and now owns the whole order.
     listProjects.mockResolvedValue([project(true)]);
     listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
@@ -69,11 +87,11 @@ describe("module tab strip reorder acceptance", () => {
     expect(screen.queryByTestId("module-drop-seam")).toBeNull();
 
     // The left half of a tab means "before it", and the baseline is the
-    // activity-sorted order the user could actually see.
+    // canonical order the user could actually see.
     dragTab("module-c", "module-a", "near");
 
-    await waitFor(() => expect(reorderModulePresentation).toHaveBeenCalled());
-    expect(reorderModulePresentation).toHaveBeenCalledWith("module-c", {
+    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalled());
+    expect(reorderWorkItem).toHaveBeenCalledWith("module-c", {
       before_id: null,
       after_id: "module-a",
       initial_order_ids: ["module-a", "module-b", "module-c"],
@@ -106,10 +124,8 @@ describe("module tab strip reorder acceptance", () => {
     listModules.mockResolvedValue(modules("module-a", "module-c", "module-b"));
     dragTab("module-c", "module-a", "far");
 
-    await waitFor(() =>
-      expect(reorderModulePresentation).toHaveBeenCalledTimes(2),
-    );
-    expect(reorderModulePresentation).toHaveBeenLastCalledWith("module-c", {
+    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalledTimes(2));
+    expect(reorderWorkItem).toHaveBeenLastCalledWith("module-c", {
       before_id: "module-a",
       after_id: "module-b",
       initial_order_ids: ["module-c", "module-a", "module-b"],
@@ -137,10 +153,8 @@ describe("module tab strip reorder acceptance", () => {
 
     dragTabAboveStrip("module-b", "module-a", "near");
 
-    await waitFor(() =>
-      expect(reorderModulePresentation).toHaveBeenCalledTimes(3),
-    );
-    expect(reorderModulePresentation).toHaveBeenLastCalledWith("module-b", {
+    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalledTimes(3));
+    expect(reorderWorkItem).toHaveBeenLastCalledWith("module-b", {
       before_id: null,
       after_id: "module-a",
       initial_order_ids: ["module-a", "module-c", "module-b"],
@@ -149,7 +163,7 @@ describe("module tab strip reorder acceptance", () => {
     expect(sidebarOrder()).toEqual(["module-b", "module-a", "module-c"]);
   });
 
-  it("[overhaul-52] keeps tab navigation and the fixed add-module button intact across a reorder", async () => {
+  it("[overhaul-52] keeps tab navigation and the trailing module picker intact across a reorder", async () => {
     const scrolledInto: Element[] = [];
     Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
       scrolledInto.push(this);
@@ -166,16 +180,24 @@ describe("module tab strip reorder acceptance", () => {
     await waitFor(() => expect(tabBadges("module-c")).toHaveLength(1));
 
     const strip = screen.getByRole("tablist");
-    const addButton = screen.getByLabelText("Open module picker");
+    const pickerButton = screen.getByRole("button", {
+      name: "Open module picker",
+    });
+    const modulesToggle = screen.getByRole("button", {
+      name: /^(Open|Close) Modules pane$/,
+    });
+    const tabScroller = screen.getByLabelText("Scrollable project module tabs");
 
-    // Creation is pinned to the left edge and is not one of the project's
-    // Modules: it cannot be picked up, and it cannot receive one.
-    expect(strip.parentElement?.firstElementChild).toContainElement(addButton);
-    expect(addButton.getAttribute("draggable")).toBeNull();
+    // The sidebar toggle stays before the project's Modules and the picker
+    // stays after them. Neither control can be picked up or receive a tab.
+    expect(tabScroller.parentElement?.firstElementChild).toBe(modulesToggle);
+    expect(tabScroller.firstElementChild).toBe(strip);
+    expect(strip.nextElementSibling).toContainElement(pickerButton);
+    expect(pickerButton.getAttribute("draggable")).toBeNull();
 
     const transfer = dataTransfer();
     dragEvent(tabFor("module-c"), "dragstart", transfer);
-    dragEvent(addButton, "dragover", transfer, { clientX: 4 });
+    dragEvent(pickerButton, "dragover", transfer, { clientX: 4 });
     expect(screen.queryByTestId("module-tab-drop-seam")).toBeNull();
     fireEvent.keyDown(window, { key: "Escape" });
 
@@ -189,12 +211,14 @@ describe("module tab strip reorder acceptance", () => {
 
     // Reordering moves tabs, not what they mean: the selected tab, its
     // lifecycle badge, and the scrolled-to element still belong to the same
-    // Modules, and the add button has not drifted along with the list.
+    // Modules, and the picker has not drifted along with the list.
     expect(tabFor("module-b").getAttribute("aria-selected")).toBe("true");
     expect(tabFor("module-c").getAttribute("aria-selected")).toBe("false");
     expect(tabBadges("module-c")).toHaveLength(1);
     expect(tabBadges("module-a")).toEqual([]);
-    expect(strip.parentElement?.firstElementChild).toContainElement(addButton);
+    expect(tabScroller.parentElement?.firstElementChild).toBe(modulesToggle);
+    expect(tabScroller.firstElementChild).toBe(strip);
+    expect(strip.nextElementSibling).toContainElement(pickerButton);
 
     // The selected tab kept its id but changed position, so it must be scrolled
     // back into the strip's horizontal viewport (#369).
@@ -209,108 +233,32 @@ describe("module tab strip reorder acceptance", () => {
     expect(selectModule).toHaveBeenCalledWith("module-a");
   });
 
-  it.each(transientDocumentDragLeaveTargets)(
-    "[overhaul-130] resumes consecutive fullscreen Module drags with each surface's visible baseline after a %s leave",
-    async (leaveTarget) => {
-      await renderAutomaticProject();
-      listModules.mockResolvedValue(modules("module-a", "module-c", "module-b"));
+  it("finishes an accepted tab drag when the host omits the drop event", async () => {
+    await renderAutomaticProject();
+    listProjects.mockResolvedValue([project(true)]);
+    listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
 
-      const laidOut = layoutTabs();
-      const source = laidOut.get("module-c")!;
-      const target = laidOut.get("module-a")!;
-      const transfer = dataTransfer();
+    const { source, target, transfer } = dragTab("module-c", "module-a", "near", {
+      drop: false,
+    });
+    expect(screen.getByTestId("module-tab-drop-seam")).toHaveAttribute(
+      "data-drop-intent",
+      "near",
+    );
 
-      dragEvent(source, "dragstart", transfer);
-      dragEvent(target, "dragover", transfer, { clientX: 2 });
-      expect(screen.getByTestId("module-tab-drop-seam")).toHaveAttribute(
-        "data-drop-intent",
-        "near",
-      );
+    // Some desktop webviews finish an otherwise accepted HTML drag with a
+    // target dragleave and source dragend, but never dispatch drop. The last
+    // promised seam still defines the user's release, so the Module must move
+    // instead of silently snapping back to where it started.
+    fireEvent.dragLeave(target, { dataTransfer: transfer, relatedTarget: null });
+    dragEvent(source, "dragend", transfer);
 
-      transientDocumentDragLeave(transfer, leaveTarget);
-      expect(screen.queryByTestId("module-tab-drop-seam")).toBeNull();
-
-      // The horizontal position remains authoritative above the narrow strip.
-      dragEvent(document.body, "dragover", transfer, {
-        clientX: 98,
-        clientY: -40,
-      });
-      expect(screen.getByTestId("module-tab-drop-seam")).toHaveAttribute(
-        "data-drop-intent",
-        "far",
-      );
-      dragEvent(document.body, "drop", transfer, {
-        clientX: 98,
-        clientY: -40,
-      });
-
-      // Every drag sends the order visible when it started. There is no
-      // client-side automatic/manual ordering branch.
-      await waitFor(() =>
-        expect(reorderModulePresentation).toHaveBeenCalledOnce(),
-      );
-      expect(reorderModulePresentation).toHaveBeenCalledWith("module-c", {
-        before_id: "module-a",
-        after_id: "module-b",
-        initial_order_ids: ["module-a", "module-b", "module-c"],
-      });
-      expect(tabStripOrder()).toEqual(["A", "C", "B"]);
-      expect(sidebarOrder()).toEqual(["module-a", "module-c", "module-b"]);
-      expect(backlogGroupOrder()).toEqual(["A", "C", "B"]);
-      expect(screen.queryByTestId("module-tab-drop-seam")).toBeNull();
-
-      await waitFor(() =>
-        expect(
-          rows().every((row) => row.getAttribute("draggable") === "true"),
-        ).toBe(true),
-      );
-
-      reorderModulePresentation.mockClear();
-      listModules.mockResolvedValue(modules("module-b", "module-a", "module-c"));
-
-      const laidOutRows = layoutRows();
-      const rowSource = laidOutRows.get("module-b")!;
-      const rowTarget = laidOutRows.get("module-a")!;
-      const rowTransfer = dataTransfer();
-
-      dragEvent(rowSource, "dragstart", rowTransfer);
-      dragEvent(rowTarget, "dragover", rowTransfer, { clientY: 2 });
-      expect(screen.getByTestId("module-drop-seam")).toHaveAttribute(
-        "data-drop-intent",
-        "near",
-      );
-
-      transientDocumentDragLeave(rowTransfer, leaveTarget);
-      expect(screen.queryByTestId("module-drop-seam")).toBeNull();
-
-      // The vertical position likewise remains authoritative beside the rows.
-      dragEvent(document.body, "dragover", rowTransfer, {
-        clientX: 400,
-        clientY: 2,
-      });
-      expect(screen.getByTestId("module-drop-seam")).toHaveAttribute(
-        "data-drop-intent",
-        "near",
-      );
-      dragEvent(document.body, "drop", rowTransfer, {
-        clientX: 400,
-        clientY: 2,
-      });
-
-      // A consecutive drag uses the current visible order as its new baseline
-      // while the neighbor ids continue to express the fractional insertion.
-      await waitFor(() =>
-        expect(reorderModulePresentation).toHaveBeenCalledOnce(),
-      );
-      expect(reorderModulePresentation).toHaveBeenCalledWith("module-b", {
-        before_id: null,
-        after_id: "module-a",
-        initial_order_ids: ["module-a", "module-c", "module-b"],
-      });
-      expect(tabStripOrder()).toEqual(["B", "A", "C"]);
-      expect(sidebarOrder()).toEqual(["module-b", "module-a", "module-c"]);
-      expect(backlogGroupOrder()).toEqual(["B", "A", "C"]);
-      expect(screen.queryByTestId("module-drop-seam")).toBeNull();
-    },
-  );
+    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalledOnce());
+    expect(reorderWorkItem).toHaveBeenCalledWith("module-c", {
+      before_id: null,
+      after_id: "module-a",
+      initial_order_ids: ["module-a", "module-b", "module-c"],
+    });
+    await waitFor(() => expect(tabStripOrder()).toEqual(["C", "A", "B"]));
+  });
 });

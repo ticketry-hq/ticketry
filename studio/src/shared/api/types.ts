@@ -1,24 +1,18 @@
-import type {
-  Attachment as GeneratedAttachment,
-  GraphRunExecutionModeEnum as GeneratedGraphRunExecutionMode,
-  GraphRunResult as GeneratedGraphRunResult,
-  Module as GeneratedModule,
-  ModulePresentation as GeneratedModulePresentation,
-  ModuleLink as GeneratedModuleLink,
-  Project as GeneratedProject,
-  PatchedProject as GeneratedProjectPatch,
-  WorkItem as GeneratedWorkItem,
-  WorkItemCreate as GeneratedWorkItemCreate,
-  PatchedWorkItemPatch as GeneratedWorkItemPatch,
-  WorkspaceTabOrder as GeneratedWorkspaceTabOrder,
-} from "@worktracker/typescript-sdk";
-
-export type Project = GeneratedProject;
-export type ProjectCreate = Omit<
-  GeneratedProject,
-  "id" | "onboarding_required"
->;
-export type ProjectPatch = GeneratedProjectPatch;
+export interface Project {
+  readonly id: string;
+  name: string;
+  slug: string;
+  description?: string;
+}
+export type ProjectCreate = Omit<Project, "id">;
+export type ProjectPatch = Partial<Omit<Project, "id">>;
+/** A project's identity plus the onboarding state it now owns. */
+export interface OnboardingProject {
+  readonly id: string;
+  readonly slug: string;
+  readonly name: string;
+  readonly onboarding_required: boolean;
+}
 export interface LaunchBinding extends LaunchBindingInput {
   id: number;
   issue_type_id: string;
@@ -30,20 +24,22 @@ export interface LaunchBinding extends LaunchBindingInput {
 export interface LaunchBindingInput {
   prompt?: string | null;
   required_skills?: string[] | null;
-  entry_skill?: string | null;
+  stage_skills?: string[] | null;
   agent?: string | null;
+  profile?: string | null;
   model?: string | null;
   reasoning?: string | null;
 }
 export interface ProviderCapabilities {
   agent: string;
-  models: ProviderModelCapability[];
+  accepts_model: boolean;
+  accepts_any_model: boolean;
+  model_aliases?: string[];
+  model_prefixes?: string[];
+  reasoning_levels?: string[];
+  /** Model-specific compatibility from the generated catalogue join rows. */
+  model_reasoning_levels?: Record<string, string[]>;
   supports_unattended?: boolean;
-}
-
-export interface ProviderModelCapability {
-  name: string;
-  reasoning_levels: string[];
 }
 
 export interface StateImpact {
@@ -57,27 +53,32 @@ export interface StateImpact {
 export type ConfigurableProvider = "claude" | "codex" | "gemini";
 export interface GlobalLaunchDefault {
   provider: ConfigurableProvider;
+  profile: string | null;
   model: string | null;
   reasoning: string | null;
 }
 export interface ProviderCatalog {
   activated_providers: ConfigurableProvider[];
+  codex_profiles: string[];
   global_default: GlobalLaunchDefault | null;
 }
 export type SubtreeRunCapabilityMap = Record<string, string[]>;
 
-// Scheduling mode of one graph-run campaign. Omitting it on the wire keeps the
-// historical parallel fan-out, so callers only pass it to opt into serial.
-export type GraphRunExecutionMode = `${GeneratedGraphRunExecutionMode}`;
+export interface Module {
+  readonly id: string;
+  name: string;
+  readonly project_id: string;
+  readonly sequence_id: number;
+  readonly key: string;
+  readonly is_archived: boolean;
+  readonly issue_type: string;
+}
 
-// What one graph-run press actually did. `launched` carries the work items the
-// press started, so an empty list is a press that changed nothing rather than a
-// failure.
-export type GraphRunResult = GeneratedGraphRunResult;
-
-export type Module = GeneratedModule;
-export type ModulePresentation = GeneratedModulePresentation;
-export type ModuleLink = GeneratedModuleLink;
+export interface ModulePresentation {
+  readonly module_id: string;
+  readonly rank: string;
+  readonly tab_hidden: boolean;
+}
 
 export type IssueLevel = "module" | "task";
 export interface IssueType {
@@ -89,8 +90,6 @@ export interface IssueType {
   sort_order: number;
   start_state?: string | null;
   workflow_revision?: number;
-  /** Backend-only orchestration types are retained in storage but hidden in Studio. */
-  is_pathfind?: boolean;
 }
 
 export interface State {
@@ -103,8 +102,24 @@ export interface State {
   is_protected?: boolean;
 }
 
-export type WorkItem = GeneratedWorkItem;
-export type WorkspaceTabOrder = GeneratedWorkspaceTabOrder;
+export interface WorkItem {
+  readonly id: string;
+  readonly name: string;
+  readonly project_id: string;
+  readonly sequence_id: number;
+  readonly state: string | null;
+  readonly description: string;
+  readonly parent_id: string | null;
+  readonly sub_issues_count: number;
+  readonly key: string;
+  readonly is_archived: boolean;
+  readonly created_at: string;
+  readonly updated_at: string;
+  readonly rank: string;
+  readonly issue_type: string;
+  readonly blocked_by_ids: string[];
+  readonly blocks_ids: string[];
+}
 
 export interface ModuleTree {
   rootIds: string[];
@@ -114,30 +129,38 @@ export interface ModuleTree {
   order: string[];
 }
 
-export type Attachment = Omit<
-  GeneratedAttachment,
-  "mime_type" | "size"
-> & {
+export interface Attachment {
+  readonly id: string;
+  readonly issue: string;
+  readonly filename: string;
   mime_type: string;
   size: number | null;
-};
+  readonly url: string;
+  readonly created_at: string;
+}
 
 export interface WorkItemDetail {
   task: WorkItem;
   attachments: Attachment[];
 }
 
-export type WorkItemCreate = GeneratedWorkItemCreate;
-export type ModuleWorkItemCreate = GeneratedWorkItemCreate;
+export interface WorkItemCreate {
+  name: string;
+  description?: string | null;
+  issue_type_id?: string | null;
+  state_id?: string | null;
+  parent_id?: string | null;
+}
+export type ModuleWorkItemCreate = WorkItemCreate;
 
-export type WorkItemPatch = Omit<
-  GeneratedWorkItemPatch,
-  "blocked_by_ids" | "name" | "origin"
-> & {
+export interface WorkItemPatch {
   blocked_by_ids?: string[];
   name?: string;
+  description?: string | null;
+  parent_id?: string | null;
+  state_id?: string | null;
   issue_type_id?: string;
-};
+}
 
 export interface IssueTypeCreate {
   name: string;
@@ -180,14 +203,16 @@ export interface ScopedWorkflowTransition {
   from_state_id: string;
   to_state_id: string;
   agent_allowed: boolean;
+  handoff: boolean;
 }
 
 export interface ScopedWorkflowLaunchBinding extends LaunchBindingInput {
   state_id: string;
   prompt: string;
   required_skills: string[];
-  entry_skill: string | null;
+  stage_skills: string[];
   agent: string | null;
+  profile: string | null;
   model: string | null;
   reasoning: string | null;
   auto_start: boolean;

@@ -1,13 +1,13 @@
-export { useSetModuleTabHidden } from "./mutations";
+export { ModulePicker, eligibleModulePickerChoices } from "./ModulePicker";
 export {
   getVisibleModulesSnapshot,
+  getModulePresentationsSnapshot,
   hiddenModuleIds,
-  loadModulePresentations,
-  useModulePresentationsQuery,
+  useModulePresentations,
   visibleModules,
-} from "./queries";
+} from "./modulePresentation";
 export { useRestoreAndSelectModule } from "./useRestoreAndSelectModule";
-export { ModulePicker } from "./ModulePicker";
+export { useSetModuleTabHidden } from "./useSetModuleTabHidden";
 export { ModuleJumpBadge } from "./ModuleJumpBadge";
 export {
   useModuleJumpBadges,

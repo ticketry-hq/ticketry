@@ -1,201 +1,173 @@
-import { useQuery } from "@tanstack/react-query";
-import * as api from "../../shared/api/client";
-import { queryClient } from "../../shared/query/queryClient";
-import { queryKeys } from "../../shared/query/keys";
-import { loadStates, reloadStates } from "../../shared/query/stateCatalog";
+import { setIssueTypeMetadata as setIssueTypes } from "../workflows";
+import { skipToken, useQuery } from "@apollo/client/react";
 import type { IssueType, SubtreeRunCapabilityMap } from "../../shared/api/types";
-import { visibleIssueTypes } from "./visibleIssueTypes";
+import {
+  compactWorktrackerId,
+  publicWorktrackerId,
+} from "../../shared/api/generatedWorktracker";
+import { studioApolloClient } from "../../shared/apollo/client";
+import {
+  readProjectOpen,
+  WorkTrackerProjectIssueTypesDocument,
+} from "../projects";
+import {
+  issueType,
+  getWorkflowCatalogSnapshot,
+  readWorkflowCatalog,
+} from "../workflows/queries/projectCatalog";
 
-// Project settings server state: the issue-type catalog and the subtree-run
-// capability map. Workflow states are NOT duplicated here — they live in the
-// one shared catalog (shared/query/stateCatalog.ts) that every surface reads.
+const seededCapabilities = new Map<string, SubtreeRunCapabilityMap>();
 
 const bySortOrder = <T extends { sort_order?: number }>(rows: T[]): T[] =>
   [...rows].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
-const issueTypesKey = (projectId: string) =>
-  queryKeys.issueTypes.byProject(projectId);
-
-const capabilitiesKey = (projectId: string) =>
-  ["settings", projectId, "subtree-run"] as const;
-
 async function fetchIssueTypes(projectId: string): Promise<IssueType[]> {
-  return bySortOrder(visibleIssueTypes(await api.listIssueTypes(projectId)));
+  return bySortOrder((await readWorkflowCatalog(projectId)).issueTypes.map(issueType));
 }
 
-export function loadIssueTypes(
+export async function loadIssueTypes(
   projectId: string,
   loader: (projectId: string) => Promise<IssueType[]> = fetchIssueTypes,
 ): Promise<IssueType[]> {
-  return queryClient.fetchQuery({
-    queryKey: issueTypesKey(projectId),
-    queryFn: () => loader(projectId),
-    staleTime: 0,
-  });
-}
-
-// Local capability writes (a just-saved workflow binding, an explicit refresh)
-// are newer than any load already in flight. One monotonic generation per
-// project decides that race — the single guard replacing the per-store copies.
-const capabilityGenerations = new Map<string, number>();
-
-function advanceCapabilityGeneration(projectId: string): void {
-  capabilityGenerations.set(projectId, (capabilityGenerations.get(projectId) ?? 0) + 1);
-}
-
-async function fetchCapabilities(
-  projectId: string,
-): Promise<SubtreeRunCapabilityMap> {
-  const generation = capabilityGenerations.get(projectId) ?? 0;
-  const fetched = await api.listSubtreeRunCapabilities(projectId);
-  // A synchronize/refresh landed while this request was in flight; what the
-  // server just told us is already stale, so keep the newer local map.
-  if ((capabilityGenerations.get(projectId) ?? 0) !== generation) {
-    return getCapabilitiesSnapshot(projectId);
-  }
-  return fetched;
+  const rows = await loader(projectId);
+  if (loader !== fetchIssueTypes) setIssueTypesSorted(projectId, rows);
+  return rows;
 }
 
 export function getIssueTypesSnapshot(projectId: string | null): IssueType[] {
   if (!projectId) return [];
-  return queryClient.getQueryData<IssueType[]>(issueTypesKey(projectId)) ?? [];
+  return getWorkflowCatalogSnapshot(projectId)?.issueTypes.map(issueType) ?? [];
 }
 
 export function issueTypeById(
   issueTypes: readonly IssueType[],
   issueTypeId: string | null | undefined,
 ): IssueType | null {
-  return issueTypes.find((issueType) => issueType.id === issueTypeId) ?? null;
+  return issueTypes.find((candidate) => candidate.id === issueTypeId) ?? null;
+}
+
+function capabilitiesFromProject(projectId: string): SubtreeRunCapabilityMap {
+  const seeded = seededCapabilities.get(projectId);
+  if (seeded) return seeded;
+  const catalog = getWorkflowCatalogSnapshot(projectId);
+  if (!catalog) return {};
+  const capabilities: SubtreeRunCapabilityMap = {};
+  for (const binding of catalog.launchBindings) {
+    if (!binding.subtree_run_enabled) continue;
+    capabilities[binding.issue_type] = [
+      ...(capabilities[binding.issue_type] ?? []),
+      binding.state,
+    ];
+  }
+  return capabilities;
 }
 
 export function getCapabilitiesSnapshot(
   projectId: string | null,
 ): SubtreeRunCapabilityMap {
-  if (!projectId) return {};
-  return (
-    queryClient.getQueryData<SubtreeRunCapabilityMap>(
-      capabilitiesKey(projectId),
-    ) ?? {}
-  );
+  return projectId ? capabilitiesFromProject(projectId) : {};
 }
 
-/**
- * Write the issue-type catalog, preserving the caller's order — an optimistic
- * reorder has to survive until the server responds.
- */
-export function setIssueTypes(projectId: string, issueTypes: IssueType[]): void {
-  queryClient.setQueryData(issueTypesKey(projectId), visibleIssueTypes(issueTypes));
-}
+export { setIssueTypes };
 
-/** Write the issue-type catalog in canonical sort order (server responses). */
 export function setIssueTypesSorted(
   projectId: string,
   issueTypes: IssueType[],
 ): void {
-  queryClient.setQueryData(
-    issueTypesKey(projectId),
-    bySortOrder(visibleIssueTypes(issueTypes)),
-  );
+  setIssueTypes(projectId, bySortOrder(issueTypes));
 }
 
 export function setCapabilities(
   projectId: string,
   map: SubtreeRunCapabilityMap,
 ): void {
-  queryClient.setQueryData(capabilitiesKey(projectId), map);
+  seededCapabilities.set(projectId, map);
 }
 
-/**
- * Load every settings resource for a project. Concurrent callers share one
- * request per resource — the cache dedups, so the hand-rolled in-flight
- * tracking this replaced is no longer needed.
- */
 export async function loadSettings(projectId: string): Promise<void> {
-  await Promise.all([
-    queryClient.fetchQuery({
-      queryKey: issueTypesKey(projectId),
-      queryFn: () => fetchIssueTypes(projectId),
-      staleTime: 0,
-    }),
-    reloadStates(projectId),
-    queryClient.fetchQuery({
-      queryKey: capabilitiesKey(projectId),
-      queryFn: () => fetchCapabilities(projectId),
-      staleTime: 0,
-    }),
-  ]);
+  await readProjectOpen(projectId, "network-only");
+  seededCapabilities.delete(projectId);
 }
 
-/** Load at most once per project; later calls resolve from cache. */
 export async function ensureSettings(projectId: string): Promise<void> {
-  await Promise.all([
-    queryClient.ensureQueryData({
-      queryKey: issueTypesKey(projectId),
-      queryFn: () => fetchIssueTypes(projectId),
-    }),
-    loadStates(projectId),
-    queryClient.ensureQueryData({
-      queryKey: capabilitiesKey(projectId),
-      queryFn: () => fetchCapabilities(projectId),
-    }),
-  ]);
+  await readProjectOpen(projectId, "cache-first");
 }
 
 export async function refreshSubtreeRunCapabilities(
   projectId: string,
 ): Promise<void> {
-  advanceCapabilityGeneration(projectId);
   try {
-    setCapabilities(projectId, await fetchCapabilities(projectId));
+    await readProjectOpen(projectId, "network-only");
+    seededCapabilities.delete(projectId);
   } catch {
-    // The workflow save already succeeded. Preserve the last known map and let
-    // a later settings load retry rather than reporting the save as failed.
+    // The workflow write already committed; the next project load retries.
   }
 }
 
-/** Reflect a just-saved workflow binding without a round-trip. */
 export function synchronizeSubtreeRunCapabilities(
   projectId: string,
   issueTypeId: string,
   enabledStateIds: string[],
 ): void {
-  advanceCapabilityGeneration(projectId);
   const next = { ...getCapabilitiesSnapshot(projectId) };
   if (enabledStateIds.length > 0) next[issueTypeId] = enabledStateIds;
   else delete next[issueTypeId];
-  setCapabilities(projectId, next);
+  seededCapabilities.set(projectId, next);
 }
 
 export function useSubtreeRunCapabilitiesQuery(projectId: string | null) {
-  return useQuery(
-    {
-      queryKey: capabilitiesKey(projectId ?? "none"),
-      queryFn: () => fetchCapabilities(projectId!),
-      enabled: projectId !== null,
-    },
-    queryClient,
+  const query = useQuery(
+    WorkTrackerProjectIssueTypesDocument,
+    projectId
+      ? {
+          variables: { projectId: compactWorktrackerId(projectId) },
+          client: studioApolloClient(),
+          fetchPolicy: "cache-first",
+        }
+      : skipToken,
   );
+  return {
+    ...query,
+    data: projectId && query.data ? capabilitiesFromProject(projectId) : undefined,
+  };
+}
+
+export function useLaunchBindingStatesQuery(projectId: string | null) {
+  const query = useQuery(
+    WorkTrackerProjectIssueTypesDocument,
+    projectId
+      ? {
+          variables: { projectId: compactWorktrackerId(projectId) },
+          client: studioApolloClient(),
+          fetchPolicy: "cache-first",
+        }
+      : skipToken,
+  );
+  const data: SubtreeRunCapabilityMap = {};
+  for (const type of query.data?.issue_types.nodes ?? []) {
+    const typeId = publicWorktrackerId(type.id);
+    data[typeId] = type.launch_bindings.nodes.map((binding) =>
+      publicWorktrackerId(binding.state),
+    );
+  }
+  return { ...query, data: query.data ? data : undefined };
 }
 
 export function useIssueTypesQuery(projectId: string | null) {
-  return useQuery(
-    {
-      queryKey: issueTypesKey(projectId ?? "none"),
-      queryFn: () => fetchIssueTypes(projectId!),
-      enabled: projectId !== null,
-    },
-    queryClient,
+  const query = useQuery(
+    WorkTrackerProjectIssueTypesDocument,
+    projectId
+      ? {
+          variables: { projectId: compactWorktrackerId(projectId) },
+          client: studioApolloClient(),
+          fetchPolicy: "cache-first",
+        }
+      : skipToken,
   );
-}
-
-/** Test seams. */
-export function seedIssueTypes(projectId: string, issueTypes: IssueType[]): void {
-  setIssueTypes(projectId, issueTypes);
-}
-
-export function seedCapabilities(
-  projectId: string,
-  map: SubtreeRunCapabilityMap,
-): void {
-  setCapabilities(projectId, map);
+  return {
+    ...query,
+    data: query.data
+      ? bySortOrder(query.data.issue_types.nodes.map(issueType))
+      : undefined,
+  };
 }

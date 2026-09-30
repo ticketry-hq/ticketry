@@ -1,0 +1,113 @@
+import { useSyncExternalStore } from "react";
+import {
+  useClientStore,
+  type EditViewZone,
+} from "../../state/clientStore";
+import { formatChordSymbols } from "../navigation/chordLabel";
+import {
+  studioKeymapRegistry,
+  type KeyChord,
+} from "../navigation/keymapRegistry";
+import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../navigation/three-zone/threeZoneNavigation";
+import { KeyChordHint } from "../../shared/ui/KeyChordHint";
+import { useChangesWorkspace } from "../../features/agents/worktrees";
+
+type FooterHint = {
+  key: string;
+  label: string;
+  tone?: "engaged";
+};
+
+const EDIT_VIEW_ACTIONS: Record<
+  EditViewZone,
+  readonly { actionIds: readonly string[]; label: string }[]
+> = {
+  stories: [
+    { actionIds: ["edit-view.next-zone"], label: "Next Zone" },
+    { actionIds: ["edit-view.up", "edit-view.down"], label: "Story" },
+    { actionIds: ["edit-view.right"], label: "Expand / Dive" },
+    { actionIds: ["edit-view.commit"], label: "Dive" },
+  ],
+  "tab-strip": [
+    { actionIds: ["edit-view.next-zone"], label: "Next Zone" },
+    { actionIds: ["edit-view.left", "edit-view.right"], label: "Tab" },
+    { actionIds: ["edit-view.down"], label: "Body" },
+    { actionIds: ["edit-view.commit"], label: "Open" },
+  ],
+  "active-tab-body": [
+    { actionIds: ["edit-view.next-zone"], label: "Next Zone" },
+    { actionIds: ["edit-view.up"], label: "Tabs" },
+    { actionIds: ["edit-view.left"], label: "Stories" },
+    { actionIds: ["edit-view.commit"], label: "Engage" },
+  ],
+  "terminal-panel": [
+    { actionIds: ["edit-view.next-zone"], label: "Next Zone" },
+    { actionIds: ["edit-view.up"], label: "Workspace" },
+    { actionIds: ["edit-view.commit"], label: "Type" },
+  ],
+};
+
+export function StudioFooterHints() {
+  useSyncExternalStore(
+    studioKeymapRegistry.subscribe,
+    studioKeymapRegistry.getRevision,
+  );
+  const sidebarVisible = useClientStore((state) => state.sidebarVisible);
+  const bodyEngaged = useClientStore((state) => state.editViewBodyEngaged);
+  const zone = useClientStore((state) => state.editViewZone);
+  const changesActive = useChangesWorkspace((state) => state.active);
+  const hints = changesActive ? [] : getFooterHints(sidebarVisible, zone, bodyEngaged);
+
+  return hints.map((hint) => (
+    <KeyChordHint
+      key={hint.label}
+      chord={hint.key}
+      label={hint.label}
+      tone={hint.tone}
+    />
+  ));
+}
+
+function getFooterHints(
+  sidebarVisible: boolean,
+  zone: EditViewZone,
+  bodyEngaged: boolean,
+): FooterHint[] {
+  if (sidebarVisible) return [];
+  return getEditViewHints(getEffectiveChords(), zone, bodyEngaged);
+}
+
+function getEditViewHints(
+  chords: Map<string, KeyChord>,
+  zone: EditViewZone,
+  bodyEngaged: boolean,
+): FooterHint[] {
+  if (zone === "active-tab-body" && bodyEngaged) {
+    return [
+      {
+        key: formatChordSymbols(EDIT_VIEW_BODY_DISENGAGE_CHORD),
+        label: "Disengage",
+        tone: "engaged",
+      },
+    ];
+  }
+
+  return EDIT_VIEW_ACTIONS[zone].flatMap(({ actionIds, label }) => {
+    const keys = actionIds.flatMap((actionId) => {
+      const chord = chords.get(`capture:${actionId}`);
+      return chord ? [formatChordSymbols(chord)] : [];
+    });
+    return keys.length > 0 ? [{ key: keys.join(""), label }] : [];
+  });
+}
+
+function getEffectiveChords() {
+  return new Map(
+    studioKeymapRegistry
+      .getEffectiveBindings()
+      .map((binding) => [
+        `${binding.context}:${binding.actionId}`,
+        binding.chord,
+      ]),
+  );
+}

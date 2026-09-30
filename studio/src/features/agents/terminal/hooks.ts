@@ -1,16 +1,13 @@
 import { useMemo } from "react";
 import {
   useTerminalStore,
-  type OpenSessionArgs,
   type SessionMeta,
 } from "./internal/sessionStore";
-import { launchAgent } from "./internal/actions";
 import type { SessionId, TaskId } from "../types";
 import type { TerminalPresentationState } from "./lifecycle";
 import {
-  isLiveAgentRunState,
   selectRunState,
-  useAgentStatusStore,
+  useAgentStatusRuns,
 } from "../status";
 import type { RunRecord } from "../status";
 import { bucketOfMeta, dismissedRunsFor } from "./internal/sessionStore";
@@ -20,13 +17,6 @@ import { useClientStore as useWorkspaceTabsStore } from "../../../state/clientSt
 // tab strip, a badge, or a launch button import these — never the store
 // internals. Each hook subscribes narrowly so callers re-render only on the
 // slice they read.
-
-// Launch verbs. Spawning is deliberately separate from presenting: `<Terminal>`
-// only displays an existing session; these create one and return its id (the
-// pre-ready temp id — the store rekeys it centrally once the server acks).
-export function launchSession(args: OpenSessionArgs): SessionId {
-  return launchAgent(args);
-}
 
 // One terminal tab of a task bucket, ready to render: the session meta plus
 // the lifecycle the strip shows ("reconnecting" transport state beats the
@@ -87,7 +77,7 @@ export function deriveTaskSessions(
       const lifecycle: TerminalPresentationState =
         meta.status === "reconnecting"
           ? "reconnecting"
-          : meta.status === "session_lost" && !isLiveAgentRunState(runState)
+          : meta.status === "session_lost" && !runState
             ? "lost"
             : (runState ?? "unknown");
       return {
@@ -105,11 +95,7 @@ export function deriveTaskSessions(
 // buckets). The workspace-tabs store is the sole tab index (CODIN-981/982).
 export function useTaskSessions(taskId: TaskId | null): SessionTab[] {
   const sessions = useTerminalStore((s) => s.sessions);
-  const runStates = useAgentStatusStore((s) => s.runs);
-  // A run can change presentation with no run fact changing at all — the clock
-  // simply passed its unchanged-output deadline. The epoch is what tells this
-  // memo to reproject then.
-  const stallEpoch = useAgentStatusStore((s) => s.stallEpoch);
+  const runStates = useAgentStatusRuns();
   return useMemo(
     () => deriveTaskSessions(
       taskId,
@@ -117,7 +103,7 @@ export function useTaskSessions(taskId: TaskId | null): SessionTab[] {
       runStates,
       taskId ? dismissedRunsFor(taskId) : new Set(),
     ),
-    [taskId, sessions, runStates, stallEpoch],
+    [taskId, sessions, runStates],
   );
 }
 

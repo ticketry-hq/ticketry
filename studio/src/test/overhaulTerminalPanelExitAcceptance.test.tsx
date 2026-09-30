@@ -16,22 +16,33 @@
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { loadXtermTerminal } from "../features/agents/terminal/xtermTerminalLoader";
+
+// The compatibility renderer is a lazily fetched chunk; preload it so the
+// xterm host can be queried synchronously after render.
+beforeEach(async () => {
+  await loadXtermTerminal();
+});
 
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
-import { useAgentStatusStore } from "../features/agents/status/store";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import {
   selectModuleLifecycleCounts,
   selectScratchLifecycleChips,
-  selectScratchRunIds,
   selectTaskLifecycleChips,
   selectTaskRunCount,
 } from "../features/agents/status/selectors";
-import { dispatchStatusFrame } from "../features/agents/status/statusFeed";
+import { applyRunStatusFrame } from "../features/agents/status/stream/runStatusHolding";
+import { applySnapshotFrame } from "../features/agents/status/stream/statusSnapshot";
+import {
+  statusRunHolding,
+  terminalStatusFrame,
+} from "../features/agents/status/testing/durableStatusFrames";
 import type { RunRecord } from "../features/agents/status/types";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useStudioStore } from "../features/projects/store";
-import { seedConfig } from "../features/studio/stores/configStore";
+import { seedModuleLinks } from "../features/module-links";
 import { selectLiveTerminalStops } from "../features/studio/lib/liveTerminalCycle";
 import { useModuleShellStore } from "../features/terminal-panel/moduleShellStore";
 import { useTerminalPanelStore } from "../features/terminal-panel/panelStore";
@@ -160,11 +171,17 @@ function shellRun(runId: string, overrides: Partial<RunRecord> = {}): RunRecord 
 /** Announce a live shell run exactly as its launch does. */
 function announceShell(runId: string): void {
   act(() => {
-    dispatchStatusFrame({
-      v: 1,
-      type: "agent_lifecycle",
+    const status = useAgentStatusStore.getState();
+    applySnapshotFrame({
+      __typename: "RunStatusSnapshot",
+      project_id: "project-1",
+      cursor: 1,
       at: AT,
-      run: shellRun(runId),
+      runs: [
+        ...Object.values(status.runs).map(statusRunHolding),
+        statusRunHolding(shellRun(runId)),
+      ],
+      automation_attempts: [],
     });
   });
 }
@@ -172,14 +189,13 @@ function announceShell(runId: string): void {
 /** Push the completion state reconciliation publishes for a dead session. */
 function announceExit(runId: string, exitCode: number | null): void {
   act(() => {
-    dispatchStatusFrame({
-      v: 1,
-      type: "backend_session",
-      agent_run_id: runId,
-      status: "exited",
+    applyRunStatusFrame(terminalStatusFrame({
+      projectId: "project-1",
+      agentRunId: runId,
+      state: "exited",
       at: "2026-08-15T10:05:00.000Z",
-      exit_code: exitCode,
-    });
+      exitCode,
+    }));
   });
 }
 
@@ -206,6 +222,7 @@ function resetStudioState(): void {
 
 describe("terminal panel shell exit acceptance", () => {
   beforeEach(() => {
+    localStorage.setItem("ticketry:terminal-renderer", "xterm");
     runtime.desktop = false;
     runtime.nativeAvailable = false;
     shellApi.createModuleShell.mockReset();
@@ -223,21 +240,11 @@ describe("terminal panel shell exit acceptance", () => {
       editViewZone: "active-tab-body",
       editViewBodyEngaged: false,
       activeByTask: {},
-      modalStack: [],
     });
     useStudioStore.setState({ selectedProjectId: "project-1" });
-    seedConfig({
-      profiles: [
-        {
-          name: "local",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_links: [{ module_id: "module-1", path: "/repo/module-1" }],
-          recent_project_id: null,
-        },
-      ],
-      recentProfileIndex: 0,
-    });
+    seedModuleLinks([
+      { id: "link-module-1", moduleId: "module-1", path: "/repo/module-1" },
+    ]);
   });
 
   afterEach(() => {
@@ -321,21 +328,20 @@ describe("terminal panel shell exit acceptance", () => {
     // accident: a real task id, a lifecycle state a module badge counts, and a
     // session sitting in a task's own slot in the cycle.
     act(() => {
-      dispatchStatusFrame({
-        v: 1,
-        type: "agent_lifecycle",
+      applySnapshotFrame({
+        __typename: "RunStatusSnapshot",
+        project_id: "project-1",
+        cursor: 2,
         at: AT,
-        run: shellRun("run-shell-1", { task_id: "task-1", state: "working" }),
-      });
-      dispatchStatusFrame({
-        v: 1,
-        type: "agent_lifecycle",
-        at: AT,
-        run: {
+        runs: [statusRunHolding(shellRun("run-shell-1", {
+          task_id: "task-1",
+          state: "working",
+        })), statusRunHolding({
           ...shellRun("run-agent-1", { task_id: "task-1", state: "working" }),
           agent: "codex",
           scope: "task",
-        },
+        })],
+        automation_attempts: [],
       });
     });
 
@@ -345,11 +351,10 @@ describe("terminal panel shell exit acceptance", () => {
     expect(selectModuleLifecycleCounts(status, "module-1").working).toBe(1);
     expect(selectTaskRunCount(status, "task-1")).toBe(1);
     expect(selectTaskLifecycleChips(status, "task-1")).toEqual([
-      { state: "working", count: 1 },
+      { state: "working", count: 1, agent: "codex" },
     ]);
     // The module's scratch chicklets are plan/instant work; a shell is neither.
     expect(selectScratchLifecycleChips(status, "project-1", "module-1")).toEqual([]);
-    expect(selectScratchRunIds(status, "project-1", "module-1")).toEqual([]);
 
     // The cycle walks the work-item tree's agent terminals. Even with the shell
     // session presented as if it belonged to the task, it is not one of them.

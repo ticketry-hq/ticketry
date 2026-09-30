@@ -1,0 +1,258 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// The two host reads startup must complete before it can prompt for anything.
+vi.mock("../features/projects/queries", async () => ({
+  ...(await vi.importActual("../features/projects/queries")),
+  loadProjects: vi.fn(),
+  loadModules: vi.fn(),
+  getModulesSnapshot: vi.fn(),
+}));
+
+// The host read: bootstrap must have answered it before anything can prompt
+// for a folder, so the test replaces the read rather than the cache.
+vi.mock("../features/module-links", async () => ({
+  ...(await vi.importActual("../features/module-links")),
+  loadModuleLinks: vi.fn(),
+}));
+
+vi.mock("../features/projects/modulePresentation", async () => ({
+  ...(await vi.importActual("../features/projects/modulePresentation")),
+  getModulePresentationsSnapshot: vi.fn(),
+}));
+
+vi.mock("../features/work-items/queries/readTransport", async () => ({
+  ...(await vi.importActual("../features/work-items/queries/readTransport")),
+  readModuleTreeRecords: vi.fn(),
+}));
+
+vi.mock("../app/navigation/keymapSettings", async () => ({
+  ...(await vi.importActual("../app/navigation/keymapSettings")),
+  loadKeybindingOverrides: vi.fn(async () => {}),
+}));
+
+import { bootstrapStudio } from "../app/startup/bootstrapStudio";
+import { useModalStore } from "../app/modal";
+import * as moduleLinks from "../features/module-links";
+import * as modulePresentation from "../features/projects/modulePresentation";
+import { getModuleLinks, seedModuleLinks } from "../features/module-links";
+import { getProjectsSnapshot, seedProjects, useStudioStore } from "../features/projects";
+import * as projectQueries from "../features/projects/queries";
+import * as workItemReadTransport from "../features/work-items/queries/readTransport";
+import { useClientStore } from "../state/clientStore";
+import { RECENT_MODULE_KEY, rememberTaskSelection } from "../state/persistence";
+import { TEMP_TASK_ID, type TabKind } from "../features/agents/types";
+import { scratchBucketId } from "../features/agents/terminal";
+import { readStudioWorkspaceTarget, rememberStudioWorkspaceTarget } from "../features/workspace-state/studioWorkspaceTarget";
+
+const loadProjects = projectQueries.loadProjects as ReturnType<typeof vi.fn>;
+const loadModules = projectQueries.loadModules as ReturnType<typeof vi.fn>;
+const getModulesSnapshot = projectQueries.getModulesSnapshot as ReturnType<
+  typeof vi.fn
+>;
+const loadModuleLinks = moduleLinks.loadModuleLinks as ReturnType<typeof vi.fn>;
+const getModulePresentationsSnapshot =
+  modulePresentation.getModulePresentationsSnapshot as ReturnType<typeof vi.fn>;
+const readModuleTree = workItemReadTransport.readModuleTreeRecords as ReturnType<
+  typeof vi.fn
+>;
+
+const INSTALLATION_PROJECT = {
+  id: "project-1",
+  name: "Coding",
+  slug: "CDN",
+  description: "",
+  is_automatic: false,
+};
+
+const MODULES = [
+  { id: "module-1", name: "Runtime", project_id: "project-1" },
+  { id: "module-2", name: "Shell", project_id: "project-1" },
+];
+
+/** The order in which the host answered each read during one bootstrap. */
+let reads: string[] = [];
+
+function seedHost({
+  projects = [INSTALLATION_PROJECT],
+  links = [{ id: "link-module-1", moduleId: "module-1", path: "/repos/runtime" }],
+}: {
+  projects?: unknown[];
+  links?: { id: string; moduleId: string; path: string }[];
+} = {}): void {
+  loadProjects.mockImplementation(async () => {
+    reads.push("projects");
+    seedProjects(projects as never);
+    return projects;
+  });
+  loadModuleLinks.mockImplementation(async () => {
+    reads.push("module-links");
+    seedModuleLinks(links);
+    return links;
+  });
+}
+
+describe("startup acceptance", () => {
+  beforeEach(() => {
+    reads = [];
+    localStorage.clear();
+    seedProjects([]);
+    seedModuleLinks([]);
+    loadModules.mockReset().mockResolvedValue(MODULES);
+    getModulesSnapshot.mockReset().mockReturnValue(MODULES);
+    getModulePresentationsSnapshot.mockReset().mockReturnValue([]);
+    readModuleTree.mockReset().mockResolvedValue({
+      rootIds: [],
+      children: {},
+      order: [],
+      states: [],
+      workItems: [],
+    });
+    useStudioStore.setState({ selectedProjectId: null, error: null });
+    useClientStore.setState({
+      selectedModuleId: null,
+      selectedTaskId: null,
+      sidebarVisible: false,
+      focusedPane: "tasks",
+    });
+    useModalStore.setState({ modalStack: [] });
+    seedHost();
+  });
+
+  it("opens a fresh install on the installation project with no profile file", async () => {
+    expect(await bootstrapStudio()).toBe("ready");
+
+    expect(useStudioStore.getState().selectedProjectId).toBe("project-1");
+    // No profile index, no profile selection, no recent-project list.
+    expect(localStorage.getItem("studio.recentProjects")).toBeNull();
+    expect(getProjectsSnapshot()).toHaveLength(1);
+  });
+
+  it("does not force the Modules sidebar open during ordinary startup", async () => {
+    useClientStore.setState({ sidebarVisible: false });
+
+    expect(await bootstrapStudio()).toBe("ready");
+
+    expect(useClientStore.getState().sidebarVisible).toBe(false);
+  });
+
+  it("reads the project and its links before anything can prompt", async () => {
+    expect(await bootstrapStudio()).toBe("ready");
+
+    expect(reads).toContain("projects");
+    expect(reads).toContain("module-links");
+    expect(getModuleLinks()).toHaveLength(1);
+    // A folder prompt during startup would mean the links had not been read.
+    expect(useModalStore.getState().modalStack).toEqual([]);
+  });
+
+  it("restores the one remembered module across a restart", async () => {
+    localStorage.setItem(RECENT_MODULE_KEY, "module-1");
+
+    expect(await bootstrapStudio()).toBe("ready");
+
+    expect(useClientStore.getState().selectedModuleId).toBe("module-1");
+    expect(useClientStore.getState().focusedPane).toBe("tasks");
+  });
+
+  it("[overhaul-288] launches the restored Story or scratch workspace on Details without removing its tabs", async () => {
+    for (const taskId of ["story-1", TEMP_TASK_ID]) {
+      for (const active of ["terminal", "doc", "changes"] as TabKind[]) {
+        useStudioStore.setState({ selectedProjectId: null });
+        localStorage.setItem(RECENT_MODULE_KEY, "module-1");
+        rememberTaskSelection("module-1", taskId);
+        readModuleTree.mockResolvedValue({
+          rootIds: ["story-1"], children: { "story-1": [] }, order: ["story-1"], states: [], workItems: [],
+        });
+        const bucket = taskId === TEMP_TASK_ID ? scratchBucketId("module-1") : taskId;
+        useClientStore.setState({
+          selectedModuleId: null, selectedTaskId: null,
+          workspaces: { [bucket]: { active, activeDocId: "doc-1", closedDocIds: ["doc-2"] } },
+          activeByTask: { [bucket]: "session-1" },
+        });
+        rememberStudioWorkspaceTarget(bucket, active === "terminal"
+          ? { kind: "terminal", agentRunId: "run-1" }
+          : active === "doc" ? { kind: "doc", relPath: "spec.md" } : { kind: "changes" });
+
+        expect(await bootstrapStudio()).toBe("ready");
+        expect(useClientStore.getState().selectedTaskId).toBe(taskId);
+        expect(useClientStore.getState().workspaces[bucket]).toEqual({
+          active: "details", activeDocId: "doc-1", closedDocIds: ["doc-2"],
+        });
+        expect(useClientStore.getState().activeByTask[bucket]).toBe("session-1");
+        expect(readStudioWorkspaceTarget(bucket)).toEqual({ kind: "details" });
+
+        // After startup, an explicit tab selection still works normally.
+        useClientStore.getState().setActive(bucket, "terminal");
+        expect(useClientStore.getState().workspaces[bucket].active).toBe("terminal");
+      }
+    }
+  });
+
+  it("uses the first visible linked module when the remembered module is hidden", async () => {
+    localStorage.setItem(RECENT_MODULE_KEY, "module-1");
+    getModulePresentationsSnapshot.mockReturnValue([
+      { module_id: "module-1", rank: "00000001", tab_hidden: true },
+      { module_id: "module-2", rank: "00000002", tab_hidden: false },
+    ]);
+    seedHost({
+      links: [
+        { id: "link-module-1", moduleId: "module-1", path: "/repos/runtime" },
+        { id: "link-module-2", moduleId: "module-2", path: "/repos/shell" },
+      ],
+    });
+
+    expect(await bootstrapStudio()).toBe("ready");
+
+    expect(useClientStore.getState().selectedModuleId).toBe("module-2");
+    expect(useModalStore.getState().modalStack).toEqual([]);
+  });
+
+  it("starts with no module when the remembered module and every fallback are hidden", async () => {
+    localStorage.setItem(RECENT_MODULE_KEY, "module-1");
+    getModulePresentationsSnapshot.mockReturnValue(MODULES.map((module, index) => ({
+      module_id: module.id,
+      rank: String(index).padStart(8, "0"),
+      tab_hidden: true,
+    })));
+
+    expect(await bootstrapStudio()).toBe("ready");
+
+    expect(useClientStore.getState().selectedModuleId).toBeNull();
+    expect(useModalStore.getState().modalStack).toEqual([]);
+  });
+
+  it("leaves an unlinked remembered module unopened rather than prompting", async () => {
+    localStorage.setItem(RECENT_MODULE_KEY, "module-2");
+
+    expect(await bootstrapStudio()).toBe("ready");
+
+    expect(useClientStore.getState().selectedModuleId).toBeNull();
+    expect(useModalStore.getState().modalStack).toEqual([]);
+    expect(useClientStore.getState().focusedPane).toBe("tasks");
+  });
+
+  it("ignores a remembered module the project no longer has", async () => {
+    localStorage.setItem(RECENT_MODULE_KEY, "module-removed");
+    seedHost({
+      links: [
+        { id: "link-removed", moduleId: "module-removed", path: "/repos/gone" },
+      ],
+    });
+
+    expect(await bootstrapStudio()).toBe("ready");
+
+    expect(useClientStore.getState().selectedModuleId).toBeNull();
+  });
+
+  it("reports the host as unavailable rather than provisioning", async () => {
+    loadProjects.mockRejectedValue(new TypeError("fetch failed"));
+
+    expect(await bootstrapStudio()).toBe("unavailable");
+  });
+
+  it("reports provisioning while the installation project cannot resolve", async () => {
+    loadProjects.mockRejectedValue(new Error("state.db is still adopting"));
+
+    expect(await bootstrapStudio()).toBe("provisioning");
+  });
+});

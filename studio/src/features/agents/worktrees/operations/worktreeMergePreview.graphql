@@ -1,0 +1,22 @@
+query WorktreeMergePreview($taskId: String!, $destinationBranch: String) {
+  worktree_merge_preview(
+    task_id: $taskId
+    destination_branch: $destinationBranch
+  ) {
+    source_branch
+    source_commit
+    destination_branch
+    destination_commit
+    destination_checkout
+    destination_checkout_identity
+    confirmation_token
+    ready
+    blocker
+    reason
+    requires_destination_selection
+    destinations {
+      branch
+      checkout
+    }
+  }
+}

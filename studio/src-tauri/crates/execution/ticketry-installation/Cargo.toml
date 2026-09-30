@@ -1,0 +1,31 @@
+[package]
+name = "ticketry-installation"
+# Adoption records the Ticketry release that performed it into the user's
+# evidence file, reading `env!("CARGO_PKG_VERSION")`. That string is durable
+# support data, so this crate carries the shipping application version rather
+# than the workspace-internal `0.0.0`.
+version = "0.2.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+base64.workspace = true
+chrono.workspace = true
+sea-orm.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+ticketry-agent-execution.workspace = true
+ticketry-data-directory.workspace = true
+ticketry-documents.workspace = true
+ticketry-entities.workspace = true
+ticketry-runs.workspace = true
+ticketry-settings.workspace = true
+ticketry-terminal.workspace = true
+ticketry-work-management.workspace = true
+ticketry-workspace-runtime.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio.workspace = true

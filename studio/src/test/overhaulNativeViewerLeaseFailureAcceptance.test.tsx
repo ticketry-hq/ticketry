@@ -6,6 +6,7 @@ import { useModalStore } from "../app/modal/modalStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useClientStore } from "../state/clientStore";
+import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -40,6 +41,7 @@ describe("native viewer attachment acceptance", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       x: 0,
@@ -108,7 +110,7 @@ describe("native viewer attachment acceptance", () => {
     });
   });
 
-  it("[overhaul-32] releases viewer ownership without reporting a renderer failure when the native attachment process exits", async () => {
+  it("[overhaul-32] releases viewer ownership without starting renderer recovery when the native attachment process exits", async () => {
     const listeners = new Map<string, (event: { payload: unknown }) => void>();
     tauri.listen.mockImplementation(
       async (event: string, listener: (event: { payload: unknown }) => void) => {
@@ -116,17 +118,11 @@ describe("native viewer attachment acceptance", () => {
         return () => listeners.delete(event);
       },
     );
-    const requests: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        requests.push(String(input));
-        return new Response("{}", {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }),
-    );
+    // Viewer ownership is claimed and released on the Rust lease contract, so
+    // what a test counts is lease operations, not host requests.
+    const leaseOperations = installDesktopGraphQlRuntime();
+    const leases = (operationName: string) =>
+      leaseOperations.filter((operation) => operation.operationName === operationName);
     const ready = vi.fn();
     const unavailable = vi.fn();
 
@@ -149,7 +145,7 @@ describe("native viewer attachment acceptance", () => {
     });
 
     await waitFor(() => {
-      expect(requests.some((url) => url.endsWith("/release"))).toBe(true);
+      expect(leases("DeleteViewerLease").length > 0).toBe(true);
     });
     expect(unavailable).not.toHaveBeenCalled();
     expect(tauri.invoke).not.toHaveBeenCalledWith("native_terminal_detach", {
@@ -190,17 +186,11 @@ describe("native viewer attachment acceptance", () => {
       }
       return Promise.resolve();
     });
-    const requests: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        requests.push(String(input));
-        return new Response("{}", {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }),
-    );
+    // Viewer ownership is claimed and released on the Rust lease contract, so
+    // what a test counts is lease operations, not host requests.
+    const leaseOperations = installDesktopGraphQlRuntime();
+    const leases = (operationName: string) =>
+      leaseOperations.filter((operation) => operation.operationName === operationName);
     const firstUnavailable = vi.fn();
     const replacementUnavailable = vi.fn();
     const firstReady = vi.fn();
@@ -216,7 +206,7 @@ describe("native viewer attachment acceptance", () => {
     await waitFor(() => expect(firstReady).toHaveBeenCalled());
     firstView.unmount();
     await waitFor(() => {
-      expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(1);
+      expect(leases("DeleteViewerLease")).toHaveLength(1);
     });
 
     render(
@@ -228,9 +218,7 @@ describe("native viewer attachment acceptance", () => {
       />,
     );
     await waitFor(() => expect(replacementReady).toHaveBeenCalled());
-    const releasesBeforeStaleFailure = requests.filter((url) =>
-      url.endsWith("/release"),
-    ).length;
+    const releasesBeforeStaleFailure = leases("DeleteViewerLease").length;
 
     failureListeners[0]({
       payload: {
@@ -244,7 +232,7 @@ describe("native viewer attachment acceptance", () => {
     expect(tauri.invoke).not.toHaveBeenCalledWith("native_terminal_detach", {
       handle: "native-2",
     });
-    expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(
+    expect(leases("DeleteViewerLease")).toHaveLength(
       releasesBeforeStaleFailure,
     );
   });

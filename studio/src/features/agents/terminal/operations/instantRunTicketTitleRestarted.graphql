@@ -1,0 +1,3 @@
+subscription InstantRunTicketTitleRestarted {
+  instant_run_ticket_title_restarted
+}

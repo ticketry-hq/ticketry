@@ -12,11 +12,14 @@ import type {
 import { useModalStore } from "../../../app/modal/modalStore";
 import { getModuleFolder } from "../../module-links";
 import { TEMP_TASK_ID } from "../../agents/types";
-import { useStudioStore } from "../../projects/store";
+import {
+  launchFailureMessage,
+  launchInstantConversation,
+  type TerminalProvider,
+} from "../../agents/terminal";
+import { useStudioStore } from "../../projects";
 import { useClientStore } from "../../../state/clientStore";
-import { queryClient } from "../../../shared/query/queryClient";
-import { queryKeys } from "../../../shared/query/keys";
-import type { WorkItem } from "../../../shared/api/types";
+import { getWorkItemSnapshot } from "../../work-items";
 
 function selectScratchWorkspace(): void {
   useClientStore.getState().selectTask(TEMP_TASK_ID);
@@ -86,46 +89,60 @@ export function startPlanFlow(): void {
   beginTerminalCreate(req, studioPlanFlow());
 }
 
+function launchSelectedConversation(
+  projectId: string,
+  moduleId: string,
+  options: InstantConversationOptions,
+): void {
+  void launchInstantConversation({ projectId, moduleId, ...options }).catch((error) => {
+    const message = launchFailureMessage(error);
+    useModalStore.getState().notifyUser({
+      id: `conversation-launch:${crypto.randomUUID()}`,
+      severity: "error",
+      title: "Conversation did not start",
+      message,
+      acknowledgementLabel: "Close",
+    });
+  });
+}
+
+export interface InstantConversationOptions {
+  provider?: TerminalProvider;
+  prompt?: string;
+}
+
 /**
- * Kick off the instant-change flow:
- * 1) If the selected module has no link, push ModuleFolder first
- *    (chained `next` resumes into PromptInput → AgentPicker (mode: instant)).
- * 2) Otherwise push PromptInput with `next: agent-picker, mode: instant`.
+ * Launch an Instant conversation. With no options it uses the configured
+ * global default and the user types in its terminal; the inline composer
+ * passes its chosen provider and first message.
  */
-export function startInstantChangeFlow(): void {
+export function startInstantChangeFlow(
+  options: InstantConversationOptions = {},
+): void {
   const tasks = {
     ...useStudioStore.getState(),
     ...useClientStore.getState(),
   };
-  const modal = useModalStore.getState();
-
   const { selectedProjectId, selectedModuleId } = tasks;
   if (!selectedProjectId || !selectedModuleId) return;
-  const agentPayload = {
-    mode: "instant",
-    projectId: selectedProjectId,
-    moduleId: selectedModuleId,
-    onLaunched: selectScratchWorkspace,
-  };
-
   const folder = getModuleFolder(selectedModuleId);
 
   if (!folder) {
-    modal.pushModal({
+    useModalStore.getState().pushModal({
       type: "module-folder",
       payload: {
         moduleId: selectedModuleId,
-        next: "prompt-input",
-        nextPayload: { next: "agent-picker", nextPayload: agentPayload },
+        onSaved: () => launchSelectedConversation(
+          selectedProjectId,
+          selectedModuleId,
+          options,
+        ),
       },
     });
     return;
   }
 
-  modal.pushModal({
-    type: "prompt-input",
-    payload: { next: "agent-picker", nextPayload: agentPayload },
-  });
+  launchSelectedConversation(selectedProjectId, selectedModuleId, options);
 }
 
 function selectedTaskLaunchContext(): {
@@ -144,9 +161,7 @@ function selectedTaskLaunchContext(): {
     !selectedTaskId ||
     selectedTaskId === TEMP_TASK_ID
   ) return null;
-  const selected = queryClient.getQueryData<WorkItem>(
-    queryKeys.workItems.byId(selectedTaskId),
-  );
+  const selected = getWorkItemSnapshot(selectedTaskId);
   if (!selected) return null;
   return {
     projectId: selectedProjectId,

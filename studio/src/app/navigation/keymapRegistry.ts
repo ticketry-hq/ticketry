@@ -1,6 +1,6 @@
 import {
   DEFAULT_BINDINGS,
-  KEYMAP_CONTEXT_PRECEDENCE,
+  KEYMAP_CONTEXTS,
   type BindingOverride,
   type EffectiveBinding,
   type BindingDefinition,
@@ -8,9 +8,16 @@ import {
   type KeymapContext,
 } from "./keymapBindings";
 import { studioRuntime, type StudioPlatform } from "../../runtime";
+import {
+  AGENT_RUN_ACTIONS,
+  type AgentRunActionId,
+} from "./actionIds";
+import { installCaptureKeymapResolver } from "../../shared/navigation/keymapResolver";
+
+type ActionHandler = (payload?: unknown) => boolean | Promise<boolean>;
 
 const DEFAULT_BINDINGS_IN_CONTEXT_PRECEDENCE =
-  KEYMAP_CONTEXT_PRECEDENCE.flatMap((context) =>
+  KEYMAP_CONTEXTS.flatMap((context) =>
     DEFAULT_BINDINGS.filter((binding) => binding.context === context),
   );
 const CONFIGURABLE_BINDINGS_IN_CONTEXT_PRECEDENCE =
@@ -69,6 +76,7 @@ function matchesChord(
 
 class KeymapRegistry {
   private overrides = new Map<string, KeyChord>();
+  private actions = new Map<string, ActionHandler>();
   private listeners = new Set<() => void>();
   private revision = 0;
 
@@ -122,9 +130,7 @@ class KeymapRegistry {
   }
 
   getConfigurableBindings(): EffectiveBinding[] {
-    return CONFIGURABLE_BINDINGS_IN_CONTEXT_PRECEDENCE.filter((binding) =>
-      availableInInstallation(binding)
-    ).map(
+    return CONFIGURABLE_BINDINGS_IN_CONTEXT_PRECEDENCE.map(
       ({ context, actionId, chord: bindingChord }) => ({
         context,
         actionId,
@@ -136,9 +142,7 @@ class KeymapRegistry {
   }
 
   getDefaultBindings(): EffectiveBinding[] {
-    return CONFIGURABLE_BINDINGS_IN_CONTEXT_PRECEDENCE.filter((binding) =>
-      availableInInstallation(binding)
-    ).map(
+    return CONFIGURABLE_BINDINGS_IN_CONTEXT_PRECEDENCE.map(
       ({ context, actionId, chord: bindingChord }) => ({
         context,
         actionId,
@@ -152,7 +156,6 @@ class KeymapRegistry {
     predicate: (binding: EffectiveBinding) => boolean,
   ): EffectiveBinding | null {
     for (const binding of CONFIGURABLE_BINDINGS_IN_CONTEXT_PRECEDENCE) {
-      if (!availableInInstallation(binding)) continue;
       const effectiveChord =
         this.overrides.get(bindingKey(binding.context, binding.actionId)) ??
         binding.chord;
@@ -230,6 +233,18 @@ class KeymapRegistry {
   };
 
   getRevision = (): number => this.revision;
+
+  registerAction(actionId: string, handler: ActionHandler): () => void {
+    this.actions.set(actionId, handler);
+    return () => {
+      if (this.actions.get(actionId) === handler) this.actions.delete(actionId);
+    };
+  }
+
+  async dispatch(actionId: string, payload?: unknown): Promise<boolean> {
+    const handler = this.actions.get(actionId);
+    return handler ? await handler(payload) : false;
+  }
 }
 
 function bindingKey(context: KeymapContext, actionId: string): string {
@@ -248,13 +263,8 @@ function isBindingRegistered(
   platform: StudioPlatform,
 ): boolean {
   return (
-    availableOnPlatform(binding, platform) &&
-    availableInInstallation(binding)
+    availableOnPlatform(binding, platform)
   );
-}
-
-function availableInInstallation(_binding: BindingDefinition): boolean {
-  return true;
 }
 
 const DEFAULT_BINDINGS_BY_CONTEXT = new Map<
@@ -289,10 +299,23 @@ function isBindingOverride(value: unknown): value is BindingOverride {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<BindingOverride>;
   return (
-    KEYMAP_CONTEXT_PRECEDENCE.includes(candidate.context as KeymapContext) &&
+    KEYMAP_CONTEXTS.includes(candidate.context as KeymapContext) &&
     typeof candidate.actionId === "string" &&
     isKeyChord(candidate.chord)
   );
 }
 
 export const studioKeymapRegistry = new KeymapRegistry();
+installCaptureKeymapResolver((event, actionIds) =>
+  studioKeymapRegistry.resolve("changes", event, actionIds)
+);
+for (const actionId of Object.values(AGENT_RUN_ACTIONS)) {
+  studioKeymapRegistry.registerAction(actionId, async (payload) => {
+    const { dispatchAgentRunAction } = await import(
+      "../../features/agents/actions/agentRunActions"
+    );
+    return dispatchAgentRunAction(actionId as AgentRunActionId, payload);
+  });
+}
+
+export { AGENT_RUN_ACTIONS };

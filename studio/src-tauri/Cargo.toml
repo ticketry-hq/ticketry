@@ -1,5 +1,7 @@
 [package]
 name = "ticketry"
+autobins = false
+default-run = "ticketry"
 version = "0.2.0"
 description = "Least-privilege desktop shell for Ticketry"
 license = "MIT"
@@ -10,22 +12,159 @@ name = "muxed_studio_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-cc = "1"
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "=2.6.3", features = [] }
 
 [features]
-default = []
-native-libghostty = []
+# CODING-1486 — embedded native libghostty is the shipping desktop renderer, so
+# every ordinary build of this package links it. `build.rs` and the desktop
+# crate both gate on macOS, so the feature is inert on other platforms.
+default = ["native-libghostty"]
+# The developer command line lives in `crates/app/ticketry-dev-tools` now, so this
+# feature gates nothing. It stays declared, and empty, so the generation and
+# verification scripts that still pass `--features development-tools` to this
+# package keep working instead of failing on an unknown feature.
+development-tools = []
+# Both are the desktop shell's features; the root package forwards them so
+# `studio/e2e` and the libghostty build keep the same command line. The root
+# build script uses it to stage the resources owned by `tauri.conf.json`.
+desktop-acceptance = ["ticketry-desktop/desktop-acceptance"]
+native-libghostty = ["ticketry-desktop/native-libghostty"]
+
+[[bin]]
+name = "ticketry"
+path = "src/main.rs"
 
 [dependencies]
+# The root package is the shell's entry point and nothing else: `src/lib.rs`
+# builds the Tauri context and hands it to the desktop crate, and `src/main.rs`
+# activates a temporary SQLite profile before it. Every other slice reaches the
+# binary through `ticketry-desktop`.
+# `tauri::generate_context!` expands to `serde_json` paths, so the macro's
+# crate needs it even though no line of this package names it.
+serde_json.workspace = true
+tauri.workspace = true
+tauri-plugin-launchkey-adaptor.workspace = true
+# Registers the opener permissions with tauri-build so the capability can name them.
+tauri-plugin-opener.workspace = true
+ticketry-desktop.workspace = true
+ticketry-diagnostics.workspace = true
+ticketry-installation.workspace = true
+ticketry-terminal.workspace = true
+
+[dev-dependencies]
+# `tests/` holds the cross-slice contract binaries — the ones that assert over
+# the assembled schema and across slice boundaries, above any single crate.
+# They are the only reason the root package depends on the slices at all.
+async-graphql.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+futures-util.workspace = true
+http.workspace = true
+log = "=0.4.33"
+reqwest.workspace = true
+sea-orm.workspace = true
+seaography.workspace = true
+seaolim.workspace = true
+sha2.workspace = true
+syn = { version = "=2.0.119", features = ["full", "visit"] }
+tauri-graphql.workspace = true
+tempfile.workspace = true
+ticketry-agent-execution.workspace = true
+ticketry-codex-app-server.workspace = true
+ticketry-data-directory.workspace = true
+ticketry-documents.workspace = true
+ticketry-entities.workspace = true
+ticketry-graphql-schema.workspace = true
+ticketry-installation.workspace = true
+ticketry-launch.workspace = true
+ticketry-mcp = { workspace = true, features = ["test-support"] }
+ticketry-provider.workspace = true
+ticketry-runs = { workspace = true, features = ["test-support"] }
+ticketry-settings.workspace = true
+ticketry-terminal.workspace = true
+ticketry-tool-discovery.workspace = true
+ticketry-work-management = { workspace = true, features = ["test-support"] }
+ticketry-workspace-runtime.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+
+[workspace]
+members = [
+    ".",
+    "crates/*/*",
+]
+resolver = "2"
+
+[workspace.dependencies]
+async-graphql = { version = "=7.0.19", features = ["dynamic-schema"] }
+async-trait = "=0.1.92"
+axum = { version = "=0.8.9", features = ["ws"] }
+base64 = "0.22"
+blake2 = "0.10"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+futures-util = "=0.3.32"
+http = "=1.4.2"
 libc = "0.2"
+notify = "=8.2.0"
 portable-pty = "0.9"
-process-wrap = { version = "9.1", default-features = false, features = [
-    "std",
-    "process-group",
-] }
 rand = "0.8"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tauri = { version = "2", features = [] }
-tauri-plugin-dialog = "2.6"
+reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls"] }
+rustls-pki-types = "=1.15.1"
+rmcp = { version = "=3.0.0" }
+sea-orm = { version = "=2.0.1", features = ["runtime-tokio-rustls", "seaography", "sqlx-postgres", "sqlx-sqlite"] }
+sea-orm-migration = { version = "=2.0.1", features = ["runtime-tokio-rustls", "sqlx-sqlite"] }
+seaography = { version = "=2.0.0-rc.9", default-features = false, features = ["field-camel-case", "macros", "with-chrono", "with-json"] }
+seaolim = { git = "https://github.com/charleeagni/seaolim", rev = "29f24172be1ab423e9b8b14b11ba1fa73452f1cd" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "0.10"
+specta = { version = "=2.0.0-rc.25", features = ["derive"] }
+tauri = "=2.11.5"
+tauri-graphql = { path = "crates/foundation/tauri-graphql" }
+tauri-plugin-launchkey-adaptor = { git = "https://github.com/charleeagni/launchkey-adaptor", rev = "60e7b541ba1225491f2b3083960bdf1f1f362b8c" }
+tauri-plugin-opener = "2"
+taurpc = "=0.8.2"
+tempfile = "=3.23.0"
+toml_edit = "=0.25.13"
+ticketry-agent-execution = { path = "crates/execution/ticketry-agent-execution" }
+ticketry-codex-app-server = { path = "crates/execution/ticketry-codex-app-server" }
+ticketry-data-directory = { path = "crates/foundation/ticketry-data-directory" }
+ticketry-desktop = { path = "crates/app/ticketry-desktop" }
+ticketry-dev-tools = { path = "crates/app/ticketry-dev-tools" }
+ticketry-diagnostics = { path = "crates/foundation/ticketry-diagnostics" }
+ticketry-documents = { path = "crates/worktracking/ticketry-documents" }
+ticketry-entities = { path = "crates/foundation/ticketry-entities" }
+ticketry-graphql-schema = { path = "crates/surfaces/ticketry-graphql-schema" }
+ticketry-installation = { path = "crates/execution/ticketry-installation" }
+ticketry-launch = { path = "crates/execution/ticketry-launch" }
+ticketry-mcp = { path = "crates/surfaces/ticketry-mcp" }
+ticketry-provider = { path = "crates/foundation/ticketry-provider" }
+ticketry-runs = { path = "crates/worktracking/ticketry-runs" }
+ticketry-settings = { path = "crates/config/ticketry-settings" }
+ticketry-terminal = { path = "crates/execution/ticketry-terminal" }
+ticketry-tool-discovery = { path = "crates/execution/ticketry-tool-discovery" }
+ticketry-work-management = { path = "crates/worktracking/ticketry-work-management" }
+ticketry-workspace-runtime = { path = "crates/execution/ticketry-workspace-runtime" }
+tokio = { version = "=1.53.1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio-util = "=0.7.18"
+uuid = { version = "1.24", features = ["v4", "v5"] }
+
+# Development builds keep only the line tables. Full DWARF for a workspace this
+# size costs tens of gigabytes and dominates link time; line tables still name
+# the file and line in every panic and backtrace, which is what the test suite
+# and the desktop crash reports actually read.
+[profile.dev]
+debug = "line-tables-only"
+# Crate granularity is what makes a rebuild small now, so the incremental
+# cache buys little and costs tens of gigabytes of `target/`.
+incremental = false
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.release]
+# Unwinding must stay enabled: wry answers WKURLSchemeTask requests inside
+# `objc2::exception::catch`, which cannot catch the "task has already been
+# stopped" NSException under `panic = "abort"`. Aborting there turns a stale
+# asset request into a process crash (CODING-1368 investigation).
+panic = "unwind"

@@ -1,0 +1,9 @@
+mutation WorktreePush($taskId: String!, $operationId: String!) {
+  worktree_push(task_id: $taskId, operation_id: $operationId) {
+    operation_id
+    head_commit
+    dirty
+    unpushed_count
+    uncommitted_work_excluded
+  }
+}

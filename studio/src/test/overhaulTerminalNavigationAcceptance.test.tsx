@@ -1,34 +1,47 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import type { WorkItemRow } from "../app/shell/ticket-workspace/tasks/TasksPane";
-import { ApiError } from "../features/agents/api/agentApi";
 import { useStudioStore } from "../features/projects/store";
-import { useAgentStatusStore } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import {
+  refreshTerminalHoldings,
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
-import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
-import { queryKeys } from "../shared/query/keys";
-import { setStatesSorted } from "../shared/query/stateCatalog";
+import { setStatesSorted } from "../features/projects";
 import { useClientStore } from "../state/clientStore";
 import { workItem } from "./seam";
+import {
+  installDesktopGraphQlRuntime,
+  terminalSessionReadExecutor,
+} from "./desktopGraphQlRuntime";
+import { seedModuleOpenFixture } from "./projectOpenFixture";
+import {
+  getModuleTreeSnapshot,
+  getWorkItemSnapshot,
+} from "../features/work-items";
+import { studioApolloClient } from "../shared/apollo/client";
+import {
+  findDormantItem,
+  getDormantItem,
+  queryDormantItem,
+} from "./dormantTabsFixture";
 
 const terminalApi = vi.hoisted(() => ({
-  getDocuments: vi.fn(),
-  getTerminals: vi.fn(),
-  listResumableTerminals: vi.fn(),
   resumeTerminal: vi.fn(),
   terminateTerminal: vi.fn(),
 }));
 
-const workspaceTabApi = vi.hoisted(() => ({
-  getWorkspaceTabOrder: vi.fn(),
-  updateWorkspaceTabOrder: vi.fn(),
+const documentRegistry = vi.hoisted(() => ({
+  listTaskDocuments: vi.fn(),
+  listScratchDocuments: vi.fn(),
+}));
+
+vi.mock("../features/documents", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../features/documents")>()),
+  ...documentRegistry,
 }));
 
 vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
@@ -36,11 +49,17 @@ vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
   ...terminalApi,
 }));
 
-vi.mock("../shared/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shared/api/client")>()),
-  getWorkspaceTabOrder: workspaceTabApi.getWorkspaceTabOrder,
-  updateWorkspaceTabOrder: workspaceTabApi.updateWorkspaceTabOrder,
-}));
+// Terminal session reads moved to the Rust Terminal Session graph, so the seam
+// a test controls is the read transport, not a host API module.
+const terminalReads = vi.hoisted(() => {
+  const resumable = vi.fn();
+  return {
+    readTaskTerminalSessions: vi.fn(),
+    readScratchTerminalSessions: vi.fn(),
+    readTaskResumableTerminalSessions: resumable,
+    readScratchResumableTerminalSessions: resumable,
+  };
+});
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
@@ -84,6 +103,7 @@ function run(
   agentRunId: string,
   taskId: string,
   state: "working" | "exited" | "lost" = "working",
+  providerSessionId: string | null = null,
 ) {
   return {
     agent_run_id: agentRunId,
@@ -91,6 +111,7 @@ function run(
     module_id: "module-1",
     scope: "task" as const,
     state,
+    provider_session_id: providerSessionId,
     started_at: "2026-08-07T12:00:00Z",
     updated_at: "2026-08-07T12:00:00Z",
   };
@@ -104,9 +125,8 @@ function KeymapHarness({ rows }: { rows: WorkItemRow[] }) {
 describe("overhaul acceptance — terminals", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime(terminalSessionReadExecutor(terminalReads));
     localStorage.clear();
-    queryClient.clear();
-    seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
       selectedModuleId: "module-1",
@@ -127,13 +147,11 @@ describe("overhaul acceptance — terminals", () => {
       automationAttempts: {},
       automationByTask: {},
     });
-    terminalApi.getDocuments.mockResolvedValue({ documents: [] });
-    terminalApi.getTerminals.mockResolvedValue([]);
-    terminalApi.listResumableTerminals.mockResolvedValue([]);
-    workspaceTabApi.getWorkspaceTabOrder.mockResolvedValue({ order: [] });
-    workspaceTabApi.updateWorkspaceTabOrder.mockImplementation(
-      async (_taskId, order) => order,
-    );
+    documentRegistry.listTaskDocuments.mockResolvedValue([]);
+    documentRegistry.listScratchDocuments.mockResolvedValue([]);
+    terminalReads.readTaskTerminalSessions.mockResolvedValue([]);
+    terminalReads.readScratchTerminalSessions.mockResolvedValue([]);
+    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
   });
 
   it("[overhaul-08] cycles live terminals by keyboard into a collapsed branch", async () => {
@@ -152,14 +170,13 @@ describe("overhaul acceptance — terminals", () => {
       parent_id: "story-1",
       rank: "A",
     });
-    queryClient.setQueryData(queryKeys.tasks.byModule("project-1", "module-1"), {
-      rootIds: ["story-1"],
-      children: { "story-1": ["child-1"], "child-1": [] },
-      order: ["story-1", "child-1"],
-    });
-    queryClient.setQueryData(queryKeys.workItems.byId(parent.id), parent);
-    queryClient.setQueryData(queryKeys.workItems.byId(child.id), child);
+    seedModuleOpenFixture("module-1", [parent, child]);
     setStatesSorted("project-1", [TODO]);
+    expect(getModuleTreeSnapshot("project-1", "module-1").order).toEqual([
+      "child-1",
+      "story-1",
+    ]);
+    expect(getWorkItemSnapshot("child-1")?.parent_id).toBe("story-1");
 
     useTerminalStore.setState({
       sessions: {
@@ -205,7 +222,7 @@ describe("overhaul acceptance — terminals", () => {
     expect(useClientStore.getState().collapsedStateIds.has("todo")).toBe(false);
   });
 
-  it("[overhaul-160] loads unopened workspaces before cycling in their saved terminal order", async () => {
+  it("[overhaul-173] cycles through an unopened workspace in its saved terminal order", async () => {
     const first = workItem({
       id: "story-1",
       name: "First",
@@ -215,16 +232,24 @@ describe("overhaul acceptance — terminals", () => {
     const unopened = workItem({
       id: "story-2",
       name: "Unopened",
+      key: "MEML-2",
       state: TODO.id,
       rank: "B",
     });
-    queryClient.setQueryData(queryKeys.tasks.byModule("project-1", "module-1"), {
-      rootIds: ["story-1", "story-2"],
-      children: { "story-1": [], "story-2": [] },
-      order: ["story-1", "story-2"],
+    seedModuleOpenFixture("module-1", [first, unopened]);
+    studioApolloClient().cache.modify({
+      id: studioApolloClient().cache.identify({
+        __typename: "WorktrackerIssue",
+        id: "story-2",
+      }),
+      fields: {
+        workspaceTabOrder: () => [
+          { kind: "terminal", id: "run-b" },
+          { kind: "details" },
+          { kind: "terminal", id: "run-a" },
+        ],
+      },
     });
-    queryClient.setQueryData(queryKeys.workItems.byId(first.id), first);
-    queryClient.setQueryData(queryKeys.workItems.byId(unopened.id), unopened);
     setStatesSorted("project-1", [TODO]);
     useTerminalStore.setState({
       sessions: {
@@ -246,14 +271,6 @@ describe("overhaul acceptance — terminals", () => {
         "run-b": run("run-b", "story-2"),
       },
     });
-    workspaceTabApi.getWorkspaceTabOrder.mockImplementation(async (taskId) => ({
-      order: taskId === "story-2"
-        ? [
-            { kind: "terminal", id: "run-b" },
-            { kind: "terminal", id: "run-a" },
-          ]
-        : [],
-    }));
     render(<KeymapHarness rows={[]} />);
 
     act(() => {
@@ -265,12 +282,10 @@ describe("overhaul acceptance — terminals", () => {
       }));
     });
 
-    await waitFor(() => expect(useClientStore.getState().activeByTask["story-2"])
-      .toBe("session-b"));
-    expect(workspaceTabApi.getWorkspaceTabOrder).toHaveBeenCalledWith(
-      "story-2",
-      expect.any(AbortSignal),
-    );
+    await waitFor(() => expect(useClientStore.getState().selectedTaskId)
+      .toBe("story-2"));
+    expect(useClientStore.getState().activeByTask["story-2"])
+      .toBe("session-b");
   });
 
   it("[overhaul-16] closes, refreshes, and resumes a provider conversation in place", async () => {
@@ -284,16 +299,33 @@ describe("overhaul acceptance — terminals", () => {
       resumed_from: null,
       scope: "task" as const,
     };
-    terminalApi.listResumableTerminals
+    terminalReads.readTaskResumableTerminalSessions
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([resumableSession]);
     terminalApi.terminateTerminal.mockResolvedValue({
       agent_run_id: "run-old",
       terminated: true,
     });
-    terminalApi.resumeTerminal.mockResolvedValue({
-      agent_run_id: "run-new",
-      resumed_from: "run-old",
+    let restoredSuccessorId: string | null = null;
+    terminalApi.resumeTerminal.mockImplementation(async () => {
+      // The real Apollo mutation refreshes terminal holdings before it
+      // resolves. A status event may also restore the live successor during
+      // that window; resuming must focus that tab instead of opening a second
+      // viewer for the same run.
+      terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
+      await refreshTerminalHoldings();
+      restoredSuccessorId = useTerminalStore.getState().openSession({
+        taskId: "story-1",
+        projectId: "project-1",
+        moduleId: "module-1",
+        agent: "codex",
+        agentRunId: "run-new",
+        select: false,
+      });
+      return {
+        agent_run_id: "run-new",
+        resumed_from: "run-old",
+      };
     });
     useTerminalStore.setState({
       sessions: {
@@ -318,7 +350,6 @@ describe("overhaul acceptance — terminals", () => {
     });
 
     render(
-      <QueryClientProvider client={queryClient}>
         <SelectedTicketContent
           bucket="story-1"
           projectId="project-1"
@@ -326,96 +357,277 @@ describe("overhaul acceptance — terminals", () => {
           owner="studio"
           details={<input aria-label="Issue title draft" defaultValue="Draft" />}
         />
-      </QueryClientProvider>,
     );
 
     const draft = screen.getByRole("textbox", { name: "Issue title draft" });
     fireEvent.change(draft, { target: { value: "Unsaved title" } });
     await waitFor(() => {
-      expect(terminalApi.listResumableTerminals).toHaveBeenCalledTimes(1);
+      expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(1);
     });
-    expect(screen.queryByRole("button", { name: "Resume codex terminal" }))
+    expect(queryDormantItem("Resume codex terminal"))
       .not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", {
       name: "Close codex terminal",
     }));
 
-    const resume = await screen.findByRole("button", {
-      name: "Resume codex terminal",
-    });
+    const resume = await findDormantItem("Resume codex terminal");
     expect(screen.queryByRole("tab", { name: "codex terminal" }))
       .not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", {
+    expect(screen.getAllByRole("menuitem", {
       name: "Resume codex terminal",
     })).toHaveLength(1);
     expect(terminalApi.terminateTerminal).toHaveBeenCalledWith("run-old");
-    expect(terminalApi.listResumableTerminals).toHaveBeenCalledTimes(2);
+    // The shared refresh re-reads the valid task holding and ignores the
+    // skipped conversation holding because it has no project or module scope.
+    expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(2);
     expect(terminalApi.terminateTerminal.mock.invocationCallOrder[0])
-      .toBeLessThan(terminalApi.listResumableTerminals.mock.invocationCallOrder[1]);
+      .toBeLessThan(terminalReads.readTaskResumableTerminalSessions.mock.invocationCallOrder[1]);
     expect(screen.getByRole("textbox", { name: "Issue title draft" }))
       .toHaveValue("Unsaved title");
 
     fireEvent.click(resume);
 
     await waitFor(() => {
-      expect(terminalApi.resumeTerminal).toHaveBeenCalledWith("run-old");
+      expect(terminalApi.resumeTerminal).toHaveBeenCalledWith({
+        source: expect.objectContaining(resumableSession),
+        projectId: "project-1",
+        moduleId: "module-1",
+        taskId: "story-1",
+      });
       expect(Object.values(useTerminalStore.getState().sessions)).toContainEqual(
         expect.objectContaining({ agentRunId: "run-new" }),
       );
     });
+    const successorTabs = Object.values(useTerminalStore.getState().sessions)
+      .filter((session) => session.agentRunId === "run-new");
+    expect(successorTabs).toHaveLength(1);
+    expect(useClientStore.getState().activeByTask["story-1"])
+      .toBe(restoredSuccessorId);
     expect(useClientStore.getState().workspaces["story-1"]?.active).toBe(
       "terminal",
     );
     expect(screen.getByRole("tab", { name: "codex terminal" }))
       .toHaveAttribute("aria-selected", "true");
-    expect(screen.queryByRole("button", { name: "Resume codex terminal" }))
+    expect(queryDormantItem("Resume codex terminal"))
       .not.toBeInTheDocument();
   });
 
-  it("[overhaul-145] explains a rejected provider resume and keeps it available", async () => {
-    terminalApi.listResumableTerminals.mockResolvedValue([{
-      agent_run_id: "run-old",
-      agent: "codex",
+  it("[overhaul-204] keeps past agents independently resumable", async () => {
+    const resumableSessions = [
+      {
+        agent_run_id: "run-grill",
+        agent: "codex",
+        status: "exited",
+        started_at: "2026-08-07T12:00:00Z",
+        ended_at: "2026-08-07T12:30:00Z",
+        launch_state: "Grill",
+        launch_model: "gpt-5",
+        provider_session_id: "provider-grill",
+        resumed_from: null,
+        scope: "task" as const,
+      },
+      {
+        agent_run_id: "run-spec",
+        agent: "codex",
+        status: "exited",
+        started_at: "2026-08-07T13:00:00Z",
+        ended_at: "2026-08-07T13:30:00Z",
+        launch_state: "Spec",
+        launch_model: "gpt-5",
+        provider_session_id: "provider-spec",
+        resumed_from: null,
+        scope: "task" as const,
+      },
+    ];
+    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue(
+      resumableSessions,
+    );
+    const completions = new Map<
+      string,
+      (result: { agent_run_id: string; resumed_from: string }) => void
+    >();
+    terminalApi.resumeTerminal.mockImplementation(
+      ({ source }: { source: (typeof resumableSessions)[number] }) =>
+        new Promise((resolve) => completions.set(source.agent_run_id, resolve)),
+    );
+
+    render(
+      <SelectedTicketContent
+        bucket="story-1"
+        projectId="project-1"
+        moduleId="module-1"
+        owner="studio"
+        details={<div>Issue details</div>}
+      />,
+    );
+
+    const grill = await findDormantItem("Resume Grill codex terminal");
+    const spec = getDormantItem("Resume Spec codex terminal");
+    fireEvent.click(grill);
+
+    await waitFor(() => expect(grill).toBeDisabled());
+    expect(grill).toHaveTextContent("Resuming…");
+    expect(spec).toBeEnabled();
+
+    fireEvent.click(spec);
+    await waitFor(() => expect(terminalApi.resumeTerminal).toHaveBeenCalledTimes(2));
+    expect(terminalApi.resumeTerminal.mock.calls.map(([input]) =>
+      input.source.agent_run_id
+    )).toEqual(["run-grill", "run-spec"]);
+    expect(spec).toBeDisabled();
+    expect(spec).toHaveTextContent("Resuming…");
+
+    const completeGrill = completions.get("run-grill");
+    const completeSpec = completions.get("run-spec");
+    expect(completeGrill).toBeDefined();
+    expect(completeSpec).toBeDefined();
+    await act(async () => {
+      completeGrill?.({
+        agent_run_id: "run-grill-successor",
+        resumed_from: "run-grill",
+      });
+    });
+    await waitFor(() => expect(grill).toBeEnabled());
+    expect(spec).toBeDisabled();
+
+    await act(async () => {
+      completeSpec?.({
+        agent_run_id: "run-spec-successor",
+        resumed_from: "run-spec",
+      });
+    });
+    await waitFor(() => expect(spec).toBeEnabled());
+    expect(Object.values(useTerminalStore.getState().sessions)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ agentRunId: "run-grill-successor" }),
+        expect.objectContaining({ agentRunId: "run-spec-successor" }),
+      ]),
+    );
+  });
+
+  it("[overhaul-249] resumes one stopped conversation without restoring its stopped peers", async () => {
+    const grill = {
+      agent_run_id: "run-grill",
+      agent: "codex" as const,
       status: "exited",
       started_at: "2026-08-07T12:00:00Z",
       ended_at: "2026-08-07T12:30:00Z",
-      provider_session_id: "provider-session",
+      launch_state: "Grill",
+      launch_model: "gpt-5",
+      provider_session_id: "provider-grill",
       resumed_from: null,
-      scope: "task",
-    }]);
-    terminalApi.resumeTerminal.mockRejectedValue(new ApiError(
-      409,
-      "cwd_missing",
-      { detail: "cwd_missing", code: "cwd_missing" },
-    ));
+      scope: "task" as const,
+    };
+    const spec = {
+      ...grill,
+      agent_run_id: "run-spec",
+      started_at: "2026-08-07T13:00:00Z",
+      ended_at: "2026-08-07T13:30:00Z",
+      launch_state: "Spec",
+      provider_session_id: "provider-spec",
+    };
+    terminalReads.readTaskResumableTerminalSessions
+      .mockResolvedValueOnce([grill, spec])
+      .mockResolvedValue([spec]);
+    terminalApi.resumeTerminal.mockResolvedValue({
+      agent_run_id: "run-grill-successor",
+      resumed_from: "run-grill",
+    });
+    useAgentStatusStore.setState({
+      runs: {
+        "run-grill": {
+          ...run("run-grill", "story-1", "working", "provider-grill"),
+          agent: "codex",
+        },
+        "run-spec": {
+          ...run("run-spec", "story-1", "working", "provider-spec"),
+          agent: "codex",
+        },
+      },
+    });
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <SelectedTicketContent
-          bucket="story-1"
-          projectId="project-1"
-          moduleId="module-1"
-          owner="studio"
-          details={<div>Issue details</div>}
-        />
-      </QueryClientProvider>,
+    const view = render(
+      <SelectedTicketContent
+        bucket="story-1"
+        projectId="project-1"
+        moduleId="module-1"
+        owner="studio"
+        details={<div>Issue details</div>}
+      />,
     );
 
-    const resume = await screen.findByRole("button", {
-      name: "Resume codex terminal",
+    const grillResume = await findDormantItem("Resume Grill codex terminal");
+    expect(getDormantItem("Resume Spec codex terminal"))
+      .toBeEnabled();
+    expect(Object.values(useTerminalStore.getState().sessions)).toHaveLength(0);
+
+    fireEvent.click(grillResume);
+    await waitFor(() => expect(terminalApi.resumeTerminal).toHaveBeenCalledTimes(1));
+    expect(terminalApi.resumeTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({ source: grill }),
+    );
+
+    useAgentStatusStore.setState({
+      runs: {
+        "run-grill": {
+          ...run("run-grill", "story-1", "working", "provider-grill"),
+          agent: "codex",
+        },
+        "run-spec": {
+          ...run("run-spec", "story-1", "working", "provider-spec"),
+          agent: "codex",
+        },
+        "run-grill-successor": {
+          ...run(
+            "run-grill-successor",
+            "story-1",
+            "working",
+            "provider-grill",
+          ),
+          agent: "codex",
+        },
+      },
     });
-    fireEvent.click(resume);
 
     await waitFor(() => {
-      expect(useClientStore.getState().toasts).toContainEqual(
-        expect.objectContaining({
-          kind: "error",
-          message: "Working directory no longer exists",
-        }),
-      );
+      const tabs = Object.values(useTerminalStore.getState().sessions);
+      expect(tabs.filter((tab) => tab.agentRunId === "run-grill-successor"))
+        .toHaveLength(1);
+      expect(tabs.some((tab) => tab.agentRunId === "run-grill")).toBe(false);
+      expect(tabs.some((tab) => tab.agentRunId === "run-spec")).toBe(false);
     });
-    expect(resume).toBeEnabled();
-    expect(useTerminalStore.getState().sessions).toEqual({});
+    const resumedTab = Object.values(useTerminalStore.getState().sessions).find(
+      (tab) => tab.agentRunId === "run-grill-successor",
+    );
+    expect(useClientStore.getState().activeByTask["story-1"])
+      .toBe(resumedTab?.sessionId);
+
+    await refreshTerminalHoldings();
+    expect(getDormantItem("Resume Spec codex terminal"))
+      .toBeEnabled();
+    expect(queryDormantItem("Resume Grill codex terminal"))
+      .not.toBeInTheDocument();
+
+    view.unmount();
+    useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
+    render(
+      <SelectedTicketContent
+        bucket="story-1"
+        projectId="project-1"
+        moduleId="module-1"
+        owner="studio"
+        details={<div>Issue details</div>}
+      />,
+    );
+
+    await findDormantItem("Resume Spec codex terminal");
+    await waitFor(() => {
+      expect(Object.values(useTerminalStore.getState().sessions).filter(
+        (tab) => tab.agentRunId === "run-grill-successor",
+      )).toHaveLength(1);
+    });
+    expect(terminalApi.resumeTerminal).toHaveBeenCalledTimes(1);
   });
+
 });

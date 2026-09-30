@@ -1,0 +1,20 @@
+mutation WorktreeCreate($taskId: String!, $operationId: String!) {
+  worktree_create(task_id: $taskId, operation_id: $operationId) {
+    kind
+    task_id
+    top_level_task_id
+    is_shared
+    branch
+    base_branch
+    path
+    state
+    clean
+    dirty
+    ahead
+    behind
+    conflict
+    checkout_present
+    ephemeral
+    reason
+  }
+}

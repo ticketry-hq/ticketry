@@ -1,15 +1,19 @@
 import { useRef, useState } from "react";
 import { toast } from "../../../../../../state/clientStore";
-import { ApiError, apiErrorMessage, executeTaskSubtree } from "../../../../../../shared/api/client";
+import { ApiError } from "../../../../../../shared/api/errors";
+import { launchFailureMessage } from "../../../../../../features/agents/terminal";
+import {
+  executeTaskSubtree,
+  type GraphRunExecutionMode,
+} from "../../../../../../features/execution";
 import { TEMP_TASK_ID } from "../../../../../../features/agents/types";
 import {
   refreshSubtreeRunCapabilities,
   useSubtreeRunCapabilitiesQuery,
 } from "../../../../../../features/settings";
-import { queryClient } from "../../../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../../../shared/query/keys";
-import type { GraphRunExecutionMode, WorkItem } from "../../../../../../shared/api/types";
-import { stateById, useCachedStates } from "../../../../../../shared/query/stateCatalog";
+import { readWorkItem } from "../../../../../../features/work-items";
+import type { WorkItem } from "../../../../../../shared/api/types";
+import { stateById, useCachedStates } from "../../../../../../features/projects";
 
 /**
  * Reports whether the one subtree-run capability authorizes campaigns for this
@@ -24,7 +28,6 @@ export function useSubtreeRunEligibility(item: WorkItem, moduleId: string | null
   return (
     item.id !== TEMP_TASK_ID &&
     moduleId !== null &&
-    item.parent_id === moduleId &&
     item.sub_issues_count > 0 &&
     item.state !== null &&
     enabledStates?.includes(item.state) === true
@@ -47,6 +50,8 @@ interface SubtreeRunLaunchOptions {
   /** Reported when the press was accepted but launched no work item. */
   inertMessage: string;
   failureMessage: string;
+  execute?: () => Promise<{ launched: string[] }>;
+  refreshRunState?: () => Promise<void>;
 }
 
 /**
@@ -63,6 +68,8 @@ export function useSubtreeRunLaunch({
   successMessage,
   inertMessage,
   failureMessage,
+  execute,
+  refreshRunState,
 }: SubtreeRunLaunchOptions): SubtreeRunLaunch {
   const states = useCachedStates(item.project_id);
   const [pending, setPending] = useState(false);
@@ -76,29 +83,30 @@ export function useSubtreeRunLaunch({
     try {
       // The campaign accepts the press either way; only the launched list says
       // whether any work actually started.
-      const result = await executeTaskSubtree(item.id, mode);
+      const result = await (execute?.() ?? executeTaskSubtree(item.id, mode));
       if (result.launched.length > 0) {
         toast.success(successMessage);
       } else {
         toast.error(inertMessage);
       }
     } catch (error) {
+      await refreshRunState?.().catch(() => undefined);
       if (
         error instanceof ApiError &&
         error.body &&
         typeof error.body === "object" &&
-        (error.body as Record<string, unknown>).error === "subtree_run_not_enabled"
+        ((error.body as Record<string, unknown>).error === "subtree_run_not_enabled" ||
+          (error.body as Record<string, unknown>).code === "subtree_run_not_enabled")
       ) {
-        await Promise.all([
+        const [, freshItem] = await Promise.all([
           refreshSubtreeRunCapabilities(item.project_id),
-          queryClient.invalidateQueries({
-            queryKey: queryKeys.workItems.byId(item.id),
-            exact: true,
-          }),
+          // Capability refresh is the required recovery. A simultaneous item
+          // read is useful for a newer state label, but a transient read miss
+          // must not turn the already-handled launch refusal into an unhandled
+          // rejection or suppress its feedback.
+          readWorkItem(item.id).catch(() => item),
         ]);
-        const stateId = queryClient.getQueryData<WorkItem>(
-          queryKeys.workItems.byId(item.id),
-        )?.state ?? item.state;
+        const stateId = freshItem.state ?? item.state;
         const stateName = stateById(states, stateId)?.name;
         toast.error(
           stateName
@@ -106,7 +114,7 @@ export function useSubtreeRunLaunch({
             : `${actionName} is no longer available in this item's current state.`,
         );
       } else {
-        toast.error(`${failureMessage}: ${apiErrorMessage(error)}`);
+        toast.error(`${failureMessage}: ${launchFailureMessage(error)}`);
       }
     } finally {
       inFlightRef.current = false;

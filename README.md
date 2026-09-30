@@ -1,8 +1,9 @@
-# Ticketry
+# Ticketry desktop application
 
-Ticketry is a macOS desktop application for planning work and running coding
-agents. This repository contains the Django backend, React frontend, Tauri
-shell, generated SDKs, MCP service, and local development tools.
+Ticketry is a React application hosted by a Tauri desktop shell. The desktop
+process owns the SeaORM database, Seaography GraphQL schema, MCP listener,
+terminal lifecycle, and native host operations directly. There is no Python
+product runtime or external REST contract.
 
 <p align="center">
   <a href="https://github.com/ticketry-hq/ticketry/releases/download/0.2.0/Ticketry_0.2.0_aarch64.dmg">
@@ -13,15 +14,10 @@ shell, generated SDKs, MCP service, and local development tools.
 The current build requires macOS 11 or newer on an Apple silicon Mac. Release
 downloads are available to repository collaborators.
 
-## Repository layout
-
 ```text
-backend/                             Django ASGI host, application code, and worktracker
-studio/                              React/Vite frontend and Tauri desktop shell
-surfaces/worktracker-sdk/            Typed Python API client
-surfaces/worktracker-typescript-sdk/ Generated TypeScript API client
-surfaces/worktracker-agent/          FastMCP service
-scripts/                             Bootstrap, development, and contract tooling
+studio/   React/Vite frontend, Tauri shell, Rust services, and generated GraphQL contracts
+scripts/  Development, validation, and release tooling
+spec/     Application design history
 ```
 
 ## Screenshots
@@ -32,153 +28,113 @@ scripts/                             Bootstrap, development, and contract toolin
 
 ![The rich-text spec editor open inside a work item](screenshots/spec-editor.png)
 
-## Local development
+## Development
 
-Development requires macOS 11 or newer, Node.js 22, Python 3.11 or newer,
-[`uv`](https://docs.astral.sh/uv/), Rust stable, Java 17, Xcode with the Metal
-compiler, and `tmux`. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for repository
-structure and pull request requirements.
-
-Install the frontend and backend dependencies:
+Install dependencies, then launch the canonical desktop application:
 
 ```bash
 npm install
-(cd backend && uv sync --extra dev)
+npm run desktop:dev
+# or: pnpm run dev
 ```
 
-Start the complete browser application from the repository root:
+The launcher rebuilds the Rust application as `Ticketry Dev`, with its own app
+identifier and a per-worktree development profile. It can run beside an
+installed `Ticketry` app without sharing data, tmux sessions, frontend ports,
+or MCP listeners. MCP binds `mcp.sock` inside the owned data directory;
+providers connect through the packaged `ticketry-hook mcp` stdio bridge.
+Frontend, Rust runtime, and MCP output is written to
+`.ticketry-dev/logs/ticketry.log`.
+Every launch is also a startup measurement: once the desktop and the frontend
+finish booting, the launcher prints their startup times against the median of
+the last ten launches and shouts `STARTUP TIME REGRESSION` when one is more
+than 1.25x slower. `npm run logs:startup` prints the same comparison.
+
+To run that development build as the main app against the writable production
+data and product tmux sessions, close the installed app first, then run:
+
+```bash
+npm run desktop:dev:prod
+```
+
+The production data-directory lock still applies, so a second Ticketry process
+will refuse to start. The command respects `TICKETRY_DATA_DIR` and
+`TICKETRY_DATA_DIR_NAME`, and keeps development diagnostics in
+`.ticketry-dev/logs/ticketry.log` for agent inspection.
+
+The production-data web launcher uses a small Rust GraphQL adapter. It shares
+`~/.config/ticketry/state.db` and the product tmux namespace with the installed
+app:
 
 ```bash
 npm run web
-# or: pnpm run web
 ```
 
-This prepares a per-worktree development profile, applies pending Django
-migrations, starts the backend and Studio on the first free loopback ports
-(beginning at `8787` and `5174`), exposes WorkTracker MCP at the pinned
-`http://127.0.0.1:8123/mcp` endpoint, and opens Studio in the default browser
-when Vite is ready; Ctrl+C stops all three services. The selected URLs and
-isolated profile path are printed at startup. Override them with
-`MUXED_WEB_BACKEND_PORT`, `MUXED_FRONTEND_PORT`, `MUXED_WEB_MCP_PORT`, and
-`MUXED_DATA_DIR` when fixed values are needed. A port collision fails startup
-instead of silently moving the externally configured MCP endpoint.
-
-Local web development disables API-key authentication by default because both
-services bind only to loopback. Set `WORKTRACKER_DISABLE_AUTH=false` and provide
-the same token through `WORKTRACKER_API_TOKEN` and `VITE_WT_API_KEY` when testing
-an authenticated Studio session. To run the services separately:
+For browser development with the same per-worktree isolation as
+`desktop:dev`, use:
 
 ```bash
-scripts/dev.sh backend  # 127.0.0.1:8787
-scripts/dev.sh studio   # 127.0.0.1:5174
+npm run web:dev
 ```
 
-For the desktop application, run either `npm run desktop:dev` or `pnpm run dev`
-from the repository root. Both commands rebuild the Python sidecar and launch
-the Tauri shell with its supervised backend and MCP services.
-
-### One shared local Postgres database
-
-By default, every development worktree keeps an isolated SQLite database. To
-instead share database-backed Ticketry work between local web and desktop
-development runs, install and configure a user-level Postgres database (no
-Docker required):
+Add `--log-to-file` to mirror browser console records and Rust story-move
+diagnostics into `.ticketry-dev/logs/ticketry.log`:
 
 ```bash
-npm run db:setup
+npm run web -- --log-to-file
 ```
 
-The command installs Homebrew `postgresql@17` when needed, starts it as a user
-service, creates the `ticketry` database, applies migrations, and writes the
-opt-in connection URL and enable marker under
-`~/.config/worktracker-studio/`. Source-tree development launchers and your
-installed Ticketry app on that macOS account read this machine-local opt-in.
-The marker is never included in an app bundle, so installations distributed to
-other users retain their private SQLite database. Use `npm run db:status` to
-check it. `npm run db:disable` removes only the opt-in files; it does not stop
-Postgres or delete either Postgres or SQLite data.
+The production web launcher and installed app use the same product database
+and tmux namespace. Only one may run at a time. The second process refuses to
+open the data directory while the first process owns it.
 
-This shares Django database records, not instance-owned files or processes:
-profiles, API-token files, attachments, tmux sessions, caches, and logs remain
-in each run's data directory. Avoid running code revisions with incompatible
-database migrations against the shared database at the same time. Set
-`MUXED_DATABASE_URL` for a one-launch override or `MUXED_DATABASE_URL_FILE` to
-use a different persistent URL file.
+[`config/product-identity.json`](config/product-identity.json) owns the default
+data-directory name and the supported configuration variables. Set
+`TICKETRY_DATA_DIR` to choose a full path, or `TICKETRY_DATA_DIR_NAME` to choose
+one directory below `~/.config`.
 
-Copy `studio/.env.example` to `studio/.env.local` and set `VITE_WT_API_KEY` when
-testing an authenticated Studio session. Studio proxies `/api` to the backend;
-`VITE_AGENT_API_BASE` defaults to `/api`.
+Use `--temp-sqlite` with either command for a disposable profile. Ticketry
+starts that profile empty, removes it after a clean exit, and stops only tmux
+sessions created in its temporary namespace. Normal shutdown preserves
+intentional tmux sessions.
 
-## Desktop
+## Production diagnostics
 
-`npm run desktop:dev` packages the current Python backend and WorkTracker MCP
-into one multi-call sidecar, then launches Studio with those supervised local
-services in its Tauri shell. WorkTracker MCP is exposed on the same pinned
-`http://127.0.0.1:8123/mcp` endpoint used by browser development and standalone
-launches. The command disables Tauri's Rust file watcher so
-the freshly rebuilt sidecar does not immediately restart the app; rerun the
-command after native changes. `npm run desktop:build` builds the production shell
-with the compiled Studio assets, and `npm run desktop:smoke` runs its lifecycle
-checks.
+The installed app records frontend and Rust diagnostics by default, including
+when opened from Finder. The legacy `--log-to-file` flag is still accepted.
 
-On macOS, `pnpm run deploy` builds an ad-hoc-signed application and replaces
-`/Applications/Ticketry.app`. The replacement is staged beside the installed
-app, and the previous bundle is restored if the final move fails. Quit Ticketry
-before deploying so the next launch uses the new bundle.
+```bash
+/Applications/Ticketry.app/Contents/MacOS/ticketry --log-to-file
+```
 
-macOS desktop releases are currently **unsigned and not notarized**. Private
-GitHub Release builds are available to repository collaborators. Gatekeeper
-will block a downloaded unsigned build; see
-[`studio/release/OPERATIONS.md`](studio/release/OPERATIONS.md) for the
-quarantine workaround and the full release policy.
+A launch of a store Rust already owns skips the whole-file SQLite integrity
+check and semantic preflight. Add `--verify-store` (or set
+`TICKETRY_VERIFY_STORE=1`) to run the full preflight, for example after an
+update or when support asks:
 
-To attach the desktop shell to separately running development services instead,
-run `npm run desktop:dev -- --connect`. Attach mode reuses the `5174` frontend,
-`8787` backend, and established data directory without rebuilding or launching
-the sidecar.
+```bash
+/Applications/Ticketry.app/Contents/MacOS/ticketry --verify-store --log-to-file
+```
 
-To launch with a brand-new disposable SQLite database, run
-`npm run desktop:dev -- --temp-sqlite`. This mode ignores the local Postgres
-opt-in for that launch, creates an isolated temporary profile, and removes the
-database and the rest of that profile after the desktop process exits cleanly.
-Any tmux sessions created by that disposable launch are stopped during cleanup.
-The packaged executable accepts the same flag, for example
-`/Applications/Ticketry.app/Contents/MacOS/ticketry --temp-sqlite`.
-The browser development stack supports the same behavior with
-`npm run web -- --temp-sqlite`. Disposable launches attempt to expose MCP on
-port `8123`; when that port is occupied they continue without MCP.
+The process writes `ticketry.log` in Ticketry's selected data directory, the
+same path shown by the startup failure screen. Story moves record drop
+resolution, state transition, rank allocation, GraphQL errors, and the final
+module refresh.
 
 ## Validation
 
 ```bash
+npm run caller:check
 npm run typecheck
+npm run test:overhaul --workspace @worktracker/studio
 npm run test --workspace @worktracker/studio
-npm run test:native-clipboard --workspace @worktracker/studio
-npm run test:mcp
 npm run build --workspace @worktracker/studio
-scripts/dev.sh test
-(cd backend && uv run --extra dev pytest -q)
+cargo check --locked --manifest-path studio/src-tauri/Cargo.toml
 ```
 
-## Configuration
-
-The existing public configuration remains unchanged:
-
-| Variable | Purpose |
-| --- | --- |
-| `WORKTRACKER_API_TOKEN` | API `x-api-key` when authentication is enabled. |
-| `WORKTRACKER_DISABLE_AUTH` | Disable API-key checks for local use. |
-| `MUXED_STATE_DB` | SQLite state-database path. |
-| `MUXED_FORCE_SQLITE` | Force SQLite even when local Postgres is enabled; set automatically by `--temp-sqlite`. |
-| `MUXED_ENABLE_LOCAL_POSTGRES` | Source-development gate; installed use is enabled by this user's machine-local marker. |
-| `MUXED_DATABASE_URL` | Explicit local Postgres URL; effective only with the development gate or local marker. |
-| `MUXED_DATABASE_URL_FILE` | Persistent Postgres opt-in file (defaults to `~/.config/worktracker-studio/database-url`). |
-| `MUXED_WEB_MCP_PORT`, `MUXED_DESKTOP_MCP_PORT` | Explicit development override for the pinned MCP port (`8123` by default). |
-| `MUXED_SECRET_KEY`, `MUXED_DEBUG`, `MUXED_ALLOWED_HOSTS` | Django runtime settings. |
-| `MUXED_DESKTOP_*` | Optional desktop endpoint and smoke-test overrides. |
+See [`studio/release/OPERATIONS.md`](studio/release/OPERATIONS.md) for build,
+signing, notarization, installation, and recovery procedures.
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE) and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
-Report suspected vulnerabilities through the process in
-[`SECURITY.md`](SECURITY.md).
+MIT. See [`LICENSE`](LICENSE).

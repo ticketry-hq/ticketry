@@ -1,28 +1,17 @@
 import { useState } from "react";
 import { studioRuntime, type StudioRuntime } from "../../../runtime";
-import { isAbsoluteFolderPath } from "../../module-links";
-
-interface FolderLink {
-  local_path: string;
-}
+import { isAbsoluteFolderPath } from "../../studio/lib/moduleFolderPath";
+import { recentModuleFolders, useModuleLinks } from "../../module-links";
 
 export function useModuleFolderSelection({
-  moduleLinks,
   initialValue = "",
   runtime = studioRuntime(),
 }: {
-  moduleLinks: FolderLink[];
   initialValue?: string;
   runtime?: StudioRuntime;
-}) {
-  const recentFolders = Array.from(
-    new Set(
-      moduleLinks
-        .map((link) => link.local_path)
-        .reverse()
-        .filter(isAbsoluteFolderPath),
-    ),
-  );
+} = {}) {
+  // Folders already linked to some Module are the ones worth offering again.
+  const recentFolders = recentModuleFolders(useModuleLinks());
   const [value, setValue] = useState(initialValue);
   const [highlight, setHighlight] = useState(-1);
   const isValid = isAbsoluteFolderPath(value);
@@ -137,12 +126,19 @@ export function ModuleFolderSelection({
           </div>
           <ul
             aria-label="Recent folders"
-            className="border border-pane-border bg-pane-bg"
+            className="max-h-48 overflow-y-auto border border-pane-border bg-pane-bg"
           >
             {selection.recentFolders.map((folder, index) => (
               <li
                 key={folder}
+                ref={
+                  index === selection.highlight
+                    ? (item) => item?.scrollIntoView({ block: "nearest" })
+                    : undefined
+                }
+                aria-disabled={disabled || undefined}
                 onClick={() => {
+                  if (disabled) return;
                   selection.setValue(folder);
                   selection.setHighlight(-1);
                 }}

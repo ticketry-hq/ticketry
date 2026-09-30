@@ -1,5 +1,4 @@
 import type { WorkItem } from "./types";
-import { listWorkItemsByIds } from "./client";
 
 export const WORK_ITEM_BATCH_WINDOW_MS = 10;
 export const WORK_ITEM_BATCH_MAX_IDS = 100;
@@ -78,7 +77,3 @@ export function createWorkItemBatcher(
 
   return { fetchWorkItem };
 }
-
-const defaultBatcher = createWorkItemBatcher(listWorkItemsByIds);
-
-export const fetchWorkItem = defaultBatcher.fetchWorkItem;

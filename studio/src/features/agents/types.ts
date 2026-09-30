@@ -11,6 +11,7 @@ export type LifecycleState =
   | "error"
   | "unknown";
 
+
 export type AgentName = "claude" | "agy" | "codex" | "gemini";
 export type TaskId = string;
 export type SessionId = string;
@@ -19,6 +20,8 @@ export interface PersistedTerminalSession {
   agent_run_id: string;
   doc_rel_path?: string | null;
   created_at: string;
+  launch_state?: string | null;
+  launch_model?: string | null;
 }
 
 export interface ResumableTerminalSession {
@@ -42,10 +45,8 @@ export interface ResumableTerminalSession {
 export const TEMP_TASK_ID = "__scratch__";
 export const SCRATCH_RUN_TASK_ID = "00000000-0000-0000-0000-000000000000";
 
-export interface DesignDoc {
-  id: string;
-  rel_path: string;
-  label: string;
-}
+/** Design documents are owned by the Documents feature; re-exported here so
+ * existing agent-workspace consumers keep one import site. */
+export type { DesignDoc } from "../documents/types";
 
-export type TabKind = "details" | "doc" | "terminal";
+export type TabKind = "details" | "changes" | "doc" | "terminal";

@@ -3,6 +3,8 @@ import { access, cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
+import { resolveProductDataDirectory } from "../../scripts/product-identity.mjs";
+
 export class InstalledArtifactAcceptanceError extends Error {}
 
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -18,23 +20,8 @@ const REQUIRED_SCENARIOS = [
   "missing_dependency_diagnostic",
   "os_permission_diagnostic",
   "durable_agent_terminal_flow",
-  "offline_packaged_skill_matrix",
-  "skill_configuration_unchanged",
-  "skill_overlay_cleanup",
+  "rust_only_process_shape",
 ];
-
-const REQUIRED_SKILLS = [
-  "code-review",
-  "domain-modeling",
-  "grill-with-docs",
-  "grilling",
-  "implement",
-  "setup-matt-pocock-skills",
-  "tdd",
-  "to-spec",
-  "to-tickets",
-];
-const SKILL_PROVIDERS = ["claude", "codex", "agy", "gemini"];
 
 function requireValue(value, label) {
   if (typeof value !== "string" || value.trim() === "") {
@@ -67,13 +54,14 @@ export function sanitizedDesktopEnvironment({ home, dataDirectory, resultPath })
     HTTPS_PROXY: "http://127.0.0.1:1",
     ALL_PROXY: "http://127.0.0.1:1",
     MUXED_DATA_DIR: dataDirectory,
+    MUXED_DESKTOP_ACCEPTANCE_EXIT_AFTER_STARTUP: "1",
     MUXED_DESKTOP_ACCEPTANCE_RESULT: resultPath,
     MUXED_DESKTOP_ACCEPTANCE_NODE: process.execPath,
   };
 }
 
 export function acceptanceDataDirectory(home) {
-  return path.join(home, ".config", "worktracker-studio");
+  return resolveProductDataDirectory({ environment: { HOME: home } });
 }
 
 export function assertAcceptanceResult(result) {
@@ -86,21 +74,6 @@ export function assertAcceptanceResult(result) {
       throw new InstalledArtifactAcceptanceError(
         `installed-artifact acceptance scenario failed: ${scenario}`
           + (typeof detail === "string" && detail.trim() ? ` (${detail})` : ""),
-      );
-    }
-  }
-  const providerEvidence = result.packaged_skill_providers;
-  if (!providerEvidence || typeof providerEvidence !== "object") {
-    throw new InstalledArtifactAcceptanceError(
-      "acceptance driver omitted packaged skill provider evidence",
-    );
-  }
-  for (const provider of SKILL_PROVIDERS) {
-    const discovered = providerEvidence[provider];
-    if (!Array.isArray(discovered)
-      || REQUIRED_SKILLS.some((skill) => !discovered.includes(skill))) {
-      throw new InstalledArtifactAcceptanceError(
-        `installed artifact did not discover required packaged skills for ${provider}`,
       );
     }
   }

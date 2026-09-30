@@ -1,11 +1,14 @@
-import { act, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NativeGhosttyTerminal } from "../features/agents/terminal/NativeGhosttyTerminal";
+import { Terminal } from "../features/agents/terminal/Terminal";
+import { focusTerminal } from "../features/agents/terminal/internal/terminalRegistry";
 import { useModalStore } from "../app/modal/modalStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useClientStore } from "../state/clientStore";
+import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -39,7 +42,9 @@ describe("native viewer attachment acceptance", () => {
   });
 
   beforeEach(() => {
+    window.history.replaceState({}, "", "/?terminalRenderer=native");
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       x: 0,
@@ -126,30 +131,30 @@ describe("native viewer attachment acceptance", () => {
   });
 
   it("[overhaul-63] matches Ghostty's background seams to Studio's pane panel", async () => {
+    // The host paints nothing itself: the native sibling shows through it, so
+    // the seam match comes from Ghostty's own theme, asserted below.
     const view = render(
       <NativeGhosttyTerminal sessionId="session-1" owner="studio" />,
     );
     const host = view.getByTestId("native-terminal-host");
-    expect(host).toHaveClass("bg-pane-panel");
-    expect(host.parentElement).toHaveClass("bg-pane-panel");
+    expect(host).toHaveClass("bg-transparent");
+    expect(host.parentElement).toHaveClass("bg-transparent");
     view.unmount();
 
     const { readFile } = await import("node:fs/promises");
-    const [runtimeSource, viewSource, themeSource, tauriConfig] = await Promise.all([
+    const [runtimeSource, viewSource, themeSource] = await Promise.all([
       readFile(`${process.cwd()}/src-tauri/native/libghostty_runtime.m`, "utf8"),
       readFile(`${process.cwd()}/src-tauri/native/libghostty_view.m`, "utf8"),
       readFile(`${process.cwd()}/src-tauri/native/ticketry-ghostty.conf`, "utf8"),
-      readFile(`${process.cwd()}/src-tauri/tauri.conf.json`, "utf8"),
     ]);
-    expect(themeSource.trim()).toBe("background = #111317");
-    expect(tauriConfig).toContain('"native/ticketry-ghostty.conf": "ticketry-ghostty.conf"');
+    expect(themeSource).toContain("background = #111317");
     expect(runtimeSource).toContain("load_ticketry_ghostty_theme(runtime->config)");
     expect(runtimeSource).toContain("ghostty_config_load_file(config");
     expect(runtimeSource).toContain("ticketry_ghostty_background_is_configured");
     expect(viewSource).toContain("muxed_ghostty_background_color().CGColor");
   });
 
-  it("[overhaul-66] hides Ghostty behind Studio modals and restores its measured pane", async () => {
+  it("[overhaul-66] keeps Ghostty presented behind Studio modals, hands input to the WebView, and leaves its measured pane untouched", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -159,68 +164,117 @@ describe("native viewer attachment acceptance", () => {
         }),
       ),
     );
-    const ready = vi.fn();
-    const view = render(
-      <NativeGhosttyTerminal
-        sessionId="session-1"
-        owner="studio"
-        onReady={ready}
-      />,
-    );
-    await waitFor(() => expect(ready).toHaveBeenCalledOnce());
+    const calls = (command: string) =>
+      tauri.invoke.mock.calls
+        .filter((call) => call[0] === command && (call[1] as { handle?: string })?.handle === "native-1")
+        .map((call) => call[1] as Record<string, unknown>);
+    const presented = () =>
+      screen.getByTestId("native-terminal-host").hasAttribute("data-native-terminal-presented");
+
+    // The production surface: `Terminal` renders native libghostty as a
+    // WebView sibling. Never mount `NativeGhosttyTerminal` directly here.
+    const view = render(<Terminal sessionId="session-1" owner="studio" />);
+    await waitFor(() => expect(calls("native_terminal_show")).toHaveLength(1));
+    expect(presented()).toBe(true);
+
+    // The viewer owns input before the modal opens.
+    fireEvent.pointerDown(screen.getByTestId("native-terminal-host"));
+    await waitFor(() => {
+      expect(calls("native_terminal_set_webview_interaction").at(-1)).toMatchObject({
+        webviewFocus: false,
+      });
+    });
 
     act(() => {
       useModalStore.setState({ modalStack: [{ type: "settings" }] });
     });
+    // Input moves to the WebView; the viewer stays presented and is not hidden.
     await waitFor(() => {
-      expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_hide", {
-        handle: "native-1",
+      expect(calls("native_terminal_set_webview_interaction").at(-1)).toMatchObject({
+        webviewFocus: true,
       });
     });
+    expect(calls("native_terminal_hide")).toHaveLength(0);
+    expect(presented()).toBe(true);
+    act(() => focusTerminal("session-1"));
+    expect(calls("native_terminal_focus")).toHaveLength(0);
 
     act(() => {
       useModalStore.setState({ modalStack: [] });
     });
-    await waitFor(() => {
-      expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_show", {
-        handle: "native-1",
-        frame: {
-          x: 0,
-          y: 0,
-          width: 800,
-          height: 600,
-          viewportWidth: 800,
-          viewportHeight: 600,
-        },
-      });
+    // Closing changes nothing about presentation: no re-show, same frame, and
+    // focus is not stolen back into the viewer.
+    await act(async () => {});
+    expect(calls("native_terminal_hide")).toHaveLength(0);
+    expect(calls("native_terminal_focus")).toHaveLength(0);
+    expect(calls("native_terminal_show")).toHaveLength(1);
+    expect(calls("native_terminal_show")[0]).toEqual({
+      handle: "native-1",
+      frame: {
+        x: 0,
+        y: 0,
+        width: 800,
+        height: 600,
+        viewportWidth: 800,
+        viewportHeight: 600,
+      },
     });
+    expect(presented()).toBe(true);
     view.unmount();
   });
 
   it("[overhaul-64] discards native surfaces before a WebView reload remeasures the pane", async () => {
     const [shellSource, nativeTerminalSource] = await Promise.all([
-      import("node:fs/promises").then(({ readFile }) =>
-        readFile(`${process.cwd()}/src-tauri/src/lib.rs`, "utf8"),
+      import("node:fs/promises").then(async ({ readFile }) =>
+        [
+          await readFile(`${process.cwd()}/src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs`, "utf8"),
+          await readFile(`${process.cwd()}/src-tauri/crates/app/ticketry-desktop/src/desktop/lifecycle.rs`, "utf8"),
+        ].join("\n"),
       ),
-      import("node:fs/promises").then(({ readFile }) =>
-        readFile(`${process.cwd()}/src-tauri/src/native_terminal/macos/state.rs`, "utf8"),
+      import("node:fs/promises").then(async ({ readFile }) =>
+        [
+          await readFile(`${process.cwd()}/src-tauri/crates/app/ticketry-desktop/src/native_terminal/macos/state.rs`, "utf8"),
+          await readFile(`${process.cwd()}/src-tauri/crates/app/ticketry-desktop/src/native_terminal/macos/teardown.rs`, "utf8"),
+        ].join("\n"),
       ),
     ]);
 
     expect(shellSource).toMatch(
-      /PageLoadEvent::Started[\s\S]{0,160}detach_transient_viewers\(webview\.app_handle\(\)\)/,
+      /PageLoadEvent::Started[\s\S]{0,240}detach_transient_viewers_for_page_load\(webview\.app_handle\(\)\)/,
     );
     expect(shellSource).toMatch(
       /fn detach_transient_viewers[\s\S]{0,500}ViewerCommandState[\s\S]{0,500}NativeTerminalState/,
     );
+    // Exit and an update relaunch share one teardown, and it is what detaches
+    // the native surfaces.
     expect(shellSource).toMatch(
-      /RunEvent::Exit[\s\S]{0,120}detach_transient_viewers\(application\)/,
+      /RunEvent::Exit[\s\S]{0,120}tear_down_before_exit\(application\)/,
+    );
+    expect(shellSource).toMatch(
+      /fn tear_down_before_exit[\s\S]{0,300}detach_transient_viewers\(application\)/,
     );
     expect(nativeTerminalSource).toMatch(
       /fn cancel_all[\s\S]{0,180}generation[\s\S]{0,180}phase\.store\(FAILED/,
     );
     expect(nativeTerminalSource).toMatch(
-      /fn detach_all[\s\S]{0,500}attaching\.cancel_all\(\)[\s\S]{0,500}registry\.drain/,
+      /fn detach_all[\s\S]{0,180}detach_every_viewer/,
+    );
+    const detachEveryViewerSource = nativeTerminalSource.slice(
+      nativeTerminalSource.indexOf("fn detach_every_viewer"),
+      nativeTerminalSource.indexOf("fn free_view_with_timing"),
+    );
+    expect(detachEveryViewerSource).toContain("attaching.cancel_all()");
+    expect(detachEveryViewerSource).toContain("registry.drain()");
+    expect(detachEveryViewerSource.indexOf("attaching.cancel_all()"))
+      .toBeLessThan(detachEveryViewerSource.indexOf("registry.drain()"));
+    // Tauri handles a main-thread dispatch inline when page-load teardown is
+    // already on AppKit's thread. Cross a worker first so native frees run on
+    // the next event-loop turn, after WebKit finishes committing navigation.
+    expect(nativeTerminalSource).toMatch(
+      /fn defer_native_frees[\s\S]{0,900}run_on_main_thread[\s\S]{0,300}dispatch_from_fresh_thread/,
+    );
+    expect(nativeTerminalSource).toMatch(
+      /fn dispatch_from_fresh_thread[\s\S]{0,300}std::thread::Builder::new\(\)[\s\S]{0,300}\.spawn/,
     );
     expect(nativeTerminalSource).toMatch(
       /fn insert_entry[\s\S]{0,500}self\.is_current\(&registry\)/,
@@ -236,8 +290,9 @@ describe("native viewer attachment acceptance", () => {
         "lifecycle.rs",
         "presentation_commands.rs",
         "attach_commands.rs",
+        "teardown.rs",
       ].map((file) =>
-        readFile(`${process.cwd()}/src-tauri/src/native_terminal/macos/${file}`, "utf8")
+        readFile(`${process.cwd()}/src-tauri/crates/app/ticketry-desktop/src/native_terminal/macos/${file}`, "utf8")
       )).then((sources) => sources.join("\n")),
     ]);
 
@@ -250,10 +305,10 @@ describe("native viewer attachment acceptance", () => {
       "if (!_reportsGridResize || _surface == NULL || _resizeCallback == NULL)",
     );
     expect(viewBridgeSource).toMatch(
-      /muxed_ghostty_view_present[\s\S]{0,180}_reportsGridResize = YES[\s\S]{0,180}\[view reportGridResize\]/,
+      /muxed_ghostty_view_present[\s\S]{0,500}_reportsGridResize = YES[\s\S]{0,180}\[view reportGridResize\]/,
     );
     expect(viewBridgeSource).toMatch(
-      /muxed_ghostty_view_hide[\s\S]{0,180}_reportsGridResize = NO/,
+      /void muxed_ghostty_view_hide\([^}]*_reportsGridResize = NO/,
     );
     expect(bridgeSource).toContain("Some(report_grid_resize)");
     expect(bridgeSource).toContain(
@@ -262,5 +317,33 @@ describe("native viewer attachment acceptance", () => {
     expect(bridgeSource).toContain(
       "muxed_ghostty_view_disable_resize_callback(view as *mut c_void)",
     );
+  });
+
+  it("[overhaul-232] [overhaul-230] gives captured wheel gestures to the program and keeps shell scrollback in tmux", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const viewSource = await readFile(
+      `${process.cwd()}/src-tauri/native/libghostty_view.m`,
+      "utf8",
+    );
+    const scrollMethod = viewSource.match(
+      /- \(void\)scrollWheel:\(NSEvent \*\)event \{[\s\S]*?\n\}/,
+    )?.[0];
+    if (scrollMethod === undefined) {
+      throw new Error("libghostty view must implement scrollWheel");
+    }
+
+    expect(scrollMethod).toContain("ghostty_surface_mouse_captured(_surface)");
+    expect(scrollMethod).toContain("ghostty_surface_mouse_scroll(_surface");
+    expect(scrollMethod).toContain("muxed_ghostty_normalize_scroll");
+    expect(scrollMethod).toContain("_scrollCallback(_scrollContext");
+    expect(scrollMethod.indexOf("ghostty_surface_mouse_captured(_surface)"))
+      .toBeLessThan(scrollMethod.indexOf("muxed_ghostty_normalize_scroll"));
+
+    const keyDownMethod = viewSource.match(
+      /- \(void\)keyDown:\(NSEvent \*\)event \{[\s\S]*?\n\}/,
+    )?.[0];
+    expect(keyDownMethod).toContain("[self.window makeFirstResponder:_webview]");
+    expect(keyDownMethod).toContain("ghostty_surface_key(_surface, key)");
+    expect(keyDownMethod).not.toContain("interpretKeyEvents");
   });
 });

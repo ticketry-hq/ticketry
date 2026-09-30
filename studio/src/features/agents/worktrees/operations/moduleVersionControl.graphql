@@ -1,0 +1,43 @@
+query ModuleVersionControl($moduleId: String!) {
+  module_version_control(module_id: $moduleId) {
+    module_id
+    checkout {
+      available
+      reason
+      branch
+      default_branch
+      committed_count
+      pull_request_creation_eligible
+      baseline
+      baseline_kind
+      clean
+      dirty
+      unpushed_count
+      truncated
+      files {
+        path
+        previous_path
+        status
+        binary
+        insertions
+        deletions
+      }
+      insertions
+      deletions
+    }
+    worktrees {
+      kind
+      task_id
+      task_key
+      task_name
+      branch
+      available
+      clean
+      dirty
+      unpushed_count
+      pull_request_state
+      reason
+    }
+    worktrees_truncated
+  }
+}

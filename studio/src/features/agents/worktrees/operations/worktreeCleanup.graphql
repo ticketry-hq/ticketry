@@ -1,0 +1,27 @@
+mutation WorktreeCleanup($taskId: String!, $operationId: String!, $confirmed: Boolean!) {
+  worktree_cleanup(task_id: $taskId, operation_id: $operationId, confirmed: $confirmed) {
+    removed
+    task_id
+    top_level_task_id
+    branch
+    reason
+    status {
+      kind
+      task_id
+      top_level_task_id
+      is_shared
+      branch
+      base_branch
+      path
+      state
+      clean
+      dirty
+      ahead
+      behind
+      conflict
+      checkout_present
+      ephemeral
+      reason
+    }
+  }
+}

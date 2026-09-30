@@ -1,10 +1,12 @@
-import { QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
-import { StudioFooter } from "../app/shell/StudioFooter";
+import { ModalHost } from "../app/modal/ModalHost";
+import { useModalStore } from "../app/modal/modalStore";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
+import type { WorkspaceLauncherContext } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import type {
+  InstantRunRow,
   ScratchRow,
   TreeRow,
   WorkItemRow,
@@ -12,22 +14,23 @@ import type {
 import { TEMP_TASK_ID } from "../features/agents/types";
 import { scratchBucketId } from "../features/agents/terminal";
 import { useStudioStore } from "../features/projects/store";
-import { useAgentStatusStore } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import {
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
-import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
-import { queryKeys } from "../shared/query/keys";
-import { setStatesSorted } from "../shared/query/stateCatalog";
+import { setStatesSorted } from "../features/projects";
+import { setProviderCapabilities } from "../features/workflows";
 import { useClientStore, type EditViewZone } from "../state/clientStore";
+import {
+  leaveChangesWorkspace,
+  openModuleChangesWorkspace,
+} from "../features/agents/worktrees";
 import { workItem } from "./seam";
+import { seedModuleOpenFixture } from "./projectOpenFixture";
 
 const terminalApi = vi.hoisted(() => ({
   getDocuments: vi.fn(),
-  getTerminals: vi.fn(),
-  listResumableTerminals: vi.fn(),
 }));
 
 vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
@@ -78,6 +81,15 @@ const EXPANDED_ROWS: WorkItemRow[] = [
 /** The Local scratch workspace row: selectable in Stories, never expandable. */
 const SCRATCH_ROW: ScratchRow = { kind: "scratch", moduleId: "module-1" };
 
+/** One Conversations row: its terminal is the only body it has (CODING-1542). */
+const INSTANT_ROW: InstantRunRow = {
+  kind: "instant-run",
+  runId: "instant-1",
+  moduleId: "module-1",
+  name: "Tighten the launch prompt",
+  startedAt: "2026-08-07T12:00:00Z",
+};
+
 function session(): SessionMeta {
   return {
     sessionId: "session-1",
@@ -91,6 +103,16 @@ function session(): SessionMeta {
     isInstant: false,
     initialPrompt: null,
     agentRunId: "run-1",
+  };
+}
+
+function instantSession(): SessionMeta {
+  return {
+    ...session(),
+    sessionId: "session-instant",
+    taskId: null,
+    isInstant: true,
+    agentRunId: "instant-1",
   };
 }
 
@@ -135,10 +157,11 @@ function bodyElement(): HTMLElement {
 
 async function renderEditViewWorkspace(
   rows: WorkItemRow[],
+  launchContext: WorkspaceLauncherContext | null = null,
 ): Promise<{ setRows: (next: WorkItemRow[]) => void }> {
   function tree(current: WorkItemRow[]) {
     return (
-      <QueryClientProvider client={queryClient}>
+      <>
         <KeymapHarness rows={current} />
         <SelectedTicketContent
           bucket="story-1"
@@ -146,8 +169,10 @@ async function renderEditViewWorkspace(
           moduleId="module-1"
           owner="studio"
           details={<div>Details surface</div>}
+          launchContext={launchContext}
         />
-      </QueryClientProvider>
+        <ModalHost />
+      </>
     );
   }
 
@@ -172,7 +197,7 @@ async function renderEditViewWorkspace(
 async function renderScratchWorkspace(): Promise<void> {
   useClientStore.setState({ selectedTaskId: TEMP_TASK_ID });
   render(
-    <QueryClientProvider client={queryClient}>
+    <>
       <KeymapHarness rows={[SCRATCH_ROW]} />
       <SelectedTicketContent
         bucket={scratchBucketId("module-1")}
@@ -181,7 +206,7 @@ async function renderScratchWorkspace(): Promise<void> {
         owner="studio"
         details={<div>Details surface</div>}
       />
-    </QueryClientProvider>,
+    </>,
   );
   await waitFor(() => {
     expect(screen.getByRole("tab", { name: "Details" })).toBeTruthy();
@@ -192,8 +217,7 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     localStorage.clear();
-    queryClient.clear();
-    seedConfig({ features: { sidebar: true, projects: true } });
+    useModalStore.setState({ modalStack: [] });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
       selectedModuleId: "module-1",
@@ -225,7 +249,6 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
           agent_run_id: "run-1",
           task_id: "story-1",
           module_id: "module-1",
-          agent: "codex",
           scope: "task",
           state: "working",
           started_at: "2026-08-07T12:00:00Z",
@@ -251,21 +274,13 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
       parent_id: "story-1",
       rank: "A",
     });
-    queryClient.setQueryData(queryKeys.tasks.byModule("project-1", "module-1"), {
-      rootIds: ["story-1"],
-      children: { "story-1": ["child-1"], "child-1": [] },
-      order: ["story-1", "child-1"],
-    });
-    queryClient.setQueryData(queryKeys.workItems.byId(parent.id), parent);
-    queryClient.setQueryData(queryKeys.workItems.byId(child.id), child);
+    seedModuleOpenFixture("module-1", [parent, child]);
     setStatesSorted("project-1", [TODO]);
 
     terminalApi.getDocuments.mockResolvedValue({ documents: [] });
-    terminalApi.getTerminals.mockResolvedValue([]);
-    terminalApi.listResumableTerminals.mockResolvedValue([]);
   });
 
-  it("[overhaul-82] expands a collapsed Story on Right, then dives Right straight into its remembered Active tab body", async () => {
+  it("[overhaul-136] expands a collapsed Story on Right, then dives Right straight into its remembered Active tab body", async () => {
     const { setRows } = await renderEditViewWorkspace([PARENT_ROW]);
     const zones = recordZones();
 
@@ -296,61 +311,126 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
     expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
   });
 
-  it("[overhaul-148] names the Stories Enter actions without losing the Right Arrow body route", () => {
-    render(
-      <>
-        <KeymapHarness rows={EXPANDED_ROWS} />
-        <StudioFooter />
-      </>,
-    );
-
-    expect(screen.getByText("— Expand / Dive").previousElementSibling)
-      .toHaveTextContent("→");
-    expect(screen.getByText("— Open Terminal").previousElementSibling)
-      .toHaveTextContent("Enter");
-    expect(screen.getByText("— Choose Agent").previousElementSibling)
-      .toHaveTextContent("⇧Enter");
-    expect(screen.queryByText("— Dive")).toBeNull();
-  });
-
-  it("keeps Right as the explicit body dive while Enter reveals the live terminal", async () => {
+  it("lands Right where Enter lands", async () => {
     await renderEditViewWorkspace(EXPANDED_ROWS);
 
-    press("ArrowRight");
-    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
-    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
-
-    useClientStore.getState().setEditViewZone("stories");
-    useClientStore.getState().setActive("story-1", "details");
-    press("Enter");
-
-    expect(useClientStore.getState().editViewZone).toBe("stories");
-    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
-    expect(useClientStore.getState().workspaces["story-1"]?.active).toBe(
-      "terminal",
-    );
-  });
-
-  it("keeps Right as the scratch workspace dive while Enter does nothing", async () => {
-    await renderScratchWorkspace();
-
-    // The scratch row has nothing to expand, so Right dives immediately.
     press("ArrowRight");
     const afterRight = {
       zone: useClientStore.getState().editViewZone,
       engaged: useClientStore.getState().editViewBodyEngaged,
+      active: useClientStore.getState().workspaces["story-1"]?.active,
       focused: document.activeElement,
     };
-
-    expect(afterRight.zone).toBe("active-tab-body");
-    expect(afterRight.engaged).toBe(false);
-    expect(afterRight.focused).toBe(bodyElement());
 
     useClientStore.getState().setEditViewZone("stories");
     press("Enter");
 
+    expect({
+      zone: useClientStore.getState().editViewZone,
+      engaged: useClientStore.getState().editViewBodyEngaged,
+      active: useClientStore.getState().workspaces["story-1"]?.active,
+      focused: document.activeElement,
+    }).toEqual(afterRight);
+  });
+
+  it("dives Right into the scratch workspace row", async () => {
+    await renderScratchWorkspace();
+
+    // The scratch row has nothing to expand, so Right dives immediately.
+    press("ArrowRight");
+
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
+    expect(document.activeElement).toBe(bodyElement());
+  });
+
+  /**
+   * Mounts the Conversations workspace with one instant terminal, the Stories
+   * selection resting on the scratch row above it.
+   */
+  async function renderConversationWorkspace(): Promise<{
+    focusSession: ReturnType<typeof vi.fn>;
+  }> {
+    const bucket = scratchBucketId("module-1");
+    const focusSession = vi.fn();
+    useClientStore.setState({
+      selectedTaskId: TEMP_TASK_ID,
+      workspaces: { [bucket]: { active: "details", activeDocId: null, closedDocIds: [] } },
+      activeByTask: {},
+    });
+    useTerminalStore.setState({
+      sessions: { "session-instant": instantSession() },
+      sessionByRun: { "instant-1": "session-instant" },
+      focusSession,
+    });
+    render(
+      <>
+        <KeymapHarness rows={[SCRATCH_ROW, INSTANT_ROW]} />
+        <SelectedTicketContent
+          bucket={bucket}
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Details surface</div>}
+        />
+      </>,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "instant codex terminal" })).toBeTruthy();
+    });
+    return { focusSession };
+  }
+
+  it("[CODING-1542] Down selects a conversation without entering its terminal", async () => {
+    const { focusSession } = await renderConversationWorkspace();
+    const bucket = scratchBucketId("module-1");
+
+    press("ArrowDown");
+
+    expect(useClientStore.getState().activeByTask[bucket]).toBe("session-instant");
+    expect(useClientStore.getState().workspaces[bucket]?.active).toBe("terminal");
     expect(useClientStore.getState().editViewZone).toBe("stories");
     expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
+    expect(focusSession).not.toHaveBeenCalled();
+  });
+
+  it("[CODING-1542] Right enters the selected conversation's terminal and Cmd+Escape leaves it", async () => {
+    await renderConversationWorkspace();
+    press("ArrowDown");
+
+    press("ArrowRight");
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(true);
+
+    const terminalInput = screen.getByRole("textbox", { name: "Terminal input" });
+    terminalInput.focus();
+    fireEvent.keyDown(terminalInput, { key: "Escape", metaKey: true });
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
+    expect(bodyElement()).toHaveFocus();
+  });
+
+  it("[CODING-1542] Right focuses the selected conversation's terminal in Full sidebar view", () => {
+    const bucket = scratchBucketId("module-1");
+    const focusSession = vi.fn();
+    useClientStore.setState({
+      sidebarVisible: true,
+      focusedPane: "tasks",
+      selectedTaskId: TEMP_TASK_ID,
+      workspaces: { [bucket]: { active: "terminal", activeDocId: null, closedDocIds: [] } },
+      activeByTask: { [bucket]: "session-instant" },
+    });
+    useTerminalStore.setState({
+      sessions: { "session-instant": instantSession() },
+      sessionByRun: { "instant-1": "session-instant" },
+      focusSession,
+    });
+    render(<KeymapHarness rows={[SCRATCH_ROW, INSTANT_ROW]} />);
+
+    press("ArrowRight");
+
+    expect(focusSession).toHaveBeenCalledWith("session-instant");
+    expect(useClientStore.getState().focusedPane).toBe("details-or-terminal");
   });
 
   it("keeps Right in the Stories zone when no navigable Task workspace is mounted", () => {
@@ -390,20 +470,98 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
     expect(useClientStore.getState().editViewZone).toBe("stories");
   });
 
-  it("leaves an engaged terminal owning its keys until Cmd+Escape", async () => {
+  it("leaves Enter and the arrows to the Changes surface while it is open", async () => {
     await renderEditViewWorkspace(EXPANDED_ROWS);
+    act(() => openModuleChangesWorkspace("module-1"));
+
+    for (const key of ["Enter", "ArrowDown", "ArrowRight"]) {
+      const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+      act(() => { window.dispatchEvent(event); });
+      expect(event.defaultPrevented).toBe(false);
+    }
+    press("Tab", { shiftKey: true });
+    expect(useClientStore.getState().editViewZone).toBe("stories");
+
+    act(() => leaveChangesWorkspace());
+    press("Tab", { shiftKey: true });
+    expect(useClientStore.getState().editViewZone).toBe("tab-strip");
+  });
+
+  it("cycles workspace tabs with Cmd+Arrow in edit view", async () => {
+    await renderEditViewWorkspace(EXPANDED_ROWS);
+    const details = screen.getByRole("tab", { name: "Details" });
+    const terminal = screen.getByRole("tab", { name: "codex terminal" });
+    expect(terminal).toHaveAttribute("aria-selected", "true");
+
+    press("ArrowLeft", { metaKey: true });
+    expect(details).toHaveAttribute("aria-selected", "true");
+
+    press("ArrowRight", { metaKey: true });
+    expect(terminal).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("[overhaul-253] reaches and activates the visible Agent launcher with the keyboard", async () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    setProviderCapabilities([
+      {
+        agent: "codex",
+        accepts_model: true,
+        accepts_any_model: false,
+        model_aliases: [],
+        model_prefixes: [],
+        reasoning_levels: [],
+      },
+    ]);
+    await renderEditViewWorkspace(EXPANDED_ROWS, {
+      kind: "task",
+      taskId: "story-1",
+      projectId: "project-1",
+      moduleId: "module-1",
+    });
+    const launcher = screen.getByRole("button", { name: "＋ Agent" });
+
+    press("ArrowRight");
+    press("ArrowUp");
+    press("ArrowRight");
+
+    expect(launcher).toHaveFocus();
+
+    press("Enter");
+    const picker = await screen.findByRole("dialog", { name: "Select Agent" });
+    expect(picker).toHaveTextContent("codex");
+    expect(screen.queryByRole("menu", { name: "Launch agent" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("returns terminal input to Studio navigation with Cmd+Escape", async () => {
+    await renderEditViewWorkspace(EXPANDED_ROWS);
+    const terminalTab = screen.getByRole("tab", { name: "codex terminal" });
+    const terminalInput = screen.getByRole("textbox", { name: "Terminal input" });
 
     press("ArrowRight");
     press("Enter");
     expect(useClientStore.getState().editViewBodyEngaged).toBe(true);
+    terminalInput.focus();
+    expect(terminalInput).toHaveFocus();
 
-    press("ArrowLeft");
+    fireEvent.keyDown(terminalInput, { key: "ArrowLeft" });
     expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
     expect(useClientStore.getState().editViewBodyEngaged).toBe(true);
 
-    press("Escape", { metaKey: true });
+    fireEvent.keyDown(terminalInput, { key: "Escape", metaKey: true });
     expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
     expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
+    expect(bodyElement()).toHaveFocus();
+    expect(terminalTab).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.keyDown(document.activeElement ?? window, { key: "ArrowLeft" });
+    expect(useClientStore.getState().editViewZone).toBe("stories");
   });
 
   it("leaves Full sidebar view pane navigation unchanged", async () => {

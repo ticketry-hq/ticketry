@@ -18,7 +18,7 @@ import {
 import type {
   ModelConfigurationCommitState,
   ModelConfigurationPanelHandle,
-} from "../../workflows/ModelConfigurationPanel";
+} from "../../workflows";
 import {
   commitPendingSettingsChanges,
   createSettingsChangeLedger,
@@ -26,17 +26,27 @@ import {
   type SettingsChangeLedger,
   type SettingsLedgerEntry,
 } from "../../settings/changeLedger";
-import { KeyboardShortcutsPanel } from "./KeyboardShortcutsModal";
+import { KeybindingSettings } from "./KeybindingSettings";
+import { InstantSettingsPanel } from "../../settings";
+import {
+  AppUpdateAvailabilityIndicator,
+  AppUpdatesSection,
+  useAppUpdateAvailable,
+} from "../../app-updates";
 
 const ModelConfigurationPanel = lazy(async () => ({
-  default: (await import("../../workflows/ModelConfigurationPanel"))
+  default: (await import("../../workflows"))
     .ModelConfigurationPanel,
 }));
 
 const MODELS_LEDE =
   "Which providers are available to launch, and what runs when a configuration leaves it unset.";
 
-type SettingsSection = "models" | "keyboard-shortcuts";
+type SettingsSection =
+  | "models"
+  | "instant"
+  | "keyboard-shortcuts"
+  | "app-updates";
 
 type SettingsStatus = {
   tone: "success" | "attention" | "danger";
@@ -50,13 +60,14 @@ export function SettingsModal() {
   const popModal = useModalStore((state) => state.popModal);
   const requestedSection = useModalStore((state) => {
     const top = state.modalStack.at(-1);
-    return top?.type === "settings" &&
-      top.payload?.section === "keyboard-shortcuts"
-      ? "keyboard-shortcuts"
+    const section = top?.type === "settings" ? top.payload?.section : null;
+    return section === "keyboard-shortcuts" || section === "instant"
+      ? section
       : "models";
   });
   const [activeSection, setActiveSection] =
     useState<SettingsSection>(requestedSection);
+  const updateAvailable = useAppUpdateAvailable();
   const [ledger, setLedger] = useState<SettingsChangeLedger>(
     createSettingsChangeLedger,
   );
@@ -101,9 +112,20 @@ export function SettingsModal() {
                 onClick={() => setActiveSection("models")}
               />
               <RailItem
+                active={activeSection === "instant"}
+                label="Conversations"
+                onClick={() => setActiveSection("instant")}
+              />
+              <RailItem
                 active={activeSection === "keyboard-shortcuts"}
                 label="Keyboard shortcuts"
                 onClick={() => setActiveSection("keyboard-shortcuts")}
+              />
+              <RailItem
+                active={activeSection === "app-updates"}
+                label="App updates"
+                onClick={() => setActiveSection("app-updates")}
+                updateAvailable={updateAvailable}
               />
             </RailGroup>
           </div>
@@ -148,7 +170,19 @@ export function SettingsModal() {
 
           {activeSection === "keyboard-shortcuts" ? (
             <div className="row-start-2 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto px-5 py-4">
-              <KeyboardShortcutsPanel />
+              <KeybindingSettings />
+            </div>
+          ) : null}
+
+          {activeSection === "instant" ? (
+            <div className="row-start-2 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto px-5 py-4">
+              <InstantSettingsPanel />
+            </div>
+          ) : null}
+
+          {activeSection === "app-updates" ? (
+            <div className="row-start-2 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto px-5 py-4">
+              <AppUpdatesSection />
             </div>
           ) : null}
 
@@ -315,16 +349,22 @@ function RailItem({
   active,
   label,
   onClick,
+  updateAvailable = false,
 }: {
   active: boolean;
   label: string;
   onClick: () => void;
+  updateAvailable?: boolean;
 }) {
   return (
     <button
       type="button"
       role="tab"
       aria-selected={active}
+      aria-label={label}
+      aria-describedby={
+        updateAvailable ? "app-updates-tab-update-available" : undefined
+      }
       onClick={onClick}
       className={
         active
@@ -332,7 +372,12 @@ function RailItem({
           : "border-l-2 border-transparent px-2 py-1.5 text-left text-sm text-text-secondary hover:text-text-primary"
       }
     >
-      {label}
+      <span className="flex items-center gap-2">
+        {label}
+        {updateAvailable ? (
+          <AppUpdateAvailabilityIndicator descriptionId="app-updates-tab-update-available" />
+        ) : null}
+      </span>
     </button>
   );
 }

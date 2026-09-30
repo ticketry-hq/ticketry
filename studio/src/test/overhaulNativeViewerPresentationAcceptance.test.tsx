@@ -9,10 +9,17 @@ import { useModalStore } from "../app/modal/modalStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useClientStore } from "../state/clientStore";
+import {
+  grantsEveryLease,
+  installDesktopGraphQlRuntime,
+} from "./desktopGraphQlRuntime";
+import { documentOperationName } from "../graphql-foundation/typedDocument";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
   listen: vi.fn(),
+  movedHandlers: [] as Array<() => void>,
+  scaleChangedHandlers: [] as Array<() => void>,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -22,6 +29,19 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: tauri.listen,
+}));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    onMoved: async (handler: () => void) => {
+      tauri.movedHandlers.push(handler);
+      return () => {};
+    },
+    onScaleChanged: async (handler: () => void) => {
+      tauri.scaleChangedHandlers.push(handler);
+      return () => {};
+    },
+  }),
 }));
 
 vi.mock("../features/agents/terminal/internal/entryPool", () => ({
@@ -42,7 +62,12 @@ describe("native viewer attachment acceptance", () => {
   });
 
   beforeEach(() => {
+    window.history.replaceState({}, "", "/?terminalRenderer=native");
     vi.resetAllMocks();
+    tauri.movedHandlers.length = 0;
+    tauri.scaleChangedHandlers.length = 0;
+    localStorage.setItem("ticketry:terminal-renderer", "native");
+    installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       x: 0,
@@ -164,6 +189,7 @@ describe("native viewer attachment acceptance", () => {
     await waitFor(() => {
       expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_attach", {
         runId: "run-1",
+        viewerId: expect.any(String),
         frame: {
           x: 0,
           y: 0,
@@ -191,21 +217,15 @@ describe("native viewer attachment acceptance", () => {
       }
       return Promise.resolve();
     });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        return new Response(
-          url.endsWith("/api/terminals")
-            ? JSON.stringify({ agent_run_id: "run-fresh" })
-            : "{}",
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-      }),
-    );
+    // The run is created on the Rust terminal graph, never on a host route.
+    const host = vi.fn();
+    vi.stubGlobal("fetch", host);
+    installDesktopGraphQlRuntime(async (document, variables) => {
+      if (documentOperationName(document) === "CreateTerminalSession") {
+        return { terminal_session: { agent_run_id: "run-fresh" } } as never;
+      }
+      return grantsEveryLease(document, variables);
+    });
     useTerminalStore.setState({
       sessions: {
         "tmp-fresh": {
@@ -243,21 +263,14 @@ describe("native viewer attachment acceptance", () => {
       );
     });
     expect(view.queryByTestId("terminal-host")).not.toBeInTheDocument();
+    expect(host).not.toHaveBeenCalled();
     view.unmount();
   });
 
   it("retains one durable native viewer while workspace surfaces are inactive", async () => {
-    const requests: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        requests.push(String(input));
-        return new Response("{}", {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }),
-    );
+    const operations = installDesktopGraphQlRuntime();
+    const claimed = (operationName: string) =>
+      operations.filter((operation) => operation.operationName === operationName);
     const ready = vi.fn();
     const view = render(
       <NativeGhosttyTerminal
@@ -288,8 +301,8 @@ describe("native viewer attachment acceptance", () => {
     expect(tauri.invoke).not.toHaveBeenCalledWith("native_terminal_detach", {
       handle: "native-1",
     });
-    expect(requests.filter((url) => url.endsWith("/lease"))).toHaveLength(1);
-    expect(requests.filter((url) => url.endsWith("/release"))).toHaveLength(0);
+    expect(claimed("CreateViewerLease")).toHaveLength(1);
+    expect(claimed("DeleteViewerLease")).toHaveLength(0);
 
     view.rerender(
       <NativeGhosttyTerminal
@@ -315,7 +328,122 @@ describe("native viewer attachment acceptance", () => {
     expect(tauri.invoke.mock.calls.filter(([command]) =>
       command === "native_terminal_attach"
     )).toHaveLength(1);
-    expect(requests.filter((url) => url.endsWith("/lease"))).toHaveLength(1);
+    expect(claimed("CreateViewerLease")).toHaveLength(1);
+    view.unmount();
+  });
+
+  it("[overhaul-326] realigns a native viewer when the window moves between displays", async () => {
+    const ready = vi.fn();
+    const view = render(
+      <NativeGhosttyTerminal
+        sessionId="session-1"
+        owner="studio"
+        active
+        onReady={ready}
+      />,
+    );
+    await waitFor(() => expect(ready).toHaveBeenCalledOnce());
+    await waitFor(() => {
+      expect(tauri.movedHandlers).toHaveLength(1);
+      expect(tauri.scaleChangedHandlers).toHaveLength(1);
+    });
+
+    const frameWrites = () => tauri.invoke.mock.calls.filter(
+      ([command]) => command === "native_terminal_set_frame",
+    );
+    await waitFor(() => expect(frameWrites().length).toBeGreaterThan(0));
+    const initialWrites = frameWrites().length;
+
+    act(() => tauri.movedHandlers[0]?.());
+    await waitFor(() => expect(frameWrites()).toHaveLength(initialWrites + 1));
+
+    act(() => tauri.scaleChangedHandlers[0]?.());
+    await waitFor(() => expect(frameWrites()).toHaveLength(initialWrites + 2));
+    view.unmount();
+  });
+
+  it("hides the retained workspace viewer during Changes and restores the same session on Back", async () => {
+    const operations = installDesktopGraphQlRuntime();
+    const bodyRef = createRef<HTMLDivElement>();
+    const detailsSurfaceRef = createRef<HTMLDivElement>();
+    const sharedProps = {
+      bodyRef,
+      detailsSurfaceRef,
+      bucket: "task-1",
+      owner: "studio" as const,
+      details: <div>Task details</div>,
+      activeKind: "terminal" as const,
+      activeDocument: null,
+      openDocuments: [],
+      terminalIds: ["session-1"],
+      activeTerminalId: "session-1",
+      requestedSurface: null,
+      surfaceFocusSignal: 0,
+      requestedTerminalId: null,
+      terminalFocusSignal: 0,
+      activeTab: { kind: "terminal" as const, id: "session-1" },
+      isEditView: false,
+      editViewZone: "active-tab-body" as const,
+      showZoneChrome: false,
+      bodyEngaged: false,
+      onClaimPointerZone: vi.fn(),
+      onEngageTab: vi.fn(),
+      onSetEditViewZone: vi.fn(),
+    };
+    useClientStore.setState({ activeByTask: { "task-1": "session-1" } });
+
+    const view = render(
+      <WorkspaceTabBody {...sharedProps} workspaceActive />,
+    );
+    await waitFor(() => {
+      expect(tauri.invoke).toHaveBeenCalledWith(
+        "native_terminal_attach",
+        expect.objectContaining({ runId: "run-1" }),
+      );
+    });
+    await waitFor(() => {
+      expect(tauri.invoke).toHaveBeenCalledWith(
+        "native_terminal_show",
+        expect.objectContaining({ handle: "native-1" }),
+      );
+    });
+
+    view.rerender(
+      <WorkspaceTabBody {...sharedProps} workspaceActive={false} />,
+    );
+    await waitFor(() => {
+      expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_hide", {
+        handle: "native-1",
+      });
+    });
+
+    view.rerender(
+      <WorkspaceTabBody {...sharedProps} workspaceActive />,
+    );
+    await waitFor(() => {
+      expect(
+        tauri.invoke.mock.calls.filter(([command]) =>
+          command === "native_terminal_show"
+        ),
+      ).toHaveLength(2);
+    });
+
+    expect(
+      tauri.invoke.mock.calls.filter(([command]) =>
+        command === "native_terminal_attach"
+      ),
+    ).toHaveLength(1);
+    expect(tauri.invoke).not.toHaveBeenCalledWith(
+      "native_terminal_detach",
+      expect.anything(),
+    );
+    expect(useTerminalStore.getState().sessionByRun["run-1"]).toBe("session-1");
+    expect(
+      operations.filter(({ operationName }) => operationName === "CreateViewerLease"),
+    ).toHaveLength(1);
+    expect(
+      operations.filter(({ operationName }) => operationName === "DeleteViewerLease"),
+    ).toHaveLength(0);
     view.unmount();
   });
 

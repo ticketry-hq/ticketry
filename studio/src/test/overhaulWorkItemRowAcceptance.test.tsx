@@ -1,5 +1,6 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { useClientStore } from "../state/clientStore";
 import { fixture, mountStudio, workItem } from "./seam";
 
 describe("overhaul acceptance — work-item rows", () => {
@@ -70,11 +71,11 @@ describe("overhaul acceptance — work-item rows", () => {
 
     const stories = await screen.findByRole("region", { name: "Stories" });
     const scratch = within(stories).getByRole("treeitem", {
-      name: /Local scratch workspace/,
+      name: /New conversation/,
     });
     expect(scratch.querySelector("[data-task-id-token]")).toBeNull();
-    expect(scratch.lastElementChild).toHaveTextContent("Local scratch workspace");
-    const unresolved = within(stories).getByRole("treeitem", {
+    expect(scratch.querySelector("[data-task-label]")).toHaveTextContent("New conversation");
+    const unresolved = await within(stories).findByRole("treeitem", {
       name: /Unresolved work item/,
     });
     expect(unresolved.querySelector("[data-task-id-token]")).toBeNull();
@@ -140,10 +141,10 @@ describe("overhaul acceptance — work-item rows", () => {
     expect(child).toHaveStyle({ paddingLeft: "2ch" });
 
     const search = within(stories).getByRole("textbox", { name: "Search stories" });
-    fireEvent.change(search, { target: { value: "MEML-CANONICAL-IMPLEMENTATION" } });
+    fireEvent.change(search, { target: { value: "MEML-34" } });
     expect(await within(stories).findByText("Implementation child")).toBeVisible();
     expect(within(stories).getByText("T-34")).toBeVisible();
-    expect(stories).not.toHaveTextContent("MEML-CANONICAL-IMPLEMENTATION");
+    expect(stories).not.toHaveTextContent("MEML-34");
 
     fireEvent.change(search, { target: { value: "34" } });
     expect(await within(stories).findByText("Implementation child")).toBeVisible();
@@ -152,5 +153,83 @@ describe("overhaul acceptance — work-item rows", () => {
     fireEvent.change(search, { target: { value: "Implementation child" } });
     expect(await within(stories).findByText("Implementation child")).toBeVisible();
     expect(within(stories).getByText("T-34")).toBeVisible();
+  });
+
+  it("keeps focus on search when the Stories pane becomes active", async () => {
+    const http = fixture();
+    http.tree("module-1", {
+      rootIds: [],
+      children: {},
+      order: [],
+    });
+    mountStudio({ http });
+
+    const stories = await screen.findByRole("region", { name: "Stories" });
+    const search = within(stories).getByRole("textbox", {
+      name: "Search stories",
+    });
+    act(() => useClientStore.setState({
+      sidebarVisible: true,
+      focusedPane: "modules",
+    }));
+
+    act(() => search.focus());
+
+    expect(search).toHaveFocus();
+    expect(useClientStore.getState().focusedPane).toBe("tasks");
+  });
+
+  it("[overhaul-369] explains an unmatched story search and clears it without losing selection", async () => {
+    const http = fixture();
+    http.tree("module-1", {
+      rootIds: ["story-1"],
+      children: { "story-1": [] },
+      order: ["story-1"],
+    });
+    http.workItems([
+      workItem({
+        id: "story-1",
+        name: "Keep this story selected",
+        key: "MEML-369",
+        sequence_id: 369,
+      }),
+    ]);
+    mountStudio({ http });
+
+    const stories = await screen.findByRole("region", { name: "Stories" });
+    const selectedStory = await within(stories).findByRole("treeitem", {
+      name: /Keep this story selected/,
+    });
+    fireEvent.click(selectedStory);
+    const details = await screen.findByRole("region", { name: "Details" });
+    expect(details).toHaveTextContent("Keep this story selected");
+
+    fireEvent.change(
+      within(stories).getByRole("textbox", { name: "Search stories" }),
+      { target: { value: "no-matching-story-ux" } },
+    );
+
+    expect(within(stories).queryByRole("treeitem", {
+      name: /Keep this story selected/,
+    })).toBeNull();
+    expect(within(stories).queryByRole("button", {
+      name: "Collapse Ideas",
+    })).toBeNull();
+    expect(await within(stories).findByRole("status")).toHaveTextContent(
+      'No stories match "no-matching-story-ux". The selected story remains open in Details but is outside the filtered results.',
+    );
+
+    fireEvent.click(within(stories).getByRole("button", {
+      name: "Clear story search",
+    }));
+
+    const restoredStory = await within(stories).findByRole("treeitem", {
+      name: /Keep this story selected/,
+    });
+    expect(within(stories).getByRole("button", {
+      name: "Collapse Ideas",
+    })).toBeVisible();
+    expect(restoredStory).toHaveAttribute("aria-selected", "true");
+    expect(details).toHaveTextContent("Keep this story selected");
   });
 });

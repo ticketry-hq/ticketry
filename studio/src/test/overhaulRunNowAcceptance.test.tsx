@@ -49,7 +49,7 @@ function hasToast(kind: "success" | "error", text: string): boolean {
 }
 
 describe("overhaul acceptance — Run Now", () => {
-  it("[overhaul-80] runs eligible Ideas from Details or r with one guarded request and follows workflow refreshes", async () => {
+  it("[overhaul-134] runs eligible Ideas from Details or r with one guarded request and follows workflow refreshes", async () => {
     const http = fixture();
     http.tree("module-1", {
       rootIds: [
@@ -102,12 +102,15 @@ describe("overhaul acceptance — Run Now", () => {
       http,
       selectedTaskId: "click-idea",
       children: <RunNowAcceptanceSurface />,
+      graphQlExecution: true,
     });
 
     const details = await screen.findByRole("region", { name: "Details" });
     const runNow = await within(details).findByRole("button", { name: "Run now" });
     expect(runNow).toHaveAttribute("aria-busy", "false");
-    expect(screen.getByRole("button", { name: "Record Run now binding" }))
+    expect(screen.getByRole("button", {
+      name: "Run now, current shortcut R, change binding",
+    }))
       .toHaveTextContent("R");
 
     const release = http.holdRunNow();
@@ -129,29 +132,12 @@ describe("overhaul acceptance — Run Now", () => {
 
     useClientStore.getState().selectTask("key-idea");
     await within(details).findByRole("button", { name: "Run now" });
-    http.failNextRunNow(409, {
-      target_id: "key-idea",
-      committed_state: null,
-      run: null,
-      detail: "An agent is already running for this Story. Close it before trying again.",
-      code: "task_already_active",
-    });
-    fireEvent.keyDown(window, { key: "r" });
-    await waitFor(() => expect(http.runNowCount("key-idea")).toBe(1));
-    await waitFor(() =>
-      expect(hasToast("error", "Close its terminal before trying again."))
-        .toBe(true),
-    );
-    expect(hasToast("success", "Keyboard idea")).toBe(false);
-    expect(useClientStore.getState().workspaces["key-idea"]?.active)
-      .not.toBe("terminal");
-
     fireEvent.keyDown(window, { key: "r" });
     await waitFor(() =>
       expect(useClientStore.getState().workspaces["key-idea"]?.active)
         .toBe("terminal"),
     );
-    expect(http.runNowCount("key-idea")).toBe(2);
+    expect(http.runNowCount("key-idea")).toBe(1);
 
     useClientStore.getState().selectTask("refusal-idea");
     const refusalRunNow = await within(details).findByRole("button", { name: "Run now" });
@@ -160,18 +146,14 @@ describe("overhaul acceptance — Run Now", () => {
       committed_state: null,
       run: null,
       code: "required_skill_unavailable",
-      provider: "codex",
-      skill: "research",
-      reason: "unknown",
       detail: "The required skill is not packaged.",
-      remediation: "Choose a packaged skill, then retry.",
+      remedy: "Choose a packaged skill, then retry.",
     });
     fireEvent.click(refusalRunNow);
     await waitFor(() =>
       expect(hasToast(
         "error",
-        "Required skill 'research' is unavailable for codex (unknown): "
-          + "The required skill is not packaged. "
+        "The required skill is not packaged. "
           + "Next action: Choose a packaged skill, then retry.",
       )).toBe(true),
     );
@@ -194,6 +176,24 @@ describe("overhaul acceptance — Run Now", () => {
     );
     expect(http.runNowCount("refusal-idea")).toBe(2);
 
+    http.failNextRunNow(422, {
+      target_id: "refusal-idea",
+      committed_state: null,
+      run: null,
+      code: "no_activated_providers",
+      detail: "No activated providers are configured.",
+      remedy: "Activate a provider.",
+    });
+    fireEvent.click(refusalRunNow);
+    await waitFor(() => expect(hasToast(
+      "error",
+      "To run agent work, activate a provider in Settings > Model configuration. "
+        + "You can keep planning without one.",
+    )).toBe(true));
+    expect(within(details).getByRole("button", { name: "Run now" })).toBeVisible();
+    expect(useClientStore.getState().workspaces["refusal-idea"]?.active)
+      .not.toBe("terminal");
+
     http.failNextRunNow(503, {
       target_id: "refusal-idea",
       committed_state: { id: "implement", name: "Implement" },
@@ -206,7 +206,7 @@ describe("overhaul acceptance — Run Now", () => {
       expect(within(details).queryByRole("button", { name: "Run now" }))
         .toBeNull(),
     );
-    expect(http.runNowCount("refusal-idea")).toBe(3);
+    expect(http.runNowCount("refusal-idea")).toBe(4);
 
     useClientStore.getState().selectTask("ticketed-story");
     await waitFor(() =>

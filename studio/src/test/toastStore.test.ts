@@ -27,13 +27,14 @@ describe("toastStore", () => {
     expect(useClientStore.getState().toasts.map((t) => t.message)).toEqual(["one", "two"]);
   });
 
-  it("auto-dismisses success after ~4s and errors after ~8s", () => {
+  it("auto-dismisses success and info after ~4s and errors after ~8s", () => {
     vi.useFakeTimers();
     toast.success("saved");
+    toast.info("terminal closed");
     toast.error("failed");
-    expect(useClientStore.getState().toasts).toHaveLength(2);
+    expect(useClientStore.getState().toasts).toHaveLength(3);
 
-    // Success clears first; the error lingers longer but does not persist.
+    // Non-errors clear first; the error lingers longer but does not persist.
     vi.advanceTimersByTime(4000);
     const afterSuccess = useClientStore.getState().toasts;
     expect(afterSuccess).toHaveLength(1);
@@ -43,9 +44,14 @@ describe("toastStore", () => {
     expect(useClientStore.getState().toasts).toHaveLength(0);
   });
 
-  it("toast.success / toast.error helpers push the matching kind via getState()", () => {
+  it("toast helpers push the matching kind via getState()", () => {
     toast.success("ok");
+    toast.info("noted");
     toast.error("nope");
-    expect(useClientStore.getState().toasts.map((t) => t.kind)).toEqual(["success", "error"]);
+    expect(useClientStore.getState().toasts.map((t) => t.kind)).toEqual([
+      "success",
+      "info",
+      "error",
+    ]);
   });
 });

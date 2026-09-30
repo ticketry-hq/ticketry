@@ -8,7 +8,8 @@ import {
 
 /** Claims an explicit terminal surface and follows fallback releases. */
 export function useTerminalOwnership(key: string | null, owner: ForegroundOwner) {
-  const claims = useTerminalForegroundStore((state) => state.claims);
+  const resolvedOwner = useTerminalForegroundStore((state) =>
+    key ? resolveOwner(state, key) : null);
   const acquire = useTerminalForegroundStore((state) => state.acquire);
 
   useEffect(() => {
@@ -22,11 +23,11 @@ export function useTerminalOwnership(key: string | null, owner: ForegroundOwner)
 
   useEffect(() => {
     if (!key || owner === "studio") return;
-    if (resolveOwner({ claims }, key) === "studio") acquire(key, owner);
-  }, [acquire, claims, key, owner]);
+    if (resolvedOwner === "studio") acquire(key, owner);
+  }, [acquire, key, owner, resolvedOwner]);
 
   return {
     acquire,
-    resolvedOwner: key ? resolveOwner({ claims }, key) : null,
+    resolvedOwner,
   };
 }

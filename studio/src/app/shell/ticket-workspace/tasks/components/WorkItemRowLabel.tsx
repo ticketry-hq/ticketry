@@ -32,7 +32,7 @@ export function WorkItemRowLabel({
           <span className="text-text-muted"> · </span>
         </>
       ) : null}
-      <span data-task-name>{name}</span>
+      <span data-task-name className="font-mono font-normal">{name}</span>
     </span>
   );
 }

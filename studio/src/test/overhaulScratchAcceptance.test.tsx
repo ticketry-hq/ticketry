@@ -2,19 +2,28 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { SelectedTicketDetails } from "../app/shell/ticket-workspace/selected-ticket/details/SelectedTicketDetails";
-import { useAgentStatusStore } from "../features/agents/status";
+import { ScratchStateBadge } from "../features/agents/lifecycle";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { scratchBucketId, useTerminalStore } from "../features/agents/terminal";
 import { TEMP_TASK_ID } from "../features/agents/types";
 import { useStudioStore } from "../features/projects/store";
-import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
+import {
+  installDesktopGraphQlRuntime,
+  terminalSessionReadExecutor,
+} from "./desktopGraphQlRuntime";
+
+const emptyTerminalReads = {
+  readTaskTerminalSessions: async () => [],
+  readScratchTerminalSessions: async () => [],
+  readTaskResumableTerminalSessions: async () => [],
+  readScratchResumableTerminalSessions: async () => [],
+};
 
 describe("overhaul acceptance — module scratch workspace", () => {
   beforeEach(() => {
+    installDesktopGraphQlRuntime(terminalSessionReadExecutor(emptyTerminalReads));
     localStorage.clear();
-    queryClient.clear();
-    seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
       selectedModuleId: "module-1",
@@ -31,12 +40,9 @@ describe("overhaul acceptance — module scratch workspace", () => {
       automationAttempts: {},
       automationByTask: {},
     });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
-      new Response("[]", { headers: { "Content-Type": "application/json" } }),
-    ));
   });
 
-  it("[overhaul-13] opens a module scratch workspace, launches, and shows its run summary", async () => {
+  it("[overhaul-13] launches from the module scratch workspace, whose Details stays empty", async () => {
     const launch = vi.fn((mode: "plan" | "instant") => {
       useAgentStatusStore.getState().upsertRun({
         agent_run_id: "scratch-run-1",
@@ -67,18 +73,15 @@ describe("overhaul acceptance — module scratch workspace", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.getByText("No active Scratch runs.")).toBeVisible();
+    expect(screen.getByTestId("workspace-details-surface")).toBeEmptyDOMElement();
 
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Plan" }));
 
     expect(launch).toHaveBeenCalledWith("plan");
-    expect(await screen.findByTestId("scratch-run-chicklets")).toHaveTextContent(
-      "▶1",
-    );
   });
 
-  it("[overhaul-73] clears a ghost scratch badge when the authoritative snapshot omits its foreign or orphaned run", () => {
+  it("[overhaul-127] clears a ghost scratch badge when the authoritative snapshot omits its foreign or orphaned run", () => {
     useAgentStatusStore.getState().upsertRun({
       agent_run_id: "foreign-ghost",
       project_id: "project-1",
@@ -91,7 +94,7 @@ describe("overhaul acceptance — module scratch workspace", () => {
       updated_at: "2026-08-10T12:00:00Z",
     });
 
-    render(<SelectedTicketDetails />);
+    render(<ScratchStateBadge projectId="project-1" moduleId="module-1" />);
     expect(screen.getByTestId("scratch-run-chicklets")).toHaveTextContent("▶1");
 
     act(() => {
@@ -102,6 +105,6 @@ describe("overhaul acceptance — module scratch workspace", () => {
       );
     });
 
-    expect(screen.getByText("No active Scratch runs.")).toBeVisible();
+    expect(screen.queryByTestId("scratch-run-chicklets")).toBeNull();
   });
 });

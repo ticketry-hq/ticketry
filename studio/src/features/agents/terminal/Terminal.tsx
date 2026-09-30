@@ -1,35 +1,16 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
-import "xterm/css/xterm.css";
 
-import {
-  foregroundKey,
-  useTerminalForegroundStore,
-  type ForegroundOwner,
-} from "./internal/foregroundStore";
-import {
-  getEntry,
-  registerPoolDriver,
-  syncEntries,
-} from "./internal/entryPool";
+import type { ForegroundOwner } from "./internal/foregroundStore";
+import { LazyXtermTerminal } from "./xtermTerminalLoader";
 import { useTerminalStore } from "./internal/sessionStore";
-import { useTerminalOwnership } from "./internal/useTerminalOwnership";
-import { useTerminalPresentation } from "./internal/useTerminalPresentation";
-import { registerTerminalFocus } from "./internal/terminalRegistry";
-import { useModalOcclusionActive } from "./internal/modalOcclusion";
-import { useOcclusionAwareFocusSignal } from "./internal/useOcclusionAwareFocusSignal";
 import { NativeGhosttyTerminal } from "./NativeGhosttyTerminal";
 import { nativeGhosttyAvailable } from "./internal/nativeGhosttyAvailability";
-import { reportNativeRenderFailure } from "./internal/nativeRenderRecovery";
-import { nativeFailureIsHostNotVisible } from "./internal/nativeViewerFailure";
 import { nativeViewerSessionIsLive } from "./internal/nativeViewerSessionLiveness";
 import { ensureTerminalRunCreated } from "./internal/terminalRunCreation";
-
-const OWNER_LABEL: Record<ForegroundOwner, string> = {
-  studio: "the fallback workspace",
-  drawer: "the issue drawer",
-  panel: "the terminal panel",
-};
+import { currentTerminalRenderer } from "./internal/rendererSelection";
+import { useRunState } from "../status";
+import { TerminalEndedState } from "./TerminalEndedState";
 
 type TerminalProps = {
   sessionId: string | null;
@@ -53,22 +34,28 @@ export function Terminal({
     sessionId ? state.sessions[sessionId] ?? null : null,
   );
   const desktop = isTauri();
-  const modalOpen = useModalOcclusionActive();
+  // CODING-1486 — embedded native libghostty is the desktop product default
+  // and xterm is its compatibility fallback; browser development renders with
+  // xterm. Development builds may still force the other renderer for
+  // diagnostics.
+  const [rendererChoice] = useState(() => currentTerminalRenderer(desktop));
   const [nativeAvailable, setNativeAvailable] = useState<boolean | null>(() =>
-    desktop ? null : false,
+    desktop && rendererChoice === "native" ? null : false,
   );
   const [nativeFailure, setNativeFailure] = useState<{
-    sessionId: string | null;
+    runId: string | null;
     reason: string;
   } | null>(null);
+  const runId = session?.agentRunId ?? null;
+  const runState = useRunState(runId ?? "");
   const markNativeUnavailable = useCallback((reason: string) => {
-    setNativeFailure({ sessionId, reason });
-  }, [sessionId]);
+    setNativeFailure({ runId, reason });
+  }, [runId]);
   const nativeFailureReason =
-    nativeFailure?.sessionId === sessionId ? nativeFailure.reason : null;
+    nativeFailure?.runId === runId ? nativeFailure.reason : null;
 
   useEffect(() => {
-    if (!desktop) return;
+    if (!desktop || rendererChoice !== "native") return;
     let active = true;
     void nativeGhosttyAvailable().then((available) => {
       if (active) setNativeAvailable(available);
@@ -76,42 +63,31 @@ export function Terminal({
     return () => {
       active = false;
     };
-  }, [desktop]);
+  }, [desktop, rendererChoice]);
 
   useEffect(() => {
     if (!sessionId || !session) return;
     ensureTerminalRunCreated(sessionId, session);
   }, [session, sessionId]);
 
-  // A native failure on a live desktop terminal is the only input to the
-  // window-scoped recovery campaign. Capability absence, browser rendering and
-  // ended sessions are supported fallback postures, not render failures.
-  useEffect(() => {
-    if (!desktop || !nativeAvailable || !nativeFailureReason) return;
-    if (!session?.agentRunId || !nativeViewerSessionIsLive(session.status)) return;
-    // Occlusion failures already leave the native viewer hidden behind the
-    // compatibility renderer. Do not let their recovery campaign refresh the
-    // WebView while Settings or another window-level overlay owns it.
-    if (modalOpen) return;
-    // A host with no visible frame before attachment never reaches the
-    // renderer. Refreshing rebuilds the same layout, so the campaign would
-    // escalate to its cap and reload forever without a renderer ever failing.
-    if (nativeFailureIsHostNotVisible(nativeFailureReason)) return;
-    // Report the run, not just the reason, and hold the report for as long as
-    // this surface shows the fallback: these inputs cannot change again once
-    // the run has failed, so the coordinator is the only place that remembers
-    // the run is still broken while other terminals recover natively.
-    return reportNativeRenderFailure(session.agentRunId, nativeFailureReason);
-  }, [
-    desktop,
-    modalOpen,
-    nativeAvailable,
-    nativeFailureReason,
-    session?.agentRunId,
-    session?.status,
-  ]);
+  if (session?.status === "session_lost" && runState === "exited") {
+    return <TerminalEndedState conversation={session.isInstant} />;
+  }
 
-  if (desktop && (nativeAvailable === null || !session?.agentRunId)) {
+  if (session?.viewerAttachmentDeferred) {
+    return (
+      <div
+        className="h-full w-full bg-inherit"
+        data-testid="terminal-viewer-pending"
+      />
+    );
+  }
+
+  if (
+    rendererChoice === "native" &&
+    desktop &&
+    (nativeAvailable === null || !session?.agentRunId)
+  ) {
     return (
       <div
         className="h-full w-full bg-pane-panel"
@@ -121,6 +97,7 @@ export function Terminal({
   }
 
   if (
+    rendererChoice === "native" &&
     nativeAvailable &&
     sessionId &&
     session?.agentRunId &&
@@ -139,13 +116,20 @@ export function Terminal({
     );
   }
   const fallback = (
-    <XtermTerminal
+    <LazyXtermTerminal
       sessionId={active || session?.status === "connecting" ? sessionId : null}
       owner={owner}
       focusSignal={focusSignal}
     />
   );
-  if (!nativeFailureReason) return fallback;
+  // A native failure is local to this terminal: xterm takes over the same run
+  // and tmux session, and the notice lasts only until its transport is ready.
+  if (!nativeFailureReason || session?.transport === "ready") return fallback;
+  return withFallbackNotice(fallback, nativeFailureReason, "Native terminal");
+}
+
+/** The compatibility renderer plus the reason the preferred one stepped aside. */
+function withFallbackNotice(fallback: JSX.Element, reason: string, renderer: string) {
   return (
     <div className="relative h-full w-full">
       {fallback}
@@ -154,113 +138,8 @@ export function Terminal({
         data-testid="native-terminal-fallback-notice"
         className="pointer-events-none absolute bottom-2 right-2 max-w-[min(32rem,calc(100%-1rem))] border border-lifecycle-attention/40 bg-pane-bg/95 px-2 py-1 text-xs text-lifecycle-attention shadow"
       >
-        Native terminal unavailable: {nativeFailureReason}. Using compatibility renderer.
+        {renderer} unavailable: {reason}. Using compatibility renderer.
       </div>
-    </div>
-  );
-}
-
-function XtermTerminal({
-  sessionId,
-  owner = "studio",
-  focusSignal,
-}: TerminalProps) {
-  const sessions = useTerminalStore((state) => state.sessions);
-  const registerHost = useTerminalForegroundStore((state) => state.registerHost);
-  const unregisterHost = useTerminalForegroundStore((state) => state.unregisterHost);
-  const modalOpen = useModalOcclusionActive();
-  const { handledFocusSignalRef } = useOcclusionAwareFocusSignal(
-    focusSignal,
-    modalOpen,
-  );
-
-  useEffect(() => syncEntries(sessions), [sessions]);
-
-  const session = sessionId ? sessions[sessionId] ?? null : null;
-  const key = session ? foregroundKey(session) : null;
-  const { acquire, resolvedOwner } = useTerminalOwnership(key, owner);
-  const visibleSessionId = session && resolvedOwner === owner ? sessionId : null;
-  const { hostRef, mountedIdRef } = useTerminalPresentation({
-    controlledFocus: focusSignal !== undefined,
-    session: visibleSessionId ? session : null,
-    sessionId: visibleSessionId,
-  });
-
-  useEffect(() => {
-    registerHost(owner, hostRef.current);
-    const releaseDriver = registerPoolDriver();
-    return () => {
-      unregisterHost(owner);
-      releaseDriver();
-    };
-  }, [hostRef, owner, registerHost, unregisterHost]);
-
-  useEffect(() => {
-    if (!visibleSessionId) return;
-    return registerTerminalFocus(visibleSessionId, () => {
-      if (mountedIdRef.current !== visibleSessionId) return;
-      getEntry(visibleSessionId)?.term.focus?.();
-    });
-  }, [mountedIdRef, visibleSessionId]);
-
-  useEffect(() => {
-    const pendingSignal =
-      focusSignal !== undefined &&
-      focusSignal !== 0 &&
-      focusSignal !== handledFocusSignalRef.current;
-    if (
-      !pendingSignal ||
-      modalOpen ||
-      !visibleSessionId ||
-      mountedIdRef.current !== visibleSessionId
-    ) {
-      return;
-    }
-
-    const entry = getEntry(visibleSessionId);
-    if (!entry) return;
-    if (pendingSignal && focusSignal !== undefined) {
-      handledFocusSignalRef.current = focusSignal;
-    }
-    entry.term.focus?.();
-  }, [focusSignal, modalOpen, mountedIdRef, visibleSessionId]);
-
-  const presentedElsewhere = session !== null && resolvedOwner !== owner;
-
-  return (
-    <div className="relative h-full w-full">
-      <div ref={hostRef} className="h-full w-full bg-pane-bg" data-testid="terminal-host" />
-      {presentedElsewhere && resolvedOwner ? (
-        <TerminalOwnershipNotice
-          owner={resolvedOwner}
-          onReclaim={() => key && acquire(key, owner)}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function TerminalOwnershipNotice({
-  owner,
-  onReclaim,
-}: {
-  owner: ForegroundOwner;
-  onReclaim: () => void;
-}) {
-  return (
-    <div
-      data-testid="terminal-presented-elsewhere"
-      className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-pane-bg p-4 text-center text-sm text-text-muted"
-    >
-      <p>This terminal is open in {OWNER_LABEL[owner]}.</p>
-      <button
-        type="button"
-        data-testid="terminal-reclaim"
-        onClick={onReclaim}
-        className="border border-pane-border px-3 py-1 text-sm text-text-primary hover:bg-pane-title"
-      >
-        View here
-      </button>
     </div>
   );
 }

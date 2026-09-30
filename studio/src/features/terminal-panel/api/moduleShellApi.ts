@@ -1,15 +1,26 @@
 /**
  * The wire calls for a module's durable login shells (#667).
  *
- * A shell run is created and listed through `/api/terminals/shells`, which is
- * deliberately separate from the agent-run terminal routes: it resolves no
- * provider and carries no prompt. Ending one is *not* here — a shell run
- * terminates through the same terminal deletion as any other durable run.
+ * Shells are created and listed through the Rust Terminal Session graph. The
+ * `/api/terminals/shells` compatibility route browser development used went
+ * away with the Python terminal authority, so a platform without the in-process
+ * GraphQL transport has no shell surface. Neither create call accepts a
+ * provider or prompt. Ending a shell still uses the common terminal update
+ * contract.
  */
 
-import { createWorkTrackerClient } from "@worktracker/typescript-sdk/client";
-import { WorkTrackerApiError } from "@worktracker/typescript-sdk/errors";
-import { apiBase, apiKey } from "../../../shared/api/client";
+import { studioRuntime } from "../../../runtime";
+import { FoundationGraphQlError } from "../../../shared/apollo/errorLink";
+import { graphQlMutationError } from "../../../shared/api/graphqlError";
+import {
+  CreateModuleShellDocument,
+  ModuleShellSessionsDocument,
+} from "../../agents/terminal";
+import { SCRATCH_RUN_TASK_ID } from "../../agents/types";
+
+const DEFAULT_COLUMNS = 80;
+const DEFAULT_ROWS = 24;
+const SHELL_LIST_LIMIT = 100;
 
 export interface ModuleShell {
   agent_run_id: string;
@@ -29,29 +40,54 @@ export class ModuleShellRefused extends Error {
   }
 }
 
-const terminalsApi = () =>
-  createWorkTrackerClient({ baseUrl: apiBase(), apiKey: apiKey() }).terminals;
-
 /** Launches one durable login shell and returns the run that hosts it. */
 export async function createModuleShell(moduleId: string): Promise<string> {
-  try {
-    const result = await terminalsApi().terminalsShellsCreate({
-      createModuleShell: { module_id: moduleId },
-    });
-    return result.agent_run_id;
-  } catch (error) {
-    if (!(error instanceof WorkTrackerApiError)) throw error;
-    if (error.status === 409) {
-      const body = error.body as { code?: string } | null;
-      throw new ModuleShellRefused(body?.code ?? "module_folder_unset");
-    }
-    throw new Error(`shell launch failed (HTTP ${error.status})`);
-  }
+  const variables = {
+    clientRequestId: crypto.randomUUID(),
+    moduleId,
+    columns: DEFAULT_COLUMNS,
+    rows: DEFAULT_ROWS,
+  };
+  const result = await studioRuntime().writeWorkTracker({
+    graphQl: async (execute) => {
+      try {
+        let response;
+        try {
+          response = await execute(CreateModuleShellDocument, variables);
+        } catch (error) {
+          if (error instanceof FoundationGraphQlError) throw error;
+          response = await execute(CreateModuleShellDocument, variables);
+        }
+        return { agent_run_id: response.terminal_session.agent_run_id };
+      } catch (error) {
+        if (
+          error instanceof FoundationGraphQlError &&
+          error.code === "module_folder_unusable"
+        ) {
+          throw new ModuleShellRefused(error.code);
+        }
+        return graphQlMutationError(error);
+      }
+    },
+  });
+  return result.agent_run_id;
 }
 
-export async function listModuleShells(
-  moduleId: string,
-  signal?: AbortSignal,
-): Promise<ModuleShell[]> {
-  return terminalsApi().terminalsShellsList({ moduleId }, { signal });
+export async function listModuleShells(moduleId: string): Promise<ModuleShell[]> {
+  return studioRuntime().readWorkTracker({
+    graphQl: async (execute) => {
+      // Work Item shells share this module and the "shell" scope, so the
+      // scratch task id is what keeps them out of the module's tab strip.
+      const response = await execute(ModuleShellSessionsDocument, {
+        moduleId,
+        scratchTaskId: SCRATCH_RUN_TASK_ID,
+        limit: SHELL_LIST_LIMIT,
+      });
+      return response.terminal_sessions.sessions.map((session) => ({
+        agent_run_id: session.agent_run_id,
+        module_id: session.module_id,
+        created_at: session.created_at,
+      }));
+    },
+  });
 }

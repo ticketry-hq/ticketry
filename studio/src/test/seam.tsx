@@ -1,29 +1,47 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderResult } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach } from "vitest";
+import { StoriesTreeProvider } from "../features/work-items";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { SelectedTicketDetails } from "../app/shell/ticket-workspace/selected-ticket/details/SelectedTicketDetails";
-import { useAgentStatusStore } from "../features/agents/status/store";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import type { RunRecord } from "../features/agents/status/types";
 import type { DesignDoc } from "../features/agents/types";
 import { useStudioStore } from "../features/projects/store";
+import { loadModules } from "../features/projects/queries";
 import { loadModuleTree } from "../features/work-items/queries";
 import type {
   Attachment,
   IssueType,
   ModuleTree,
+  ScopedWorkflowTransition,
   State,
   WorkItem,
 } from "../shared/api/types";
-import { queryClient } from "../shared/query/queryClient";
-import { queryKeys } from "../shared/query/keys";
+import { StudioApolloProvider } from "../shared/apollo/StudioApolloProvider";
 import { useClientStore } from "../state/clientStore";
 import { rankBetween } from "../features/work-items/utilities/rank";
+import {
+  documentOperationName,
+  type TypedDocumentNode,
+} from "../graphql-foundation/typedDocument";
+import { FoundationGraphQlError } from "../shared/apollo/errorLink";
+import { createBrowserRuntime, initializeStudioRuntime } from "../runtime";
+import {
+  compactWorktrackerId,
+} from "../shared/api/generatedWorktracker";
+import { studioApolloClient } from "../shared/apollo/client";
+import {
+  WorkTrackerModuleOpenDocument,
+  WorkTrackerWorkItemDocument,
+} from "../features/work-items/generated/workItems.documents";
+import { WorkTrackerProjectOpenDocument } from "../features/projects/generated/projects.documents";
 
 export interface HttpFixture {
   tree(moduleId: string, tree: ModuleTree): void;
   workItems(items: WorkItem[]): void;
+  /** Another client's write: patch the server row and bump its revision. */
+  revise(id: string, patch: Partial<WorkItem>): void;
   runs(issueId: string, runs: RunRecord[]): void;
   documents(issueId: string, docs: DesignDoc[]): void;
   attachments(issueId: string, attachments: Attachment[]): void;
@@ -33,14 +51,20 @@ export interface HttpFixture {
     id: string,
     body: { before_id: string | null; after_id: string | null },
   ): Promise<void>;
+  reorderBodies(id: string): Array<{ before_id: string | null; after_id: string | null }>;
   graphRunCount(id: string): number;
   graphRunModes(id: string): Array<string | null>;
+  persistGraphRun(id: string, updatedAt?: string): void;
   runNowCount(id: string): number;
-  /** Fails the next Run Now POST only, leaving other requests untouched. */
+  /** Refuses the next Run Now mutation only, leaving other requests untouched. */
   failNextRunNow(status: number, body?: unknown): void;
   /** Holds Run Now responses until the returned release is called. */
   holdRunNow(): () => void;
   setRunNowTransitionEnabled(enabled: boolean): void;
+  workflowTransitions(
+    issueTypeId: string,
+    transitions: ScopedWorkflowTransition[],
+  ): void;
   refreshRunNowCapabilities(issueTypeId: string): Promise<void>;
   /** Fails the next graph-run POST only, leaving other requests untouched. */
   failNextGraphRun(status: number, body?: unknown): void;
@@ -53,6 +77,10 @@ export interface HttpFixture {
   /** Holds graph-run responses until the returned release is called. */
   holdGraphRuns(): () => void;
   setSubtreeRunEnabled(enabled: boolean): void;
+  executeGraphQl<TResult, TVariables>(
+    document: TypedDocumentNode<TResult, TVariables>,
+    variables: TVariables,
+  ): Promise<TResult>;
   failNext(status: number, body?: unknown): void;
 }
 
@@ -96,6 +124,8 @@ const json = (body: unknown, status = 200) =>
 class BoundaryFixture implements StudioFixture {
   readonly trees = new Map<string, ModuleTree>();
   readonly items = new Map<string, WorkItem>();
+  /** Server `state_revision` per Work Item; every fixture write bumps it. */
+  readonly revisions = new Map<string, number>();
   readonly states = new Map<string, State>();
   readonly issueTypes = new Map<string, IssueType>();
   readonly runRows = new Map<string, RunRecord[]>();
@@ -108,10 +138,16 @@ class BoundaryFixture implements StudioFixture {
   private graphRunFailures: Array<{ status: number; body: unknown }> = [];
   private graphRunInertPresses = 0;
   private graphRunGate: Promise<void> | null = null;
+  private readonly armedGraphRuns = new Set<string>();
+  private readonly graphRunUpdatedAt = new Map<string, string>();
   private runNowFailures: Array<{ status: number; body: unknown }> = [];
   private runNowGate: Promise<void> | null = null;
   private subtreeRunEnabled = true;
   private runNowTransitionEnabled = true;
+  private readonly workflowTransitionOverrides = new Map<
+    string,
+    ScopedWorkflowTransition[]
+  >();
   private readonly transitionRanks = new Map<string, string>();
   private nextFailure: { status: number; body: unknown } | null = null;
   private patchWaiters: Array<{
@@ -132,12 +168,14 @@ class BoundaryFixture implements StudioFixture {
   >();
 
   private applyWorkItemChange(id: string, membershipChanged: boolean): void {
-    void queryClient.invalidateQueries({
-      queryKey: queryKeys.workItems.byId(id),
-      exact: true,
+    const client = studioApolloClient();
+    void client.query({
+      query: WorkTrackerWorkItemDocument,
+      variables: { id: compactWorktrackerId(id) },
+      fetchPolicy: "network-only",
     });
     if (membershipChanged) {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      void client.refetchQueries({ include: [WorkTrackerModuleOpenDocument] });
     }
   }
 
@@ -191,6 +229,13 @@ class BoundaryFixture implements StudioFixture {
     }
   }
 
+  revise(id: string, patch: Partial<WorkItem>): void {
+    const current = this.items.get(id);
+    if (!current) throw new Error(`fixture has no work item ${id}`);
+    this.items.set(id, { ...current, ...patch });
+    this.revisions.set(id, (this.revisions.get(id) ?? 1) + 1);
+  }
+
   runs(issueId: string, runs: RunRecord[]): void {
     this.runRows.set(issueId, runs);
   }
@@ -221,6 +266,12 @@ class BoundaryFixture implements StudioFixture {
     return new Promise((resolve) => this.reorderWaiters.push({ id, body, resolve }));
   }
 
+  reorderBodies(id: string): ReorderCall["body"][] {
+    return this.reorders
+      .filter((call) => call.id === id)
+      .map((call) => call.body);
+  }
+
   graphRunCount(id: string): number {
     return this.graphRuns.filter((candidate) => candidate.id === id).length;
   }
@@ -229,6 +280,14 @@ class BoundaryFixture implements StudioFixture {
     return this.graphRuns
       .filter((candidate) => candidate.id === id)
       .map((candidate) => candidate.mode);
+  }
+
+  persistGraphRun(
+    id: string,
+    updatedAt = "2026-09-21T10:00:00Z",
+  ): void {
+    this.armedGraphRuns.add(id);
+    this.graphRunUpdatedAt.set(id, updatedAt);
   }
 
   runNowCount(id: string): number {
@@ -254,10 +313,34 @@ class BoundaryFixture implements StudioFixture {
     this.runNowTransitionEnabled = enabled;
   }
 
+  workflowTransitions(
+    issueTypeId: string,
+    transitions: ScopedWorkflowTransition[],
+  ): void {
+    this.workflowTransitionOverrides.set(issueTypeId, transitions);
+  }
+
+  private transitionsFor(issueTypeId: string): ScopedWorkflowTransition[] {
+    const configured = this.workflowTransitionOverrides.get(issueTypeId);
+    if (configured) return configured;
+    const ideas = [...this.states.values()].find((state) => state.name === "Ideas");
+    const implement = [...this.states.values()].find((state) => state.name === "Implement");
+    return this.runNowTransitionEnabled && ideas?.id && implement?.id
+      ? [{
+          from_state_id: ideas.id,
+          to_state_id: implement.id,
+          agent_allowed: true,
+          handoff: false,
+        }]
+      : [];
+  }
+
   async refreshRunNowCapabilities(issueTypeId: string): Promise<void> {
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.workflows.transitionsByIssueType(issueTypeId),
-      exact: true,
+    void issueTypeId;
+    await studioApolloClient().query({
+      query: WorkTrackerProjectOpenDocument,
+      variables: { projectId: compactWorktrackerId(this.projectId()) },
+      fetchPolicy: "network-only",
     });
   }
 
@@ -293,6 +376,454 @@ class BoundaryFixture implements StudioFixture {
     this.subtreeRunEnabled = enabled;
   }
 
+  async executeGraphQl<TResult, TVariables>(
+    document: TypedDocumentNode<TResult, TVariables>,
+    variables: TVariables,
+  ): Promise<TResult> {
+    const input = variables as {
+      rootId?: string;
+      executionMode?: string | null;
+      idOrKey?: string;
+      id?: string;
+      ids?: string[];
+      moduleId?: string;
+      projectId?: string;
+      issueTypeId?: string;
+      issueId?: string;
+      targetStateId?: string;
+      parentId?: string | null;
+      blockedByIds?: string[];
+      beforeId?: string | null;
+      afterId?: string | null;
+      projectSlug?: string;
+      sequenceId?: number;
+    };
+    const fixtureKey = <T,>(rows: Map<string, T>, id: string | null | undefined) =>
+      id == null
+        ? undefined
+        : [...rows.keys()].find((key) =>
+          key === id || compactWorktrackerId(key) === compactWorktrackerId(id),
+        );
+    const fixtureItem = (id: string | null | undefined) => {
+      const key = fixtureKey(this.items, id);
+      return key ? this.items.get(key) : undefined;
+    };
+    if (this.nextFailure) {
+      const failure = this.nextFailure;
+      this.nextFailure = null;
+      const body = failure.body && typeof failure.body === "object"
+        ? failure.body as Record<string, unknown>
+        : {};
+      throw new FoundationGraphQlError(
+        failure.status === 409 ? "conflict" : "unknown",
+        typeof body.detail === "string" ? body.detail : "GraphQL request failed.",
+      );
+    }
+    const issueRow = (item: WorkItem) => {
+      const moduleId = [...this.trees].find(([, tree]) => tree.order.includes(item.id))?.[0] ?? null;
+      return {
+        __typename: "WorktrackerIssue",
+        ...item,
+        id: compactWorktrackerId(item.id),
+        state_revision: this.revisions.get(item.id) ?? 1,
+        workspace_tab_order: [],
+        state_id: item.state,
+        issue_type_id: item.issue_type,
+        module_id: moduleId,
+        project: {
+          __typename: "WorktrackerProject",
+          id: this.projectId(),
+          slug: item.key.split("-")[0] ?? "PROJECT",
+        },
+        state_record: item.state ? {
+          __typename: "WorktrackerState",
+          ...this.states.get(item.state),
+          id: item.state,
+          sort_order: this.states.get(item.state)?.sort_order ?? 0,
+          is_protected: this.states.get(item.state)?.is_protected ?? false,
+        } : null,
+        issue_type_record: {
+          __typename: "WorktrackerIssuetype",
+          ...this.issueTypes.get(item.issue_type),
+          id: item.issue_type,
+          sort_order: this.issueTypes.get(item.issue_type)?.sort_order ?? 0,
+        },
+        children: { __typename: "WorktrackerIssueConnection", nodes: [...this.items.values()].filter((child) => child.parent_id === item.id).map((child) => ({ __typename: "WorktrackerIssue", id: child.id, is_archived: child.is_archived })) },
+        blocked_by_edges: {
+          __typename: "WorktrackerIssueBlockedByConnection",
+          nodes: item.blocked_by_ids.map((id) => ({
+            __typename: "WorktrackerIssueBlockedByEdge",
+            to_issue_id: id,
+          })),
+        },
+        blocks_edges: {
+          __typename: "WorktrackerIssueBlockedByConnection",
+          nodes: item.blocks_ids.map((id) => ({
+            __typename: "WorktrackerIssueBlockedByEdge",
+            from_issue_id: id,
+          })),
+        },
+      };
+    };
+    if (documentOperationName(document) === "CurrentWorktrees") {
+      return { worktrees: { __typename: "WorktreesConnection", nodes: [] } } as TResult;
+    }
+    const createdAt = "2026-08-06T12:00:00Z";
+    const stateRows = () => [...this.states.values()].map((state) => ({
+      __typename: "WorktrackerState",
+      ...state,
+      project: this.projectId(),
+      sort_order: state.sort_order ?? 0,
+      is_protected: state.is_protected ?? false,
+      created_at: createdAt,
+      updated_at: createdAt,
+    }));
+    const issueTypeRows = () => [...this.issueTypes.values()].map((type) => {
+      const transitions = this.transitionsFor(type.id).map((transition, index) => ({
+        __typename: "WorktrackerIssuetypetransition",
+        id: index + 1,
+        issue_type: type.id,
+        from_state: transition.from_state_id,
+        to_state: transition.to_state_id,
+        agent_allowed: transition.agent_allowed,
+        handoff: transition.handoff,
+        fromState: {
+          __typename: "WorktrackerState",
+          id: transition.from_state_id,
+          sort_order: this.states.get(transition.from_state_id)?.sort_order ?? 0,
+        },
+        toState: {
+          __typename: "WorktrackerState",
+          id: transition.to_state_id,
+          sort_order: this.states.get(transition.to_state_id)?.sort_order ?? 0,
+        },
+      }));
+      const bindings = [...this.items.values()].flatMap((item, index) =>
+        item.issue_type === type.id && item.state ? [{
+          __typename: "WorktrackerLaunchbinding",
+          id: index + 1,
+          issue_type: type.id,
+          state: item.state,
+          prompt: null,
+          required_skills: [],
+          stage_skills: [],
+          model: null,
+          reasoning: null,
+          auto_start: false,
+          subtree_run_enabled: this.subtreeRunEnabled,
+          created_at: createdAt,
+          updated_at: createdAt,
+          state_record: { __typename: "WorktrackerState", id: item.state, sort_order: this.states.get(item.state)?.sort_order ?? 0 },
+        }] : [],
+      );
+      return {
+        __typename: "WorktrackerIssuetype",
+        ...type,
+        project: type.project ?? this.projectId(),
+        start_state: type.start_state ?? null,
+        workflow_revision: type.workflow_revision ?? 1,
+        is_pathfind: false,
+        created_at: createdAt,
+        updated_at: createdAt,
+        transitions: { __typename: "WorktrackerIssuetypetransitionConnection", nodes: transitions },
+        launch_bindings: { __typename: "WorktrackerLaunchbindingConnection", nodes: bindings },
+      };
+    });
+    const moduleRows = () => [...this.trees.keys()].map((id, index) => ({
+      __typename: "WorktrackerIssue",
+      id,
+      name: `Module ${index + 1}`,
+      project_id: this.projectId(),
+      sequence_id: index + 1,
+      is_archived: false,
+      issue_type: "module",
+      rank: String(index),
+      project: { __typename: "WorktrackerProject", id: this.projectId(), slug: "T" },
+    }));
+    const providerCatalog = {
+      __typename: "WorktrackerProviderCatalog",
+      configurable_providers: [],
+      providers: [],
+      agent_models: [],
+      reasoning_levels: [],
+      codex_profiles: [],
+      global_default: null,
+    };
+    if (documentOperationName(document) === "WorkTrackerModuleOpen") {
+      const moduleKey = fixtureKey(this.trees, input.moduleId);
+      const ids = moduleKey ? [...(this.trees.get(moduleKey)?.order ?? [])].sort((leftId, rightId) => {
+        const left = this.items.get(leftId);
+        const right = this.items.get(rightId);
+        return (left?.rank ?? "").localeCompare(right?.rank ?? "")
+          || (left?.sequence_id ?? 0) - (right?.sequence_id ?? 0)
+          || leftId.localeCompare(rightId);
+      }) : [];
+      return {
+        module: { __typename: "WorktrackerIssueConnection", nodes: moduleRows().filter((row) => fixtureKey(this.trees, row.id) === moduleKey) },
+        work_items: { __typename: "WorktrackerIssueConnection", nodes: ids.flatMap((id) => this.items.has(id) ? [issueRow(this.items.get(id)!)] : []) },
+      } as TResult;
+    }
+    if (documentOperationName(document) === "WorkTrackerProjectOpen") {
+      return {
+        project: { __typename: "WorktrackerProjectConnection", nodes: [{
+          __typename: "WorktrackerProject",
+          id: this.projectId(), name: "Project", slug: "project", description: "",
+          created_at: createdAt,
+        }] },
+        modules: { __typename: "WorktrackerIssueConnection", nodes: moduleRows() },
+        module_presentations: {
+          __typename: "WorktrackerModulepresentationConnection",
+          nodes: [],
+        },
+        states: { __typename: "WorktrackerStateConnection", nodes: stateRows() },
+        issue_types: { __typename: "WorktrackerIssuetypeConnection", nodes: issueTypeRows() },
+        provider_catalog: providerCatalog,
+      } as TResult;
+    }
+    if (documentOperationName(document) === "WorkTrackerProjectStates") {
+      return { states: { __typename: "WorktrackerStateConnection", nodes: stateRows() } } as TResult;
+    }
+    if (documentOperationName(document) === "WorkTrackerProjectIssueTypes") {
+      return { issue_types: { __typename: "WorktrackerIssuetypeConnection", nodes: issueTypeRows() } } as TResult;
+    }
+    if (documentOperationName(document) === "WorkTrackerProjects") {
+      return {
+        projects: { __typename: "WorktrackerProjectConnection", nodes: [{
+          __typename: "WorktrackerProject", id: this.projectId(), name: "Project",
+          slug: "project", description: "", created_at: createdAt,
+        }] },
+        module_presentations: {
+          __typename: "WorktrackerModulepresentationConnection",
+          nodes: [],
+        },
+      } as TResult;
+    }
+    if (documentOperationName(document) === "LoadProviderCatalog") {
+      return { provider_catalog: providerCatalog } as TResult;
+    }
+    if (documentOperationName(document) === "WorkTrackerWorkItems") {
+      return { work_items: { nodes: [...this.items.values()].map(issueRow) } } as TResult;
+    }
+    if (documentOperationName(document) === "WorkTrackerWorkItem") {
+      const item = fixtureItem(input.id);
+      return { work_item: { __typename: "WorktrackerIssueConnection", nodes: item ? [issueRow(item)] : [] } } as TResult;
+    }
+    if (documentOperationName(document) === "WorkTrackerWorkItemByKey") {
+      const item = [...this.items.values()].find((candidate) =>
+        candidate.sequence_id === input.sequenceId
+        && candidate.key.split("-")[0]?.toUpperCase() === input.projectSlug,
+      );
+      return { work_item: { __typename: "WorktrackerIssueConnection", nodes: item ? [issueRow(item)] : [] } } as TResult;
+    }
+    if (documentOperationName(document) === "WorkTrackerAttachments") {
+      const issueKey = fixtureKey(this.attachmentRows, input.issueId);
+      return { attachments: { __typename: "WorktrackerAttachmentConnection", nodes: (issueKey ? this.attachmentRows.get(issueKey) ?? [] : []).map((attachment) => ({
+        __typename: "WorktrackerAttachment",
+        id: attachment.id, issue_id: attachment.issue, file: attachment.url,
+        filename: attachment.filename, mime_type: attachment.mime_type,
+        size: attachment.size, created_at: attachment.created_at,
+      })) } } as TResult;
+    }
+    if (["UpdateWorkTrackerWorkItemDetails", "TransitionWorkTrackerWorkItem", "ReparentWorkTrackerWorkItem", "SetWorkTrackerBlockers"].includes(documentOperationName(document))) {
+      const id = fixtureKey(this.items, input.id) ?? input.id!;
+      const current = fixtureItem(id);
+      if (!current) throw new FoundationGraphQlError("not_found", "Not found");
+      const submitted = variables as Record<string, unknown>;
+      const body: Record<string, unknown> = {};
+      if (submitted.name !== undefined) body.name = submitted.name;
+      if (submitted.description !== undefined) body.description = submitted.description;
+      if (submitted.issueTypeId !== undefined) body.issue_type_id = submitted.issueTypeId;
+      if (submitted.targetStateId !== undefined) {
+        body.state_id = fixtureKey(this.states, submitted.targetStateId as string)
+          ?? submitted.targetStateId;
+        body.origin = "human";
+      }
+      if (submitted.parentId !== undefined) {
+        body.parent_id = fixtureKey(this.items, submitted.parentId as string | null)
+          ?? submitted.parentId;
+      }
+      if (submitted.blockedByIds !== undefined) {
+        body.blocked_by_ids = (submitted.blockedByIds as string[]).map((candidate) =>
+          fixtureKey(this.items, candidate) ?? candidate,
+        );
+      }
+      const updated: WorkItem = {
+        ...current,
+        ...body,
+        state: (body.state_id as string | undefined) ?? current.state,
+        issue_type: (body.issue_type_id as string | undefined) ?? current.issue_type,
+        parent_id: body.parent_id === undefined ? current.parent_id : body.parent_id as string | null,
+        blocked_by_ids: (body.blocked_by_ids as string[] | undefined) ?? current.blocked_by_ids,
+        rank: body.state_id === undefined ? current.rank : this.transitionRanks.get(id) ?? current.rank,
+      };
+      this.items.set(id, updated);
+      this.revisions.set(id, (this.revisions.get(id) ?? 1) + 1);
+      this.patches.push({ id, body });
+      for (const waiter of this.patchWaiters.splice(0)) {
+        if (waiter.id === id && deepEqual(waiter.body, body)) waiter.resolve(); else this.patchWaiters.push(waiter);
+      }
+      return { update_work_item: issueRow(updated) } as TResult;
+    }
+    if (documentOperationName(document) === "ReorderWorkTrackerWorkItem") {
+      const id = fixtureKey(this.items, input.id) ?? input.id!;
+      const current = this.items.get(id);
+      if (!current) throw new FoundationGraphQlError("not_found", "Not found");
+      const body = {
+        before_id: fixtureKey(this.items, input.beforeId) ?? null,
+        after_id: fixtureKey(this.items, input.afterId) ?? null,
+      };
+      const beforeRank = body.before_id ? this.items.get(body.before_id)?.rank ?? null : null;
+      const afterRank = body.after_id ? this.items.get(body.after_id)?.rank ?? null : null;
+      if (beforeRank !== null && beforeRank === afterRank) {
+        const siblings = [...this.items.values()]
+          .filter((item) =>
+            !item.is_archived &&
+            item.project_id === current.project_id &&
+            item.parent_id === current.parent_id &&
+            item.state === current.state
+          )
+          .sort((left, right) =>
+            left.rank.localeCompare(right.rank) ||
+            right.sequence_id - left.sequence_id ||
+            right.id.localeCompare(left.id)
+          )
+          .filter((item) => item.id !== current.id);
+        const insertion = body.before_id === null
+          ? 0
+          : siblings.findIndex((item) => item.id === body.before_id) + 1;
+        siblings.splice(insertion, 0, current);
+        let previousRank: string | null = null;
+        for (const sibling of siblings) {
+          const rank = rankBetween(previousRank, null);
+          this.items.set(sibling.id, { ...sibling, rank });
+          previousRank = rank;
+        }
+      }
+      const updated = {
+        ...(this.items.get(current.id) ?? current),
+        rank: beforeRank !== null && beforeRank === afterRank
+          ? this.items.get(current.id)!.rank
+          : rankBetween(beforeRank, afterRank),
+      };
+      this.items.set(updated.id, updated);
+      this.reorders.push({ id: updated.id, body });
+      for (const waiter of this.reorderWaiters.splice(0)) {
+        if (waiter.id === updated.id && deepEqual(waiter.body, body)) waiter.resolve(); else this.reorderWaiters.push(waiter);
+      }
+      return { reorder_work_item: issueRow(updated) } as TResult;
+    }
+    if (documentOperationName(document) === "RunWorkTrackerWorkItemNow") {
+      const id = input.idOrKey;
+      if (!id) throw new Error("RunWorkTrackerWorkItemNow requires idOrKey.");
+      this.runNowCalls.push({ id });
+      const failure = this.runNowFailures.shift();
+      if (this.runNowGate) await this.runNowGate;
+      if (failure) {
+        const body = failure.body && typeof failure.body === "object"
+          ? failure.body as Record<string, unknown>
+          : {};
+        return {
+          run_now: {
+            target_id: body.target_id ?? id,
+            committed_state: body.committed_state ?? null,
+            run: null,
+            detail: body.detail ?? "Run Now could not be started.",
+            code: body.code ?? "run_now_unavailable",
+            remedy: body.remedy ?? null,
+          },
+        } as TResult;
+      }
+      const current = this.items.get(id);
+      const implement = [...this.states.values()].find(
+        (state) => state.name === "Implement",
+      );
+      if (!current || !implement?.id) {
+        return {
+          run_now: {
+            target_id: id,
+            committed_state: null,
+            run: null,
+            detail: "The work item was not found.",
+            code: "task_not_found",
+            remedy: null,
+          },
+        } as TResult;
+      }
+      this.items.set(current.id, { ...current, state: implement.id });
+      return {
+        run_now: {
+          target_id: id,
+          committed_state: { id: implement.id, name: implement.name },
+          run: {
+            target_id: id,
+            agent: "codex",
+            agent_run_id: `run-now-${id}`,
+          },
+          detail: "Run Now started.",
+          code: "run_now_started",
+          remedy: null,
+        },
+      } as TResult;
+    }
+    const id = fixtureKey(this.items, input.rootId) ?? input.rootId;
+    if (!id) throw new Error(`${documentOperationName(document)} requires rootId.`);
+    if (documentOperationName(document) === "ExecutionGraphRunHolding") {
+      return {
+        graph_run_holding: {
+          __typename: "GraphRunsConnection",
+          nodes: this.armedGraphRuns.has(id)
+            ? [{
+                __typename: "GraphRuns",
+                root_id: id,
+                execution_mode: "parallel",
+                updated_at: this.graphRunUpdatedAt.get(id) ?? "2026-09-21T10:00:00Z",
+              }]
+            : [],
+        },
+      } as TResult;
+    }
+    if (
+      documentOperationName(document) !== "CreateExecutionGraphRun" &&
+      documentOperationName(document) !== "UpdateExecutionGraphRun"
+    ) {
+      throw new Error(`Unexpected GraphQL operation ${documentOperationName(document)}.`);
+    }
+    this.graphRuns.push({ id, mode: input.executionMode ?? null });
+    const failure = this.graphRunFailures.shift();
+    const inert = this.graphRunInertPresses > 0;
+    if (inert) this.graphRunInertPresses -= 1;
+    if (this.graphRunGate) await this.graphRunGate;
+    if (failure) {
+      const body = failure.body && typeof failure.body === "object"
+        ? failure.body as Record<string, unknown>
+        : {};
+      const code = typeof body.error === "string"
+        ? body.error
+        : failure.status === 409
+          ? "conflict"
+          : "unknown";
+      const message = typeof body.detail === "string"
+        ? body.detail
+        : "The Graph Run operation could not be completed.";
+      throw new FoundationGraphQlError(code as "conflict", message);
+    }
+    this.armedGraphRuns.add(id);
+    const updatedAt = "2026-09-21T10:00:00Z";
+    this.graphRunUpdatedAt.set(id, updatedAt);
+    return {
+      graph_run_result: {
+        __typename: "GraphRunMutationPayload",
+        graph_run: {
+          __typename: "GraphRuns",
+          root_id: id,
+          execution_mode: input.executionMode ?? "parallel",
+          updated_at: updatedAt,
+        },
+        launched: inert ? [] : this.launchableChildren(id),
+      },
+    } as TResult;
+  }
+
   failNext(status: number, body: unknown = null): void {
     this.nextFailure = { status, body };
   }
@@ -324,7 +855,6 @@ class BoundaryFixture implements StudioFixture {
           id: this.projectId(),
           name: "Project",
           slug: "project",
-          manual_module_order: false,
         },
       ]);
     }
@@ -353,19 +883,16 @@ class BoundaryFixture implements StudioFixture {
     );
     if (method === "GET" && transitionCollectionMatch) {
       const issueTypeId = decodeURIComponent(transitionCollectionMatch[1]);
-      const ideas = [...this.states.values()].find((state) => state.name === "Ideas");
-      const implement = [...this.states.values()].find((state) => state.name === "Implement");
       return json(
-        this.runNowTransitionEnabled && ideas?.id && implement?.id
-          ? [{
-              id: 1,
-              issue_type: issueTypeId,
-              from_state: ideas.id,
-              to_state: implement.id,
-              agent_allowed: true,
-              workflow_revision: 1,
-            }]
-          : [],
+        this.transitionsFor(issueTypeId).map((transition, index) => ({
+          id: index + 1,
+          issue_type: issueTypeId,
+          from_state: transition.from_state_id,
+          to_state: transition.to_state_id,
+          agent_allowed: transition.agent_allowed,
+          handoff: transition.handoff,
+          workflow_revision: 1,
+        })),
       );
     }
     if (
@@ -419,29 +946,6 @@ class BoundaryFixture implements StudioFixture {
       // press is accepted and launches nothing.
       const launched = inert ? [] : this.launchableChildren(id);
       return json({ root_id: id, launched }, 201);
-    }
-    const runNowMatch = path.match(
-      /\/work-tracker\/work-items\/([^/]+)\/run-now$/,
-    );
-    if (method === "POST" && runNowMatch) {
-      const id = decodeURIComponent(runNowMatch[1]);
-      this.runNowCalls.push({ id });
-      const failure = this.runNowFailures.shift();
-      if (this.runNowGate) await this.runNowGate;
-      if (failure) return json(failure.body, failure.status);
-      const current = this.items.get(id);
-      const implement = [...this.states.values()].find((state) => state.name === "Implement");
-      if (!current || !implement?.id) return json({ detail: "Not found" }, 404);
-      this.items.set(id, { ...current, state: implement.id });
-      return json({
-        target_id: id,
-        committed_state: { id: implement.id, name: implement.name },
-        run: {
-          target_id: id,
-          agent: "codex",
-          agent_run_id: `run-now-${id}`,
-        },
-      }, 201);
     }
     const attachmentMatch = path.match(
       /\/work-tracker\/work-items\/([^/]+)\/attachments$/,
@@ -556,7 +1060,6 @@ export function workItem(overrides: WorkItemOverrides = {}): FixtureWorkItem {
     project_id: "project-1",
     sequence_id: 1,
     state: typeof state === "string" || state === null ? state : state.id,
-    state_revision: 1,
     description: "",
     parent_id: "module-1",
     sub_issues_count: 0,
@@ -578,29 +1081,69 @@ export function workItem(overrides: WorkItemOverrides = {}): FixtureWorkItem {
 
 function StudioBehaviourSurface({ children }: { children?: ReactNode }) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <div>
-        <section role="region" aria-label="Stories">
-          <TasksPane />
-        </section>
-        <section role="region" aria-label="Details">
+    <StudioApolloProvider>
+      <StoriesTreeProvider>
+        <div>
+          <section role="region" aria-label="Stories">
+            <TasksPane />
+          </section>
           <SelectedTicketDetails />
-        </section>
-        {children}
-      </div>
-    </QueryClientProvider>
+          {children}
+        </div>
+      </StoriesTreeProvider>
+    </StudioApolloProvider>
   );
+}
+
+function fixtureGraphQlTransport(execute: HttpFixture["executeGraphQl"]) {
+  return () => ({
+    graphql_execute: async (requestJson: string) => {
+      const request = JSON.parse(requestJson) as {
+        query: string;
+        operationName: string;
+        variables: Record<string, unknown>;
+      };
+      try {
+        const data = await execute(
+          {
+            kind: "Document",
+            operationName: request.operationName,
+            source: request.query,
+          },
+          request.variables,
+        );
+        return JSON.stringify({ data });
+      } catch (error) {
+        if (!(error instanceof FoundationGraphQlError)) throw error;
+        return JSON.stringify({
+          data: null,
+          errors: [{
+            message: error.message,
+            extensions: { ...error.extensions, code: error.code },
+          }],
+        });
+      }
+    },
+    graphql_subscribe: async () => {
+      throw new Error("not used by the acceptance fixture");
+    },
+    graphql_unsubscribe: async () => false,
+  });
 }
 
 export function mountStudio({
   http,
   selectedTaskId = null,
   children,
+  graphQlExecution = true,
+  graphQlExecute,
 }: {
   http: HttpFixture;
   route?: string;
   selectedTaskId?: string | null;
   children?: ReactNode;
+  graphQlExecution?: boolean;
+  graphQlExecute?: typeof http.executeGraphQl;
 }): RenderResult {
   if (!(http instanceof BoundaryFixture)) {
     throw new Error("mountStudio requires the HTTP fixture returned by fixture().");
@@ -610,8 +1153,19 @@ export function mountStudio({
   restoreFetch = () => {
     globalThis.fetch = previousFetch;
   };
+  if (graphQlExecution) {
+    const browser = createBrowserRuntime({ environment: {} });
+    const execute = graphQlExecute ?? http.executeGraphQl.bind(http);
+    initializeStudioRuntime({
+      ...browser,
+      graphQlTransport: fixtureGraphQlTransport(execute),
+      readWorkTracker: (routes) => routes.graphQl(execute),
+      writeWorkTracker: (routes) => routes.graphQl(execute),
+      readSettings: (routes) => routes.graphQl(execute),
+      writeSettings: (routes) => routes.graphQl(execute),
+    });
+  }
 
-  queryClient.clear();
   useStudioStore.setState({
     selectedProjectId: http.projectId(),
     activeView: "backlog",
@@ -633,7 +1187,10 @@ export function mountStudio({
     automationAttempts: {},
     automationByTask: {},
   });
-  void loadModuleTree(http.projectId(), http.firstModuleId());
+  void Promise.all([
+    loadModules(http.projectId()),
+    loadModuleTree(http.projectId(), http.firstModuleId()),
+  ]);
 
   return render(<StudioBehaviourSurface>{children}</StudioBehaviourSurface>);
 }
@@ -641,4 +1198,5 @@ export function mountStudio({
 afterEach(() => {
   restoreFetch?.();
   restoreFetch = null;
+  initializeStudioRuntime(createBrowserRuntime({ environment: {} }));
 });

@@ -15,8 +15,14 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { useModalStore } from "../modal/modalStore";
 import { toggleTerminalPanel } from "../../features/terminal-panel";
-import { selectModuleAtPosition } from "./sharedNavigation";
+import {
+  isModulePosition,
+  modulePositionActionId,
+  routeModulePositionNavigation,
+  type ModulePosition,
+} from "./sharedNavigation";
 import { disengageEditViewBody } from "./three-zone/threeZoneNavigation";
+import { isNativeTerminalKeyboardOwner } from "../../runtime/nativeTerminalKeyboard";
 
 /** Emitted by the native host for one recognised chord. */
 export const NATIVE_TERMINAL_CHORD_EVENT = "native-terminal-chord";
@@ -26,29 +32,68 @@ export type NativeTerminalChord =
   | "panel-toggle"
   | "settings"
   | "body-disengage"
-  | `module-position-${number}`;
+  | "zoom-in"
+  | "zoom-out"
+  | "zoom-reset"
+  | `module-position-${ModulePosition}`;
 
 interface NativeTerminalChordEvent {
-  payload?: { chord?: string };
+  payload?: { handle?: string; runId?: string; chord?: string };
 }
 
-const CHORD_ACTIONS: Record<
-  "panel-toggle" | "settings" | "body-disengage",
-  () => void
-> = {
+const CHORD_ACTIONS: Record<"panel-toggle" | "settings", () => void> = {
   "panel-toggle": toggleTerminalPanel,
   // Settings stays the singleton overlay the footer and the global binding
   // both open; the chord only reaches the same store action (#718).
   settings: () => useModalStore.getState().openSettings(),
-  // The native view has already handed the keyboard back by the time this
-  // arrives; disengaging is what lets Studio's own state follow it (#753).
-  "body-disengage": disengageEditViewBody,
 };
 
-function runChord(chord: string | undefined): void {
-  const modulePosition = chord?.match(/^module-position-(10|[1-9])$/)?.[1];
-  if (modulePosition) {
-    selectModuleAtPosition(Number(modulePosition));
+function modulePositionFromChord(
+  chord: string | undefined,
+): ModulePosition | null {
+  const match = chord?.match(/^module-position-(10|[1-9])$/)?.[1];
+  if (!match) return null;
+  const position = Number(match);
+  return isModulePosition(position) ? position : null;
+}
+
+function runChord(payload: NativeTerminalChordEvent["payload"]): void {
+  const chord = payload?.chord;
+  if (chord === "zoom-in" || chord === "zoom-out" || chord === "zoom-reset") {
+    if (
+      payload?.handle && payload.runId &&
+      isNativeTerminalKeyboardOwner({
+        handle: payload.handle,
+        runId: payload.runId,
+      })
+    ) {
+      window.dispatchEvent(new KeyboardEvent("keydown", {
+        key: chord === "zoom-in" ? "+" : chord === "zoom-out" ? "-" : "0",
+        metaKey: true,
+      }));
+    }
+    return;
+  }
+  if (chord === "body-disengage") {
+    if (
+      useModalStore.getState().modalStack.length === 0 &&
+      payload?.handle &&
+      payload.runId &&
+      isNativeTerminalKeyboardOwner({
+        handle: payload.handle,
+        runId: payload.runId,
+      })
+    ) {
+      disengageEditViewBody();
+    }
+    return;
+  }
+  const modulePosition = modulePositionFromChord(chord);
+  if (modulePosition !== null) {
+    routeModulePositionNavigation(
+      null,
+      modulePositionActionId(modulePosition),
+    );
     return;
   }
   const action = CHORD_ACTIONS[chord as keyof typeof CHORD_ACTIONS];
@@ -63,7 +108,7 @@ export function subscribeNativeTerminalChords(): () => void {
   let active = true;
   let unlisten: UnlistenFn | null = null;
   void listen(NATIVE_TERMINAL_CHORD_EVENT, (event: NativeTerminalChordEvent) => {
-    if (active) runChord(event.payload?.chord);
+    if (active) runChord(event.payload);
   })
     .then((stop) => {
       unlisten = stop;

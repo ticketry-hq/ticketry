@@ -1,0 +1,23 @@
+query LoadInstantLaunchSetting {
+  instant_launch_setting {
+    scope
+    key
+    value
+    updated_at
+  }
+}
+
+mutation UpdateInstantLaunchSetting(
+  $initialPrompt: String!
+  $autoClose: Boolean!
+) {
+  update_instant_launch_setting(
+    initial_prompt: $initialPrompt
+    auto_close: $autoClose
+  ) {
+    scope
+    key
+    value
+    updated_at
+  }
+}

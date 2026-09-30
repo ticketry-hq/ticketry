@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { act, renderHook } from "@testing-library/react";
 
 import {
   foregroundKey,
@@ -70,6 +71,31 @@ describe("terminalForegroundStore — arbitration", () => {
     expect(store.getState().claims).toEqual({});
     store.getState().rekey("missing", "other");
     expect(store.getState().claims).toEqual({});
+  });
+
+  it("notifies only the changed owner selector", () => {
+    const renders = { first: 0, second: 0, actions: 0 };
+    renderHook(() => {
+      renders.first += 1;
+      return useTerminalForegroundStore((state) => resolveOwner(state, "first"));
+    });
+    renderHook(() => {
+      renders.second += 1;
+      return useTerminalForegroundStore((state) => resolveOwner(state, "second"));
+    });
+    renderHook(() => {
+      renders.actions += 1;
+      return useTerminalForegroundStore((state) => state.acquire);
+    });
+    const initial = { ...renders };
+
+    act(() => store.getState().acquire("first", "drawer"));
+
+    expect(renders).toEqual({
+      first: initial.first + 1,
+      second: initial.second,
+      actions: initial.actions,
+    });
   });
 
 });

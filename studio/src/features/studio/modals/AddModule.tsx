@@ -2,9 +2,13 @@ import { useEffect, useId, useRef, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
 import { useClientStore } from "../../../state/clientStore";
-import { useStudioStore } from "../../projects/store";
+import { useStudioStore } from "../../projects";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
-import { setModuleFolder, useModuleLinks } from "../../module-links";
+import {
+  moduleFolderSaveError,
+  prepareDirectoryTrust,
+  writeModuleLink,
+} from "../../module-links";
 import {
   ModuleFolderSelection,
   useModuleFolderSelection,
@@ -34,7 +38,6 @@ const FOLDER_REFUSAL_MESSAGE: Record<ModuleFolderRefusal, string> = {
 export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const popModal = useModalStore((s) => s.popModal);
-  const moduleLinks = useModuleLinks();
 
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -48,10 +51,7 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
   const moduleFolderErrorId = useId();
   const submittingRef = useRef(false);
   const createdModuleIdRef = useRef<string | null>(null);
-  const folderSelection = useModuleFolderSelection({
-    moduleLinks,
-    runtime,
-  });
+  const folderSelection = useModuleFolderSelection({ runtime });
 
   useEffect(() => {
     setFolderError(null);
@@ -91,6 +91,14 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
         return;
       }
 
+      // Refusing trust must leave creation untouched, including onboarding.
+      try {
+        if (!(await prepareDirectoryTrust(folder, runtime))) return;
+      } catch (cause) {
+        setError(moduleFolderSaveError(cause, "Could not prepare folder trust. Retry to continue."));
+        return;
+      }
+
       let moduleId = createdModuleIdRef.current;
       if (!moduleId) {
         const created = await useStudioStore
@@ -104,11 +112,9 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
 
       const resolvedModuleId = moduleId;
       try {
-        await setModuleFolder(resolvedModuleId, folder);
-      } catch {
-        setError(
-          "Module created, but its folder could not be saved. Retry to save the folder.",
-        );
+        await writeModuleLink(resolvedModuleId, folder);
+      } catch (cause) {
+        setError(moduleFolderSaveError(cause, "Module created, but its folder could not be saved. Retry to save the folder."));
         return;
       }
       if (useClientStore.getState().selectedModuleId !== resolvedModuleId) {
@@ -122,7 +128,8 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
         onboarding.moduleCreated(resolvedModuleId);
       }
       popModal();
-    } catch {
+    } catch (cause) {
+      console.error("Failed to create module", cause);
       // Surface the failure without tearing down the pane.
       setError("Failed to create module.");
     } finally {
@@ -143,6 +150,7 @@ export function AddModule({ runtime }: { runtime?: StudioRuntime } = {}) {
         { actionId: MODAL_ACTIONS.close, label: "Cancel" },
       ]}
       onAction={(actionId) => {
+        if (submittingRef.current) return;
         if (actionId === MODAL_ACTIONS.previous) {
           folderSelection.movePrevious();
         } else if (actionId === MODAL_ACTIONS.next) {

@@ -6,7 +6,8 @@ import {
   presentDormantTerminalChips,
   type SessionTab,
 } from "../../../../../features/agents/terminal";
-import { useAgentStatusStore } from "../../../../../features/agents/status";
+import { useAgentStatusRuns } from "../../../../../features/agents/status";
+import type { RunRecord } from "../../../../../features/agents/status";
 import {
   DEFAULT_WORKSPACE,
   useClientStore as useTicketWorkspaceStore,
@@ -23,7 +24,10 @@ export function useWorkspaceTabPresentation({
   terminalTabs,
   activeTerminalId,
   resumableSessions,
+  endedRuns,
   savedTabOrder,
+  hasChangesTab,
+  terminalOnly = false,
 }: {
   bucket: string | null;
   projectId: string | null;
@@ -32,7 +36,11 @@ export function useWorkspaceTabPresentation({
   terminalTabs: readonly SessionTab[];
   activeTerminalId: string | null;
   resumableSessions: readonly ResumableTerminalSession[];
+  /** Ended runs the WorkItem read restored; the stream no longer pushes them. */
+  endedRuns: readonly RunRecord[];
   savedTabOrder: readonly TaskWorkspaceTabIdentity[];
+  hasChangesTab: boolean;
+  terminalOnly?: boolean;
 }) {
   const workspaces = useTicketWorkspaceStore((state) => state.workspaces);
   const workspace = bucket
@@ -40,15 +48,15 @@ export function useWorkspaceTabPresentation({
     : DEFAULT_WORKSPACE;
   const terminalIds = terminalTabs.map((tab) => tab.id);
   const closedDocumentIds = new Set(workspace.closedDocIds);
-  const openDocuments = documents.filter(
+  const openDocuments = terminalOnly ? [] : documents.filter(
     (document) => !closedDocumentIds.has(document.id),
   );
-  const closedDocuments = documents.filter((document) =>
-    closedDocumentIds.has(document.id),
-  );
+  const closedDocuments = terminalOnly
+    ? []
+    : documents.filter((document) => closedDocumentIds.has(document.id));
   // The API already caps this history, but retain the presentation bound at
   // the UI seam so a malformed response cannot grow the dormant chip row.
-  const resumable = resumableSessions.slice(0, 10);
+  const resumable = terminalOnly ? [] : resumableSessions.slice(0, 10);
   const resumableRunIds = new Set(
     resumable.map((session) => session.agent_run_id),
   );
@@ -57,15 +65,16 @@ export function useWorkspaceTabPresentation({
     projectId,
     moduleId,
     excludedRunIds: resumableRunIds,
+    restoredRuns: endedRuns,
   });
   // Dormant chips are the same runs the strip labels, so they are presented by
   // the same rule from the same durable records (#695). The run store supplies
   // liveness and, for a run still inside the status window, a second copy of
   // the launch snapshot the listing already carries.
-  const runs = useAgentStatusStore((state) => state.runs);
+  const runs = useAgentStatusRuns();
   const dormantChips = presentDormantTerminalChips({
     resumableSessions: resumable,
-    history: visibleHistory,
+    history: terminalOnly ? [] : visibleHistory,
     runs,
   });
   const activeDocument =
@@ -73,7 +82,9 @@ export function useWorkspaceTabPresentation({
     openDocuments[0] ??
     null;
 
-  let activeKind = workspace.active;
+  let activeKind = terminalOnly && activeTerminalId
+    ? "terminal" as const
+    : workspace.active;
   if (
     activeKind === "terminal" &&
     (terminalIds.length === 0 || !activeTerminalId)
@@ -81,13 +92,18 @@ export function useWorkspaceTabPresentation({
     activeKind = "details";
   }
   if (activeKind === "doc" && !activeDocument) activeKind = "details";
+  if (activeKind === "changes" && (!hasChangesTab || terminalOnly)) {
+    activeKind = "details";
+  }
 
   const persistentDefaultTabs: TaskWorkspaceTabIdentity[] = [
-    { kind: "details" },
-    ...openDocuments.map((document) => ({
-      kind: "doc" as const,
-      id: document.id,
-    })),
+    ...(terminalOnly
+      ? []
+      : [
+          { kind: "details" as const },
+          ...(hasChangesTab ? [{ kind: "changes" as const }] : []),
+        ]),
+    ...openDocuments.map((document) => ({ kind: "doc" as const, id: document.id })),
     ...terminalTabs.map((tab) => ({
       kind: "terminal" as const,
       id: tab.meta.agentRunId ?? tab.id,
@@ -110,7 +126,9 @@ export function useWorkspaceTabPresentation({
     if (tab) navigableTabs.push({ kind: "terminal", id: tab.id });
   }
   const activeTab: TaskWorkspaceTabIdentity =
-    activeKind === "doc" && activeDocument
+    activeKind === "changes"
+      ? { kind: "changes" }
+      : activeKind === "doc" && activeDocument
       ? { kind: "doc", id: activeDocument.id }
       : activeKind === "terminal" && activeTerminalId
         ? { kind: "terminal", id: activeTerminalId }

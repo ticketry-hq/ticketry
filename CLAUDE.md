@@ -1,21 +1,25 @@
 # Agent guidance — unified Studio application
 
 **Read this before changing anything in this repository.** The repository
-contains the complete Studio application: its Django backend and `worktracker`
-app at `backend/`, API surfaces, and one frontend. The canonical frontend entry is
+contains the complete Ticketry application: its Rust services, Tauri shell,
+GraphQL and MCP contracts, and one frontend. The canonical frontend entry is
 `studio/index.html` → `studio/src/main.tsx`; its Vite development server listens
 on `127.0.0.1:5174`. Work-item planning, agent lifecycle, terminals,
 worktrees, documents, prompts, modals, and launch flows belong to this
 application.
 
-Use the application’s canonical runtime scripts. `scripts/dev.sh studio` starts
-the browser frontend; `npm run desktop:dev` and `pnpm dev` rebuild the sidecar
-and launch the desktop application.
+Use the application's canonical runtime scripts. `npm run desktop:dev` and
+`pnpm dev` rebuild and launch the desktop application. `npm run web` starts the
+frontend with the supporting Rust GraphQL adapter.
 
-Ticketry currently exposes one installation project. Agents using WorkTracker
-MCP must use the Project ID from their launch context. Do not list projects,
-ask the user to choose one, or look for another project. `list_projects` exists
-only for clients without launch context and returns the installation project.
+Embedded native libghostty is the terminal renderer on supported macOS desktop
+builds, development and packaged alike (CODING-1486). Ordinary desktop and
+release commands prepare and link the pinned library; no URL parameter, stored
+setting, or build flag is needed. Browser development renders with xterm over
+the `browserTerminalClient` WebSocket adapter to the Rust terminal adapter, and
+xterm is the compatibility fallback everywhere. CODING-1487 removed the
+`ghostty-wasm` renderer; its snapshot and recovery steps are in
+[`docs/archive/ghostty-wasm-restore.md`](docs/archive/ghostty-wasm-restore.md).
 
 ## Code structure — governing rules
 
@@ -33,16 +37,66 @@ opening any code. To keep that true:
   browser-vs-desktop contract and implementations; `state/` stays minimal.
   New UI code goes in the feature folder it belongs to — create a new
   `features/<domain>/` folder rather than growing `shared/` or `app/`.
-- **Backend layout** (`backend/`): `worktracker/` is the core domain, split
-  into `models/`, `rest/`, `services/`, `tests/` plus small single-purpose
-  modules; each surrounding capability is its own Django app under `apps/`.
-  New capabilities get a new app; new domain logic gets a new focused module.
+- **Rust service layout** (`studio/src-tauri/src/`): keep each capability in a
+  focused module. Database-backed GraphQL starts with migrations, SeaORM
+  entities, and Seaography registration. Native host commands stay narrow.
+  Workspace crates live under `studio/src-tauri/crates/<tier>/<crate>/` in
+  dependency order: `foundation`, `config`, `worktracking`, `execution`,
+  `surfaces`, then `app`. Crates may depend within their tier or on a lower
+  tier, never on a higher tier.
+  Each Rust crate exposes its external contract only from `src/lib.rs`.
+  Implementation modules use private `mod` declarations, crate-internal seams
+  use `pub(crate)`, and `lib.rs` re-exports each approved public item. Do not
+  make nested module paths part of a crate's API. Keep the public API boundary
+  contract test equal to every deliberate export.
 - **Name by purpose.** File and folder names must say what the code does
-  (`ranking.py`, `desktopRuntime.ts`), not generic buckets (`utils2.ts`,
-  `helpers.py`, `misc/`).
-- **Refactor opportunistically.** When touching an oversized file (e.g.
-  `SelectedTicketContent.tsx`, `rest_api.py`), prefer extracting the piece
+  (`ranking.rs`, `desktopRuntime.ts`), not generic buckets (`utils2.ts`,
+  `helpers.rs`, `misc/`).
+- **Refactor opportunistically.** When touching an oversized file, prefer extracting the piece
   you're changing into its own module over enlarging the file.
+
+## Database-backed GraphQL Models — governing rules
+
+Ticketry's Rust GraphQL surface is migration-first and generated-contract-first:
+
+- **Begin with generated CRUD.** Seaography-generated model CRUD, filters,
+  ordering, pagination, inputs, and outputs are the default capability. Author
+  caller-specific `.graphql` operations and review the generated SDL as public
+  API. Never patch generated entities, SDL, or bindings by hand.
+- **Restrict writes at the public boundary.** An identity-scoped update or
+  delete binds a non-null identity into its filter. Its input allowlists only
+  caller-writable fields and preserves `omitted | null | value`; it never
+  exposes project ownership, derived module ancestry, ranks, revisions,
+  timestamps, counters, or other protected fields.
+- **Use one model-shaped write seam.** If a raw generated mutator would bypass
+  Ticketry invariants, keep it private and expose one restricted authored
+  create/update/delete operation for that Model. The operation remains CRUD;
+  it delegates to internal model operations for validation, locking, revision
+  allocation, derived-field repair, pruning, cascades, and event planning.
+- **Do not turn helpers into APIs.** WorkItem parent, blockers,
+  classification, archive, and state are fields or relationships on the one
+  WorkItem update contract. Reparenting, blocker-cycle validation, transitions,
+  and archive cascades may require focused internal modules, but do not justify
+  separate public mutations. A state transition supplied through WorkItem
+  update remains an exclusive patch and cannot be mixed with unrelated fields.
+- **Quarantine genuine exceptions.** Only behavior that cannot be expressed as
+  model CRUD may be a named domain operation. Record every exception and its
+  reason in the route/operation registry; keep that registry exactly equal to
+  the live GraphQL mutation surface. The current exceptions are work-item
+  reorder, module-presentation reorder, state reorder, issue-type reorder,
+  remove-state-from-workflow, and onboarding acknowledgement.
+- **Require evidence for deviations.** Stop before adding replacement CRUD,
+  per-field/per-relationship RPCs, a DAO or repository that mirrors SeaORM,
+  mirrored DTOs, `mutation: false`, or generated-file patches. Record the exact
+  missing behavior, why database/framework facilities cannot provide it, the
+  smallest custom seam, and a test preventing the deviation from spreading.
+- **Converge client state deliberately.** Updates return the authoritative
+  changed entity. When membership or ordering can change, update or refetch all
+  affected lists; creates update/refetch lists and deletes evict known
+  identities or explicitly refetch.
+- **Keep one frontend state owner.** Apollo's `InMemoryCache` owns server data
+  and client-only state. Selector or persistence adapters may write cache rows,
+  but they must not retain a second application-state snapshot.
 
 ## Reference
 
@@ -50,15 +104,44 @@ opening any code. To keep that true:
 | --- | --- |
 | [`README.md`](README.md) | Application layout and install/run/validate commands. |
 
+The MCP listener binds `<data-directory>/mcp.sock` under the data-directory
+ownership guard. Provider MCP uses the packaged `ticketry-hook mcp` stdio bridge;
+there is no MCP TCP port or port override.
+
 ## Runtime validation
+
+Embedded native libghostty is the terminal renderer in development desktop and
+packaged desktop builds. It runs Ticketry's validated tmux attach command inside
+its own PTY and draws in a native view inside the Ticketry window, so terminal
+output never enters the WebView. Lifecycle, layout, visibility and focus control
+messages still travel over IPC — "no output IPC" does not mean "no IPC".
+Browser development renders with xterm over the `browserTerminalClient`
+WebSocket adapter to the Rust terminal adapter. xterm is also the compatibility
+fallback everywhere, including when native rendering is unavailable or fails.
+tmux owns durable terminal sessions under every renderer.
 
 Install from the repository root, then run:
 
 ```bash
 npm run typecheck
 npm run test --workspace @worktracker/studio
-npm run test:native-clipboard --workspace @worktracker/studio
 npm run build --workspace @worktracker/studio
 ```
 
 Keep the runtime facts here and in [`AGENTS.md`](AGENTS.md) consistent.
+
+## LLD authoring
+
+Use the repository's [lld-html-authoring skill](.agents/skills/lld-html-authoring/SKILL.md)
+for all new or revised standalone HTML LLDs. Start from its
+[dark template](.agents/skills/lld-html-authoring/assets/lld-template.html).
+Keep the compact file-change browser, search, action filters, file inspector,
+keyboard navigation, and deep links. Dark mode is the default for every LLD,
+including on systems that prefer light mode; set it before the first paint.
+
+Author `LLD.html` directly unless the task explicitly requires Markdown as the
+source of truth. For a required Markdown LLD, provide a matching dark HTML
+review artifact using the same layout, with authority labeled accurately.
+Use Ticketry's supplied design directory exactly and keep supporting assets
+inside it. Run the skill's HTML and applicable Ticketry location checks and
+inspect both desktop and narrow layouts before handing off.

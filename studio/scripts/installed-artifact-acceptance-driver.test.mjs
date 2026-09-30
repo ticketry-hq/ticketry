@@ -20,48 +20,40 @@ import {
   findAppExecutable,
   missingDependencyDiagnosticScenario,
   osPermissionDiagnosticScenario,
-  packagedSkillEvidenceScenario,
-  pendingSkillEvidence,
+  pendingRuntimeEvidence,
   requireSandboxPath,
   runAcceptance,
+  rustOnlyProcessShapeScenario,
   uninstallPreservesDataScenario,
   upgradeWithExistingDataScenario,
 } from "./installed-artifact-acceptance-driver.mjs";
-import { assertAcceptanceResult } from "./installed-artifact-acceptance.mjs";
+import {
+  acceptanceDataDirectory,
+  assertAcceptanceResult,
+} from "./installed-artifact-acceptance.mjs";
 
 const CREDENTIAL_PATTERN =
   /((api|access|auth|secret|token|password)[_-]?(key|token|password)?\s*[=:])|bearer\s+/i;
-const PACKAGED_SKILLS = [
-  "code-review",
-  "domain-modeling",
-  "grill-with-docs",
-  "grilling",
-  "implement",
-  "setup-matt-pocock-skills",
-  "tdd",
-  "to-spec",
-  "to-tickets",
-];
-
-async function fixture({ issueRows = "module-1|module\ntask-1|task" } = {}) {
+async function fixture({
+  issueRows = "module-1|module\ntask-1|task",
+  issueTypeRows = "module-type|module\ntask-type|task",
+  appExitCode = 0,
+} = {}) {
   const sandboxRoot = await mkdtemp(path.join(tmpdir(), "ticketry-driver-test-"));
-  const dataDirectory = path.join(sandboxRoot, "home", ".config", "worktracker-studio");
+  const dataDirectory = acceptanceDataDirectory(path.join(sandboxRoot, "home"));
   const appPath = path.join(sandboxRoot, "Applications", "Ticketry.app");
   const databasePath = path.join(dataDirectory, "state.db");
-  const sidecarLog = path.join(dataDirectory, "sidecar.log");
-  const sidecarExecutable = path.join(appPath, "Contents", "MacOS", "muxed-backend");
   await mkdir(dataDirectory, { recursive: true });
-  await mkdir(path.dirname(sidecarExecutable), { recursive: true });
-  await writeFile(sidecarExecutable, "sidecar-fixture");
+  await mkdir(path.join(appPath, "Contents", "MacOS"), { recursive: true });
+  await mkdir(path.join(appPath, "Contents", "Resources"), { recursive: true });
+  await Promise.all([
+    writeFile(path.join(appPath, "Contents", "MacOS", "ticketry"), "app", { mode: 0o700 }),
+    writeFile(path.join(appPath, "Contents", "MacOS", "ticketry-hook"), "hook", { mode: 0o700 }),
+  ]);
   await writeFile(databasePath, "database-fixture");
-  await writeFile(
-    sidecarLog,
-    '{"event":"ready","host":"127.0.0.1","port":43123,"credential_required":true}\n',
-  );
 
   let upgradeSentinel = "";
   let durableStored = "";
-  const sqlStatements = [];
   const context = {
     appPath,
     dataDirectory,
@@ -73,29 +65,8 @@ async function fixture({ issueRows = "module-1|module\ntask-1|task" } = {}) {
       TMPDIR: path.join(sandboxRoot, "home", "tmp"),
     },
     executable: path.join(appPath, "Contents", "MacOS", "ticketry"),
-    sidecarExecutable,
     findTmux: async () => "/opt/homebrew/bin/tmux",
     run: async (command, args) => {
-      if (command === sidecarExecutable && args.join(" ") === "skills smoke-providers") {
-        return {
-          code: 0,
-          stdout: `${JSON.stringify({
-            providers: Object.fromEntries(
-              ["claude", "codex", "agy", "gemini"].map((provider) => [
-                provider,
-                PACKAGED_SKILLS,
-              ]),
-            ),
-            mcp_configured: {
-              claude: true,
-              codex: true,
-              agy: true,
-              gemini: true,
-            },
-          })}\n`,
-          stderr: "",
-        };
-      }
       if (command === "/usr/bin/env" && args.includes("/usr/bin/which")) {
         return { code: 1, stdout: "", stderr: "" };
       }
@@ -105,9 +76,9 @@ async function fixture({ issueRows = "module-1|module\ntask-1|task" } = {}) {
       return { code: 0, stdout: "", stderr: "" };
     },
     sandboxRoot,
-    sidecarLog,
+    sqliteStatements: [],
     sqlite: async (_database, sql) => {
-      sqlStatements.push(sql);
+      context.sqliteStatements.push(sql);
       if (sql.includes("SELECT count(*) FROM worktracker_project")) return "1";
       if (sql.includes("INSERT OR REPLACE INTO acceptance_evidence")) {
         upgradeSentinel = sql.match(/VALUES \('upgrade', '([^']+)'\)/)?.[1] ?? "";
@@ -115,6 +86,9 @@ async function fixture({ issueRows = "module-1|module\ntask-1|task" } = {}) {
       }
       if (sql.includes("SELECT value FROM acceptance_evidence")) return upgradeSentinel;
       if (sql.includes("SELECT id FROM worktracker_project")) return "project-1";
+      if (sql.includes("SELECT id,level FROM worktracker_issuetype")) {
+        return issueTypeRows;
+      }
       if (sql.includes("SELECT id,type FROM worktracker_issue")) {
         return issueRows;
       }
@@ -129,12 +103,8 @@ async function fixture({ issueRows = "module-1|module\ntask-1|task" } = {}) {
     startApp: () => {
       mkdirSync(dataDirectory, { recursive: true });
       if (!existsSync(databasePath)) writeFileSync(databasePath, "database-fixture");
-      writeFileSync(
-        sidecarLog,
-        '{"event":"ready","host":"127.0.0.1","port":43123,"credential_required":true}\n',
-      );
       return Object.assign(new EventEmitter(), {
-        exitCode: null,
+        exitCode: appExitCode,
         signalCode: null,
       });
     },
@@ -146,7 +116,7 @@ async function fixture({ issueRows = "module-1|module\ntask-1|task" } = {}) {
       return value;
     },
   };
-  return { context, sandboxRoot, sqlStatements };
+  return { context, sandboxRoot };
 }
 
 async function withFixture(run) {
@@ -161,7 +131,22 @@ async function withFixture(run) {
 test("clean_install launches a fresh data directory and reaches its project", async () => {
   await withFixture(async (context) => {
     assert.equal(await cleanInstallScenario(context), true);
+    assert.equal(
+      context.sqliteStatements.some((sql) => sql.includes(
+        "ticketry_codex_spark_catalog_migration",
+      )),
+      true,
+    );
   });
+});
+
+test("clean_install rejects an unsuccessful startup exit", async () => {
+  const { context, sandboxRoot } = await fixture({ appExitCode: 1 });
+  try {
+    await assert.rejects(cleanInstallScenario(context), /startup failed \(1\)/);
+  } finally {
+    await rm(sandboxRoot, { recursive: true, force: true });
+  }
 });
 
 test("main executable comes from CFBundleExecutable when helpers are also executable", async () => {
@@ -187,6 +172,10 @@ test("main executable comes from CFBundleExecutable when helpers are also execut
 test("upgrade_with_existing_data preserves a sentinel and three snapshot generations", async () => {
   await withFixture(async (context) => {
     assert.equal(await upgradeWithExistingDataScenario(context), true);
+    assert.equal(
+      context.sqliteStatements.includes("PRAGMA wal_checkpoint(TRUNCATE);"),
+      true,
+    );
     for (const generation of [1, 2, 3]) {
       assert.equal(
         await readFile(
@@ -229,20 +218,43 @@ test("os_permission_diagnostic proves denial and remains redacted", async () => 
 test("durable_agent_terminal_flow keeps repository, run, and tmux evidence across relaunch", async () => {
   await withFixture(async (context) => {
     assert.equal(await durableAgentTerminalFlowScenario(context), true);
+    assert.equal(
+      context.sqliteStatements.some(
+        (sql) => sql.includes("runtime_cleanup_pending, output_sequence"),
+      ),
+      true,
+    );
   });
 });
 
-test("durable_agent_terminal_flow provisions work items for a fresh project", async () => {
-  const { context, sandboxRoot, sqlStatements } = await fixture({ issueRows: "" });
+test("durable_agent_terminal_flow provisions final-schema records for an empty project", async () => {
+  const { context, sandboxRoot } = await fixture({ issueRows: "", issueTypeRows: "" });
   try {
     assert.equal(await durableAgentTerminalFlowScenario(context), true);
-    assert.equal(
-      sqlStatements.filter((sql) => sql.includes("INSERT INTO worktracker_issue")).length,
-      2,
+    const issueTypeInserts = context.sqliteStatements.filter(
+      (sql) => sql.includes("INSERT INTO worktracker_issuetype"),
     );
+    assert.equal(issueTypeInserts.length, 2);
+    for (const sql of issueTypeInserts) {
+      assert.match(
+        sql,
+        /id,name,level,color,sort_order,created_at,updated_at,project_id,start_state_id,workflow_revision,is_pathfind/,
+      );
+      assert.doesNotMatch(sql, /worktracker_workspace|workspace_id/);
+    }
+    const workItemInserts = context.sqliteStatements.filter(
+      (sql) => sql.includes("INSERT INTO worktracker_issue "),
+    );
+    assert.equal(workItemInserts.length, 2);
+    for (const sql of workItemInserts) {
+      assert.match(sql, /issue_type_id,rank,state_revision,workspace_tab_order,parent_id,module_id/);
+      assert.doesNotMatch(sql, /worktracker_workspace|workspace_id/);
+    }
+    assert.match(workItemInserts[0], /,'\[\]',NULL,NULL FROM/);
+    assert.match(workItemInserts[1], /,'\[\]','([0-9a-f]{32})','\1' FROM/);
     assert.equal(
-      sqlStatements.some((sql) => sql.includes(
-        "runtime_cleanup_pending, output_sequence",
+      context.sqliteStatements.some((sql) => sql.includes(
+        "UPDATE worktracker_project SET seq_counter=",
       )),
       true,
     );
@@ -259,51 +271,67 @@ test("uninstall_preserves_data removes only the installed app", async () => {
   });
 });
 
-test("skill evidence starts fail-closed before the packaged smoke runs", () => {
-  assert.deepEqual(pendingSkillEvidence(), {
-    offline_packaged_skill_matrix: false,
-    skill_configuration_unchanged: false,
-    skill_overlay_cleanup: false,
-    packaged_skill_providers: {},
+test("Rust process-shape evidence starts fail-closed", () => {
+  assert.deepEqual(pendingRuntimeEvidence(), {
+    rust_only_process_shape: false,
   });
 });
 
-test("packaged sidecar smoke proves provider discovery, config preservation, and cleanup", async () => {
+test("installed artifact contains no retired runtime executable", async () => {
   await withFixture(async (context) => {
-    assert.deepEqual(await packagedSkillEvidenceScenario(context), {
-      offline_packaged_skill_matrix: true,
-      skill_configuration_unchanged: true,
-      skill_overlay_cleanup: true,
-      packaged_skill_providers: {
-        claude: PACKAGED_SKILLS,
-        codex: PACKAGED_SKILLS,
-        agy: PACKAGED_SKILLS,
-        gemini: PACKAGED_SKILLS,
-      },
+    assert.deepEqual(await rustOnlyProcessShapeScenario(context), {
+      rust_only_process_shape: true,
     });
   });
 });
 
-test("packaged sidecar smoke rejects a missing transitive skill", async () => {
+test("installed artifact rejects stale helpers and generated REST contracts", async () => {
   await withFixture(async (context) => {
-    const run = context.run;
-    context.run = async (command, args) => {
-      const result = await run(command, args);
-      if (command !== context.sidecarExecutable
-        || args.join(" ") !== "skills smoke-providers") {
-        return result;
-      }
-      const evidence = JSON.parse(result.stdout);
-      evidence.providers.codex = evidence.providers.codex.filter(
-        (skill) => skill !== "domain-modeling",
-      );
-      return { ...result, stdout: `${JSON.stringify(evidence)}\n` };
-    };
-
-    await assert.rejects(
-      packagedSkillEvidenceScenario(context),
-      /did not expose required skills and MCP for codex/,
+    await writeFile(
+      path.join(context.appPath, "Contents", "MacOS", "verify_slice6_copy"),
+      "helper",
     );
+    await assert.rejects(
+      rustOnlyProcessShapeScenario(context),
+      /unexpected helpers: verify_slice6_copy/,
+    );
+    await rm(path.join(context.appPath, "Contents", "MacOS", "verify_slice6_copy"));
+    await writeFile(path.join(context.appPath, "Contents", "Resources", "openapi.json"), "{}");
+    await assert.rejects(
+      rustOnlyProcessShapeScenario(context),
+      /retired Python\/REST artifacts: Contents\/Resources\/openapi.json/,
+    );
+  });
+});
+
+test("installed artifact rejects every retired runtime artifact class", async () => {
+  await withFixture(async (context) => {
+    const resources = path.join(context.appPath, "Contents", "Resources");
+    for (const artifact of [
+      "python3",
+      "libpython3.12.dylib",
+      "Django",
+      "FastMCP",
+      "worktracker-python-sdk",
+      "worktracker-typescript-sdk",
+      "sidecar-launch-configuration.json",
+      "legacy_helper.py",
+    ]) {
+      const artifactPath = path.join(resources, artifact);
+      await writeFile(artifactPath, "retired");
+      await assert.rejects(
+        rustOnlyProcessShapeScenario(context),
+        new RegExp(artifact.replaceAll(".", "\\."), "i"),
+      );
+      await rm(artifactPath);
+    }
+
+    const themes = path.join(resources, "ghostty", "themes");
+    await mkdir(themes, { recursive: true });
+    await writeFile(path.join(themes, "Django"), "terminal theme");
+    assert.deepEqual(await rustOnlyProcessShapeScenario(context), {
+      rust_only_process_shape: true,
+    });
   });
 });
 
@@ -325,7 +353,7 @@ test("sandbox validation accepts a symlinked macOS temporary root", async () => 
   }
 });
 
-test("a complete scenario run emits full packaged-skill evidence without credentials", async () => {
+test("a complete scenario run emits Rust-only evidence without credentials", async () => {
   await withFixture(async (context) => {
     const result = await runAcceptance(context);
     for (const scenario of [
@@ -339,9 +367,7 @@ test("a complete scenario run emits full packaged-skill evidence without credent
     ]) {
       assert.equal(result[scenario], true, scenario);
     }
-    assert.equal(result.offline_packaged_skill_matrix, true);
-    assert.equal(result.skill_configuration_unchanged, true);
-    assert.equal(result.skill_overlay_cleanup, true);
+    assert.equal(result.rust_only_process_shape, true);
     assert.doesNotThrow(() => assertAcceptanceResult(result));
     assert.equal(
       result.diagnostics.some(({ message }) => CREDENTIAL_PATTERN.test(message)),

@@ -5,9 +5,10 @@
  * stack directly. What is asserted here is the integration users actually hit:
  * the real footer Settings action and the real global Settings binding, taken
  * while one libghostty viewer is attached and presented, must expose the
- * singleton dialog and commit a native hide — without detaching the viewer,
- * releasing its lease, closing the terminal, or ending the run — and closing
- * the dialog must remeasure the host and reveal the same handle.
+ * singleton dialog while the viewer stays presented beneath it as a WebView
+ * sibling (CODING-1497): input ownership moves to the WebView, no hide, no
+ * detach, no lease traffic, no terminal close, and the run keeps its session.
+ * Closing the dialog leaves the same presented handle in place.
  */
 
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
@@ -24,6 +25,10 @@ import { useTerminalStore } from "../features/agents/terminal/internal/sessionSt
 import { focusTerminal } from "../features/agents/terminal/internal/terminalRegistry";
 import { useStudioStore } from "../features/projects/store";
 import { useClientStore } from "../state/clientStore";
+import {
+  installDesktopGraphQlRuntime,
+  type RecordedGraphQlOperation,
+} from "./desktopGraphQlRuntime";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -54,8 +59,8 @@ const settingsApi = vi.hoisted(() => ({
   putProviderCatalog: vi.fn(),
 }));
 
-vi.mock("../shared/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shared/api/client")>()),
+vi.mock("./legacyApiFixture", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./legacyApiFixture")>()),
   ...settingsApi,
 }));
 
@@ -82,6 +87,7 @@ const NATIVE_STATUS = {
 };
 
 let hostRequests: string[] = [];
+let leaseOperations: RecordedGraphQlOperation[] = [];
 
 /**
  * Stands in for the engaged native view recognising the Settings chord.
@@ -122,6 +128,7 @@ async function waitForPresentedViewer() {
 describe("overhaul acceptance — Settings over an attached native terminal", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    leaseOperations = installDesktopGraphQlRuntime();
     hostRequests = [];
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.stubGlobal(
@@ -205,15 +212,21 @@ describe("overhaul acceptance — Settings over an attached native terminal", ()
     vi.unstubAllGlobals();
   });
 
-  it("[overhaul-117] opens Settings from the footer over a presented native terminal, hides that viewer without tearing it down, and restores the same handle on close", async () => {
+  it("[overhaul-117] opens Settings from the footer over a presented native terminal, keeps that viewer presented while the WebView owns input, and leaves the same handle in place on close", async () => {
     const view = renderStudioWithAttachedTerminal();
     await waitForPresentedViewer();
 
-    const leaseAcquisitions = hostRequests.filter((url) =>
-      url.endsWith("/api/terminals/viewers/lease"),
-    ).length;
-    expect(leaseAcquisitions).toBe(1);
-    const requestsBeforeSettings = hostRequests.length;
+    const acquisitions = () =>
+      leaseOperations.filter((operation) => operation.operationName === "CreateViewerLease");
+    expect(acquisitions()).toHaveLength(1);
+    // Renewal is an ongoing heartbeat; only claiming and releasing ownership
+    // count as lease traffic a presentation change must not cause.
+    const claims = () =>
+      leaseOperations.filter((operation) =>
+        operation.operationName === "CreateViewerLease" ||
+        operation.operationName === "DeleteViewerLease",
+      );
+    const claimsBeforeSettings = claims().length;
 
     // The real footer action, not the modal store.
     fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
@@ -224,23 +237,29 @@ describe("overhaul acceptance — Settings over an attached native terminal", ()
     expect(dialog.parentElement).toHaveClass("fixed", "inset-0", "bg-black/60");
     expect(within(dialog).getByRole("button", { name: "Close dialog" })).toBeEnabled();
 
+    // The viewer stays presented beneath the dialog; only input ownership moves.
     await waitFor(() => {
-      expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_hide", {
+      expect(invocations("native_terminal_set_webview_interaction").at(-1)?.[0]).toMatchObject({
         handle: HANDLE,
+        webviewFocus: true,
       });
     });
+    expect(invocations("native_terminal_hide")).toHaveLength(0);
 
-    // Occlusion is presentation only: no detach, no second attachment, no
-    // lease traffic, no terminal close, and the run keeps its session.
+    // Occlusion is input only: no detach, no second attachment, no lease
+    // traffic, no terminal close, and the run keeps its session.
     expect(invocations("native_terminal_detach")).toHaveLength(0);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
-    expect(hostRequests).toHaveLength(requestsBeforeSettings);
+    expect(claims()).toHaveLength(claimsBeforeSettings);
+    // Occlusion reaches no host route at all — the retired terminal REST
+    // surface is not something a presentation change may fall back to.
+    expect(hostRequests.some((url) => url.includes("/terminals"))).toBe(false);
     expect(useTerminalStore.getState().sessions["session-1"]).toMatchObject({
       agentRunId: "run-1",
       status: "ready",
     });
 
-    // A hidden viewer cannot accept focus while the dialog is up.
+    // A presented viewer still cannot take focus while the dialog is up.
     act(() => focusTerminal("session-1"));
     expect(invocations("native_terminal_focus")).toHaveLength(0);
 
@@ -251,25 +270,21 @@ describe("overhaul acceptance — Settings over an attached native terminal", ()
       ).not.toBeInTheDocument();
     });
 
-    // The same handle is revealed against the host's current measurement.
-    await waitFor(() => {
-      expect(invocations("native_terminal_show")).toHaveLength(2);
-    });
-    expect(invocations("native_terminal_show").at(-1)).toEqual([
-      { handle: HANDLE, frame: FRAME },
+    // Nothing was hidden, so nothing is re-shown: the one reveal stands.
+    expect(invocations("native_terminal_hide")).toHaveLength(0);
+    expect(invocations("native_terminal_show")).toEqual([
+      [{ handle: HANDLE, frame: FRAME }],
     ]);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
+    expect(acquisitions()).toHaveLength(1);
     expect(
-      hostRequests.filter((url) => url.endsWith("/api/terminals/viewers/lease")),
-    ).toHaveLength(1);
-    expect(
-      hostRequests.some((url) => url.includes("/lease/release")),
+      leaseOperations.some((operation) => operation.operationName === "DeleteViewerLease"),
     ).toBe(false);
 
     view.unmount();
   });
 
-  it("[overhaul-117-keymap] reaches the same singleton dialog from the native Settings chord while the terminal owns focus", async () => {
+  it("reaches the same singleton dialog from the native Settings chord while the terminal owns focus", async () => {
     const view = renderStudioWithAttachedTerminal();
     const keymap = renderHook(() => useGlobalKeymap());
     await waitForPresentedViewer();
@@ -289,13 +304,15 @@ describe("overhaul acceptance — Settings over an attached native terminal", ()
     expect(useModalStore.getState().modalStack).toEqual([{ type: "settings" }]);
 
     await waitFor(() => {
-      expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_hide", {
+      expect(invocations("native_terminal_set_webview_interaction").at(-1)?.[0]).toMatchObject({
         handle: HANDLE,
+        webviewFocus: true,
       });
     });
+    expect(invocations("native_terminal_hide")).toHaveLength(0);
 
-    // Terminal input is suspended: the hidden viewer neither takes focus nor
-    // opens a second Settings from another report of the same chord.
+    // Terminal input is suspended: the presented viewer neither takes focus
+    // nor opens a second Settings from another report of the same chord.
     act(() => focusTerminal("session-1"));
     act(() => {
       reportNativeSettingsChord();

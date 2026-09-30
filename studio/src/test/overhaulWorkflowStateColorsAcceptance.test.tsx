@@ -4,7 +4,7 @@ import type { State } from "../shared/api/types";
 import { fixture, mountStudio, workItem } from "./seam";
 
 describe("overhaul acceptance — workflow-state colors", () => {
-  it("[overhaul-142] separates Ideas, Grill, and Review with gray, red, and teal", async () => {
+  it("[overhaul-142] renders adopted reviewed colors without replacing a custom color", async () => {
     const http = fixture();
     const states: Array<State & { sequenceId: number }> = [
       {
@@ -31,11 +31,21 @@ describe("overhaul acceptance — workflow-state colors", () => {
         sort_order: 5,
         sequenceId: 3,
       },
+      {
+        id: "custom",
+        name: "Custom",
+        group: "unstarted",
+        color: "#C0FFEE",
+        sort_order: 6,
+        sequenceId: 4,
+      },
     ];
     http.tree("module-1", {
-      rootIds: ["ideas-item", "grill-item", "review-item"],
-      children: { "ideas-item": [], "grill-item": [], "review-item": [] },
-      order: ["ideas-item", "grill-item", "review-item"],
+      rootIds: states.map((state) => `${state.id}-item`),
+      children: Object.fromEntries(
+        states.map((state) => [`${state.id}-item`, []]),
+      ),
+      order: states.map((state) => `${state.id}-item`),
     });
     http.workItems(
       states.map((state) =>
@@ -58,8 +68,9 @@ describe("overhaul acceptance — workflow-state colors", () => {
           .getByRole("button", { name: `Collapse ${state.name}` })
           .querySelector(`[data-stage-icon="${state.name}"]`),
       ).toHaveStyle({ color: state.color });
-      expect(within(stories).getByText(`T-${state.sequenceId}`))
-        .toHaveStyle({ color: state.color });
+      expect(within(stories).getByText(`T-${state.sequenceId}`)).toHaveStyle({
+        color: state.color,
+      });
     }
   });
 });

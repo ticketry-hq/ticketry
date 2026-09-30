@@ -1,55 +1,139 @@
-import { useQuery } from "@tanstack/react-query";
-import * as api from "../../shared/api/client";
-import { queryClient } from "../../shared/query/queryClient";
-import { queryKeys } from "../../shared/query/keys";
+import { useCallback, useSyncExternalStore } from "react";
 import {
-  getProjectsSnapshot,
-  loadProjects,
-} from "../../features/projects/queries";
-import { findDefaultProject } from "../../features/studio/lib/defaultProject";
+  acknowledgeOnboarding as writeOnboardingAcknowledgement,
+  readOnboardingProjects,
+  WorkTrackerOnboardingDocument,
+} from "../../features/projects";
+import type { OnboardingProject } from "../../features/projects";
+import {
+  DEFAULT_PROJECT_KEY,
+  LEGACY_PROJECT_KEY,
+} from "../../features/studio/lib/defaultProject";
+import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
+import { studioApolloClient } from "../../shared/apollo/client";
 
-async function fetchOnboardingRequired(): Promise<boolean> {
-  const project = findDefaultProject(await loadProjects());
-  return project?.onboarding_required ?? false;
+type CachedProject = {
+  id: string;
+  slug: string;
+  name: string;
+  onboarding_required: boolean;
+};
+
+function onboardingQueryData(nodes: CachedProject[]) {
+  return {
+    projects: {
+      __typename: "WorktrackerProjectConnection",
+      nodes: nodes.map((project) => ({
+        __typename: "WorktrackerProject",
+        ...project,
+      })),
+    },
+  };
 }
 
-export async function loadProjectOnboardingState(): Promise<void> {
+/**
+ * The installation's own project, resolved the way the rest of the app resolves
+ * it: a recognized slug first, then the oldest project. The query already
+ * returns creation order, so the first node is the oldest.
+ */
+function installationProject<T extends { slug: string }>(
+  nodes: readonly T[],
+): T | null {
+  return (
+    nodes.find((project) => project.slug === DEFAULT_PROJECT_KEY) ??
+    nodes.find((project) => project.slug === LEGACY_PROJECT_KEY) ??
+    nodes[0] ??
+    null
+  );
+}
+
+/**
+ * Whether first-run onboarding is still pending.
+ *
+ * An installation with no project has never been set up, so onboarding is
+ * pending by definition. Once a project exists, that project owns the answer.
+ */
+function onboardingRequired(
+  nodes: readonly { slug: string; onboarding_required: boolean }[],
+): boolean {
+  const project = installationProject(nodes);
+  return project ? project.onboarding_required : nodes.length === 0;
+}
+
+function cached(): readonly CachedProject[] | null {
+  const data = studioApolloClient().readQuery({
+    query: WorkTrackerOnboardingDocument,
+  });
+  return data?.projects.nodes ?? null;
+}
+
+function write(projects: OnboardingProject[]): void {
+  studioApolloClient().writeQuery({
+    query: WorkTrackerOnboardingDocument,
+    data: onboardingQueryData(
+      projects.map((project) => ({
+        id: compactWorktrackerId(project.id),
+        slug: project.slug,
+        name: project.name,
+        onboarding_required: project.onboarding_required,
+      })),
+    ),
+  });
+}
+
+export async function loadOnboardingState(): Promise<void> {
   try {
-    await queryClient.fetchQuery({
-      queryKey: queryKeys.onboarding,
-      queryFn: fetchOnboardingRequired,
-      staleTime: 0,
-    });
+    write(await readOnboardingProjects());
   } catch (error) {
     // A flaky project endpoint must not strand an existing user during
-    // bootstrap. Absence is deliberately interpreted as no pending welcome.
+    // bootstrap, and it must not be mistaken for a first run either. Leaving
+    // the cache unwritten keeps "unreadable" distinct from "no project yet":
+    // the readers below answer "no pending welcome" for the first and "welcome
+    // pending" only for the second.
     console.warn("[onboarding] project state load failed", error);
-    queryClient.setQueryData(queryKeys.onboarding, false);
   }
 }
 
-export async function acknowledgeOnboarding(): Promise<void> {
-  const project = findDefaultProject(getProjectsSnapshot());
-  if (!project) throw new Error("The default project is unavailable.");
-  const updated = await api.acknowledgeProjectOnboarding(project.id);
-  queryClient.setQueryData(
-    queryKeys.onboarding,
-    updated.onboarding_required,
-  );
+export async function acknowledgeOnboarding(projectId: string): Promise<void> {
+  const project = await writeOnboardingAcknowledgement(projectId);
+  const acknowledged = {
+    id: compactWorktrackerId(project.id),
+    slug: project.slug,
+    name: project.name,
+    onboarding_required: project.onboarding_required,
+  };
+  const nodes = cached() ?? [];
+  const sameProject = (node: CachedProject) =>
+    compactWorktrackerId(node.id) === acknowledged.id;
+  const known = nodes.some(sameProject);
+  studioApolloClient().writeQuery({
+    query: WorkTrackerOnboardingDocument,
+    data: onboardingQueryData(
+      known
+        ? nodes.map((node) => (sameProject(node) ? acknowledged : node))
+        : [...nodes, acknowledged],
+    ),
+  });
 }
 
 export function getOnboardingRequiredSnapshot(): boolean {
-  return queryClient.getQueryData<boolean>(queryKeys.onboarding) ?? false;
+  const nodes = cached();
+  return nodes ? onboardingRequired(nodes) : false;
 }
 
 export function useOnboardingRequired(): boolean {
-  const { data } = useQuery(
-    {
-      queryKey: queryKeys.onboarding,
-      queryFn: fetchOnboardingRequired,
-      enabled: false,
-    },
-    queryClient,
+  const client = studioApolloClient();
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => client.cache.watch({
+      query: WorkTrackerOnboardingDocument,
+      optimistic: true,
+      callback: onStoreChange,
+    }),
+    [client],
   );
-  return data ?? false;
+  const getSnapshot = useCallback(
+    () => getOnboardingRequiredSnapshot(),
+    [client],
+  );
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }

@@ -1,22 +1,18 @@
 import { Panel } from "react-resizable-panels";
 import { ModulesPane } from "./modules/ModulesPane";
-import { PaneResizeHandle } from "../layout/PaneResizeHandle";
+import { PaneResizeHandle } from "../../../shared/ui/PaneResizeHandle";
 
 interface StudioSidebarProps {
   layout: number[];
 }
 
+/** The sidebar of the installation project: its modules, and nothing else. */
 export function StudioSidebar({ layout }: StudioSidebarProps) {
-  const visibleTotal = layout[1] + layout[2] + layout[3];
-  const moduleSize =
-    visibleTotal <= 0
-      ? layout[1]
-      : (layout[1] / visibleTotal) * 100;
-
   return (
     <>
       <Panel
-        defaultSize={moduleSize}
+        id="modules"
+        defaultSize={layout[0]}
         minSize={10}
         order={2}
         data-testid="pane-modules"

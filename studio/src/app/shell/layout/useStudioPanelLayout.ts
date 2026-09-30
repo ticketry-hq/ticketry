@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
 import { useClientStore } from "../../../state/clientStore";
 import {
-  DEFAULT_SIDEBAR_PANE_COMPOSITION,
   DEFAULT_PANEL_LAYOUT,
   mergeOuterPanelLayout,
   mergeWorkAreaLayout,
@@ -10,8 +9,7 @@ import {
   splitWorkArea,
 } from "./layoutMath";
 
-export function useStudioPanelLayout() {
-  const paneComposition = DEFAULT_SIDEBAR_PANE_COMPOSITION;
+export function useStudioPanelLayout(suspended = false) {
   const sidebarVisible = useClientStore((state) => state.sidebarVisible);
   const panelLayout = useClientStore((state) => state.panelLayout);
   const setPanelLayout = useClientStore((state) => state.setPanelLayout);
@@ -32,16 +30,25 @@ export function useStudioPanelLayout() {
   function applyLayout(sizes: number[], isSidebarVisible: boolean) {
     skipNextOuterLayout.current = true;
     skipNextWorkAreaLayout.current = true;
-    outerGroupRef.current?.setLayout(
-      outerPanelLayout(sizes, isSidebarVisible, paneComposition),
-    );
-    workAreaGroupRef.current?.setLayout(splitWorkArea(sizes));
+    const outer = outerPanelLayout(sizes, isSidebarVisible);
+    if (outerGroupRef.current?.getLayout().length === outer.length) {
+      outerGroupRef.current.setLayout(outer);
+    }
+    const workArea = splitWorkArea(sizes);
+    if (workAreaGroupRef.current?.getLayout().length === workArea.length) {
+      workAreaGroupRef.current.setLayout(workArea);
+    }
   }
 
   useEffect(() => {
     previousSidebarVisible.current = sidebarVisible;
+    if (suspended) return;
+    // A stable PanelGroup keeps the workspace mounted while the sidebar is
+    // shown or hidden. Its imperative handle is available before conditional
+    // Panels finish registering, so applyLayout checks the registered shape;
+    // default sizes cover a commit whose shape is still changing.
     applyLayout(panelLayout ?? DEFAULT_PANEL_LAYOUT, sidebarVisible);
-  }, [sidebarVisible, panelLayout, paneComposition]);
+  }, [sidebarVisible, panelLayout, suspended]);
 
   function handleOuterLayout(sizes: number[]) {
     if (skipNextOuterLayout.current) {
@@ -49,12 +56,11 @@ export function useStudioPanelLayout() {
       return;
     }
 
-    if (!sidebarVisible || paneComposition === "absent") return;
+    if (!sidebarVisible) return;
 
     const nextLayout = mergeOuterPanelLayout(
       panelLayout ?? DEFAULT_PANEL_LAYOUT,
       sizes,
-      paneComposition,
     );
     if (nextLayout) setPanelLayout(nextLayout);
   }
@@ -74,7 +80,6 @@ export function useStudioPanelLayout() {
 
   return {
     layout,
-    paneComposition,
     sidebarVisible,
     outerGroupRef,
     workAreaGroupRef,

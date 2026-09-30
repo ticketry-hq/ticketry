@@ -10,6 +10,13 @@
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { loadXtermTerminal } from "../features/agents/terminal/xtermTerminalLoader";
+
+// The compatibility renderer is a lazily fetched chunk; preload it so the
+// xterm host can be queried synchronously after render.
+beforeEach(async () => {
+  await loadXtermTerminal();
+});
 
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
@@ -19,7 +26,7 @@ import {
   useTerminalStore,
 } from "../features/agents/terminal/internal/sessionStore";
 import { useStudioStore } from "../features/projects/store";
-import { seedConfig } from "../features/studio/stores/configStore";
+import { seedModuleLinks } from "../features/module-links";
 import { ACTIVE_SHELL_KEY } from "../features/terminal-panel/activeShellMemory";
 import { useModuleShellStore } from "../features/terminal-panel/moduleShellStore";
 import { useTerminalPanelStore } from "../features/terminal-panel/panelStore";
@@ -144,6 +151,7 @@ function resetStudioState(): void {
 
 describe("terminal panel tab acceptance", () => {
   beforeEach(() => {
+    localStorage.setItem("ticketry:terminal-renderer", "xterm");
     runtime.desktop = false;
     runtime.nativeAvailable = false;
     shellApi.createModuleShell.mockReset();
@@ -163,31 +171,19 @@ describe("terminal panel tab acceptance", () => {
       editViewZone: "active-tab-body",
       editViewBodyEngaged: false,
       activeByTask: {},
-      modalStack: [],
     });
     useStudioStore.setState({ selectedProjectId: "project-1" });
-    seedConfig({
-      profiles: [
-        {
-          name: "local",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_links: [
-            { module_id: "module-1", path: "/repo/module-1" },
-            { module_id: "module-2", path: "/repo/module-2" },
-          ],
-          recent_project_id: null,
-        },
-      ],
-      recentProfileIndex: 0,
-    });
+    seedModuleLinks([
+      { id: "link-module-1", moduleId: "module-1", path: "/repo/module-1" },
+      { id: "link-module-2", moduleId: "module-2", path: "/repo/module-2" },
+    ]);
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("[overhaul-96] holds several shells in one module and shows exactly one of them", async () => {
+  it("[overhaul-150] holds several shells in one module and shows exactly one of them", async () => {
     renderPanel();
     pressTogglePanel();
     await waitFor(() => expect(tabs()).toHaveLength(1));
@@ -207,7 +203,7 @@ describe("terminal panel tab acceptance", () => {
     });
   });
 
-  it("[overhaul-97] stops at the shell cap with the create action visibly refused", async () => {
+  it("[overhaul-151] stops at the shell cap with the create action visibly refused", async () => {
     renderPanel();
     pressTogglePanel();
     await waitFor(() => expect(tabs()).toHaveLength(1));
@@ -227,7 +223,7 @@ describe("terminal panel tab acceptance", () => {
     expect(shellApi.createModuleShell).toHaveBeenCalledTimes(MAX_MODULE_SHELLS);
   });
 
-  it("[overhaul-98] swaps the strip on a module switch and returns to that module's own active tab", async () => {
+  it("[overhaul-152] swaps the strip on a module switch and returns to that module's own active tab", async () => {
     renderPanel();
     pressTogglePanel();
     await waitFor(() => expect(tabs()).toHaveLength(1));
@@ -333,7 +329,7 @@ describe("terminal panel tab acceptance", () => {
     expect(shellApi.createModuleShell).toHaveBeenCalledTimes(3);
   });
 
-  it("[overhaul-100b] leaves a closed shell out of the module's dismissal ledger", async () => {
+  it("leaves a closed shell out of the module's dismissal ledger", async () => {
     renderPanel();
     pressTogglePanel();
     await waitFor(() => expect(tabs()).toHaveLength(1));

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   existsSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -10,20 +11,21 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { productIdentity } from "../../scripts/product-identity.mjs";
 
 import {
-  assertInstalledTicketryIsNotRunning,
-  buildConnectLaunch,
+  createStartupTrace,
   createTemporarySqliteProfile,
   formatDevelopmentIdentity,
   parseDesktopDevOptions,
   parseDesktopDevMode,
   removeTemporarySqliteProfile,
+  resolveDesktopDevelopmentProfile,
   resolveDevelopmentDataDirectory,
   resolveDevelopmentLogPath,
   resolveDevelopmentTmuxSocket,
   resolveTauriCliPath,
-  selectDevelopmentServicePorts,
+  selectFrontendPort,
   stopTemporaryTmuxServer,
 } from "./desktop-dev.mjs";
 import { addLinkedWorktree, createRepository } from "./git-fixtures.mjs";
@@ -50,7 +52,14 @@ test("the same canonical worktree has one stable profile", () => {
   assert.equal(direct, repeated);
   assert.equal(direct, viaSymlink);
   assert.match(path.basename(direct), /^stable-profile-[0-9a-f]{16}$/);
-  assert.equal(path.dirname(direct), path.join(parent, ".config/worktracker-studio-development"));
+  assert.equal(
+    path.dirname(direct),
+    path.join(
+      parent,
+      ".config",
+      `${productIdentity.defaultDataDirectoryName}-development`,
+    ),
+  );
   assert.throws(() => realpathSync(direct), /ENOENT/);
 });
 
@@ -84,6 +93,27 @@ test("development logs use one stable workspace-local location", () => {
   );
 });
 
+test("startup traces use one ID and record elapsed stage durations", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ticketry-startup-trace-"));
+  const logPath = path.join(directory, "ticketry.log");
+  const trace = createStartupTrace({
+    logPath,
+    id: "startup-1",
+    startedAt: 1_000,
+    now: () => 1_000,
+  });
+  trace.record("launcher-started");
+
+  const record = JSON.parse(readFileSync(logPath, "utf8").match(/\{.*\}/)?.[0] ?? "{}");
+  assert.deepEqual(record, {
+    startup_id: "startup-1",
+    stage: "launcher-started",
+    elapsed_ms: 0,
+    duration_ms: 0,
+  });
+  rmSync(directory, { recursive: true });
+});
+
 test("resolution outside a Git worktree fails closed with the launch directory", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "muxed-desktop-dev-not-git-"));
 
@@ -97,51 +127,31 @@ test("resolution outside a Git worktree fails closed with the launch directory",
   );
 });
 
-test("development services select distinct available ports for each launch", async () => {
-  const firstOccupied = new Set([8787, 8123]);
-  const first = await selectDevelopmentServicePorts({
-    environment: {},
-    isAvailable: async (port) => !firstOccupied.has(port),
-  });
-  const secondOccupied = new Set([...firstOccupied, first.backend, first.mcp]);
-  const second = await selectDevelopmentServicePorts({
-    environment: {},
-    isAvailable: async (port) => !secondOccupied.has(port),
-  });
-
-  assert.deepEqual(first, { backend: 8788, mcp: 8124 });
-  assert.deepEqual(second, { backend: 8789, mcp: 8125 });
-});
-
-test("explicit development service ports fail instead of shifting", async () => {
+test("explicit frontend ports fail instead of shifting", async () => {
   await assert.rejects(
-    selectDevelopmentServicePorts({
-      environment: { MUXED_DESKTOP_BACKEND_PORT: "43210" },
+    selectFrontendPort({
+      requestedPort: 43210,
       isAvailable: async (port) => port !== 43210,
     }),
-    /Requested backend port 43210 is unavailable/,
+    /Requested frontend port 43210 is unavailable/,
   );
 });
 
-test("temporary SQLite desktop attempts only the optional MCP port 8123", async () => {
+test("desktop development selects the first free frontend port", async () => {
   const checked = [];
-  const ports = await selectDevelopmentServicePorts({
-    environment: {},
-    temporarySqlite: true,
+  const port = await selectFrontendPort({
     isAvailable: async (port) => {
       checked.push(port);
-      return port !== 8123;
+      return port !== 5174;
     },
   });
 
-  assert.deepEqual(ports, { backend: 8787, mcp: 8123 });
-  assert.deepEqual(checked, [8787]);
+  assert.equal(port, 5175);
+  assert.deepEqual(checked, [5174, 5175]);
 });
 
-test("desktop development accepts connect or temporary SQLite mode", () => {
+test("desktop development accepts explicit data modes", () => {
   assert.equal(parseDesktopDevMode([]), "isolated");
-  assert.equal(parseDesktopDevMode(["--connect"]), "connect");
-  assert.equal(parseDesktopDevMode(["--", "--connect"]), "connect");
   assert.deepEqual(parseDesktopDevOptions(["--temp-sqlite"]), {
     mode: "isolated",
     temporarySqlite: true,
@@ -150,10 +160,54 @@ test("desktop development accepts connect or temporary SQLite mode", () => {
     mode: "isolated",
     temporarySqlite: true,
   });
+  assert.deepEqual(parseDesktopDevOptions(["--production-data"]), {
+    mode: "production-data",
+    temporarySqlite: false,
+  });
+  assert.deepEqual(parseDesktopDevOptions(["--", "--production-data"]), {
+    mode: "production-data",
+    temporarySqlite: false,
+  });
+  assert.throws(
+    () => parseDesktopDevMode(["--production-data", "--temp-sqlite"]),
+    /\[--production-data \| --temp-sqlite\]/,
+  );
   assert.throws(
     () => parseDesktopDevMode(["--unknown"]),
-    /usage: pnpm --filter @worktracker\/studio desktop:dev -- \[--connect \| --temp-sqlite\]/,
+    /usage: pnpm --filter @worktracker\/studio desktop:dev -- \[--production-data \| --temp-sqlite\]/,
   );
+});
+
+test("production-data mode selects the product profile and tmux namespace", () => {
+  const calls = [];
+  const profile = resolveDesktopDevelopmentProfile({
+    options: parseDesktopDevOptions(["--production-data"]),
+    cwd: "/repository",
+    environment: { HOME: "/users/ticketry" },
+    resolveProductData(input) {
+      calls.push(input);
+      return "/users/ticketry/.config/ticketry";
+    },
+  });
+
+  assert.deepEqual(profile, {
+    dataDirectory: "/users/ticketry/.config/ticketry",
+    tmuxSocket: "muxed",
+  });
+  assert.deepEqual(calls, [{
+    cwd: "/repository",
+    environment: { HOME: "/users/ticketry" },
+  }]);
+});
+
+test("production-data mode preserves an explicit product tmux namespace", () => {
+  const profile = resolveDesktopDevelopmentProfile({
+    options: parseDesktopDevOptions(["--production-data"]),
+    environment: { MUXED_TMUX_SOCKET: "ticketry-product" },
+    resolveProductData: () => "/product/data",
+  });
+
+  assert.equal(profile.tmuxSocket, "ticketry-product");
 });
 
 test("temporary SQLite profiles are unique and removed on shutdown", () => {
@@ -209,99 +263,16 @@ test("the Tauri CLI is resolved through the workspace dependency tree", () => {
   assert.deepEqual(requests, ["@tauri-apps/cli/tauri.js"]);
 });
 
-test("desktop development rejects a running installed macOS app actionably", () => {
-  assert.throws(
-    () => assertInstalledTicketryIsNotRunning({
-      platform: "darwin",
-      runner(command, args, options) {
-        assert.equal(command, "ps");
-        assert.deepEqual(args, ["-axo", "pid=,comm="]);
-        assert.deepEqual(options, {
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "pipe"],
-        });
-        return [
-          "  100 /usr/bin/example",
-          "  321 /Applications/Ticketry.app/Contents/MacOS/ticketry",
-          "  654 /repository/studio/src-tauri/target/debug/ticketry",
-        ].join("\n");
-      },
-    }),
-    /installed Ticketry app is still running.*PID 321.*Command-Q.*closing its window is not enough.*pnpm run dev/,
-  );
-});
-
-test("desktop development allows raw debug processes and non-macOS hosts", () => {
-  assert.doesNotThrow(() => assertInstalledTicketryIsNotRunning({
-    platform: "darwin",
-    runner: () => "654 /repository/studio/src-tauri/target/debug/ticketry\n",
-  }));
-  assert.doesNotThrow(() => assertInstalledTicketryIsNotRunning({
-    platform: "linux",
-    runner: () => {
-      throw new Error("runner must not be called");
-    },
-  }));
-});
-
-test("connect mode reuses the established pnpm dev stack without a sidecar command", () => {
-  const launch = buildConnectLaunch({
-    environment: { HOME: "/tmp/connect-home", PRESERVED: "yes" },
-  });
-
-  assert.equal(
-    launch.dataDirectory,
-    "/tmp/connect-home/.config/worktracker-studio",
-  );
-  assert.equal(launch.frontendOrigin, "http://127.0.0.1:5174");
-  assert.equal(launch.backendPort, 8787);
-  assert.deepEqual(launch.config, {
-    build: {
-      beforeDevCommand: null,
-      devUrl: "http://127.0.0.1:5174",
-    },
-  });
-  assert.equal(launch.environment.PRESERVED, "yes");
-  assert.equal(launch.environment.MUXED_DESKTOP_DEVELOPMENT_MODE, "connect");
-  assert.equal(launch.environment.MUXED_DESKTOP_BACKEND_PORT, "8787");
-  assert.equal(
-    launch.environment.MUXED_DESKTOP_WORKTRACKER_API,
-    "http://127.0.0.1:5174/api/work-tracker",
-  );
-  assert.equal(
-    launch.environment.MUXED_DESKTOP_STATUS_WEBSOCKET,
-    "ws://127.0.0.1:5174/ws/status",
-  );
-});
-
-test("connect mode pins canonical stack ports while honoring its explicit data directory", () => {
-  const launch = buildConnectLaunch({
-    environment: {
-      HOME: "/ignored",
-      MUXED_DATA_DIR: "/tmp/shared-data",
-      MUXED_FRONTEND_PORT: "5190",
-      MUXED_DESKTOP_BACKEND_PORT: "8890",
-    },
-  });
-
-  assert.equal(launch.dataDirectory, "/tmp/shared-data");
-  assert.equal(launch.frontendOrigin, "http://127.0.0.1:5174");
-  assert.equal(launch.backendPort, 8787);
-  assert.equal(launch.environment.MUXED_DESKTOP_BACKEND_PORT, "8787");
-});
-
 test("startup identity is one concise non-secret report with all selected resources", () => {
   const report = formatDevelopmentIdentity({
     frontendOrigin: "http://127.0.0.1:5175",
-    backendPort: 8788,
-    mcpPort: 8798,
     dataDirectory: "/tmp/muxed-profile",
     tmuxSocket: "muxed-dev-0123456789abcdef",
   });
 
   assert.equal(
     report,
-    "Ticketry desktop development instance: frontend=http://127.0.0.1:5175 backend=http://127.0.0.1:8788 mcp=http://127.0.0.1:8798/mcp data=/tmp/muxed-profile tmux=muxed-dev-0123456789abcdef",
+    "Ticketry Dev instance: frontend=http://127.0.0.1:5175 runtime=in-process-rust data=/tmp/muxed-profile tmux=muxed-dev-0123456789abcdef",
   );
   assert.equal(report.split("\n").length, 1);
   assert.doesNotMatch(report, /token|credential|secret/i);

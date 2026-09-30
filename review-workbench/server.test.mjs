@@ -13,7 +13,7 @@ import { createReviewServer } from "./server.mjs";
 
 const validReview = JSON.parse(
   await readFile(
-    new URL("../backend/worktracker/reviewed_defaults.json", import.meta.url),
+    new URL("../studio/src-tauri/resources/work-management/reviewed_defaults.json", import.meta.url),
     "utf8",
   ),
 );

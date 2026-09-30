@@ -6,10 +6,6 @@ import {
 import type { SessionMeta } from "../../agents/terminal";
 import type { TaskId } from "./types";
 import type { TreeRow } from "../../../app/shell/ticket-workspace/tasks/TasksPane";
-import {
-  isPlanningRow,
-  planningRowId,
-} from "../../../app/shell/ticket-workspace/tasks/TasksPane";
 
 type CycleSession = Pick<
   SessionMeta,
@@ -49,7 +45,7 @@ export function selectLiveTerminalStops({
   const taskIds =
     taskOrder ??
     taskRows.flatMap((row) =>
-      isPlanningRow(row) ? [planningRowId(row)] : [],
+      row.kind === "work-item" ? [row.id] : [],
     );
   for (const taskId of taskIds) {
     const defaultTaskSessions = Object.values(sessions)

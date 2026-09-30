@@ -1,21 +1,29 @@
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@apollo/client/react";
 import { useSyncExternalStore } from "react";
-import type { RunNowResponse } from "@worktracker/typescript-sdk/models";
-import { useTerminalStore, type SessionMeta } from "../agents/terminal/appNavigation";
 import { launchFailureMessage } from "../agents/terminal";
 import { toast, useClientStore } from "../../state/clientStore";
-import * as api from "../../shared/api/client";
-import { RunNowRefusalError } from "../../shared/api/client";
 import type {
   IssueType,
   ScopedWorkflowSettings,
   State,
   WorkItem,
 } from "../../shared/api/types";
-import { queryClient } from "../../shared/query/queryClient";
-import { queryKeys } from "../../shared/query/keys";
-import { getStatesSnapshot } from "../../shared/query/stateCatalog";
+import { compactWorktrackerId, publicWorktrackerId } from "../../shared/api/generatedWorktracker";
+import { studioApolloClient } from "../../shared/apollo/client";
+import { getStatesSnapshot } from "../../features/projects";
 import { getIssueTypesSnapshot } from "../settings";
+import {
+  RunNowRefusalError,
+  runWorkItemNow,
+} from "./internal/runNowTransport";
+import {
+  activateAcknowledgedTaskRunTab,
+  watchNewTaskRunTab,
+} from "./taskRunTabActivation";
+import { WorkTrackerProjectOpenDocument } from "../projects";
+import { WorkTrackerModuleOpenDocument } from "./generated/workItems.documents";
+import { workItemFromIssue } from "./issueAdapter";
+import { getWorkItemSnapshot } from "./queries";
 
 type WorkflowTransitions = ScopedWorkflowSettings["transitions"];
 
@@ -46,17 +54,29 @@ export function useRunNowPending(issueId: string): boolean {
 }
 
 export function useRunNowTransitions(
+  projectId: string,
   issueTypeId: string | null,
   enabled: boolean,
 ): WorkflowTransitions | undefined {
-  return useQuery(
-    {
-      queryKey: queryKeys.workflows.transitionsByIssueType(issueTypeId ?? "none"),
-      queryFn: () => api.listIssueTypeTransitions(issueTypeId!),
-      enabled: enabled && issueTypeId !== null,
-    },
-    queryClient,
-  ).data;
+  const query = useQuery(
+    WorkTrackerProjectOpenDocument,
+    enabled && issueTypeId
+      ? {
+          variables: { projectId: compactWorktrackerId(projectId) },
+          client: studioApolloClient(),
+          fetchPolicy: "cache-first",
+        }
+      : skipToken,
+  );
+  const type = query.data?.issue_types.nodes.find(
+    (candidate) => publicWorktrackerId(candidate.id) === issueTypeId,
+  );
+  return type?.transitions.nodes.map((transition) => ({
+    from_state_id: publicWorktrackerId(transition.from_state),
+    to_state_id: publicWorktrackerId(transition.to_state),
+    agent_allowed: transition.agent_allowed,
+    handoff: transition.handoff,
+  }));
 }
 
 function namedState(
@@ -95,10 +115,22 @@ function reconcileCommittedState(
   committedState: { id: string; name: string } | null,
 ): void {
   if (!committedState) return;
-  queryClient.setQueryData<WorkItem>(
-    queryKeys.workItems.byId(item.id),
-    (current) => current ? { ...current, state: committedState.id } : current,
-  );
+  const client = studioApolloClient();
+  const cacheId = client.cache.identify({
+    __typename: "WorktrackerIssue",
+    id: compactWorktrackerId(item.id),
+  });
+  if (!cacheId) return;
+  client.cache.modify({
+    id: cacheId,
+    fields: {
+      stateId: () => compactWorktrackerId(committedState.id),
+      state: (_current, { toReference }) => toReference({
+        __typename: "WorktrackerState",
+        id: compactWorktrackerId(committedState.id),
+      }),
+    },
+  });
 }
 
 function committedStateFromError(error: unknown): { id: string; name: string } | null {
@@ -107,10 +139,7 @@ function committedStateFromError(error: unknown): { id: string; name: string } |
 
 function refusalMessage(error: unknown): string {
   if (error instanceof RunNowRefusalError) {
-    const { code } = error.body;
-    if (code === "task_already_active") {
-      return "An agent is already running for this Story. Close its terminal before trying again.";
-    }
+    const { code, detail, remedy } = error.body;
     if (code === "binding_not_configured") {
       return "Configure an Implement launch binding before trying again.";
     }
@@ -120,31 +149,29 @@ function refusalMessage(error: unknown): string {
     if (code === "run_now_not_eligible") {
       return "This Story is no longer eligible to Run now. Refresh its workflow and try again.";
     }
+    if (code === "no_activated_providers") return launchFailureMessage(error);
+    if (remedy) return `${detail} Next action: ${remedy}`;
   }
   return launchFailureMessage(error);
 }
 
-function activateRunTerminal(
-  item: WorkItem,
-  moduleId: string | null,
-  response: RunNowResponse,
-): void {
-  useTerminalStore.getState().openSession({
-    taskId: item.id,
-    projectId: item.project_id,
-    moduleId: moduleId ?? undefined,
-    agent: response.run.agent as SessionMeta["agent"],
-    agentRunId: response.run.agent_run_id,
-    select: true,
-  });
-  useClientStore.getState().setActive(item.id, "terminal");
-}
-
 export function startRunNow(item: WorkItem, moduleId: string | null): boolean {
   if (pendingIds.has(item.id)) return false;
-  const transitions = queryClient.getQueryData<WorkflowTransitions>(
-    queryKeys.workflows.transitionsByIssueType(item.issue_type ?? "none"),
+  const projectOpen = studioApolloClient().readQuery({
+    query: WorkTrackerProjectOpenDocument,
+    variables: { projectId: compactWorktrackerId(item.project_id) },
+    optimistic: true,
+    returnPartialData: true,
+  });
+  const type = projectOpen?.issue_types?.nodes.find(
+    (candidate) => publicWorktrackerId(candidate.id) === item.issue_type,
   );
+  const transitions = type?.transitions.nodes.map((transition) => ({
+    from_state_id: publicWorktrackerId(transition.from_state),
+    to_state_id: publicWorktrackerId(transition.to_state),
+    agent_allowed: transition.agent_allowed,
+    handoff: transition.handoff,
+  }));
   if (
     !isRunNowEligible(
       item,
@@ -157,11 +184,20 @@ export function startRunNow(item: WorkItem, moduleId: string | null): boolean {
   }
 
   setPending(item.id, true);
-  void api.runWorkItemNow(item.id).then((response) => {
+  const tabTarget = {
+    taskId: item.id,
+    projectId: item.project_id,
+    moduleId,
+  };
+  const runTabWatch = watchNewTaskRunTab(tabTarget);
+  void runWorkItemNow(item.id).then((response) => {
+    runTabWatch.acknowledge();
+    runTabWatch.cancel();
     reconcileCommittedState(item, response.committed_state);
-    activateRunTerminal(item, moduleId, response);
+    activateAcknowledgedTaskRunTab(tabTarget, response.run);
     toast.success("Run now started.");
   }).catch((error: unknown) => {
+    runTabWatch.cancel();
     reconcileCommittedState(item, committedStateFromError(error));
     toast.error(`Run now could not be started: ${refusalMessage(error)}`);
   }).finally(() => setPending(item.id, false));
@@ -170,8 +206,19 @@ export function startRunNow(item: WorkItem, moduleId: string | null): boolean {
 
 export function startRunNowForSelectedItem(): boolean {
   const ui = useClientStore.getState();
-  const item = ui.selectedTaskId
-    ? queryClient.getQueryData<WorkItem>(queryKeys.workItems.byId(ui.selectedTaskId))
+  const opened = ui.selectedModuleId
+    ? studioApolloClient().readQuery({
+        query: WorkTrackerModuleOpenDocument,
+        variables: { moduleId: compactWorktrackerId(ui.selectedModuleId) },
+        optimistic: true,
+        returnPartialData: true,
+      })
     : undefined;
+  const row = opened?.work_items?.nodes.find(
+    (candidate) => publicWorktrackerId(candidate.id) === ui.selectedTaskId,
+  );
+  const item = row
+    ? workItemFromIssue(row)
+    : getWorkItemSnapshot(ui.selectedTaskId);
   return item ? startRunNow(item, ui.selectedModuleId) : false;
 }

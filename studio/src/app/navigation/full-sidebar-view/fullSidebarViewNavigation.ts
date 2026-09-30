@@ -6,7 +6,7 @@ import {
   useTerminalStore,
   useWorkspaceTabsStore,
 } from "../../../features/agents/terminal/appNavigation";
-import { useAgentStatusStore } from "../../../features/agents/status";
+import { readAgentStatusHolding } from "../../../features/agents/status";
 import {
   type FocusedPane,
   resolveCursorId,
@@ -17,45 +17,37 @@ import {
   useTicketWorkspaceStore,
 } from "../../shell/ticket-workspace/selected-ticket/appNavigation";
 import type { TreeRow } from "../../shell/ticket-workspace/tasks/TasksPane";
-import { queryClient } from "../../../shared/query/queryClient";
-import { queryKeys } from "../../../shared/query/keys";
-import type { WorkItem } from "../../../shared/api/types";
-import { getModuleTreeSnapshot } from "../../../features/work-items/queries";
-import { getStatesSnapshot } from "../../../shared/query/stateCatalog";
-import { useStudioStore } from "../../../features/projects/store";
+import { getModuleTreeSnapshot, getWorkItemSnapshot } from "../../../features/work-items";
+import { getStatesSnapshot } from "../../../features/projects";
+import { useStudioStore } from "../../../features/projects";
 import {
   selectLiveTerminalStops,
   selectLiveTerminalStop,
   type LiveTerminalCycleDirection,
 } from "../../../features/studio/lib/liveTerminalCycle";
 import { loadWorkspaceTabOrder } from "../../../features/workspace-tabs/queries";
-import type { WorkspaceTabOrder } from "../../../features/workspace-tabs/types";
 import {
   selectModuleTaskOrder,
   taskRevealPath,
   type TreeWorkItem,
-} from "../../../features/studio/lib/taskTree";
+} from "../../../features/work-items";
 import {
   consume,
   createNavigationContext,
+  currentPlanningRow,
   currentTaskRow,
   moveTaskSelection,
   type NavigationContext,
   selectedTaskIndex,
   selectTaskAt,
 } from "../navigationContext";
-import {
-  activateSelectedWorkItem,
-} from "../workItemActivation";
 
 const FOCUSED_PANE_ACTIONS: Record<FocusedPane, ReadonlySet<string>> = {
-  projects: new Set(["projects.next", "projects.previous", "projects.activate"]),
   modules: new Set(["modules.next", "modules.previous", "modules.activate"]),
   tasks: new Set([
     "tasks.next",
     "tasks.previous",
     "tasks.activate",
-    "tasks.choose-provider",
     "tasks.expand",
     "tasks.collapse",
   ]),
@@ -100,8 +92,6 @@ export function routeFullSidebarViewFocusedPaneNavigation(
 ): boolean {
   const ctx = createNavigationContext(event, taskRows);
   switch (ctx.ui.focusedPane) {
-    case "projects":
-      return routeProjectsPane(ctx, actionId);
     case "modules":
       return routeModulesPane(ctx, actionId, selectSidebarModule);
     case "tasks":
@@ -129,7 +119,7 @@ async function cycleLiveTerminal(
   const ui = useClientStore.getState();
   const tree = getModuleTreeSnapshot(projectId, ui.selectedModuleId);
   const itemsById = Object.fromEntries(tree.order.flatMap((id) => {
-    const item = queryClient.getQueryData<WorkItem>(queryKeys.workItems.byId(id));
+    const item = getWorkItemSnapshot(id);
     return item ? [[id, item] as const] : [];
   })) as unknown as Record<string, TreeWorkItem>;
   const terminal = useTerminalStore.getState();
@@ -142,37 +132,35 @@ async function cycleLiveTerminal(
     moduleId: ui.selectedModuleId,
     taskRows,
     taskOrder: taskIds,
-    agentStatus: useAgentStatusStore.getState(),
+    agentStatus: readAgentStatusHolding(),
     sessions: terminal.sessions,
   });
   const orderedTaskIds = Array.from(new Set(
     candidateStops.map((stop) => stop.taskId),
   ));
+  let terminalOrderByTask: Record<string, readonly string[]>;
   try {
-    await Promise.all(orderedTaskIds.map(loadWorkspaceTabOrder));
+    terminalOrderByTask = Object.fromEntries(await Promise.all(
+      orderedTaskIds.map(async (taskId) => {
+        const saved = await loadWorkspaceTabOrder(taskId);
+        return [
+          taskId,
+          saved.order.flatMap((identity) =>
+            identity.kind === "terminal" ? [identity.id] : [],
+          ),
+        ] as const;
+      }),
+    ));
   } catch {
-    // A cycle with an unknown saved order can disagree with the visible strip.
-    // Stay put until every work item that contributes a stop has loaded.
+    // An unknown saved order can disagree with the visible strip. Stay put
+    // until every work item that contributes a stop has loaded.
     return;
   }
-  const terminalOrderByTask = Object.fromEntries(
-    orderedTaskIds.map((taskId) => {
-      const order = queryClient.getQueryData<WorkspaceTabOrder>(
-        queryKeys.workspaceTabs.byWorkItem(taskId),
-      )?.order ?? [];
-      return [
-        taskId,
-        order.flatMap((identity) =>
-          identity.kind === "terminal" ? [identity.id] : [],
-        ),
-      ];
-    }),
-  );
   const stops = selectLiveTerminalStops({
     moduleId: ui.selectedModuleId,
     taskRows,
     taskOrder: taskIds,
-    agentStatus: useAgentStatusStore.getState(),
+    agentStatus: readAgentStatusHolding(),
     sessions: terminal.sessions,
     terminalOrderByTask,
   });
@@ -208,30 +196,6 @@ async function cycleLiveTerminal(
     .acquire(foregroundKey(session), "studio");
   terminal.focusSession(next.sessionId);
   useClientStore.setState({ focusedPane: "details-or-terminal" });
-}
-
-function routeProjectsPane(
-  { event, tasks, ui }: NavigationContext,
-  actionId: string | null,
-): boolean {
-  const orderedIds = tasks.projects.map((project) => project.id);
-  const cursorId = resolveCursorId(ui.projectsCursorId, orderedIds);
-
-  if (actionId === "projects.next" || actionId === "projects.previous") {
-    consume(event);
-    ui.moveProjectsCursor(
-      actionId === "projects.next" ? 1 : -1,
-      orderedIds,
-    );
-    return true;
-  }
-
-  if (actionId !== "projects.activate") return false;
-
-  consume(event);
-  const project = tasks.projects.find((candidate) => candidate.id === cursorId);
-  if (project) void tasks.selectProject(project.id);
-  return true;
 }
 
 function routeModulesPane(
@@ -277,9 +241,7 @@ function routeTasksPane(
     case "tasks.previous":
       return moveTaskSelection(ctx, -1);
     case "tasks.activate":
-      return activateTask(ctx);
-    case "tasks.choose-provider":
-      return chooseTaskProvider(ctx);
+      return openAgentPicker(ctx);
     case "tasks.expand":
       return expandOrEnterTask(ctx);
     case "tasks.collapse":
@@ -289,59 +251,19 @@ function routeTasksPane(
   }
 }
 
-function activateTask(ctx: NavigationContext): boolean {
-  const row = currentTaskRow(ctx);
-  if (!row) {
-    consume(ctx.event);
-    return true;
-  }
-  const { selectedProjectId, selectedModuleId } = ctx.tasks;
-  if (
-    selectedProjectId &&
-    selectedModuleId &&
-    ctx.tasks.itemsById[row.id] &&
-    activateSelectedWorkItem(
-      {
-        projectId: selectedProjectId,
-        moduleId: selectedModuleId,
-        taskId: row.id,
-      },
-      "open-default-terminal",
-    )
-  ) {
-    consume(ctx.event);
-    return true;
-  }
-  return openAgentPicker(ctx);
-}
-
-function chooseTaskProvider(ctx: NavigationContext): boolean {
-  consume(ctx.event);
-  const row = currentTaskRow(ctx);
-  const { selectedProjectId, selectedModuleId } = ctx.tasks;
-  if (
-    row &&
-    selectedProjectId &&
-    selectedModuleId &&
-    ctx.tasks.itemsById[row.id]
-  ) {
-    activateSelectedWorkItem(
-      {
-        projectId: selectedProjectId,
-        moduleId: selectedModuleId,
-        taskId: row.id,
-      },
-      "choose-provider",
-    );
-  }
-  return true;
-}
-
 function openAgentPicker(ctx: NavigationContext): boolean {
   consume(ctx.event);
-  const selected = selectedTaskIndex(ctx.taskRows, ctx.tasks.selectedTaskId);
+  const selected = selectedTaskIndex(
+    ctx.taskRows,
+    ctx.tasks.selectedPlanningRowId,
+  );
   const row = ctx.taskRows[selected];
-  if (!row || row.kind !== "work-item") return true;
+  if (!row) return true;
+  if (row.kind === "scratch") {
+    startInstantChangeFlow();
+    return true;
+  }
+  if (row.kind !== "work-item") return true;
 
   const { selectedProjectId, selectedModuleId } = ctx.tasks;
   if (!selectedProjectId || !selectedModuleId) return true;
@@ -353,14 +275,34 @@ function openAgentPicker(ctx: NavigationContext): boolean {
     taskId: row.id,
   };
 
-  useModalStore.getState().pushModal({
-    type: "agent-picker",
-    payload: { mode: "open", ...launchContext },
-  });
+  if (ctx.event.shiftKey) {
+    useModalStore.getState().pushModal({
+      type: "prompt-input",
+      payload: {
+        next: "agent-picker",
+        nextPayload: { mode: "open-with-prompt", ...launchContext },
+      },
+    });
+  } else {
+    useModalStore.getState().pushModal({
+      type: "agent-picker",
+      payload: { mode: "open", ...launchContext },
+    });
+  }
   return true;
 }
 
 function expandOrEnterTask(ctx: NavigationContext): boolean {
+  const planningRow = currentPlanningRow(ctx);
+  if (planningRow?.kind === "instant-run") {
+    // Up/Down only selected the conversation; Right enters its terminal.
+    consume(ctx.event);
+    const sessionId = useTerminalStore.getState().sessionByRun[planningRow.runId];
+    if (!sessionId) return true;
+    useTerminalStore.getState().focusSession(sessionId);
+    ctx.ui.setFocusedPane("details-or-terminal");
+    return true;
+  }
   const row = currentTaskRow(ctx);
   if (!row) return false;
 
@@ -372,7 +314,10 @@ function expandOrEnterTask(ctx: NavigationContext): boolean {
   }
   if (row.expandable && row.expanded) {
     consume(ctx.event);
-    const selected = selectedTaskIndex(ctx.taskRows, ctx.tasks.selectedTaskId);
+    const selected = selectedTaskIndex(
+      ctx.taskRows,
+      ctx.tasks.selectedPlanningRowId,
+    );
     selectTaskAt(ctx.taskRows, selected + 1);
     return true;
   }

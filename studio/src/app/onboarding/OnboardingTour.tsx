@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
-import { apiErrorMessage } from "../../shared/api/client";
+import { openStoryWorkflowGuide } from "../modal/openStoryWorkflowGuide";
+import { apiErrorMessage } from "../../shared/api/errors";
+import { useClientStore } from "../../state/clientStore";
 import { useModalStore } from "../modal/modalStore";
 import CoachMark from "./CoachMark";
+import { StoryHandoffGuidance } from "./StoryHandoffGuidance";
 import { acknowledgeOnboarding } from "./onboardingStore";
 import { useOnboardingTourStore } from "./onboardingTourStore";
 
@@ -15,7 +18,12 @@ const buttonClass =
 export default function OnboardingTour({ onSelectStory }: Props) {
   const step = useOnboardingTourStore((state) => state.step);
   const storyId = useOnboardingTourStore((state) => state.storyId);
+  const projectId = useOnboardingTourStore((state) => state.projectId);
   const reset = useOnboardingTourStore((state) => state.reset);
+  const selectedTaskId = useClientStore((state) => state.selectedTaskId);
+  const guideOpen = useModalStore(
+    (state) => state.modalStack.at(-1)?.type === "story-workflow-guide",
+  );
   const addModuleOpen = useModalStore(
     (state) => state.modalStack.at(-1)?.type === "add-module",
   );
@@ -36,11 +44,13 @@ export default function OnboardingTour({ onSelectStory }: Props) {
   if (step === "inactive") return null;
 
   const dismiss = async () => {
-    if (busy) return;
+    if (busy || !projectId) return;
     setBusy(true);
     setError(null);
     try {
-      await acknowledgeOnboarding();
+      // The tour was started for one project, so its acknowledgement is bound
+      // to that project rather than to whichever one resolves first later.
+      await acknowledgeOnboarding(projectId);
       reset();
     } catch (cause) {
       setError(apiErrorMessage(cause));
@@ -125,7 +135,7 @@ export default function OnboardingTour({ onSelectStory }: Props) {
       <CoachMark
         anchor="story-add"
         title="Create your first story"
-        description="Type into the real idea field and press Enter. This is where you will capture Stories every day."
+        description="A Story describes a change you want to make and why it matters. For example: Add a search box so people can find saved notes. Type into the real idea field and press Enter. This is where you will capture Stories every day."
         focusDialog={false}
       >
         {errorNode}
@@ -134,20 +144,38 @@ export default function OnboardingTour({ onSelectStory }: Props) {
     );
   }
 
+  if (guideOpen) return null;
+
   return (
     <CoachMark
       anchor="workspace"
+      portal
       title="Your first story is ready"
-      description="The story is selected in the normal backlog workspace."
+      description="The Story is selected in your workspace. You can continue working on it here."
     >
-      <button
-        data-testid="onboarding-finish"
-        className={buttonClass}
-        disabled={busy}
-        onClick={() => void dismiss()}
-      >
-        {busy ? "Finishing…" : "Finish tour"}
-      </button>
+      {storyId && <StoryHandoffGuidance storyId={storyId} />}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          data-testid="onboarding-story-workflow-guide"
+          className="border border-pane-border px-3 py-1.5 text-sm font-semibold text-text-primary hover:bg-pane-title"
+          onClick={() => {
+            if (!storyId || busy || useModalStore.getState().modalStack.length) return;
+            if (selectedTaskId !== storyId) onSelectStory(storyId);
+            openStoryWorkflowGuide(storyId, "handoff");
+          }}
+        >
+          Story workflow guide
+        </button>
+        <button
+          data-testid="onboarding-finish"
+          className={buttonClass}
+          disabled={busy}
+          onClick={() => void dismiss()}
+        >
+          {busy ? "Finishing…" : "Finish tour"}
+        </button>
+      </div>
       {errorNode}
     </CoachMark>
   );

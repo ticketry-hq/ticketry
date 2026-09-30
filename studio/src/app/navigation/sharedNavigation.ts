@@ -21,34 +21,50 @@ import {
   type NavigationContext,
 } from "./navigationContext";
 import { getVisibleModulesSnapshot } from "../../features/module-tabs";
-import { useStudioStore } from "../../features/projects/store";
+import { useStudioStore } from "../../features/projects";
 import { useClientStore } from "../../state/clientStore";
-import { startRunNowForSelectedItem } from "../../features/work-items";
+import { openConversationComposer } from "../../features/conversations";
+import {
+  startNormalRunForSelectedItem,
+  startRunNowForSelectedItem,
+} from "../../features/work-items";
 
 const MODULE_POSITION_ACTION_PREFIX = "modules.select-position-";
+const MODULE_POSITIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
+
+export type ModulePosition = (typeof MODULE_POSITIONS)[number];
+export type ModulePositionActionId =
+  `modules.select-position-${ModulePosition}`;
+
+export function isModulePosition(position: number): position is ModulePosition {
+  return MODULE_POSITIONS.some((candidate) => candidate === position);
+}
+
+export function modulePositionActionId(
+  position: ModulePosition,
+): ModulePositionActionId {
+  return `${MODULE_POSITION_ACTION_PREFIX}${position}`;
+}
 
 /**
  * Routes application-level module selection before focused controls can claim
  * the event. Returns true only when a different, present module was selected.
  */
 export function routeModulePositionNavigation(
-  event: KeyboardEvent,
+  event: Pick<KeyboardEvent, "preventDefault"> | null,
   actionId: string | null,
 ): boolean {
   if (!actionId?.startsWith(MODULE_POSITION_ACTION_PREFIX)) return false;
 
   const position = Number(actionId.slice(MODULE_POSITION_ACTION_PREFIX.length));
-  if (!Number.isInteger(position) || position < 1 || position > 10) return false;
+  if (!isModulePosition(position)) return false;
 
   const selected = selectModuleAtPosition(position);
-  if (selected) event.preventDefault();
+  if (selected) event?.preventDefault();
   return selected;
 }
 
-/** Selects the module tab at a one-based position for keyboard entry points. */
-export function selectModuleAtPosition(position: number): boolean {
-  if (!Number.isInteger(position) || position < 1 || position > 10) return false;
-
+function selectModuleAtPosition(position: ModulePosition): boolean {
   const projectId = useStudioStore.getState().selectedProjectId;
   const ui = useClientStore.getState();
   const module = getVisibleModulesSnapshot(projectId)[position - 1];
@@ -87,11 +103,13 @@ export function routeSharedNavigation(
       event.preventDefault();
       return;
     case "open-agent":
-    case "open-agent-command":
       if (ctx.tasks.selectedTaskId) {
         startOpenFlow();
         event.preventDefault();
       }
+      return;
+    case "normal-run-command":
+      if (startNormalRunForSelectedItem()) event.preventDefault();
       return;
     case "plan":
       if (ctx.tasks.selectedModuleId) {
@@ -102,6 +120,12 @@ export function routeSharedNavigation(
     case "instant-change":
       if (ctx.tasks.selectedModuleId) {
         startInstantChangeFlow();
+        event.preventDefault();
+      }
+      return;
+    case "instant-change-with-prompt":
+      if (ctx.tasks.selectedModuleId) {
+        openConversationComposer();
         event.preventDefault();
       }
       return;

@@ -1,18 +1,20 @@
 import { useCallback, useEffect } from "react";
-import {
-  startStallDeadlines,
-  stopStallDeadlines,
-} from "../../features/agents/status";
-import { statusFeed } from "../../features/agents/status/statusFeed";
-import { useStudioStore } from "../../features/projects/store";
+import { useStudioStore } from "../../features/projects";
 import { useClientStore } from "../../state/clientStore";
 import OnboardingTour from "../onboarding/OnboardingTour";
 import { useGlobalKeymap } from "../navigation/useGlobalKeymap";
+import { startAgentStatusServices } from "../startup/startAgentStatusServices";
 import { StudioFooter } from "./StudioFooter";
 import { StudioLayout } from "./StudioLayout";
-import { useStoriesTree } from "./ticket-workspace/tasks/useStoriesTree";
+import { StoriesTreeProvider, useStoriesTree } from "../../features/work-items";
+import { statusStreamTransport } from "../../runtime";
+import { ProjectRunTerminalTabBridge } from "./ProjectRunTerminalTabBridge";
 
 export function StudioShell() {
+  return <StoriesTreeProvider><StudioShellContent /></StoriesTreeProvider>;
+}
+
+function StudioShellContent() {
   const { rows } = useStoriesTree();
   const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
   const selectTask = useClientStore((state) => state.selectTask);
@@ -25,19 +27,16 @@ export function StudioShell() {
 
   useEffect(() => {
     if (!selectedProjectId) return;
-    statusFeed.start(selectedProjectId);
-    // The unchanged-output deadline lives with the status holding the feed
-    // writes into, so a connected UI reaches Stalled at the boundary without
-    // waiting for another server message.
-    startStallDeadlines();
-    return () => {
-      statusFeed.stop();
-      stopStallDeadlines();
-    };
+    // The durable GraphQL subscription is the only status authority. Desktop
+    // uses Tauri IPC; browser development streams it from the Rust adapter.
+    const createProxy = statusStreamTransport();
+    if (!createProxy) return;
+    return startAgentStatusServices(selectedProjectId, createProxy);
   }, [selectedProjectId]);
 
   return (
     <div className="flex h-full w-full flex-col">
+      <ProjectRunTerminalTabBridge />
       <div className="min-h-0 flex-1">
         <StudioLayout />
       </div>

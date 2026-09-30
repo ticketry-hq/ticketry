@@ -2,15 +2,14 @@ import { useMemo, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
 import { useModulesQuery } from "../../projects";
-import { useStudioStore } from "../../projects/store";
+import { useStudioStore } from "../../projects";
 import { useClientStore } from "../../../state/clientStore";
-import { useModuleTree } from "../../work-items/queries";
 import {
   useSetWorkItemParent,
   useWorkItem,
-  useWorkItemsByIds,
+  useModuleItems,
 } from "../../work-items";
-import { apiErrorMessage } from "../../../shared/api/client";
+import { apiErrorMessage } from "../../../shared/api/errors";
 import { toast } from "../../../state/clientStore";
 import { TEMP_TASK_ID } from "../../agents/types";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
@@ -37,8 +36,7 @@ export function ParentUpdate({ payload }: { payload?: ParentUpdatePayload }) {
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
   const selectedTaskId = useClientStore((s) => s.selectedTaskId);
-  const membership = useModuleTree(selectedProjectId, selectedModuleId);
-  const tasks = useWorkItemsByIds(membership.order);
+  const tasks = useModuleItems(selectedModuleId);
   const modules = useModulesQuery(selectedProjectId).data ?? [];
   const { data: selectedTask } = useWorkItem(
     selectedTaskId && selectedTaskId !== TEMP_TASK_ID ? selectedTaskId : null,
@@ -88,7 +86,11 @@ export function ParentUpdate({ payload }: { payload?: ParentUpdatePayload }) {
     }
     setBusy(true);
     try {
-      await setParent.mutateAsync({ id: selectedTaskId, parentId: chosen.id });
+      await setParent.mutateAsync({
+        id: selectedTaskId,
+        parentId: chosen.id,
+        moduleId: mode === "epic" ? chosen.id : selectedModuleId ?? undefined,
+      });
       popModal();
     } catch (error) {
       toast.error(apiErrorMessage(error));

@@ -14,36 +14,15 @@ native-static build patch, and writes the generated header and static
 library to `studio/src-tauri/vendor/libghostty/` (see the README in that
 directory). Generated artifacts are not committed.
 
-Ghostty is distributed under the following license:
-
-```text
-MIT License
-
-Copyright (c) 2024 Mitchell Hashimoto, Ghostty contributors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+Ghostty (https://github.com/ghostty-org/ghostty) is distributed under the
+MIT License, Copyright (c) Mitchell Hashimoto. Refer to the `LICENSE` file
+in the Ghostty repository at the pinned revision for the authoritative
+license text.
 
 ## Vendored agent skills (Matt Pocock)
 
 The agent skill definitions vendored under
-`backend/apps/terminals/agents/skills/` are derived from upstream work by
+`studio/src-tauri/resources/launch/` are derived from upstream work by
 Matt Pocock and are distributed under the MIT License,
 Copyright (c) 2026 Matt Pocock. The full upstream license text is included
-at [`backend/apps/terminals/agents/skills/UPSTREAM_LICENSE`](backend/apps/terminals/agents/skills/UPSTREAM_LICENSE).
+at [`studio/src-tauri/resources/launch/UPSTREAM_LICENSE`](studio/src-tauri/resources/launch/UPSTREAM_LICENSE).

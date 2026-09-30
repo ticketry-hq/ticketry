@@ -1,37 +1,59 @@
-import { WorkspaceTabIdentityKindEnum as ApiWorkspaceTabIdentityKind } from "@worktracker/typescript-sdk";
-import type { WorkspaceTabOrder as ApiWorkspaceTabOrder } from "../../shared/api/types";
-
 export type WorkspaceTabIdentity =
   | { kind: "details" }
+  | { kind: "changes" }
   | { kind: "doc"; id: string }
   | { kind: "terminal"; id: string };
 
 export interface WorkspaceTabOrder {
-  order: WorkspaceTabIdentity[];
+  readonly order: readonly WorkspaceTabIdentity[];
 }
 
-export function workspaceTabOrderToApi(
-  value: WorkspaceTabOrder,
-): ApiWorkspaceTabOrder {
-  return {
-    order: value.order.map((identity) => ({
-      ...identity,
-      kind: ApiWorkspaceTabIdentityKind[identity.kind],
-    })),
-  };
+function parseIdentity(value: unknown): WorkspaceTabIdentity | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as { kind?: unknown; id?: unknown };
+  if (candidate.kind === "details") {
+    return candidate.id === undefined ? { kind: "details" } : null;
+  }
+  if (
+    (candidate.kind === "doc" || candidate.kind === "terminal") &&
+    typeof candidate.id === "string" &&
+    candidate.id.length > 0
+  ) {
+    return { kind: candidate.kind, id: candidate.id };
+  }
+  return null;
 }
 
-/** Narrow the generated transport shape to Studio's discriminated identity. */
-export function workspaceTabOrderFromApi(
-  value: ApiWorkspaceTabOrder,
-): WorkspaceTabOrder {
+/** Narrow the generated JSON scalar to the server's validated identity list. */
+export function workspaceTabOrderFromJson(value: unknown): WorkspaceTabOrder {
+  if (!Array.isArray(value)) return { order: [] };
   const order: WorkspaceTabIdentity[] = [];
-  for (const identity of value.order) {
-    if (identity.kind === "details") {
-      order.push({ kind: "details" });
-    } else if (identity.id) {
-      order.push({ kind: identity.kind, id: identity.id });
+  const keys = new Set<string>();
+  for (const valueIdentity of value) {
+    if (
+      valueIdentity &&
+      typeof valueIdentity === "object" &&
+      !Array.isArray(valueIdentity) &&
+      (valueIdentity as Record<string, unknown>).kind === "changes" &&
+      !("id" in valueIdentity)
+    ) {
+      continue;
     }
+    const identity = parseIdentity(valueIdentity);
+    if (!identity) return { order: [] };
+    const key = identity.kind === "details" || identity.kind === "changes"
+      ? identity.kind
+      : `${identity.kind}:${identity.id}`;
+    if (keys.has(key)) return { order: [] };
+    keys.add(key);
+    order.push(identity);
   }
   return { order };
+}
+
+/** Strip identities retired from the durable workspace-tab contract. */
+export function workspaceTabOrderForPersistence(
+  order: readonly WorkspaceTabIdentity[],
+): WorkspaceTabIdentity[] {
+  return order.filter((identity) => identity.kind !== "changes");
 }

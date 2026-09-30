@@ -37,7 +37,7 @@ typedef enum {
   MUXED_GHOSTTY_CHORD_PANEL_TOGGLE = 1,
   // The global Settings chord (Cmd+E).
   MUXED_GHOSTTY_CHORD_SETTINGS = 2,
-  // Module-position chords (Cmd+1 through Cmd+9, then Cmd+0).
+  // Module-position chords (Cmd+1 through Cmd+9, then Cmd+Shift+0).
   MUXED_GHOSTTY_CHORD_MODULE_POSITION_1 = 3,
   MUXED_GHOSTTY_CHORD_MODULE_POSITION_2 = 4,
   MUXED_GHOSTTY_CHORD_MODULE_POSITION_3 = 5,
@@ -48,9 +48,11 @@ typedef enum {
   MUXED_GHOSTTY_CHORD_MODULE_POSITION_8 = 10,
   MUXED_GHOSTTY_CHORD_MODULE_POSITION_9 = 11,
   MUXED_GHOSTTY_CHORD_MODULE_POSITION_10 = 12,
-  // The edit-view body disengage chord (Cmd+Escape). The view hands the
-  // keyboard back for this one too, so Studio's engaged state can follow it.
+  // The edit-view body disengage chord (Cmd+Escape).
   MUXED_GHOSTTY_CHORD_BODY_DISENGAGE = 13,
+  MUXED_GHOSTTY_CHORD_ZOOM_IN = 14,
+  MUXED_GHOSTTY_CHORD_ZOOM_OUT = 15,
+  MUXED_GHOSTTY_CHORD_ZOOM_RESET = 16,
 } muxed_ghostty_chord_e;
 
 // Reported when the hosted view recognises a Studio chord instead of
@@ -66,6 +68,8 @@ bool muxed_ghostty_host_is_main_thread(void);
 void *muxed_ghostty_runtime_new(void);
 void muxed_ghostty_runtime_free(void *runtime);
 
+// View values are opaque, non-reused handles, never NSView pointers. Detached
+// handles are rejected by every command, including commands already queued.
 void *muxed_ghostty_view_new(void *runtime, void *parent_view,
                              const char *command,
                              muxed_ghostty_process_exit_cb process_exit_callback,
@@ -78,14 +82,20 @@ muxed_ghostty_view_set_frame(void *view, double x, double y, double width,
 uint64_t muxed_ghostty_view_arm_redraw(void *view);
 bool muxed_ghostty_view_wait_for_redraw(void *view, uint64_t generation,
                                         uint32_t timeout_milliseconds);
-void muxed_ghostty_view_present(void *view);
+bool muxed_ghostty_view_present(void *view);
 void muxed_ghostty_view_hide(void *view);
 muxed_ghostty_grid_size_s
 muxed_ghostty_view_show(void *view, double x, double y, double width,
                        double height, double viewport_width,
                        double viewport_height);
 bool muxed_ghostty_view_is_focused(void *view);
+bool muxed_ghostty_view_is_hidden(void *view);
+bool muxed_ghostty_view_accepts_input(void *view);
 void muxed_ghostty_view_focus(void *view);
+// Dynamic sibling ordering is the CODING-1391 fallback. WebKit stays above
+// while a DOM overlay owns input; otherwise Ghostty is raised for native input.
+bool muxed_ghostty_view_set_webview_interaction(void *view,
+                                                bool webview_owns_input);
 
 // Normalization policy shared with the browser Terminal viewer: pixel deltas
 // are divided by one line's worth of scrolling, line deltas count directly,

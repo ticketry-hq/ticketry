@@ -1,0 +1,3 @@
+query InstantRunTicketTitle($agentRunId: String!) {
+  title: instant_run_ticket_title(agent_run_id: $agentRunId)
+}

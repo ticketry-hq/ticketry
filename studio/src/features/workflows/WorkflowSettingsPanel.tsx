@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useStudioStore } from "../projects/store";
+import { useStudioStore } from "../projects";
 import { IssueTypesSection } from "./IssueTypesSection";
 import { StateCatalog } from "./StateCatalog";
 import { useWorkflowEditorStore } from "./workflowEditorStore";

@@ -1,18 +1,38 @@
 // A refused launch has to say *why* it was refused. The control plane answers
-// with a stable policy code (`POST /api/terminals` → `{detail:{error}}`, or the
-// terminal socket's error frame); without this translation the surface shows
-// `HTTP 400`, which reads as "something broke" for what is really a
-// configuration decision the user can act on.
+// with a stable policy code on the terminal create mutation; without this
+// translation the surface shows `HTTP 400`, which reads as "something broke"
+// for what is really a configuration decision the user can act on.
 
 /** Codes worth a sentence. Anything else keeps its raw code. */
 const LAUNCH_FAILURE_REASONS: Record<string, string> = {
+  no_profile_selected: "Select a Studio launch profile before trying again.",
+  // Terminal bytes come from the Rust tmux adapter over Tauri; browser-only
+  // development has no channel to carry them.
+  terminal_requires_desktop:
+    "Terminals are available only in desktop Studio.",
   // ADR-0015: a binding naming a deactivated provider is blocked, never
   // silently substituted, so the message names the specific cause and fix.
   provider_not_activated:
     "Launch blocked: this launch configuration names a provider that is "
     + "deactivated. Activate it in Settings → Model configuration, or point "
     + "the configuration at an activated provider.",
+  // Replacing a live agent refused at the end-previous-agents step; both the
+  // interactive launch and Run Now paths surface this code bare.
+  previous_agent_not_ended:
+    "The previous agent could not be ended. Close its terminal session, then "
+    + "try again.",
 };
+
+const ZERO_PROVIDER_GUIDANCE =
+  "To run agent work, activate a provider in Settings > Model configuration. "
+  + "You can keep planning without one.";
+
+function isZeroProviderRefusal(value: unknown): boolean {
+  return typeof value === "string" && (
+    (value === "no_activated_providers" || value.startsWith("no_activated_providers:")) ||
+    /^No activated providers\b/i.test(value)
+  );
+}
 
 /** Translate one control-plane launch code into what the user should read. */
 export function launchFailureReason(code: string): string {
@@ -75,9 +95,20 @@ export function launchFailureMessage(error: unknown): string {
     return `Required skill '${requiredSkill.skill}' is unavailable for ${requiredSkill.provider} (${requiredSkill.reason}): ${requiredSkill.detail} Next action: ${requiredSkill.remediation}`;
   }
   const { code, message } = errorDetailFrom(body);
+  const detail = body && typeof body === "object"
+    ? (body as { detail?: unknown }).detail
+    : null;
+  if (
+    isZeroProviderRefusal(error) ||
+    isZeroProviderRefusal(code) ||
+    isZeroProviderRefusal(message) ||
+    isZeroProviderRefusal(detail) ||
+    isZeroProviderRefusal(error instanceof Error ? error.message : null)
+  ) return ZERO_PROVIDER_GUIDANCE;
   if (code === "launch_unavailable" && message) {
     return `Launch unavailable: ${message}`;
   }
   if (code) return launchFailureReason(code);
+  if (typeof error === "string") return launchFailureReason(error);
   return error instanceof Error ? error.message : "launch_failed";
 }

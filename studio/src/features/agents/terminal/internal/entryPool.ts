@@ -7,10 +7,24 @@ import { ackTerminal } from "./actions";
 import type { TerminalClient } from "./terminalClient";
 import { terminalClientTransport } from "./terminalClientRuntime";
 import { launchFailureReason } from "./launchFailure";
+import {
+  recordTerminalPoolDisposal,
+  recordTerminalViewerEvent,
+} from "./terminalViewerDiagnostics";
+// CODING-1304 — the compatibility renderer records the same counters as the
+// experiment so the comparison matrix has a like-for-like xterm column.
+import {
+  measurePaint,
+  publishRendererMeasurements,
+  recordAttachStart,
+  recordBytes,
+  recordFirstPaint,
+} from "./rendererMeasurement";
+import { readAgentStatusHolding, selectRunState } from "../../status";
 
 // CODIN-749 — shared terminal entry pool.
 //
-// The xterm/WebSocket *object lifecycle* extracted out of TerminalHost's former
+// The xterm/transport object lifecycle extracted out of TerminalHost's former
 // component-local `entriesRef`. A module-level singleton so the Terminal/WS
 // pair for a session exists exactly once, independent of how many surfaces
 // (workspace and drawer hosts) reference it. This is the
@@ -35,13 +49,13 @@ export interface SessionEntry {
 }
 
 // How long a session may sit with no surface presenting it before its
-// WebSocket is suspended. Long enough to absorb ownership transfers between
-// surfaces and quick tab flips; the single knob for the suspend policy.
+// viewer transport is suspended. Long enough to absorb ownership transfers
+// between surfaces and quick tab flips; the single knob for the suspend policy.
 export const SUSPEND_GRACE_MS = 30_000;
 
 const XTERM_OPTIONS = {
   fontFamily: "JetBrains Mono, Fira Code, ui-monospace, monospace",
-  fontSize: 13,
+  fontSize: 14,
   cursorBlink: true,
   convertEol: false,
   theme: {
@@ -144,6 +158,11 @@ export function syncEntries(sessions: Record<string, SessionMeta>): void {
     const entry = entries.get(id);
     entries.delete(id);
     if (entry) {
+      recordTerminalPoolDisposal({
+        sessionId: id,
+        agentRunId: entry.agentRunId,
+        reason: "store_session_removed",
+      });
       if (entry.suspendTimer) {
         clearTimeout(entry.suspendTimer);
         entry.suspendTimer = null;
@@ -168,6 +187,11 @@ export function getEntry(sessionId: string): SessionEntry | undefined {
 export function releasePooledTransport(sessionId: string): void {
   const entry = entries.get(sessionId);
   if (!entry?.ws) return;
+  recordTerminalPoolDisposal({
+    sessionId,
+    agentRunId: entry.agentRunId,
+    reason: "native_viewer_takeover",
+  });
   try {
     entry.ws.detach();
   } catch {
@@ -176,10 +200,10 @@ export function releasePooledTransport(sessionId: string): void {
   entry.ws = null;
 }
 
-// Open the WebSocket for a session that is `connecting`, or reattach a `ready`
-// durable session whose pooled handle disappeared with the last terminal host.
+// Open the viewer transport for a session that is `connecting`, or reattach a
+// `ready` durable session whose pooled handle disappeared with the last terminal host.
 // Idempotent: a second call while a handle exists is a no-op — this is what
-// makes a second WS viewer for the same live run impossible.
+// makes a second viewer for the same live run impossible.
 //
 // The caller must have seeded `entry.lastCols/lastRows` from a fit before this
 // runs so the PTY is born at the visible geometry.
@@ -209,6 +233,10 @@ export function ensureConnected(sessionId: string, meta: SessionMeta): void {
   // gone session from a transient transport failure (CODIN-799/800).
 
   let firstReady = true;
+  let firstPaintPending = true;
+  const measuredRunId = entry.agentRunId;
+  publishRendererMeasurements();
+  recordAttachStart("xterm", measuredRunId);
   const handle = terminalClientTransport.attach(
     {
       agentRunId: entry.agentRunId,
@@ -216,10 +244,18 @@ export function ensureConnected(sessionId: string, meta: SessionMeta): void {
       rows,
     },
     (event) => {
+      recordTerminalViewerEvent({
+        sessionId: liveId,
+        agentRunId: entry.agentRunId,
+        currentStatus: store().sessions[liveId]?.status ?? null,
+        event,
+      });
       if (event.type === "ready") {
         if (firstReady) {
           firstReady = false;
-          const serverId = event.sessionId;
+          // A replacement viewer has a new handle, not a new terminal tab.
+          // Only the first attachment of a connecting launch rekeys its id.
+          const serverId = canAttachReadySession ? tempId : event.sessionId;
           const runId = event.agentRunId;
         // Rekey the entry under the server id so subsequent lookups work. The
         // matching registry rekey (tmp -> agentRunId) happens centrally in
@@ -247,7 +283,20 @@ export function ensureConnected(sessionId: string, meta: SessionMeta): void {
         return;
       }
       if (event.type === "output") {
-        entry.term.write(event.bytes);
+        recordBytes("xterm", measuredRunId, event.bytes.length);
+        // xterm renders its own buffer asynchronously, so this measures the
+        // parse-and-enqueue cost, not the frame. The matrix must read it that
+        // way when comparing against a renderer that owns its paint.
+        measurePaint("xterm", measuredRunId, () => entry.term.write(event.bytes));
+        if (firstPaintPending) {
+          firstPaintPending = false;
+          recordFirstPaint("xterm", measuredRunId);
+        }
+        return;
+      }
+      if (event.type === "resumed") {
+        firstPaintPending = true;
+        recordAttachStart("xterm", measuredRunId, "warm");
         return;
       }
       if (event.type === "connecting" && !firstReady && event.attempt > 0) {
@@ -273,8 +322,16 @@ export function ensureConnected(sessionId: string, meta: SessionMeta): void {
         event.type === "reattachment_required" &&
         event.reason === "session_not_found"
       ) {
-        entry.term.write("\r\n[session lost]\r\n");
-        store().setSessionLost(liveId);
+        const runState = entry.agentRunId
+          ? selectRunState(readAgentStatusHolding(), entry.agentRunId)
+          : null;
+        if (runState === "exited") {
+          entry.term.write("\r\n[session ended]\r\n");
+          store().setExited(liveId);
+        } else {
+          entry.term.write("\r\n[session lost]\r\n");
+          store().setSessionLost(liveId);
+        }
         return;
       }
       if (event.type === "reattachment_required") {
@@ -389,9 +446,4 @@ export function disposeAll(): void {
     entry.term.dispose();
   }
   entries.clear();
-}
-
-// Test-only: the live entry count, for asserting create-once / dispose.
-export function _entryCount(): number {
-  return entries.size;
 }

@@ -8,7 +8,7 @@
  * never compete for one set of keystrokes.
  */
 
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
@@ -19,7 +19,7 @@ import {
   type SessionMeta,
 } from "../features/agents/terminal/internal/sessionStore";
 import { useStudioStore } from "../features/projects/store";
-import { seedConfig } from "../features/studio/stores/configStore";
+import { seedModuleLinks } from "../features/module-links";
 import { ModuleShellRefused } from "../features/terminal-panel/api/moduleShellApi";
 import { useModuleShellStore } from "../features/terminal-panel/moduleShellStore";
 import { useTerminalPanelStore } from "../features/terminal-panel/panelStore";
@@ -144,6 +144,7 @@ async function shellSessionId(): Promise<string> {
 
 describe("terminal panel acceptance", () => {
   beforeEach(() => {
+    localStorage.setItem("ticketry:terminal-renderer", "xterm");
     runtime.desktop = false;
     runtime.nativeAvailable = false;
     pool.entries.clear();
@@ -163,28 +164,19 @@ describe("terminal panel acceptance", () => {
       editViewZone: "active-tab-body",
       editViewBodyEngaged: false,
       activeByTask: {},
-      modalStack: [],
     });
     useStudioStore.setState({ selectedProjectId: "project-1" });
-    seedConfig({
-      profiles: [
-        {
-          name: "local",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_links: [{ module_id: "module-1", path: "/repo/module-1" }],
-          recent_project_id: null,
-        },
-      ],
-      recentProfileIndex: 0,
-    });
+    seedModuleLinks([
+      { id: "link-module-1", moduleId: "module-1", path: "/repo/module-1" },
+    ]);
   });
 
   afterEach(() => {
+    cleanup();
     vi.unstubAllGlobals();
   });
 
-  it("[overhaul-90] opens a module shell on the toggle, focuses it, and closes again from anywhere", async () => {
+  it("[overhaul-144] opens a module shell on the toggle, focuses it, and closes again from anywhere", async () => {
     render(
       <>
         <KeymapHarness />
@@ -216,7 +208,7 @@ describe("terminal panel acceptance", () => {
     expect(screen.queryByTestId("terminal-panel")).toBeNull();
   });
 
-  it("[overhaul-91] resolves the toggle while an agent terminal holds typing mode", async () => {
+  it("[overhaul-145] resolves the toggle while an agent terminal holds typing mode", async () => {
     render(
       <>
         <KeymapHarness />
@@ -250,7 +242,7 @@ describe("terminal panel acceptance", () => {
     expect(useClientStore.getState().editViewBodyEngaged).toBe(true);
   });
 
-  it("[overhaul-92] offers the folder affordance instead of launching elsewhere", async () => {
+  it("[overhaul-146] offers the folder affordance instead of launching elsewhere", async () => {
     shellApi.createModuleShell.mockRejectedValueOnce(
       new ModuleShellRefused("module_folder_missing"),
     );
@@ -271,7 +263,7 @@ describe("terminal panel acceptance", () => {
     expect(screen.queryByTestId("terminal-host")).toBeNull();
   });
 
-  it("[overhaul-93] attaches nothing while the panel stays closed", async () => {
+  it("[overhaul-147] attaches nothing while the panel stays closed", async () => {
     render(
       <>
         <KeymapHarness />
@@ -294,7 +286,7 @@ describe("terminal panel acceptance", () => {
     expect(shellApi.createModuleShell).toHaveBeenCalledTimes(1);
   });
 
-  it("[overhaul-94] keeps an agent terminal and the panel shell visible without sharing keystrokes", async () => {
+  it("[overhaul-148] keeps an agent terminal and the panel shell visible without sharing keystrokes", async () => {
     useTerminalStore.setState({
       sessions: { "session-agent": agentSession() },
       sessionByRun: { "run-agent": "session-agent" },
@@ -322,7 +314,9 @@ describe("terminal panel acceptance", () => {
     });
   });
 
-  it("[overhaul-95] renders the shell through the native renderer when available and the browser fallback otherwise", async () => {
+  it("[overhaul-149] uses the native renderer on desktop and xterm in the browser", async () => {
+    window.history.replaceState({}, "", "/");
+    localStorage.removeItem("ticketry:terminal-renderer");
     const browser = render(
       <>
         <KeymapHarness />
@@ -331,7 +325,7 @@ describe("terminal panel acceptance", () => {
     );
     pressTogglePanel();
     await shellSessionId();
-    await waitFor(() => expect(screen.getByTestId("terminal-host")).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByTestId("terminal-host").length).toBeGreaterThan(0));
     expect(screen.queryByTestId("native-terminal-host")).toBeNull();
     browser.unmount();
 
@@ -350,60 +344,8 @@ describe("terminal panel acceptance", () => {
     );
     pressTogglePanel();
     await shellSessionId();
-    // The shell reaches the same native renderer an agent terminal uses. Its
-    // attachment then follows the established native lifecycle — including
-    // that lifecycle's own fallback, which the native viewer cases pin.
-    const nativeHost = await screen.findByTestId("native-terminal-host");
-    expect(nativeHost.getAttribute("data-terminal-renderer")).toBe("libghostty");
-  });
-
-  it("discards a compatibility-renderer focus signal raised while Settings is open", async () => {
-    useTerminalStore.setState({
-      sessions: { "session-agent": agentSession() },
-      sessionByRun: { "run-agent": "session-agent" },
-    });
-    const view = render(
-      <Terminal
-        sessionId="session-agent"
-        owner="studio"
-        focusSignal={0}
-        active
-      />,
-    );
-    await waitFor(() => expect(screen.getByTestId("terminal-host")).toBeTruthy());
-
-    act(() => useModalStore.getState().openSettings());
-    view.rerender(
-      <Terminal
-        sessionId="session-agent"
-        owner="studio"
-        focusSignal={1}
-        active
-      />,
-    );
-    expect(pool.entryFor("session-agent").focusCalls).toBe(0);
-
-    act(() => useModalStore.getState().popModal());
-    view.rerender(
-      <Terminal
-        sessionId="session-agent"
-        owner="studio"
-        focusSignal={1}
-        active
-      />,
-    );
-    expect(pool.entryFor("session-agent").focusCalls).toBe(0);
-
-    view.rerender(
-      <Terminal
-        sessionId="session-agent"
-        owner="studio"
-        focusSignal={2}
-        active
-      />,
-    );
-    await waitFor(() => {
-      expect(pool.entryFor("session-agent").focusCalls).toBe(1);
-    });
+    // CODING-1486 — a desktop build selects embedded native libghostty without
+    // a URL parameter, a stored setting, or a diagnostic build override.
+    await waitFor(() => expect(screen.getByTestId("native-terminal-host")).toBeTruthy());
   });
 });

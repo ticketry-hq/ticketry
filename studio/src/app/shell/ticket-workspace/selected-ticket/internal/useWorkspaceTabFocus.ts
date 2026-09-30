@@ -9,6 +9,7 @@ import type { SessionMeta } from "../../../../../features/agents/terminal";
 import type { EditViewZone } from "../../../../../state/clientStore";
 import type { TabKind } from "../../../../../features/agents/types";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
+import { isDialogFocusTarget } from "../../../../../shared/utilities/keyboard";
 
 export function useRekeyedTerminalFocus({
   activeTerminalId,
@@ -96,6 +97,7 @@ export function useEditViewWorkspaceFocus({
 
   useEffect(() => {
     if (!isEditView) return;
+    if (isDialogFocusTarget(document.activeElement)) return;
     if (editViewZone === "tab-strip") {
       if (document.activeElement !== tabStripRef.current) {
         tabStripRef.current?.focus({ preventScroll: true });
@@ -103,9 +105,11 @@ export function useEditViewWorkspaceFocus({
       return;
     }
     if (editViewZone !== "active-tab-body") return;
-    if (document.activeElement !== bodyRef.current) {
-      bodyRef.current?.focus({ preventScroll: true });
-    }
+    if (document.activeElement === bodyRef.current) return;
+    // Editors and terminal inputs already own focus inside this zone.
+    // Claiming the body must not pull focus away from the selected control.
+    if (bodyRef.current?.contains(document.activeElement)) return;
+    bodyRef.current?.focus({ preventScroll: true });
   }, [bodyRef, editViewZone, isEditView, tabStripRef]);
 
   useEffect(() => {

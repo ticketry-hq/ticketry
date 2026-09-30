@@ -1,0 +1,290 @@
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
+use serde::Deserialize;
+
+use super::super::CommandError;
+use ticketry_entities::{agent_model, agent_model_reasoning_level, provider};
+use ticketry_provider::{provider_contract, ProfileSelection, Provider};
+use ticketry_settings::{read_global_launch_default, ProviderCatalogService};
+
+const REQUIRED_SKILL_LOCK: &str =
+    include_str!("../../../../../../../resources/launch/skills.lock.json");
+
+pub(super) struct LaunchBindingCandidate<'a> {
+    pub prompt: &'a str,
+    pub required_skills: &'a [String],
+    pub profile: Option<&'a str>,
+    pub model_id: Option<&'a str>,
+    pub reasoning_id: Option<&'a str>,
+    pub auto_start: bool,
+    pub subtree_run_enabled: bool,
+}
+
+#[derive(Deserialize)]
+struct RequiredSkillLock {
+    selected_packages: Vec<String>,
+}
+
+struct ProviderSelection {
+    slug: String,
+    activated: bool,
+}
+
+pub(super) async fn validate_launch_binding(
+    database: &impl ConnectionTrait,
+    candidate: LaunchBindingCandidate<'_>,
+) -> Result<(), CommandError> {
+    validate_prompt(candidate.prompt)?;
+    validate_required_skills(candidate.required_skills)?;
+    if candidate.reasoning_id.is_some() && candidate.model_id.is_none() {
+        return Err(rejected(
+            "model_id",
+            "model_required",
+            "Choose a catalog model before configuring reasoning.",
+        ));
+    }
+    if let Some(profile) = candidate.profile {
+        let profiles = ProviderCatalogService::load_from(database)
+            .await
+            .map_err(|error| CommandError::Storage(error.to_string()))?
+            .codex_profiles
+            .0;
+        provider_contract(Provider::Codex)
+            .validate_profile_selection(
+                ProfileSelection {
+                    profile: Some(profile),
+                    model: candidate.model_id,
+                    effort: candidate.reasoning_id,
+                },
+                &profiles,
+            )
+            .map_err(|error| {
+                let (code, message) = match error.code {
+                    ticketry_provider::ProviderErrorCode::UnregisteredProfile => (
+                        "profile_not_registered",
+                        format!("Codex profile '{profile}' is not registered."),
+                    ),
+                    _ => (
+                        "profile_conflicts_with_model",
+                        "A Codex profile cannot be combined with model or reasoning overrides."
+                            .to_owned(),
+                    ),
+                };
+                rejected("profile", code, message)
+            })?;
+    }
+
+    // A profile is a Codex-only option, so a profile-only binding is a Codex
+    // binding even though it names no catalog model. Without this the
+    // automation checks below fall through to the global default's provider.
+    let provider = match (candidate.profile, candidate.model_id) {
+        (Some(_), _) => provider_by_slug(database, Provider::Codex.slug()).await?,
+        (None, Some(model_id)) => Some(provider_for_model(database, model_id).await?),
+        (None, None) => None,
+    };
+    if let (Some(model_id), Some(reasoning_id)) = (candidate.model_id, candidate.reasoning_id) {
+        validate_reasoning(database, model_id, reasoning_id).await?;
+    }
+
+    if candidate.auto_start || candidate.subtree_run_enabled {
+        let field = automation_field(candidate.auto_start);
+        let provider = match provider {
+            Some(provider) => provider,
+            None => unattended_default_provider(database).await?.ok_or_else(|| {
+                rejected(
+                    field,
+                    "agent_not_configured",
+                    "Choose an agent/provider that can launch unattended before enabling automation.",
+                )
+            })?,
+        };
+        if !provider.activated {
+            return Err(rejected(
+                field,
+                "provider_not_activated",
+                format!(
+                    "Agent/provider '{}' must be activated before it can be used by a launch binding.",
+                    provider.slug
+                ),
+            ));
+        }
+        if !supports_unattended(&provider) {
+            return Err(rejected(
+                field,
+                "unattended_launch_unsupported",
+                format!(
+                    "Agent/provider '{}' cannot launch unattended.",
+                    provider.slug
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_required_skills(values: &[String]) -> Result<(), CommandError> {
+    let lock: RequiredSkillLock = serde_json::from_str(REQUIRED_SKILL_LOCK)
+        .map_err(|_| CommandError::validation("The pinned required-skill catalog is invalid."))?;
+    let mut seen = std::collections::HashSet::new();
+    for identifier in values {
+        if !lock.selected_packages.contains(identifier) {
+            return Err(rejected(
+                "required_skills",
+                "invalid_required_skills",
+                format!("Required skill '{identifier}' is not in the pinned upstream snapshot."),
+            ));
+        }
+        if !seen.insert(identifier) {
+            return Err(rejected(
+                "required_skills",
+                "invalid_required_skills",
+                format!("Required skill '{identifier}' is declared more than once."),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// A stored launch binding must carry the prompt its launches are built from.
+///
+/// `LaunchPolicyResolver` refuses a prompt-less binding with
+/// `prompt_not_configured`, and that refusal writes no durable trace: every
+/// launch for the type/state simply fails. Rejecting the write keeps that
+/// unlaunchable row from existing at all, so a partial patch that omits the
+/// prompt can never clear a configured one. Removing a binding is
+/// `delete_launch_binding`, not emptying its prompt.
+fn validate_prompt(prompt: &str) -> Result<(), CommandError> {
+    if prompt.is_empty() {
+        return Err(rejected(
+            "prompt",
+            "prompt_required",
+            "A launch binding must have a non-empty prompt. Delete the binding \
+             instead of clearing it.",
+        ));
+    }
+    Ok(())
+}
+
+async fn provider_for_model(
+    database: &impl ConnectionTrait,
+    model_id: &str,
+) -> Result<ProviderSelection, CommandError> {
+    let row = agent_model::Entity::find_by_id(model_id)
+        .find_also_related(provider::Entity)
+        .one(database)
+        .await?
+        .ok_or_else(|| {
+            rejected(
+                "model_id",
+                "unsupported_model",
+                "Model is not in the agent catalog.",
+            )
+        })?;
+    let provider = row.1.ok_or_else(|| {
+        rejected(
+            "model_id",
+            "unsupported_model",
+            "Model references no provider in the agent catalog.",
+        )
+    })?;
+    let provider = ProviderSelection {
+        slug: provider.slug,
+        activated: provider.activated,
+    };
+    if !provider.activated {
+        return Err(rejected(
+            "model_id",
+            "provider_not_activated",
+            format!(
+                "Agent/provider '{}' must be activated before it can be used by a launch binding.",
+                provider.slug
+            ),
+        ));
+    }
+    Ok(provider)
+}
+
+async fn validate_reasoning(
+    database: &impl ConnectionTrait,
+    model_id: &str,
+    reasoning_id: &str,
+) -> Result<(), CommandError> {
+    let compatible = agent_model_reasoning_level::Entity::find()
+        .filter(agent_model_reasoning_level::Column::AgentModelId.eq(model_id))
+        .filter(agent_model_reasoning_level::Column::ReasoningLevelId.eq(reasoning_id))
+        .one(database)
+        .await?
+        .is_some();
+    if compatible {
+        return Ok(());
+    }
+    Err(rejected(
+        "reasoning_id",
+        "unsupported_reasoning",
+        "Reasoning is not permitted for the selected model.",
+    ))
+}
+
+async fn unattended_default_provider(
+    database: &impl ConnectionTrait,
+) -> Result<Option<ProviderSelection>, CommandError> {
+    let Some(default) = read_global_launch_default(database).await? else {
+        return Ok(None);
+    };
+    provider_by_slug(database, &default.provider).await
+}
+
+async fn provider_by_slug(
+    database: &impl ConnectionTrait,
+    slug: &str,
+) -> Result<Option<ProviderSelection>, CommandError> {
+    Ok(provider::Entity::find()
+        .filter(provider::Column::Slug.eq(slug))
+        .one(database)
+        .await?
+        .map(|row| ProviderSelection {
+            slug: row.slug,
+            activated: row.activated,
+        }))
+}
+
+fn automation_field(auto_start: bool) -> &'static str {
+    if auto_start {
+        "auto_start"
+    } else {
+        "subtree_run_enabled"
+    }
+}
+
+fn supports_unattended(provider: &ProviderSelection) -> bool {
+    Provider::from_slug(&provider.slug)
+        .is_some_and(|provider| provider_contract(provider).metadata().supports_unattended)
+}
+
+fn rejected(field: &'static str, code: &'static str, message: impl Into<String>) -> CommandError {
+    CommandError::Rejected {
+        message: message.into(),
+        code,
+        field: Some(field),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn required_skill_source_is_the_packaged_lock() {
+        let lock: RequiredSkillLock = serde_json::from_str(REQUIRED_SKILL_LOCK).unwrap();
+        assert_eq!(
+            lock.selected_packages,
+            [
+                "code-review",
+                "grill-with-docs",
+                "implement",
+                "tdd",
+                "to-spec",
+                "to-tickets",
+            ]
+        );
+    }
+}

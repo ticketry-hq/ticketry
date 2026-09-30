@@ -4,8 +4,8 @@ import {
 } from "../../../../../../features/settings";
 import type { IssueType } from "../../../../../../shared/api/types";
 import { IssueTypeLabel } from "../../../../../../shared/ui/IssueTypeLabel";
-import Popover, { PopoverOption } from "./Popover";
-import PopoverContent from "./PopoverContent";
+import Popover, { PopoverOption } from "../../../../../../shared/ui/Popover";
+import PopoverContent from "../../../../../../shared/ui/PopoverContent";
 import PickerTrigger from "./PickerTrigger";
 
 const EMPTY_ISSUE_TYPES: IssueType[] = [];
@@ -30,21 +30,9 @@ export default function IssueTypePicker({
   );
   const selected = issueTypeById(issueTypes, value);
 
-  if (issueTypesQuery.isSuccess && !selected) {
-    return (
-      <span
-        className="px-2.5 py-1 text-sm text-text-primary"
-        data-testid="issue-type-picker"
-      >
-        PathFind
-      </span>
-    );
-  }
-
   return (
     <Popover
       data-testid="issue-type-picker"
-      align="right"
       disabled={saving}
       trigger={({ onClick, disabled }) => (
         <PickerTrigger
@@ -52,13 +40,7 @@ export default function IssueTypePicker({
           disabled={disabled}
           saving={saving}
           variant="bare"
-          label={
-            selected
-              ? <IssueTypeLabel issueType={selected} />
-              : issueTypesQuery.isError
-                ? "Type unavailable"
-                : "Loading type…"
-          }
+          label={selected ? <IssueTypeLabel issueType={selected} /> : "Unknown type"}
         />
       )}
     >

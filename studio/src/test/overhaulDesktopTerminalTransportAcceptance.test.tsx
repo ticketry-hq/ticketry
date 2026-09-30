@@ -1,0 +1,358 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  inertLaunchkeyRuntime,
+  initializeStudioRuntime,
+  type StudioRuntime,
+} from "../runtime";
+import {
+  createDefaultInteractiveTaskLaunch,
+  createTerminalSession,
+  resumeTerminalSession,
+  terminateTerminalSession,
+} from "../features/agents/terminal/internal/mutationTransport";
+import { desktopViewerLease } from "../features/agents/terminal/internal/viewerLease";
+import {
+  createModuleShell,
+  listModuleShells,
+} from "../features/terminal-panel/api/moduleShellApi";
+import { runWorkItemNow } from "../features/work-items/internal/runNowTransport";
+import { RunStatusStreamDocument } from "../features/agents/status/generated/statusStream.documents";
+import {
+  documentOperationName,
+  documentSource,
+} from "../graphql-foundation/typedDocument";
+import { readStatusFact } from "../features/agents/status/stream/statusFacts";
+import { studioApolloClient } from "../shared/apollo/client";
+import { TaskResumableTerminalSessionsDocument } from "../features/agents/terminal/generated/terminalSessions.documents";
+import { quietAppUpdatesRuntime } from "./appUpdatesRuntimeFixture";
+
+const runtime = vi.hoisted(() => ({ desktop: true }));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  isTauri: () => runtime.desktop,
+  Channel: class {},
+  invoke: vi.fn(),
+}));
+
+function desktopRuntime(
+  writeWorkTracker: StudioRuntime["writeWorkTracker"],
+): StudioRuntime {
+  return {
+    platform: "desktop",
+    graphQlTransport: () => { throw new Error("not used"); },
+    launchkey: inertLaunchkeyRuntime,
+    capabilities: {
+      statusFeed: true,
+      nativeLifecycle: true,
+      serviceSupervision: true,
+      nativeTerminal: true,
+      nativeFolderPicker: true,
+      appUpdates: true,
+    },
+    appUpdates: quietAppUpdatesRuntime(),
+    readWorkTracker: writeWorkTracker,
+    writeWorkTracker,
+    readSettings: writeWorkTracker,
+    writeSettings: writeWorkTracker,
+    statusStream: () => null,
+    documentUrl: (id, path) => `ticketrydoc://localhost/${id}/${path}`,
+    pickFolder: async () => null,
+    retryServices: async () => {},
+    startup: () => ({
+      serviceHealth: {
+        state: "ready",
+        service: "terminal-runtime",
+        message: null,
+        logPointer: null,
+      },
+      initialNotices: [],
+    }),
+    subscribeServiceHealth: () => () => {},
+    subscribeUserNotices: () => () => {},
+  };
+}
+
+function mockTaskTerminalHolding(refetch: ReturnType<typeof vi.fn>): void {
+  vi.spyOn(studioApolloClient(), "getObservableQueries").mockReturnValue(new Set([{
+    options: { query: TaskResumableTerminalSessionsDocument },
+    variables: { taskId: "task-1" },
+    refetch,
+  }]) as never);
+}
+
+describe("desktop terminal transport acceptance", () => {
+  beforeEach(() => {
+    runtime.desktop = true;
+    vi.resetModules();
+  });
+
+  it("[overhaul-153] routes the desktop xterm fallback through Tauri viewer commands", async () => {
+    const [{ tauriTerminalClient }, { terminalClientTransport }] = await Promise.all([
+      import("../features/agents/terminal/internal/tauriTerminalClient"),
+      import("../features/agents/terminal/internal/terminalClientRuntime"),
+    ]);
+
+    expect(terminalClientTransport).toBe(tauriTerminalClient);
+  });
+
+  it("[overhaul-153a] keeps one task-launch identity across a transport retry", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const execute = vi.fn(async (
+      _document: { operationName: string },
+      variables: Record<string, unknown>,
+    ) => {
+      calls.push(variables);
+      if (calls.length === 1) throw new Error("TauRPC response interrupted");
+      return { terminal_session: { agent_run_id: "run-created" } };
+    });
+    initializeStudioRuntime(
+      desktopRuntime((routes) => routes.graphQl(execute as never)),
+    );
+    await createDefaultInteractiveTaskLaunch({
+      projectId: "project-1",
+      moduleId: "module-1",
+      issueId: "task-1",
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0].clientRequestId).toBe(calls[1].clientRequestId);
+  });
+
+  it("[overhaul-153b] does not report a committed terminal mutation as failed when refresh fails", async () => {
+    const execute = vi.fn(async () => ({
+      terminal_session: { agent_run_id: "run-created" },
+    }));
+    initializeStudioRuntime(
+      desktopRuntime((routes) => routes.graphQl(execute as never)),
+    );
+    mockTaskTerminalHolding(
+      vi.fn().mockRejectedValue(new Error("resumable holdings unavailable")),
+    );
+
+    await expect(terminateTerminalSession("run-created")).resolves.toEqual({
+      agent_run_id: "run-created",
+      terminated: true,
+    });
+  });
+
+  it("[overhaul-154] uses one Rust GraphQL control plane for agent terminals, module shells, and viewer ownership", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const calls: Array<{ operationName: string; variables: Record<string, unknown> }> = [];
+    let firstCreateAttempt = true;
+    let firstRunNowAttempt = true;
+    const execute = vi.fn(async (
+      document: { operationName: string },
+      variables: Record<string, unknown>,
+    ) => {
+      calls.push({ operationName: documentOperationName(document), variables });
+      if (documentOperationName(document) === "RunWorkTrackerWorkItemNow") {
+        if (firstRunNowAttempt) {
+          firstRunNowAttempt = false;
+          throw new Error("TauRPC response interrupted");
+        }
+        return {
+          run_now: {
+            target_id: "task-1",
+            code: "run_now_started",
+            detail: "Run Now started.",
+            remedy: null,
+            committed_state: { id: "implement", name: "Implement" },
+            run: {
+              target_id: "task-1",
+              agent: "codex",
+              agent_run_id: "run-now",
+            },
+          },
+        };
+      }
+      if (documentOperationName(document) === "CreateTerminalSession" && firstCreateAttempt) {
+        firstCreateAttempt = false;
+        throw new Error("TauRPC response interrupted");
+      }
+      if (documentOperationName(document).endsWith("ViewerLease")) {
+        return {
+          viewer_lease: documentOperationName(document) === "DeleteViewerLease"
+            ? null
+            : {
+                agent_run_id: "run-lease",
+                viewer_id: "viewer-1",
+                transport: "xterm",
+                generation: "lease-generation",
+                acquired_at: "2026-08-19T10:00:00Z",
+                expires_at: "2026-08-19T10:00:30Z",
+              },
+        };
+      }
+      if (documentOperationName(document) === "ModuleShellSessions") {
+        return {
+          terminal_sessions: {
+            sessions: [{
+              agent_run_id: "run-shell",
+              module_id: "module-1",
+              scope: "shell",
+              doc_rel_path: null,
+              created_at: "2026-08-19T10:00:00Z",
+              agent_run: { id: "run-shell", launch_state: null, launch_model: null },
+            }],
+          },
+        };
+      }
+      return {
+        terminal_session: {
+          agent_run_id: documentOperationName(document) === "ResumeTerminalSession"
+            ? "run-resumed"
+            : documentOperationName(document) === "CreateModuleShell"
+              ? "run-shell"
+              : "run-created",
+          module_id: "module-1",
+          scope: documentOperationName(document) === "CreateModuleShell" ? "shell" : "task",
+          doc_rel_path: null,
+          created_at: "2026-08-19T10:00:00Z",
+          agent_run: { id: "run-created" },
+        },
+      };
+    });
+    initializeStudioRuntime(
+      desktopRuntime((routes) => routes.graphQl(execute as never)),
+    );
+    const refetch = vi.fn().mockResolvedValue(undefined);
+    mockTaskTerminalHolding(refetch);
+
+    await expect(runWorkItemNow("task-1")).resolves.toMatchObject({
+      target_id: "task-1",
+      committed_state: { id: "implement", name: "Implement" },
+      run: { agent_run_id: "run-now" },
+    });
+    await createTerminalSession({
+      agent: "codex",
+      projectId: "project-1",
+      moduleId: "module-1",
+      taskId: "task-1",
+      initialPrompt: "Fix the terminal",
+      isPlanning: false,
+      isInstant: false,
+    });
+    await createTerminalSession({
+      agent: "codex",
+      projectId: "project-1",
+      moduleId: "module-1",
+      taskId: "task-1",
+      initialPrompt: "Fix the terminal",
+      isPlanning: false,
+      isInstant: false,
+    });
+    await resumeTerminalSession({
+      projectId: "project-1",
+      moduleId: "module-1",
+      taskId: "task-1",
+      source: {
+        agent_run_id: "run-ended",
+        agent: "codex",
+        status: "completed",
+        started_at: "2026-08-19T09:00:00Z",
+        ended_at: "2026-08-19T09:30:00Z",
+        launch_model: "gpt-5",
+        provider_session_id: "conversation-1",
+        resumed_from: null,
+        scope: "task",
+      },
+    });
+    await terminateTerminalSession("run-created");
+    const lease = await desktopViewerLease.acquire("run-lease", "viewer-1", "xterm");
+    await desktopViewerLease.renew("run-lease", "viewer-1", lease.generation);
+    await desktopViewerLease.release("run-lease", "viewer-1", lease.generation);
+    await expect(createModuleShell("module-1")).resolves.toBe("run-shell");
+    await expect(listModuleShells("module-1")).resolves.toEqual([{
+      agent_run_id: "run-shell",
+      module_id: "module-1",
+      created_at: "2026-08-19T10:00:00Z",
+    }]);
+
+    const creates = calls.filter((call) => call.operationName === "CreateTerminalSession");
+    const runNowCalls = calls.filter(
+      (call) => call.operationName === "RunWorkTrackerWorkItemNow",
+    );
+    expect(runNowCalls).toHaveLength(2);
+    expect(runNowCalls[0].variables.requestIdentity)
+      .toBe(runNowCalls[1].variables.requestIdentity);
+    expect(creates[0].variables.clientRequestId).toBe(creates[1].variables.clientRequestId);
+    expect(creates[2].variables.clientRequestId).not.toBe(creates[1].variables.clientRequestId);
+    expect(calls.map((call) => call.operationName)).toEqual([
+      "RunWorkTrackerWorkItemNow",
+      "RunWorkTrackerWorkItemNow",
+      "CreateTerminalSession",
+      "CreateTerminalSession",
+      "CreateTerminalSession",
+      "ResumeTerminalSession",
+      "UpdateTerminalSession",
+      "CreateViewerLease",
+      "UpdateViewerLease",
+      "DeleteViewerLease",
+      "CreateModuleShell",
+      "ModuleShellSessions",
+    ]);
+    const shellCreate = calls.find((call) => call.operationName === "CreateModuleShell");
+    expect(shellCreate?.variables).toEqual({
+      clientRequestId: expect.any(String),
+      moduleId: "module-1",
+      columns: 80,
+      rows: 24,
+    });
+    expect(refetch).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("[overhaul-155] consumes Rust output and effective-state projections on snapshot and live status", () => {
+    expect(documentSource(RunStatusStreamDocument)).toContain("effective_state");
+    expect(documentSource(RunStatusStreamDocument)).toContain("output_sequence");
+    expect(documentSource(RunStatusStreamDocument)).toContain("last_output_at");
+
+    const fact = readStatusFact({
+      __typename: "RunStatusEvent",
+      cursor: 14,
+      event_id: "event-14",
+      project_id: "project-1",
+      event_kind: "agent_run.terminal_activity",
+      payload_version: 1,
+      subject_kind: "agent_run",
+      subject_id: "run-shell",
+      agent_run_id: "run-shell",
+      automation_attempt_id: null,
+      work_item_id: null,
+      committed_at: "2026-08-19T10:01:00Z",
+      payload: {
+        type: "terminal_activity",
+        at: "2026-08-19T10:01:00Z",
+        run: {
+          agent_run_id: "run-shell",
+          project_id: "project-1",
+          task_id: null,
+          module_id: "module-1",
+          agent: null,
+          scope: "shell",
+          launch_state: null,
+          launch_model: null,
+          started_at: "2026-08-19T10:00:00Z",
+          state: "working",
+          effective_state: "stalled",
+          updated_at: "2026-08-19T10:01:00Z",
+          provider_session_id: null,
+          output_sequence: 4,
+          last_output_at: "2026-08-19T10:00:00Z",
+        },
+      },
+    });
+
+    expect(fact).toMatchObject({
+      family: "agent_run_activity",
+      run: {
+        agent: null,
+        scope: "shell",
+        effective_state: "stalled",
+        output_sequence: 4,
+        last_output_at: "2026-08-19T10:00:00Z",
+      },
+    });
+  });
+});

@@ -1,0 +1,18 @@
+[package]
+name = "tauri-graphql"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+async-graphql.workspace = true
+futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+specta.workspace = true
+tauri.workspace = true
+taurpc.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tauri = { workspace = true, features = ["test"] }

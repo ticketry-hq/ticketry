@@ -1,0 +1,9 @@
+query ModuleFileDiff($moduleId: String!, $path: String!) {
+  module_file_diff(module_id: $moduleId, path: $path) {
+    path
+    status
+    binary
+    patch
+    truncated
+  }
+}

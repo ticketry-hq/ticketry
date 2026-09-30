@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { createApolloStore } from "../../shared/apollo/localState";
 import {
   validateUserNotice,
   type UserNotice,
@@ -15,6 +15,7 @@ export type StandardModalType =
     | "keyboard-shortcuts"
     | "settings"
     | "status-update"
+    | "story-workflow-guide"
     | "parent-update"
     | "add-project"
     | "add-module";
@@ -33,17 +34,6 @@ export type ModalDescriptor =
   | StandardModalDescriptor
   | NotifyUserModalDescriptor;
 
-function isSameModuleFolderModal(
-  current: ModalDescriptor,
-  candidate: StandardModalDescriptor,
-): boolean {
-  return (
-    current.type === "module-folder" &&
-    candidate.type === "module-folder" &&
-    current.payload?.moduleId === candidate.payload?.moduleId
-  );
-}
-
 export interface ModalKeyBinding {
   actionId: string | readonly string[];
   label: string;
@@ -59,17 +49,13 @@ interface ModalState {
   popModal: () => void;
 }
 
-export const useModalStore = create<ModalState>((set) => ({
+export const useModalStore = createApolloStore<ModalState>("modal", (set) => ({
   modalStack: [],
   // Seeded from window-session storage so notices already presented before an
   // in-app recovery refresh stay silent in the document that replaces it.
   presentedNoticeIds: new Set(readPresentedNoticeIds()),
   pushModal: (modal) =>
-    set((state) =>
-      state.modalStack.some((current) => isSameModuleFolderModal(current, modal))
-        ? state
-        : { modalStack: [...state.modalStack, modal] },
-    ),
+    set((state) => ({ modalStack: [...state.modalStack, modal] })),
   notifyUser: (candidate) =>
     set((state) => {
       const notice = validateUserNotice(candidate);

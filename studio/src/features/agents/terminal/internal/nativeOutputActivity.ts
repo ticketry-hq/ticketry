@@ -1,5 +1,6 @@
-import { createWorkTrackerClient } from "@worktracker/typescript-sdk/client";
-import { apiBase, apiKey } from "../../../../shared/api/client";
+import { studioRuntime } from "../../../../runtime";
+import { graphQlMutationError } from "../../../../shared/api/graphqlError";
+import { ObserveTerminalOutputDocument } from "../generated/outputActivity.documents";
 
 /**
  * The native renderer's report of the shared terminal-output observation.
@@ -41,14 +42,32 @@ export function reportNativeViewerAttached(
   void client.report(agentRunId).catch(() => {});
 }
 
-/** Desktop's companion to the viewer lease on the same authenticated surface. */
+/**
+ * Rust owns the observation after the terminal cutover.
+ *
+ * This used to POST `/api/terminals/viewers/output`, a route that went away
+ * with the Python terminal authority. The same capability is now the
+ * `ObserveTerminalOutput` mutation on the in-process GraphQL transport: Rust
+ * binds the live runtime, captures the pane, digests it, and decides whether
+ * anything advanced. Only the destination changed — the client still submits
+ * one Terminal Session identity and reads nothing back.
+ */
 export const desktopOutputActivity: OutputActivityClient = {
   async report(agentRunId) {
-    await createWorkTrackerClient({
-      baseUrl: apiBase(),
-      apiKey: apiKey(),
-    }).terminals.terminalsViewersOutputCreate({
-      viewerOutputReport: { agent_run_id: agentRunId },
+    await studioRuntime().writeWorkTracker({
+      graphQl: async (execute) => {
+        try {
+          await execute(ObserveTerminalOutputDocument, { agentRunId });
+        } catch (error) {
+          return graphQlMutationError(error);
+        }
+      },
     });
   },
 };
+
+/**
+ * Observation reaches tmux through the desktop process. A platform without the
+ * in-process transport cannot observe anything, and the route it used to post
+ * to no longer answers.
+ */

@@ -14,10 +14,9 @@ import {
   MODULE_LIFECYCLE_STATES,
   selectModuleLifecycleCounts,
   selectScratchLifecycleChips,
-  selectScratchRunIds,
   selectTaskRunCount,
 } from "./selectors";
-import { useAgentStatusStore } from "./store";
+import { useAgentStatusStore } from "./testStore";
 import type { RunRecord } from "./types";
 
 const SCRATCH_TASK_ID = "00000000-0000-0000-0000-000000000000";
@@ -105,11 +104,10 @@ describe("agent activity surfaces stay agent-only", () => {
     useAgentStatusStore.getState().upsertRun(shellRun());
 
     const data = useAgentStatusStore.getState();
-    expect(selectScratchRunIds(data, "project-1", "module-1")).toEqual(["run-plan"]);
     // The plan run's own chip is unchanged by the shell run sharing its module.
     expect(
       selectScratchLifecycleChips(data, "project-1", "module-1"),
-    ).toEqual([{ state: "working", count: 1 }]);
+    ).toEqual([{ state: "working", count: 1, agent: "codex" }]);
   });
 
   it("moves no module lifecycle count", () => {

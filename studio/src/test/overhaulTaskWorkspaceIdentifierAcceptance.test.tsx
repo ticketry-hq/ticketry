@@ -1,7 +1,9 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { DialogHost } from "../app/shell/DialogHost";
 import { fixture, mountStudio, workItem } from "./seam";
+import { studioApolloClient } from "../shared/apollo/client";
+import { WorkTrackerWorkItemDocument } from "../features/work-items/generated/workItems.documents";
 
 const story = {
   id: "story",
@@ -62,6 +64,7 @@ describe("overhaul acceptance — Task workspace identifiers", () => {
       workItem({
         id: "finding",
         name: "Finding one",
+        description: "Path: src/old.ts\nLines: 1-2",
         key: "MEML-CANONICAL-402",
         sequence_id: 402,
         issue_type: implementation,
@@ -117,6 +120,17 @@ describe("overhaul acceptance — Task workspace identifiers", () => {
       within(findings).getByRole("button", { name: "Cancel T-402" }),
     ).toBeVisible();
 
+    expect(within(findings).getByTestId("finding-location")).toHaveTextContent("src/old.ts:1-2");
+    await act(async () => {
+      http.revise("finding", { description: "Path: src/new.ts\nLines: 8-12" });
+      await studioApolloClient().query({
+        query: WorkTrackerWorkItemDocument,
+        variables: { id: "finding" },
+        fetchPolicy: "network-only",
+      });
+    });
+    await waitFor(() => expect(within(findings).getByTestId("finding-location")).toHaveTextContent("src/new.ts:8-12"));
+
     // Dependency chips read the referenced work item's sequence identifier.
     expect(
       within(within(details).getByTestId("blocked-by-row")).getByText("T-404"),
@@ -138,11 +152,12 @@ describe("overhaul acceptance — Task workspace identifiers", () => {
     ).toBeVisible();
     fireEvent.keyDown(document, { key: "Escape" });
 
-    // Parent picker: the closed trigger and both option groups, plus the
-    // Module link, name a Module by the same convention as a task.
+    // Parent picker: the breadcrumb trigger names the parent and carries its
+    // identifier; both option groups name a Module like a task.
     const parentPicker = within(details).getByTestId("parent-picker");
-    expect(within(details).getByTestId("epic-link")).toHaveTextContent("T-1");
-    fireEvent.click(within(parentPicker).getByRole("button", { name: "T-1" }));
+    const parentCrumb = within(parentPicker).getByRole("button", { name: "Module 1" });
+    expect(parentCrumb).toHaveAttribute("title", expect.stringContaining("(now T-1)"));
+    fireEvent.click(parentCrumb);
     expect(
       within(parentPicker).getByRole("button", { name: "T-1 Module 1" }),
     ).toBeVisible();

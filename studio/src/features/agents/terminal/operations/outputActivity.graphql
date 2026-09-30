@@ -1,0 +1,7 @@
+mutation ObserveTerminalOutput($agentRunId: String!) {
+  observation: terminal_output_observe(agent_run_id: $agentRunId) {
+    advanced
+    output_sequence
+    last_output_at
+  }
+}

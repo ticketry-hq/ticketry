@@ -3,15 +3,34 @@
 static const double kMuxedScrollPixelsPerLine = 24.0;
 static const uint16_t kMuxedScrollMaxLines = 20;
 
-// AppKit virtual key codes for the two chords the view refuses to forward.
-static const uint16_t kMuxedEscapeKeyCode = 0x35;
-static const uint16_t kMuxedGraveKeyCode = 0x32;
-static const uint16_t kMuxedEKeyCode = 0x0E;
+static ghostty_input_mouse_momentum_e
+muxed_ghostty_mouse_momentum(NSEventPhase phase) {
+  switch (phase) {
+    case NSEventPhaseBegan:
+      return GHOSTTY_MOUSE_MOMENTUM_BEGAN;
+    case NSEventPhaseStationary:
+      return GHOSTTY_MOUSE_MOMENTUM_STATIONARY;
+    case NSEventPhaseChanged:
+      return GHOSTTY_MOUSE_MOMENTUM_CHANGED;
+    case NSEventPhaseEnded:
+      return GHOSTTY_MOUSE_MOMENTUM_ENDED;
+    case NSEventPhaseCancelled:
+      return GHOSTTY_MOUSE_MOMENTUM_CANCELLED;
+    case NSEventPhaseMayBegin:
+      return GHOSTTY_MOUSE_MOMENTUM_MAY_BEGIN;
+    default:
+      return GHOSTTY_MOUSE_MOMENTUM_NONE;
+  }
+}
 
-// Hardware positions for 1 through 9, followed by 0, on a Mac keyboard.
-static const uint16_t kMuxedModulePositionKeyCodes[] = {
-    0x12, 0x13, 0x14, 0x15, 0x17, 0x16, 0x1A, 0x1C, 0x19, 0x1D,
-};
+static ghostty_input_scroll_mods_t
+muxed_ghostty_scroll_mods(NSEvent *event) {
+  // libghostty's packed ScrollMods stores precision in bit zero and the
+  // three-bit momentum enum immediately above it.
+  int precision = event.hasPreciseScrollingDeltas ? 1 : 0;
+  int momentum = (int)muxed_ghostty_mouse_momentum(event.momentumPhase);
+  return precision | (momentum << 1);
+}
 
 @interface MuxedGhosttyView : NSView {
  @public
@@ -32,6 +51,9 @@ static const uint16_t kMuxedModulePositionKeyCodes[] = {
   void *_chordContext;
   BOOL _acceptsInput;
   BOOL _reportsGridResize;
+  NSView *_webview;
+  float _baseFontSize;
+  double _fontZoom;
 }
 - (instancetype)initWithRuntime:(MuxedGhosttyRuntime *)runtime
                          parent:(NSView *)parent
@@ -42,35 +64,6 @@ static const uint16_t kMuxedModulePositionKeyCodes[] = {
 - (void)reportGridResize;
 - (void)recordRedraw;
 @end
-
-uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
-  NSEventModifierFlags chord =
-      modifier_flags & (NSEventModifierFlagControl | NSEventModifierFlagCommand |
-                        NSEventModifierFlagOption | NSEventModifierFlagShift);
-  // Exact modifier match, like the Studio keymap. Ctrl+Shift+grave is a
-  // different chord and still belongs to the terminal, and so does a bare
-  // letter: only a modified chord can be taken from someone who is typing.
-  if (key_code == kMuxedGraveKeyCode && chord == NSEventModifierFlagControl) {
-    return MUXED_GHOSTTY_CHORD_PANEL_TOGGLE;
-  }
-  if (key_code == kMuxedEKeyCode && chord == NSEventModifierFlagCommand) {
-    return MUXED_GHOSTTY_CHORD_SETTINGS;
-  }
-  // Cmd+Escape leaves typing mode. The view has always handed the keyboard
-  // back for it; reporting it as a chord is what lets Studio's engaged state
-  // follow the keyboard instead of being left behind (#753).
-  if (key_code == kMuxedEscapeKeyCode && chord == NSEventModifierFlagCommand) {
-    return MUXED_GHOSTTY_CHORD_BODY_DISENGAGE;
-  }
-  if (chord == NSEventModifierFlagCommand) {
-    for (uint8_t index = 0; index < 10; index++) {
-      if (key_code == kMuxedModulePositionKeyCodes[index]) {
-        return MUXED_GHOSTTY_CHORD_MODULE_POSITION_1 + index;
-      }
-    }
-  }
-  return MUXED_GHOSTTY_CHORD_NONE;
-}
 
 @implementation MuxedGhosttyView
 
@@ -98,7 +91,12 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
   _processExitCallback = processExitCallback;
   _processExitContext = processExitContext;
   muxed_ghostty_surface_owner_init(&_surfaceOwner, self);
-  [parent addSubview:self positioned:NSWindowAbove relativeTo:nil];
+  _webview = parent;
+  muxed_ghostty_prepare_transparent_webview(_webview);
+  if (!muxed_ghostty_place_sibling(self, _webview, true)) {
+    [self release];
+    return nil;
+  }
 
   // The target window is authoritative. The view must already belong to it
   // before libghostty chooses its first cell metrics and backing size.
@@ -106,6 +104,8 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
   self.layer.contentsScale = scale;
 
   ghostty_surface_config_s config = ghostty_surface_config_new();
+  ghostty_config_get(runtime->config, &_baseFontSize, "font-size", 9);
+  _fontZoom = 1.0;
   config.platform_tag = GHOSTTY_PLATFORM_MACOS;
   config.platform.macos.nsview = self;
   config.userdata = &_surfaceOwner;
@@ -124,18 +124,6 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
   ghostty_surface_set_content_scale(_surface, scale, scale);
   muxed_focus_trace(self, "view created", _acceptsInput);
   return self;
-}
-
-- (void)dealloc {
-  if (_surface != NULL) {
-    ghostty_surface_t surface = _surface;
-    _surface = NULL;
-    // Surface teardown may synchronously ask the runtime for host services.
-    // Make every such request unavailable before libghostty begins teardown.
-    muxed_ghostty_surface_owner_invalidate(&_surfaceOwner);
-    ghostty_surface_free(surface);
-  }
-  [super dealloc];
 }
 
 - (BOOL)acceptsFirstResponder {
@@ -161,6 +149,46 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
   muxed_focus_trace(self, "resignFirstResponder", _acceptsInput);
   muxed_focus_trace_settled(self, "resignFirstResponder");
   return resigned;
+}
+
+- (void)updateTrackingAreas {
+  [super updateTrackingAreas];
+  NSArray<NSTrackingArea *> *existingAreas = [self.trackingAreas copy];
+  for (NSTrackingArea *area in existingAreas) {
+    [self removeTrackingArea:area];
+  }
+  [existingAreas release];
+  NSTrackingArea *area = [[NSTrackingArea alloc]
+      initWithRect:NSZeroRect
+           options:NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved |
+                   NSTrackingInVisibleRect | NSTrackingActiveAlways
+             owner:self
+          userInfo:nil];
+  [self addTrackingArea:area];
+  [area release];
+}
+
+- (void)reportMousePosition:(NSEvent *)event {
+  if (!_acceptsInput || _surface == NULL) return;
+  NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
+  ghostty_surface_mouse_pos(_surface, point.x, self.bounds.size.height - point.y,
+                           ghostty_mods(event.modifierFlags));
+}
+
+- (void)mouseEntered:(NSEvent *)event {
+  [super mouseEntered:event];
+  [self reportMousePosition:event];
+}
+
+- (void)mouseExited:(NSEvent *)event {
+  [super mouseExited:event];
+  if (_acceptsInput && _surface != NULL && NSEvent.pressedMouseButtons == 0)
+    ghostty_surface_mouse_pos(_surface, -1, -1,
+                             ghostty_mods(event.modifierFlags));
+}
+
+- (void)mouseMoved:(NSEvent *)event {
+  [self reportMousePosition:event];
 }
 
 - (void)viewDidChangeBackingProperties {
@@ -203,49 +231,6 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
   atomic_fetch_add_explicit(&_redrawGeneration, 1, memory_order_release);
 }
 
-static ghostty_input_key_s muxed_ghostty_key_event(NSEvent *event,
-                                                   ghostty_input_action_e action) {
-  ghostty_input_key_s key = {0};
-  key.action = action;
-  key.keycode = event.keyCode;
-  key.mods = ghostty_mods(event.modifierFlags);
-  key.consumed_mods =
-      ghostty_mods(event.modifierFlags &
-                   ~(NSEventModifierFlagControl | NSEventModifierFlagCommand));
-  NSString *unshifted = [event charactersByApplyingModifiers:0];
-  if (unshifted.length == 1)
-    key.unshifted_codepoint = [unshifted characterAtIndex:0];
-
-  NSString *text = event.characters;
-  if (text.length == 1) {
-    unichar scalar = [text characterAtIndex:0];
-    if (scalar < 0x20 || (scalar >= 0xF700 && scalar <= 0xF8FF)) text = nil;
-  }
-  key.text = text.UTF8String;
-  return key;
-}
-
-- (BOOL)performKeyEquivalent:(NSEvent *)event {
-  if (!_acceptsInput || _surface == NULL || event.type != NSEventTypeKeyDown)
-    return NO;
-
-  // NSWindow asks the whole view tree for key equivalents. With two visible
-  // terminals, an unfocused view must not claim Cmd+V (or any other Ghostty
-  // binding) before AppKit reaches the terminal that actually owns input.
-  if (self.window.firstResponder != self) return NO;
-
-  // AppKit offers Command-modified keys to this path before keyDown. Ask
-  // libghostty whether it owns the event so bindings such as Cmd++ reach the
-  // native surface instead of falling through to the WebView's zoom handler.
-  ghostty_input_key_s key =
-      muxed_ghostty_key_event(event, GHOSTTY_ACTION_PRESS);
-  ghostty_binding_flags_e flags = 0;
-  if (!ghostty_surface_key_is_binding(_surface, key, &flags)) return NO;
-
-  [self keyDown:event];
-  return YES;
-}
-
 - (void)keyDown:(NSEvent *)event {
   if (!_acceptsInput || _surface == NULL) return;
   // Studio chords must survive an engaged terminal (#667, #735): the WebView
@@ -256,7 +241,9 @@ static ghostty_input_key_s muxed_ghostty_key_event(NSEvent *event,
   uint8_t chord = muxed_ghostty_studio_chord(event.modifierFlags, event.keyCode);
   if (chord != MUXED_GHOSTTY_CHORD_NONE) {
     muxed_focus_trace(self, "disengaged by studio chord", _acceptsInput);
-    [self.window makeFirstResponder:self.superview];
+    if (chord < MUXED_GHOSTTY_CHORD_ZOOM_IN ||
+        chord > MUXED_GHOSTTY_CHORD_ZOOM_RESET)
+      [self.window makeFirstResponder:_webview];
     if (_chordCallback != NULL) _chordCallback(_chordContext, chord);
     return;
   }
@@ -301,11 +288,70 @@ static ghostty_input_key_s muxed_ghostty_key_event(NSEvent *event,
                            ghostty_mods(event.modifierFlags));
 }
 
+- (void)rightMouseDown:(NSEvent *)event {
+  if (!_acceptsInput || _surface == NULL) return;
+  [self reportMousePosition:event];
+  ghostty_surface_mouse_button(_surface, GHOSTTY_MOUSE_PRESS,
+                              GHOSTTY_MOUSE_RIGHT,
+                              ghostty_mods(event.modifierFlags));
+}
+
+- (void)rightMouseUp:(NSEvent *)event {
+  if (!_acceptsInput || _surface == NULL) return;
+  ghostty_surface_mouse_button(_surface, GHOSTTY_MOUSE_RELEASE,
+                              GHOSTTY_MOUSE_RIGHT,
+                              ghostty_mods(event.modifierFlags));
+}
+
+- (void)rightMouseDragged:(NSEvent *)event {
+  [self reportMousePosition:event];
+}
+
+- (void)otherMouseDown:(NSEvent *)event {
+  if (!_acceptsInput || _surface == NULL) return;
+  [self reportMousePosition:event];
+  ghostty_surface_mouse_button(_surface, GHOSTTY_MOUSE_PRESS,
+                              GHOSTTY_MOUSE_MIDDLE,
+                              ghostty_mods(event.modifierFlags));
+}
+
+- (void)otherMouseUp:(NSEvent *)event {
+  if (!_acceptsInput || _surface == NULL) return;
+  ghostty_surface_mouse_button(_surface, GHOSTTY_MOUSE_RELEASE,
+                              GHOSTTY_MOUSE_MIDDLE,
+                              ghostty_mods(event.modifierFlags));
+}
+
+- (void)otherMouseDragged:(NSEvent *)event {
+  [self reportMousePosition:event];
+}
+
 - (void)scrollWheel:(NSEvent *)event {
-  if (!_acceptsInput) return;
-  // Wheel and trackpad gestures express Scroll bridge intent. They are never
-  // forwarded to libghostty, whose fallback would write keys to the hosted
-  // command, and a horizontal-only gesture produces no terminal action.
+  if (muxed_focus_trace_enabled()) {
+    NSLog(@"[focus-trace] scrollWheel view=%p acceptsInput=%d surface=%p "
+          @"precise=%d delta=(%.3f,%.3f) phase=%lu momentum=%lu",
+          self, _acceptsInput, _surface, event.hasPreciseScrollingDeltas,
+          event.scrollingDeltaX, event.scrollingDeltaY,
+          (unsigned long)event.phase, (unsigned long)event.momentumPhase);
+  }
+  if (!_acceptsInput || _surface == NULL) return;
+  // A mouse-tracking program owns its viewport. Match the WASM renderer by
+  // letting libghostty encode that wheel event for the program. Ordinary shell
+  // scrollback remains durable in tmux.
+  if (ghostty_surface_mouse_captured(_surface)) {
+    [self reportMousePosition:event];
+    double x = event.scrollingDeltaX;
+    double y = event.scrollingDeltaY;
+    if (event.hasPreciseScrollingDeltas) {
+      // Match Ghostty's macOS host, which doubles trackpad travel before
+      // handing the gesture to the terminal core.
+      x *= 2;
+      y *= 2;
+    }
+    ghostty_surface_mouse_scroll(_surface, x, y,
+                                 muxed_ghostty_scroll_mods(event));
+    return;
+  }
   muxed_ghostty_scroll_intent_s intent = muxed_ghostty_normalize_scroll(
       event.scrollingDeltaY, event.hasPreciseScrollingDeltas);
   if (intent.direction == MUXED_GHOSTTY_SCROLL_NONE) return;

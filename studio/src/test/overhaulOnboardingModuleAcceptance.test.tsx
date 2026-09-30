@@ -1,81 +1,170 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createBrowserRuntime } from "../runtime/browserRuntime";
+
+const nativeTrust = vi.hoisted(() => ({ desktop: false, invoke: vi.fn() }));
+vi.mock("@tauri-apps/api/core", async () => ({
+  ...(await vi.importActual("@tauri-apps/api/core")),
+  isTauri: () => nativeTrust.desktop,
+  invoke: nativeTrust.invoke,
+}));
 
 const api = vi.hoisted(() => ({
-  acknowledgeProjectOnboarding: vi.fn(),
   createModule: vi.fn(),
   createProject: vi.fn(),
   getLaunchProviderCapabilities: vi.fn(),
   getProviderCatalog: vi.fn(),
   getTasks: vi.fn(),
   listIssueTypes: vi.fn(),
-  listModuleLinks: vi.fn(),
-  listModulePresentations: vi.fn(),
   listModules: vi.fn(),
   listProjects: vi.fn(),
-  putProfile: vi.fn(),
   putProviderCatalog: vi.fn(),
-  upsertModuleLink: vi.fn(),
-  updateModulePresentation: vi.fn(),
-  validateModuleFolder: vi.fn(),
+  writeModuleLink: vi.fn(),
 }));
 
 const moduleFolderValidationApi = vi.hoisted(() => ({
   validateModuleFolder: vi.fn(),
 }));
+const providerState = vi.hoisted(() => ({
+  catalog: { activated_providers: [] as string[], global_default: null },
+  capabilities: [] as unknown[],
+}));
 
-vi.mock("../shared/api/client", async () => {
-  const actual = await vi.importActual<typeof import("../shared/api/client")>(
-    "../shared/api/client",
+function trustRuntime(
+  prepareDirectoryTrust: NonNullable<StudioRuntime["prepareDirectoryTrust"]>,
+): StudioRuntime {
+  return {
+    ...createBrowserRuntime({ environment: {} }),
+    platform: "desktop",
+    prepareDirectoryTrust,
+  };
+}
+
+vi.mock("./legacyApiFixture", async () => {
+  const actual = await vi.importActual<typeof import("./legacyApiFixture")>(
+    "./legacyApiFixture",
   );
   return { ...actual, ...api };
+});
+
+vi.mock("../features/work-items/mutationTransport", async () => {
+  const actual = await vi.importActual<
+    typeof import("../features/work-items/mutationTransport")
+  >("../features/work-items/mutationTransport");
+  return {
+    ...actual,
+    createWorkItem: (projectId: string, body: { name?: string; issue_type_id?: string }) =>
+      api.createModule(projectId, body.name, body.issue_type_id),
+  };
+});
+
+vi.mock("../features/work-items/queries/readTransport", async () => ({
+  ...(await vi.importActual("../features/work-items/queries/readTransport")),
+  readModuleTreeRecords: api.getTasks,
+}));
+
+vi.mock("../features/projects/queries/readTransport", async () => {
+  const actual = await vi.importActual<typeof import("../features/projects/queries/readTransport")>(
+    "../features/projects/queries/readTransport",
+  );
+  const { projectOpenFixture } = await import("./projectOpenFixture");
+  return {
+    ...actual,
+    readProjects: api.listProjects,
+    readProjectOpen: async (projectId: string) => {
+      const [projects, modules] = await Promise.all([api.listProjects(), api.listModules(projectId)]);
+      const project = projects.find((candidate: { id: string }) => candidate.id === projectId) ?? projects[0];
+      if (!project) throw new Error(`Project ${projectId} was not found.`);
+      return projectOpenFixture(project, modules);
+    },
+    readOnboardingProjects: vi.fn(),
+  };
+});
+
+vi.mock("../features/workflows/queries/readTransport", async () => ({
+  ...(await vi.importActual("../features/workflows/queries/readTransport")),
+  readWorkflowIssueTypes: api.listIssueTypes,
+}));
+
+vi.mock("../features/settings/queries", async () => ({
+  ...(await vi.importActual("../features/settings/queries")),
+  loadIssueTypes: api.listIssueTypes,
+}));
+
+vi.mock("../features/module-links/moduleLinkTransport", async () => ({
+  ...(await vi.importActual("../features/module-links/moduleLinkTransport")),
+  writeModuleLink: api.writeModuleLink,
+}));
+
+vi.mock("../features/workflows/providerQueries", () => ({
+  setProviderCapabilities: vi.fn(),
+  loadProviderCapabilities: api.getLaunchProviderCapabilities,
+  loadConfigurableProviderCapabilities: api.getLaunchProviderCapabilities,
+  loadProviderCatalog: async () => (await api.getProviderCatalog()).value,
+  updateProviderCatalog: async (value: unknown) =>
+    (await api.putProviderCatalog(value)).value,
+  useProviderCatalogQuery: () => ({
+    data: providerState.catalog,
+    isLoading: false,
+    isError: false,
+  }),
+  useConfigurableProviderCapabilitiesQuery: () => ({
+    data: providerState.capabilities,
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
+vi.mock("../features/projects/mutationTransport", async () => {
+  const actual = await vi.importActual<
+    typeof import("../features/projects/mutationTransport")
+  >("../features/projects/mutationTransport");
+  return { ...actual, createProject: api.createProject };
 });
 
 vi.mock("../features/studio/api/moduleFolderValidationApi", () =>
   moduleFolderValidationApi,
 );
 
+import { DialogHost } from "../app/shell/DialogHost";
+import { useDialogStore } from "../app/shell/dialogStore";
 import { ModalHost } from "../app/modal/ModalHost";
 import { useModalStore } from "../app/modal/modalStore";
 import OnboardingTour from "../app/onboarding/OnboardingTour";
 import OnboardingWelcome from "../app/onboarding/OnboardingWelcome";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
 import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
-import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import { useStudioStore } from "../features/projects/store";
 import { AddModule } from "../features/studio/modals/AddModule";
-import { seedModuleLinks } from "../features/module-links";
-import {
-  seedConfig,
-} from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
-import { queryKeys } from "../shared/query/keys";
-import type { StudioRuntime } from "../runtime";
+import { getModuleLinks, seedModuleLinks } from "../features/module-links";
+import { initializeStudioRuntime, inertLaunchkeyRuntime, type StudioRuntime } from "../runtime";
 import { useClientStore } from "../state/clientStore";
+import { quietAppUpdatesRuntime } from "./appUpdatesRuntimeFixture";
 
 function folderPickerRuntime(): StudioRuntime {
   return {
     platform: "desktop",
+    graphQlTransport: () => { throw new Error("not used"); },
+    launchkey: inertLaunchkeyRuntime,
     capabilities: {
       statusFeed: true,
-      websocketTerminal: true,
       nativeLifecycle: false,
       serviceSupervision: true,
       nativeTerminal: false,
       nativeFolderPicker: true,
+      appUpdates: true,
     },
+    appUpdates: quietAppUpdatesRuntime(),
+    readWorkTracker: async () => { throw new Error("unused"); },
+    writeWorkTracker: async () => { throw new Error("unused"); },
+    readSettings: async () => { throw new Error("unused"); },
+    writeSettings: async () => { throw new Error("unused"); },
+    statusStream: () => null,
+    documentUrl: (documentId, relPath) =>
+      `/api/documents/${documentId}/${relPath}`,
     pickFolder: async () => "/repos/picked",
     retryServices: async () => {},
     startup: () => ({
-      endpoints: {
-        workTrackerApi: "/api/work-tracker",
-        agentApi: "/api",
-        statusApi: "/api",
-        statusWebSocket: "/ws/status",
-        terminalWebSocket: "/ws/terminal",
-      },
-      values: { workTrackerApiKey: "" },
       serviceHealth: {
         state: "ready",
         service: "backend",
@@ -89,18 +178,19 @@ function folderPickerRuntime(): StudioRuntime {
   };
 }
 
-const profile = (moduleLinks: Array<{ module_id: string; path: string }> = []) => ({
-  name: "Local",
-  agent_prompt: null,
-  agent_prompts: {},
-  module_links: moduleLinks,
-  recent_project_id: "project-1",
-  recent_module_ids: {},
-});
+/** Stand in for the host's authoritative link row. */
+const acceptModuleLink = async (moduleId: string, path: string) => {
+  seedModuleLinks([
+    ...getModuleLinks().filter((link) => link.moduleId !== moduleId),
+    { id: `link-${moduleId}`, moduleId, path },
+  ]);
+};
 
 beforeEach(() => {
-  queryClient.clear();
-  api.acknowledgeProjectOnboarding.mockReset();
+  initializeStudioRuntime(createBrowserRuntime({ environment: {} }));
+  nativeTrust.desktop = false;
+  nativeTrust.invoke.mockReset().mockResolvedValue("already_trusted");
+  useDialogStore.setState({ dialogs: [] });
   api.createModule.mockReset();
   api.createProject.mockReset();
   moduleFolderValidationApi.validateModuleFolder
@@ -109,7 +199,11 @@ beforeEach(() => {
   api.getLaunchProviderCapabilities.mockReset().mockResolvedValue([
     {
       agent: "claude",
-      models: [],
+      accepts_model: true,
+      accepts_any_model: true,
+      model_aliases: [],
+      model_prefixes: [],
+      reasoning_levels: [],
     },
   ]);
   api.getProviderCatalog.mockReset().mockResolvedValue({
@@ -126,27 +220,10 @@ beforeEach(() => {
     { id: "module-type", name: "Module", level: "module", sort_order: 0 },
   ]);
   api.listModules.mockReset().mockResolvedValue([]);
-  api.listModulePresentations.mockReset().mockResolvedValue([]);
-  api.listModuleLinks.mockReset().mockResolvedValue([]);
   api.listProjects.mockReset().mockResolvedValue([]);
-  api.putProfile.mockReset();
+  api.writeModuleLink.mockReset().mockImplementation(acceptModuleLink);
   api.putProviderCatalog.mockReset().mockImplementation(async (value) => ({ value }));
-  api.upsertModuleLink.mockReset().mockImplementation(
-    async (moduleId: string, localPath: string) => ({
-      id: `link-${moduleId}`,
-      module_id: moduleId,
-      local_path: localPath,
-      created_at: "2026-08-19T00:00:00Z",
-      updated_at: "2026-08-19T00:00:00Z",
-    }),
-  );
-  api.validateModuleFolder.mockReset().mockResolvedValue({ valid: true, reason: null });
 
-  seedConfig({
-    profiles: [profile()],
-    recentProfileIndex: 0,
-    features: { sidebar: true, projects: false },
-  });
   seedModuleLinks([]);
   useOnboardingTourStore.getState().reset();
   useStudioStore.setState({
@@ -163,37 +240,6 @@ beforeEach(() => {
 });
 
 describe("onboarding and module-folder acceptance", () => {
-  it("[overhaul-131] completes onboarding on the default project without workspace scope", async () => {
-    const project = {
-      id: "project-1",
-      name: "Coding",
-      slug: "CDN",
-      description: "",
-      onboarding_required: true,
-    };
-    queryClient.setQueryData(queryKeys.projects.all, [project]);
-    queryClient.setQueryData(queryKeys.onboarding, true);
-    api.acknowledgeProjectOnboarding.mockResolvedValue({
-      ...project,
-      onboarding_required: false,
-    });
-    useOnboardingTourStore.setState({
-      step: "handoff",
-      projectId: project.id,
-      moduleId: "module-1",
-      storyId: "story-1",
-    });
-
-    render(<OnboardingTour onSelectStory={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Finish tour" }));
-
-    await waitFor(() => {
-      expect(api.acknowledgeProjectOnboarding).toHaveBeenCalledWith(project.id);
-      expect(queryClient.getQueryData(queryKeys.onboarding)).toBe(false);
-      expect(useOnboardingTourStore.getState().step).toBe("inactive");
-    });
-  });
-
   it("[overhaul-28] composes disabled-Projects onboarding with retryable default-project resolution", async () => {
     api.createProject
       .mockRejectedValueOnce(new Error("temporary failure"))
@@ -234,22 +280,17 @@ describe("onboarding and module-folder acceptance", () => {
       name: "General",
       project_id: "project-1",
     });
-    api.upsertModuleLink
+    api.writeModuleLink
+      .mockReset()
       .mockRejectedValueOnce(new Error("disk unavailable"))
-      .mockImplementation(async (moduleId: string, localPath: string) => ({
-        id: `link-${moduleId}`,
-        module_id: moduleId,
-        local_path: localPath,
-        created_at: "2026-08-19T00:00:00Z",
-        updated_at: "2026-08-19T00:00:00Z",
-      }));
+      .mockImplementation(acceptModuleLink);
 
     render(
-      <QueryClientProvider client={queryClient}>
+      <>
         <ModulesPane />
         <OnboardingTour onSelectStory={vi.fn()} />
         <ModalHost />
-      </QueryClientProvider>,
+      </>,
     );
 
     expect(
@@ -336,6 +377,81 @@ describe("onboarding and module-folder acceptance", () => {
     ).toBeVisible();
   });
 
+  it("[overhaul-295] cancels module creation after trust refusal and can retry without a duplicate module", async () => {
+    const trust = vi.fn(async (provider: string, _directory: string, approval: string | null) => ({
+      status: approval ? "prepared" : "approval_required",
+      approval: approval ? null : `${provider}-approval`,
+      directory: "/repos/trust",
+    } as const));
+    useStudioStore.setState({ selectedProjectId: "project-1" });
+    useOnboardingTourStore.getState().start("project-1");
+    api.createModule.mockResolvedValue({ id: "module-trust", name: "Runtime", project_id: "project-1" });
+    api.getProviderCatalog.mockResolvedValue({
+      value: { activated_providers: ["gemini"], global_default: null },
+    });
+    initializeStudioRuntime(trustRuntime(trust));
+    render(<><OnboardingTour onSelectStory={vi.fn()} /><ModalHost /><DialogHost /></>);
+    act(() => useModalStore.getState().pushModal({ type: "add-module" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "Module name" }), { target: { value: "Runtime" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Module folder" }), { target: { value: "/repos/trust" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create module" }));
+    expect(await screen.findByRole("dialog", { name: "Trust module folder?" })).toBeVisible();
+    expect(api.writeModuleLink).not.toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole("button", { name: "Cancel" }).at(-1)!);
+    expect(useOnboardingTourStore.getState().step).toBe("module-create");
+    expect(api.writeModuleLink).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create module" })).toBeEnabled());
+    expect(screen.getByRole("textbox", { name: "Module name" })).toBeEnabled();
+    expect(api.createModule).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog", { name: "Add Module" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Add your first module" })).toBeVisible();
+    expect(useClientStore.getState().selectedModuleId).toBeNull();
+    expect(api.createModule).not.toHaveBeenCalled();
+    expect(api.writeModuleLink).not.toHaveBeenCalled();
+
+    act(() => useModalStore.getState().pushModal({ type: "add-module" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "Module name" }), { target: { value: "Runtime" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Module folder" }), { target: { value: "/repos/trust" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create module" }));
+    await screen.findByRole("dialog", { name: "Trust module folder?" });
+    fireEvent.click(screen.getByRole("button", { name: "Trust folder" }));
+    await waitFor(() => expect(useOnboardingTourStore.getState().step).toBe("story-create"));
+    expect(api.createModule).toHaveBeenCalledOnce();
+    expect(api.writeModuleLink).toHaveBeenCalledOnce();
+  });
+
+  it("[overhaul-296] retries native setup failure and accepts an already-trusted folder without another prompt", async () => {
+    const trust = vi
+      .fn()
+      .mockRejectedValueOnce("Cannot write provider config: permission denied")
+      .mockImplementation(async () => ({
+        status: "already_trusted",
+        approval: null,
+        directory: "/repos/trusted",
+      }));
+    useStudioStore.setState({ selectedProjectId: "project-1" });
+    useOnboardingTourStore.getState().start("project-1");
+    api.createModule.mockResolvedValue({ id: "module-trusted", name: "Runtime", project_id: "project-1" });
+    api.getProviderCatalog.mockResolvedValue({
+      value: { activated_providers: ["gemini"], global_default: null },
+    });
+    render(<><AddModule runtime={trustRuntime(trust)} /><DialogHost /></>);
+    fireEvent.change(screen.getByRole("textbox", { name: "Module name" }), { target: { value: "Runtime" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Module folder" }), { target: { value: "/repos/trusted" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create module" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/permission denied.*Retry/);
+    expect(api.writeModuleLink).not.toHaveBeenCalled();
+    expect(useOnboardingTourStore.getState().step).toBe("module-create");
+    expect(api.createModule).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Create module" }));
+    await waitFor(() => expect(useOnboardingTourStore.getState().step).toBe("story-create"));
+    expect(screen.queryByRole("dialog", { name: "Trust module folder?" })).not.toBeInTheDocument();
+    expect(api.createModule).toHaveBeenCalledOnce();
+    expect(api.writeModuleLink).toHaveBeenCalledOnce();
+    expect(trust).toHaveBeenCalledWith("gemini", "/repos/trusted", null);
+  });
+
   it("[overhaul-29a] restores the module coach mark when Add Module is cancelled", async () => {
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useOnboardingTourStore.getState().start("project-1");
@@ -353,30 +469,6 @@ describe("onboarding and module-folder acceptance", () => {
       screen.getByRole("heading", { name: "Add your first module" }),
     ).toBeVisible();
     expect(useOnboardingTourStore.getState().step).toBe("module-create");
-  });
-
-  it("[overhaul-179] does not anchor module onboarding to the picker trigger", async () => {
-    useStudioStore.setState({ selectedProjectId: "project-1" });
-    useOnboardingTourStore.getState().start("project-1");
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <ModuleTabStrip />
-        <OnboardingTour onSelectStory={vi.fn()} />
-      </QueryClientProvider>,
-    );
-
-    expect(
-      screen.getByRole("heading", { name: "Add your first module" }),
-    ).toBeVisible();
-    const pickerTrigger = await screen.findByRole("button", {
-      name: "Open module picker",
-    });
-    expect(pickerTrigger).not.toHaveAttribute("data-coach-anchor");
-    expect(pickerTrigger).not.toHaveAttribute("data-coach-highlight");
-    expect(
-      document.querySelector('[data-coach-anchor="module-add"]'),
-    ).toBeNull();
   });
 
   it("[overhaul-29b] keeps the desktop folder picker beside the described CWD input", () => {
@@ -428,7 +520,7 @@ describe("onboarding and module-folder acceptance", () => {
     );
     expect(folderInput).toHaveAttribute("aria-invalid", "true");
     expect(api.createModule).not.toHaveBeenCalled();
-    expect(api.upsertModuleLink).not.toHaveBeenCalled();
+    expect(api.writeModuleLink).not.toHaveBeenCalled();
   });
 
   it("[overhaul-29c] keeps modal teaching cards beside their fields inside the modal", async () => {
@@ -492,15 +584,10 @@ describe("onboarding and module-folder acceptance", () => {
       name: "Runtime",
       project_id: "project-1",
     });
-    api.upsertModuleLink
+    api.writeModuleLink
+      .mockReset()
       .mockRejectedValueOnce(new Error("disk unavailable"))
-      .mockImplementation(async (moduleId: string, localPath: string) => ({
-        id: `link-${moduleId}`,
-        module_id: moduleId,
-        local_path: localPath,
-        created_at: "2026-08-19T00:00:00Z",
-        updated_at: "2026-08-19T00:00:00Z",
-      }));
+      .mockImplementation(acceptModuleLink);
 
     render(<AddModule />);
     fireEvent.change(screen.getByPlaceholderText("Module name"), {
@@ -521,13 +608,7 @@ describe("onboarding and module-folder acceptance", () => {
   });
 
   it("[overhaul-31] preserves selection on cancel and save failure, then resumes after a valid link", async () => {
-    seedModuleLinks([{
-      id: "link-old",
-      module_id: "module-old",
-      local_path: "/repos/old",
-      created_at: "2026-08-19T00:00:00Z",
-      updated_at: "2026-08-19T00:00:00Z",
-    }]);
+    seedModuleLinks([{ id: "link-module-old", moduleId: "module-old", path: "/repos/old" }]);
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({ selectedModuleId: "module-old", selectedTaskId: "story-old" });
 
@@ -539,15 +620,10 @@ describe("onboarding and module-folder acceptance", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(useClientStore.getState().selectedModuleId).toBe("module-old");
 
-    api.upsertModuleLink
+    api.writeModuleLink
+      .mockReset()
       .mockRejectedValueOnce(new Error("disk unavailable"))
-      .mockImplementation(async (moduleId: string, localPath: string) => ({
-        id: `link-${moduleId}`,
-        module_id: moduleId,
-        local_path: localPath,
-        created_at: "2026-08-19T00:00:00Z",
-        updated_at: "2026-08-19T00:00:00Z",
-      }));
+      .mockImplementation(acceptModuleLink);
     await act(async () => {
       await useClientStore.getState().selectModule("module-new");
     });

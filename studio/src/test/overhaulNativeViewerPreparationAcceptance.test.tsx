@@ -1,5 +1,12 @@
 import { render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { loadXtermTerminal } from "../features/agents/terminal/xtermTerminalLoader";
+
+// The compatibility renderer is a lazily fetched chunk; preload it so the
+// xterm host can be queried synchronously after render.
+beforeEach(async () => {
+  await loadXtermTerminal();
+});
 
 import { NativeGhosttyTerminal } from "../features/agents/terminal/NativeGhosttyTerminal";
 import { Terminal } from "../features/agents/terminal/Terminal";
@@ -8,6 +15,7 @@ import { useTerminalForegroundStore } from "../features/agents/terminal/internal
 import { releasePooledTransport } from "../features/agents/terminal/internal/entryPool";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useClientStore } from "../state/clientStore";
+import { installDesktopGraphQlRuntime } from "./desktopGraphQlRuntime";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -41,7 +49,10 @@ describe("native viewer attachment acceptance", () => {
   });
 
   beforeEach(() => {
+    window.history.replaceState({}, "", "/?terminalRenderer=native");
     vi.resetAllMocks();
+    localStorage.setItem("ticketry:terminal-renderer", "native");
+    installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       x: 0,
@@ -68,7 +79,7 @@ describe("native viewer attachment acceptance", () => {
           moduleId: "module-1",
           agent: "codex",
           status: "ready",
-          transport: "ready",
+          transport: "connecting",
           isPlanning: false,
           isInstant: false,
           initialPrompt: null,
@@ -226,15 +237,7 @@ describe("native viewer attachment acceptance", () => {
     expect(attachFrames[1]).toEqual(attachFrames[0]);
     reopened.unmount();
 
-    const leaseAcquireRequests = () =>
-      vi
-        .mocked(fetch)
-        .mock.calls.filter(([input]) =>
-          String(input instanceof Request ? input.url : input).endsWith(
-            "/api/terminals/viewers/lease/",
-          ),
-        ).length;
-    const acquisitionsBeforeFailedAttach = leaseAcquireRequests();
+    const requestsBeforeFailedAttach = vi.mocked(fetch).mock.calls.length;
     const fallback = render(<Terminal sessionId="session-1" />);
     await waitFor(() => {
       expect(fallback.getByTestId("native-terminal-fallback-notice")).toHaveTextContent(
@@ -243,7 +246,7 @@ describe("native viewer attachment acceptance", () => {
     });
     expect(fallback.getByTestId("terminal-host")).toBeVisible();
     expect(attachFrames).toHaveLength(3);
-    expect(leaseAcquireRequests()).toBe(acquisitionsBeforeFailedAttach);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(requestsBeforeFailedAttach);
     expect(releasePooledTransport).toHaveBeenCalledTimes(2);
     expect(resizeRegistrations).toBe(2);
   });
@@ -312,6 +315,7 @@ describe("native viewer attachment acceptance", () => {
     await waitFor(() =>
       expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_attach", {
         runId: "run-1",
+        viewerId: expect.any(String),
         frame: {
           x: 0,
           y: 0,

@@ -1,0 +1,244 @@
+import { createRef } from "react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  ModelConfigurationPanel,
+  type ModelConfigurationPanelHandle,
+  useActivatedProviders,
+} from "../features/workflows";
+import { initializeStudioRuntime } from "../runtime";
+import { createBrowserRuntime } from "../runtime/browserRuntime";
+import { createDesktopRuntime } from "../runtime/desktopRuntime";
+
+const startup = {
+  serviceHealth: {
+    state: "ready" as const,
+    service: "backend",
+    message: null,
+    logPointer: null,
+  },
+  initialNotices: [],
+};
+
+const allProviders = [
+  { id: "p-claude", slug: "claude", activated: true, supports_unattended: true },
+  { id: "p-codex", slug: "codex", activated: true, supports_unattended: true },
+  { id: "p-gemini", slug: "gemini", activated: false, supports_unattended: true },
+];
+
+function payload(activated: readonly string[]) {
+  return {
+    __typename: "ProviderCatalog",
+    configurable_providers: allProviders.map((provider) => ({
+      __typename: "WorktrackerProvider",
+      ...provider,
+      activated: activated.includes(provider.slug),
+    })),
+    providers: allProviders
+      .filter((provider) => activated.includes(provider.slug))
+      .map((provider) => ({
+        __typename: "WorktrackerProvider",
+        ...provider,
+        activated: true,
+      })),
+    agent_models: [
+      {
+        __typename: "WorktrackerAgentmodel",
+        id: "m-sonnet",
+        provider: "p-claude",
+        name: "sonnet",
+        reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [{ __typename: "WorktrackerAgentmodelreasoninglevel", id: 1, reasoning_level_id: "r-high" }] },
+      },
+      {
+        __typename: "WorktrackerAgentmodel",
+        id: "m-gpt",
+        provider: "p-codex",
+        name: "gpt-5.6-luna",
+        reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [{ __typename: "WorktrackerAgentmodelreasoninglevel", id: 2, reasoning_level_id: "r-high" }] },
+      },
+      {
+        __typename: "WorktrackerAgentmodel",
+        id: "m-astra",
+        provider: "p-codex",
+        name: "gpt-6-astra",
+        reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [{ __typename: "WorktrackerAgentmodelreasoninglevel", id: 4, reasoning_level_id: "r-high" }] },
+      },
+      ...["gpt-6-sol", "gpt-6-luna"].map((name, index) => ({
+        __typename: "WorktrackerAgentmodel",
+        id: `m-gpt-6-${index}`,
+        provider: "p-codex",
+        name,
+        reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [{ __typename: "WorktrackerAgentmodelreasoninglevel", id: 5 + index, reasoning_level_id: "r-high" }] },
+      })),
+      {
+        __typename: "WorktrackerAgentmodel",
+        id: "m-glm-flash",
+        provider: "p-codex",
+        name: "glm-5.3-flash",
+        reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [] },
+      },
+      {
+        __typename: "WorktrackerAgentmodel",
+        id: "m-gemini",
+        provider: "p-gemini",
+        name: "gemini-pro",
+        reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [{ __typename: "WorktrackerAgentmodelreasoninglevel", id: 3, reasoning_level_id: "r-high" }] },
+      },
+    ],
+    reasoning_levels: [{ __typename: "WorktrackerReasoninglevel", id: "r-high", name: "high" }],
+    codex_profiles: [],
+    global_default: {
+      __typename: "GlobalLaunchDefault",
+      provider: activated.includes("gemini") ? "gemini" : "codex",
+      profile: null,
+      model: activated.includes("gemini") ? "gemini-pro" : "gpt-5.6-luna",
+      reasoning: "high",
+    },
+  };
+}
+
+function PickerProbe() {
+  const providers = useActivatedProviders();
+  return (
+    <output aria-label="Launch picker providers">
+      {[...providers.slugs].sort().join(",")}
+    </output>
+  );
+}
+
+describe("provider catalogue desktop runtime acceptance", () => {
+  afterEach(() => {
+    initializeStudioRuntime(createBrowserRuntime({ environment: {} }));
+    vi.unstubAllGlobals();
+  });
+
+  it("[overhaul-79] atomically saves GraphQL catalogue changes and converges launch pickers immediately", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const operations: string[] = [];
+    const graphqlExecute = vi.fn(async (encoded: string) => {
+      const request = JSON.parse(encoded) as {
+        operationName: string;
+        variables: {
+          activatedProviders?: string[];
+          codexProfiles?: string[];
+          defaultProvider?: string | null;
+          defaultProfile?: string | null;
+          defaultModel?: string | null;
+          defaultReasoning?: string | null;
+        };
+      };
+      operations.push(request.operationName);
+      if (request.operationName === "LoadProviderCatalog") {
+        return JSON.stringify({ data: { provider_catalog: payload(["claude", "codex"]) } });
+      }
+      expect(request.operationName).toBe("UpdateProviderCatalog");
+      expect(request.variables).toEqual({
+        activatedProviders: ["claude", "codex", "gemini"],
+        codexProfiles: [],
+        defaultProvider: "gemini",
+        defaultProfile: null,
+        defaultModel: "gemini-pro",
+        defaultReasoning: "high",
+      });
+      return JSON.stringify({
+        data: {
+          update_provider_catalog: payload(request.variables.activatedProviders ?? []),
+        },
+      });
+    });
+    initializeStudioRuntime(await createDesktopRuntime({
+      invoke: vi.fn().mockResolvedValue(startup),
+      createGraphQlProxy: () => ({
+        graphql_execute: graphqlExecute,
+        graphql_subscribe: vi.fn(),
+        graphql_unsubscribe: vi.fn(),
+      }),
+    }));
+
+    const panel = createRef<ModelConfigurationPanelHandle>();
+    render(
+      <>
+        <ModelConfigurationPanel ref={panel} />
+        <button type="button" onClick={() => panel.current?.save()}>Save</button>
+        <PickerProbe />
+      </>,
+    );
+
+    const region = await screen.findByRole("region", { name: "Model configuration" });
+    expect(region.querySelector('option[value="gpt-6-astra"]')).toBeInTheDocument();
+    expect(region.querySelector('option[value="gpt-6-sol"]')).toBeInTheDocument();
+    expect(region.querySelector('option[value="gpt-6-luna"]')).toBeInTheDocument();
+    expect(region.querySelector('option[value="glm-5.3-flash"]')).toBeInTheDocument();
+    for (const model of ["gpt-6-sol", "gpt-6-luna"]) {
+      fireEvent.change(within(region).getByLabelText("Model"), { target: { value: model } });
+      expect(within(region).getByLabelText("Model")).toHaveValue(model);
+    }
+    await waitFor(() => {
+      expect(screen.getByRole("status", { name: "Launch picker providers" }))
+        .toHaveTextContent("claude,codex");
+    });
+    fireEvent.click(within(region).getByRole("checkbox", { name: "Activate gemini" }));
+    fireEvent.change(within(region).getByRole("combobox", { name: "Agent/provider" }), {
+      target: { value: "gemini" },
+    });
+    fireEvent.change(within(region).getByLabelText("Model"), {
+      target: { value: "gemini-pro" },
+    });
+    fireEvent.change(within(region).getByRole("combobox", { name: "Reasoning" }), {
+      target: { value: "high" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status", { name: "Launch picker providers" }))
+        .toHaveTextContent("claude,codex,gemini");
+    });
+    expect(operations).toEqual(["LoadProviderCatalog", "UpdateProviderCatalog"]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("[overhaul-391] offers GPT-6 Sol and Luna as Codex launch defaults", async () => {
+    const graphqlExecute = vi.fn(async (encoded: string) => {
+      const request = JSON.parse(encoded) as { operationName: string; variables: { defaultModel?: string } };
+      if (request.operationName === "LoadProviderCatalog") {
+        return JSON.stringify({ data: { provider_catalog: payload(["claude", "codex"]) } });
+      }
+      expect(request.operationName).toBe("UpdateProviderCatalog");
+      expect(request.variables.defaultModel).toBe("gpt-6-luna");
+      return JSON.stringify({
+        data: {
+          update_provider_catalog: {
+            ...payload(["claude", "codex"]),
+            global_default: {
+              __typename: "GlobalLaunchDefault",
+              provider: "codex",
+              profile: null,
+              model: "gpt-6-luna",
+              reasoning: "high",
+            },
+          },
+        },
+      });
+    });
+    initializeStudioRuntime(await createDesktopRuntime({
+      invoke: vi.fn().mockResolvedValue(startup),
+      createGraphQlProxy: () => ({
+        graphql_execute: graphqlExecute,
+        graphql_subscribe: vi.fn(),
+        graphql_unsubscribe: vi.fn(),
+      }),
+    }));
+
+    const panel = createRef<ModelConfigurationPanelHandle>();
+    render(<><ModelConfigurationPanel ref={panel} /><button type="button" onClick={() => panel.current?.save()}>Save</button></>);
+    const region = await screen.findByRole("region", { name: "Model configuration" });
+    for (const model of ["gpt-6-sol", "gpt-6-luna"]) {
+      expect(region.querySelector(`option[value="${model}"]`)).toBeInTheDocument();
+      fireEvent.change(within(region).getByLabelText("Model"), { target: { value: model } });
+      expect(within(region).getByLabelText("Model")).toHaveValue(model);
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(graphqlExecute).toHaveBeenCalledTimes(2));
+  });
+});

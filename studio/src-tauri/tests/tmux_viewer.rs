@@ -1,11 +1,11 @@
 use crate::common::isolated_tmux::{IsolatedTmux, TmuxEnvironmentOverride, RUN_ID, TMUX_ENV_LOCK};
-use muxed_studio_lib::terminal_runtime::{
-    AttachmentOutcome, TerminalAttachment, TerminalAttachmentError, TerminalScrollDirection,
-};
 use std::io::Read;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
+use ticketry_terminal::{
+    AttachmentOutcome, TerminalAttachment, TerminalAttachmentError, TerminalScrollDirection,
+};
 
 mod common;
 
@@ -83,6 +83,22 @@ fn reports_a_missing_session_as_a_typed_error() {
         error,
         TerminalAttachmentError::SessionNotFound { .. }
     ));
+}
+
+#[test]
+fn rejects_unbounded_input_without_ending_the_session() {
+    let _environment_lock = TMUX_ENV_LOCK.lock().expect("lock TMUX_TMPDIR");
+    let server = IsolatedTmux::start();
+    let _environment = TmuxEnvironmentOverride::set(&server.socket_dir);
+    let viewer = TerminalAttachment::attach(RUN_ID, 80, 24).expect("attach terminal");
+    let (mut viewer, _reader) = viewer.into_control_and_reader();
+
+    assert!(matches!(
+        viewer.write_all(&vec![0_u8; ticketry_terminal::MAX_INPUT_BYTES + 1]),
+        Err(TerminalAttachmentError::InputTooLarge { .. })
+    ));
+    assert!(server.has_session());
+    viewer.detach().expect("detach bounded-input viewer");
 }
 
 #[test]
@@ -184,4 +200,63 @@ fn scrolls_copy_mode_history_back_to_the_live_prompt_without_ending_the_session(
         server.has_session(),
         "detach must preserve the durable session"
     );
+}
+
+#[test]
+fn delivers_wheel_scroll_to_alternate_screen_programs_instead_of_copy_mode() {
+    let _environment_lock = TMUX_ENV_LOCK.lock().expect("lock TMUX_TMPDIR");
+    let server = IsolatedTmux::start();
+    let _environment = TmuxEnvironmentOverride::set(&server.socket_dir);
+    let viewer = TerminalAttachment::attach(RUN_ID, 80, 24).expect("attach terminal");
+    let (mut viewer, _reader) = viewer.into_control_and_reader();
+
+    // Alternate-screen programs receive SGR wheel reports even when they do
+    // not enable mouse reporting, matching Codex's scroll handling.
+    viewer
+        .write_all(b"printf '\\033[?1049h'; cat -v\r")
+        .expect("start alternate-screen program");
+    await_pane_value(&server, "#{alternate_on}", "1");
+    viewer
+        .scroll(TerminalScrollDirection::Up, 3)
+        .expect("scroll alternate screen");
+    await_pane_contents(&server, "^[[<64;41;13M^[[<64;41;13M^[[<64;41;13M");
+    assert_eq!(server.pane_value("#{pane_in_mode}"), "0");
+
+    // A program that asked for SGR mouse reports gets wheel reports.
+    viewer
+        .write_all(b"\x03printf '\\033[?1000h\\033[?1006h'; cat -v\r")
+        .expect("start mouse-reporting program");
+    await_pane_value(&server, "#{mouse_sgr_flag}", "1");
+    viewer
+        .scroll(TerminalScrollDirection::Down, 1)
+        .expect("scroll mouse-reporting program");
+    await_pane_contents(&server, "^[[<65;41;13M");
+    assert_eq!(server.pane_value("#{pane_in_mode}"), "0");
+    assert_eq!(server.global_option("mouse"), "off");
+
+    viewer.detach().expect("detach alternate-screen viewer");
+    assert!(server.has_session());
+}
+
+fn await_pane_value(server: &IsolatedTmux, format: &str, expected: &str) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while server.pane_value(format) != expected {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "{format} never became {expected}"
+        );
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+fn await_pane_contents(server: &IsolatedTmux, expected: &str) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while !server.pane_contents(RUN_ID).contains(expected) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "pane never showed {expected:?}:\n{}",
+            server.pane_contents(RUN_ID)
+        );
+        thread::sleep(Duration::from_millis(20));
+    }
 }

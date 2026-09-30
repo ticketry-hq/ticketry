@@ -1,0 +1,53 @@
+# Ended runs of one WorkItem, read through the generated WorkItem model.
+#
+# The status stream carries live runs only, so the runs a reopened workspace has
+# to restore come from here. A Story reads its own `task` runs; a module scratch
+# workspace reads the plan, instant, and shell runs the module WorkItem owns.
+# `terminalSession` is the resumability evidence: a run whose terminal session
+# record is still live (`terminatedAt` null) can be restored however long ago it
+# ended, while a run with no record — or with a terminated one, whose tmux
+# session is gone — never can. No calendar cutoff.
+query WorkItemEndedRuns(
+  $issueId: String!
+  $issueType: String!
+  $scopes: [String!]!
+  $limit: Int!
+) {
+  work_item: worktrackerIssue(
+    filters: { id: { eq: $issueId }, type: { eq: $issueType } }
+  ) {
+    nodes {
+      id
+      project_id: projectId
+      module_id: moduleId
+      ended_runs: agentRuns(
+        filters: { endedAt: { is_null: false }, scope: { is_in: $scopes } }
+        orderBy: { startedAt: DESC }
+        pagination: { offset: { limit: $limit, offset: 0 } }
+      ) {
+        nodes {
+          ...WorkItemEndedRunFields
+        }
+      }
+    }
+  }
+}
+
+fragment WorkItemEndedRunFields on AgentRuns {
+  agent_run_id: id
+  agent
+  scope
+  status
+  started_at: startedAt
+  ended_at: endedAt
+  exit_code: exitCode
+  launch_state: launchState
+  launch_model: launchModel
+  provider_session_id: providerSessionId
+  terminal_session: terminalSession {
+    nodes {
+      agent_run_id: agentRunId
+      terminated_at: terminatedAt
+    }
+  }
+}

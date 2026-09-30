@@ -3,9 +3,8 @@ import {
   useTerminalStore,
 } from "../../../../../features/agents/terminal/appNavigation";
 import { toast } from "../../../../../state/clientStore";
-import { apiErrorMessage } from "../../../../../shared/api/client";
-import { queryClient } from "../../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../../shared/query/keys";
+import { apiErrorMessage } from "../../../../../shared/api/errors";
+import { refreshTerminalHoldings } from "../../../../../features/agents/terminal";
 import type { SessionId } from "../../../../../features/agents/types";
 
 /**
@@ -26,10 +25,13 @@ export async function closeTerminalTab(
       return;
     }
     if (!isScratchBucket(bucket)) {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.terminalSessions.resumable(bucket),
-        exact: true,
-      });
+      try {
+        await refreshTerminalHoldings();
+      } catch (error) {
+        toast.error(
+          `Terminal closed, but resumable sessions could not be refreshed: ${apiErrorMessage(error)}`,
+        );
+      }
     }
   } else {
     term.closeTab(sessionId);

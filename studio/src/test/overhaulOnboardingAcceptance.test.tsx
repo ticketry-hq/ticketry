@@ -6,19 +6,47 @@ const catalogApi = vi.hoisted(() => ({
   getProviderCatalog: vi.fn(),
   putProviderCatalog: vi.fn(),
 }));
-const resolveDefaultProject = vi.hoisted(() => vi.fn());
+const providerState = vi.hoisted(() => ({
+  catalog: { activated_providers: [] as string[], global_default: null },
+  capabilities: [] as unknown[],
+}));
 
-vi.mock("../shared/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shared/api/client")>()),
+vi.mock("./legacyApiFixture", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./legacyApiFixture")>()),
   ...catalogApi,
 }));
-vi.mock("../features/studio/lib/defaultProject", () => ({
-  resolveDefaultProject,
+
+vi.mock("../features/studio/lib/defaultProject", async () => ({
+  ...(await vi.importActual("../features/studio/lib/defaultProject")),
+  resolveDefaultProject: vi.fn(),
+}));
+
+vi.mock("../features/workflows/providerQueries", () => ({
+  setProviderCapabilities: vi.fn(),
+  loadProviderCapabilities: catalogApi.getLaunchProviderCapabilities,
+  loadConfigurableProviderCapabilities: catalogApi.getLaunchProviderCapabilities,
+  loadProviderCatalog: async () => (await catalogApi.getProviderCatalog()).value,
+  updateProviderCatalog: async (value: unknown) =>
+    (await catalogApi.putProviderCatalog(value)).value,
+  useProviderCatalogQuery: () => ({
+    data: providerState.catalog,
+    isLoading: false,
+    isError: false,
+  }),
+  useConfigurableProviderCapabilitiesQuery: () => ({
+    data: providerState.capabilities,
+    isLoading: false,
+    isError: false,
+  }),
 }));
 
 import OnboardingWelcome from "../app/onboarding/OnboardingWelcome";
+import * as defaultProject from "../features/studio/lib/defaultProject";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
 import { useStudioStore } from "../features/projects/store";
+
+const resolveDefaultProject =
+  defaultProject.resolveDefaultProject as ReturnType<typeof vi.fn>;
 const selectProject = vi.fn();
 let releaseSelection = () => {};
 
@@ -33,7 +61,7 @@ describe("onboarding acceptance", () => {
     }));
     useOnboardingTourStore.getState().reset();
     resolveDefaultProject.mockReset().mockResolvedValue({
-      id: "created-project",
+      id: "installation-project",
       name: "Coding",
       slug: "CDN",
       description: "",
@@ -46,28 +74,43 @@ describe("onboarding acceptance", () => {
         };
       }),
     );
-    useStudioStore.setState({
-      selectedProjectId: null,
-      selectProject,
-    });
+    useStudioStore.setState({ selectedProjectId: null, selectProject });
   });
 
-  it("[overhaul-26] selects the first project before its guided tour starts", async () => {
+  it("[overhaul-26] selects the installation project before its zero-provider tour starts", async () => {
     render(<OnboardingWelcome />);
 
     expect(screen.queryByRole("button", { name: "Skip" })).not.toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("checkbox", { name: "I use codex" }));
+    await screen.findByRole("checkbox", { name: "I use codex" });
+    // One installation project: nobody is asked to name or choose one.
+    expect(screen.queryByRole("heading", { name: "Your first project" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Get started" }));
 
     await waitFor(() =>
-      expect(selectProject).toHaveBeenCalledWith("created-project"),
+      expect(selectProject).toHaveBeenCalledWith("installation-project"),
     );
     expect(useOnboardingTourStore.getState().step).toBe("inactive");
     releaseSelection();
     await waitFor(() =>
       expect(useOnboardingTourStore.getState().step).toBe("module-create"),
     );
-    expect(useStudioStore.getState().selectedProjectId).toBe("created-project");
-    expect(useOnboardingTourStore.getState().projectId).toBe("created-project");
+    expect(useStudioStore.getState().selectedProjectId).toBe("installation-project");
+    expect(useOnboardingTourStore.getState().projectId).toBe("installation-project");
+  });
+
+  it("keeps a provider selection when a late catalog response repeats the initial value", async () => {
+    const view = render(<OnboardingWelcome />);
+    const codex = await screen.findByRole("checkbox", { name: "I use codex" });
+
+    fireEvent.click(codex);
+    expect(codex).toBeChecked();
+
+    providerState.catalog = {
+      activated_providers: [],
+      global_default: null,
+    };
+    view.rerender(<OnboardingWelcome />);
+
+    expect(codex).toBeChecked();
   });
 });

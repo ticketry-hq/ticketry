@@ -1,5 +1,13 @@
 # T3 Code terminal architecture
 
+Status: **historical research about another product.** It describes T3 Code's
+renderer, not Ticketry's. Ticketry ran a Ghostty WASM renderer of its own for a
+while; CODING-1487 removed it. Desktop development and packaged builds render
+with embedded native libghostty, browser development renders with xterm over the
+`browserTerminalClient` WebSocket adapter, and xterm is the compatibility
+fallback everywhere. See
+[`../archive/ghostty-wasm-restore.md`](../archive/ghostty-wasm-restore.md).
+
 Research snapshot: T3 Code commit [`038560e58036d51b2576b3c2cd9170a194cefe9e`](https://github.com/pingdotgg/t3code/tree/038560e58036d51b2576b3c2cd9170a194cefe9e), dated 2026-08-14. T3 Code changes quickly, so the pinned commit matters: this note describes that implementation, not older releases.
 
 ## Executive summary

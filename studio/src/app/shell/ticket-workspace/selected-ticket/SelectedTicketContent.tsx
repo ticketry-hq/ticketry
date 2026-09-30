@@ -1,12 +1,12 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
 } from "react";
-import { useWorkspaceDocuments } from "./documents/queries";
+import { useWorkspaceDocuments } from "../../../../features/documents";
 import {
   isScratchBucket,
   useTerminalStore,
@@ -24,10 +24,7 @@ import { WorkspaceTabStrip } from "./internal/WorkspaceTabStrip";
 import { DormantWorkspaceTabs } from "./internal/DormantWorkspaceTabs";
 import { WorkspaceTabBody } from "./internal/WorkspaceTabBody";
 import type { WorkspaceLauncherContext } from "./internal/WorkspaceLauncher";
-import {
-  useRefreshWorkspaceTerminalSessionsForRuns,
-  useWorkspaceTerminalSessions,
-} from "./terminals/useWorkspaceTerminalSessions";
+import { useWorkspaceTerminalSessions } from "./terminals/useWorkspaceTerminalSessions";
 import { useWorkspaceTabActions } from "./internal/useWorkspaceTabActions";
 import {
   useRememberPendingTerminalTarget,
@@ -39,11 +36,9 @@ import {
   useRekeyedTerminalFocus,
 } from "./internal/useWorkspaceTabFocus";
 import { useWorkspaceTabPresentation } from "./internal/useWorkspaceTabPresentation";
-import { useActivatedProviders } from "../../../../features/workflows/launchProviderCatalog";
+import { useWorkspaceTabOrdering } from "../../../../features/workspace-tabs/useWorkspaceTabOrdering";
 import { useWorkspaceTabOrder } from "../../../../features/workspace-tabs/queries";
-import { useWorkspaceTabReorderDrag } from "../../../../features/workspace-tabs/internal/useWorkspaceTabReorderDrag";
-import { workspaceTabIdentityKey } from "../../../../features/workspace-tabs/ordering";
-import { useWorkspaceTabLifecycleOrder } from "../../../../features/workspace-tabs/useWorkspaceTabLifecycleOrder";
+import { useTaskWorktreeChangesTabLifecycle } from "./internal/useTaskWorktreeChangesTabLifecycle";
 
 export type {
   ScratchLaunchMode,
@@ -63,43 +58,53 @@ export function SelectedTicketContent({
   projectId,
   moduleId,
   owner,
+  workspaceActive = true,
   details,
   launchContext = null,
   entrySignal = 0,
   onBeforeFirstTab,
   modal = false,
+  conversationRunId = null,
+  conversationTitle = null,
 }: {
   bucket: string | null;
   projectId: string | null;
   moduleId: string | null;
   owner: ForegroundOwner;
+  /** Whether the selected-ticket workspace may present its native terminal. */
+  workspaceActive?: boolean;
   details: ReactNode;
   launchContext?: WorkspaceLauncherContext | null;
   entrySignal?: number;
   onBeforeFirstTab?: () => void;
   /** True only when this workspace is hosted by the issue-drawer overlay. */
   modal?: boolean;
+  /** Restrict a Conversations row to the one terminal run that row owns. */
+  conversationRunId?: string | null;
+  /** Selected conversation title read from its Apollo Instant ticket row. */
+  conversationTitle?: string | null;
 }) {
   const {
     sessions,
     tabs,
     activeTerminalId: activeTermIdOrNull,
     scratch,
-    persistedSessions,
-    terminalSessionsFetched,
+    workspaceRuns,
+    endedRuns,
     resumableSessions,
-    mountedBucketRunIds,
-  } = useWorkspaceTerminalSessions(bucket, projectId, moduleId);
-  const {
-    slugs: activatedProviders,
-    loaded: providersLoaded,
-    failed: providersFailed,
-  } = useActivatedProviders();
+    restorationExcludedRunIds,
+  } = useWorkspaceTerminalSessions(
+    bucket,
+    projectId,
+    moduleId,
+    conversationRunId,
+  );
   const ensureWorkspace = useTicketWorkspaceStore((s) => s.ensureWorkspace);
   const setActive = useTicketWorkspaceStore((s) => s.setActive);
   const setActiveDoc = useTicketWorkspaceStore((s) => s.setActiveDoc);
   const paneRef = useRef<HTMLDivElement>(null);
   const tabStripRef = useRef<HTMLDivElement>(null);
+  const launcherTriggerRef = useRef<HTMLButtonElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const detailsSurfaceRef = useRef<HTMLDivElement>(null);
   const requestedSurfaceRef = useRef<TaskWorkspaceTabIdentity | null>(null);
@@ -121,7 +126,6 @@ export function SelectedTicketContent({
   );
   const isEditView =
     owner === "studio" && !sidebarVisible;
-
   const engageWorkspaceTab = useCallback((tab: TaskWorkspaceTabIdentity): void => {
     setEditViewBodyEngaged(true);
     if (tab.kind === "terminal") {
@@ -154,6 +158,7 @@ export function SelectedTicketContent({
     requestedSurfaceRef,
     requestedTerminalRef,
     rememberPendingTerminalRef,
+    explicitTerminalRunId: conversationRunId,
   });
 
   useEffect(() => {
@@ -175,11 +180,12 @@ export function SelectedTicketContent({
     moduleId,
     isScratchBucket(bucket),
   );
+  const workspaceDocuments = conversationRunId ? [] : documentQuery.documents;
 
   useStudioDocumentRestoration({
     bucket,
     owner,
-    documents: documentQuery.documents,
+    documents: workspaceDocuments,
     documentsFetched: documentQuery.isFetched,
     restoreRequestRef,
     restoreGenerationRef,
@@ -187,29 +193,33 @@ export function SelectedTicketContent({
     setActiveDoc,
   });
 
-  useEffect(() => {
-    if (!bucket || !terminalSessionsFetched) return;
-    useTerminalStore.getState().restoreLiveSessions(bucket, persistedSessions);
+  // ProjectRunStatus already knows which live runs belong to this workspace.
+  // Materialize their connecting tabs before paint so reopening a task never
+  // shows its lifecycle badge without the matching terminal tab. Attaching the
+  // viewer remains asynchronous and may keep the tab in "connecting".
+  useLayoutEffect(() => {
+    if (!bucket) return;
+    useTerminalStore.getState().reconcileRunTabs(
+      bucket,
+      workspaceRuns,
+      restorationExcludedRunIds,
+    );
     restoreTerminalTarget(bucket, restoreGenerationRef.current, true);
   }, [
     bucket,
-    mountedBucketRunIds,
-    persistedSessions,
+    restorationExcludedRunIds,
     restoreTerminalTarget,
-    terminalSessionsFetched,
+    workspaceRuns,
   ]);
 
-  useRefreshWorkspaceTerminalSessionsForRuns({
-    bucket,
-    projectId,
-    moduleId,
-    mountedRunIds: mountedBucketRunIds,
-  });
-
   const sessionByRun = useTerminalStore((s) => s.sessionByRun);
-  const savedTabOrder = useWorkspaceTabOrder(
-    bucket && !isScratchBucket(bucket) ? bucket : null,
-  );
+  const workspaceTabWorkItemId = bucket && !isScratchBucket(bucket) ? bucket : null;
+  const hasTaskChangesTab = useTaskWorktreeChangesTabLifecycle({
+    taskId: workspaceTabWorkItemId,
+    owner,
+  });
+  const hasChangesTab = (scratch && moduleId !== null) || hasTaskChangesTab;
+  const savedTabOrder = useWorkspaceTabOrder(workspaceTabWorkItemId);
 
   useEffect(() => {
     const request = restoreRequestRef.current;
@@ -248,71 +258,24 @@ export function SelectedTicketContent({
     bucket,
     projectId,
     moduleId,
-    documents: documentQuery.documents,
+    documents: workspaceDocuments,
     terminalTabs: tabs,
     activeTerminalId: activeTermId,
     resumableSessions,
+    endedRuns,
     savedTabOrder: savedTabOrder.order,
+    hasChangesTab,
+    terminalOnly: Boolean(conversationRunId),
   });
-
-  const toPersistentTabIdentity = useCallback(
-    (identity: TaskWorkspaceTabIdentity): TaskWorkspaceTabIdentity => {
-      if (identity.kind !== "terminal") return identity;
-      const terminal = tabs.find((tab) => tab.id === identity.id);
-      return {
-        kind: "terminal",
-        id: terminal?.meta.agentRunId ?? identity.id,
-      };
-    },
-    [tabs],
-  );
-  const knownPersistentTabs = useMemo(() => {
-    const identities: TaskWorkspaceTabIdentity[] = [
-      { kind: "details" },
-      ...documentQuery.documents.map((document) => ({
-        kind: "doc" as const,
-        id: document.id,
-      })),
-      ...persistedSessions.map((session) => ({
-        kind: "terminal" as const,
-        id: session.agent_run_id,
-      })),
-      ...resumableSessions.map((session) => ({
-        kind: "terminal" as const,
-        id: session.agent_run_id,
-      })),
-      ...tabs.map((tab) => ({
-        kind: "terminal" as const,
-        id: tab.meta.agentRunId ?? tab.id,
-      })),
-    ];
-    return [...new Map(
-      identities.map((identity) => [workspaceTabIdentityKey(identity), identity]),
-    ).values()];
-  }, [documentQuery.documents, persistedSessions, resumableSessions, tabs]);
-  const workspaceTabReorder = useWorkspaceTabReorderDrag({
-    workItemId: bucket && !isScratchBucket(bucket) ? bucket : null,
-    visibleOrder: navigableTabs,
+  const workspaceTabReorder = useWorkspaceTabOrdering({
+    workItemId: workspaceTabWorkItemId,
     savedOrder: savedTabOrder,
-    knownIdentities: knownPersistentTabs,
-    toPersistentIdentity: toPersistentTabIdentity,
-  });
-  useWorkspaceTabLifecycleOrder({
-    workItemId: bucket && !isScratchBucket(bucket) ? bucket : null,
-    savedOrder: savedTabOrder.order,
-    orderReady: savedTabOrder.isReady,
-    visibleIdentities: [
-      { kind: "details" },
-      ...openDocs.map((document) => ({
-        kind: "doc" as const,
-        id: document.id,
-      })),
-      ...tabs.flatMap((tab) =>
-        tab.meta.agentRunId
-          ? [{ kind: "terminal" as const, id: tab.meta.agentRunId }]
-          : [],
-      ),
-    ],
+    documents: workspaceDocuments,
+    openDocuments: openDocs,
+    terminalTabs: tabs,
+    resumableSessions,
+    visibleOrder: navigableTabs,
+    hasChangesTab,
   });
 
   useEditViewWorkspaceFocus({
@@ -341,14 +304,15 @@ export function SelectedTicketContent({
 
   const {
     selectWorkspaceTab,
+    activateWorkspaceTerminal,
     diveWorkspaceTab,
     claimPointerZone,
     closeWorkspaceDocument,
     reopenWorkspaceDocument,
     closeWorkspaceTerminal,
     resumeWorkspaceTerminal,
-    launchTaskAgent,
-    resumingRunId,
+    rememberLaunchedTaskAgent,
+    resumingRunIds,
   } = useWorkspaceTabActions({
     bucket,
     projectId,
@@ -359,7 +323,7 @@ export function SelectedTicketContent({
     activeDocument: activeDoc,
     activeTerminalId: activeTermId,
     terminalIds: termIds,
-    documents: documentQuery.documents,
+    documents: workspaceDocuments,
     sessions,
     isEditView,
     launchContext,
@@ -378,6 +342,7 @@ export function SelectedTicketContent({
     selectTab: selectWorkspaceTab,
     diveTab: diveWorkspaceTab,
     engageTab: engageWorkspaceTab,
+    launcherTriggerRef,
     onBeforeFirst: onBeforeFirstTab,
     modal,
   });
@@ -400,6 +365,7 @@ export function SelectedTicketContent({
     >
       <WorkspaceTabStrip
         tabStripRef={tabStripRef}
+        launcherTriggerRef={launcherTriggerRef}
         isEditView={isEditView}
         editViewZone={editViewZone}
         showZoneChrome={showZoneChrome}
@@ -416,32 +382,34 @@ export function SelectedTicketContent({
         reorderDrag={workspaceTabReorder}
         bucket={bucket}
         launchContext={launchContext}
-        activatedProviders={activatedProviders}
-        providersLoaded={providersLoaded}
-        providersFailed={providersFailed}
+        conversationTitle={conversationTitle}
         onClaimPointerZone={claimPointerZone}
         onSetEditViewZone={setEditViewZone}
         onSelectTab={selectWorkspaceTab}
+        onActivateTerminal={activateWorkspaceTerminal}
         onCloseDocument={closeWorkspaceDocument}
         onCloseTerminal={closeWorkspaceTerminal}
-        onLaunchTaskAgent={launchTaskAgent}
-      />
-
-      <DormantWorkspaceTabs
-        closedDocuments={closedDocs}
-        resumableSessions={resumable}
-        resumableChips={dormantChips.resumable}
-        historyChips={dormantChips.history}
-        resumingRunId={resumingRunId}
-        onReopenDocument={reopenWorkspaceDocument}
-        onResumeTerminal={(session) => void resumeWorkspaceTerminal(session)}
+        onTaskAgentLaunched={rememberLaunchedTaskAgent}
+        trailing={
+          <DormantWorkspaceTabs
+            closedDocuments={closedDocs}
+            resumableSessions={resumable}
+            resumableChips={dormantChips.resumable}
+            historyChips={dormantChips.history}
+            resumingRunIds={resumingRunIds}
+            onReopenDocument={reopenWorkspaceDocument}
+            onResumeTerminal={(session) => void resumeWorkspaceTerminal(session)}
+          />
+        }
       />
 
       <WorkspaceTabBody
         bodyRef={bodyRef}
         detailsSurfaceRef={detailsSurfaceRef}
         bucket={bucket}
+        moduleId={moduleId}
         owner={owner}
+        workspaceActive={workspaceActive}
         details={details}
         activeKind={effActive}
         activeDocument={activeDoc}

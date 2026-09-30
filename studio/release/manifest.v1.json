@@ -8,26 +8,35 @@
       "required_outputs": ["dist/index.html"]
     },
     "tauri": {
-      "command": ["npm", "run", "tauri", "--", "build", "--features", "native-libghostty"],
+      "command": ["npm", "run", "tauri", "--", "build"],
       "binary_name": "ticketry",
-      "bundle_formats": ["app", "dmg"]
+      "bundle_formats": ["app", "dmg", "app.tar.gz"]
     },
-    "sidecar": {
-      "build_script": "../backend/packaging/build-sidecar.sh",
-      "defaults_artifact": "../backend/worktracker/reviewed_defaults.json",
-      "migration_directories": [
-        "../backend/worktracker/migrations",
-        "../backend/apps/documents/migrations",
-        "../backend/apps/execution/migrations",
-        "../backend/apps/runs/migrations",
-        "../backend/apps/settings_store/migrations",
-        "../backend/apps/terminals/migrations",
-        "../backend/apps/worktrees/migrations"
-      ],
-      "dependency_policy": {
-        "python_lock": "../backend/uv.lock",
-        "python_project": "../backend/pyproject.toml",
-        "node_lock": "../package-lock.json"
+    "updater": {
+      "archive_suffix": ".app.tar.gz",
+      "signature_suffix": ".app.tar.gz.sig",
+      "latest_manifest": {
+        "filename": "latest.json",
+        "format": "tauri-static-json-v2",
+        "version_matches_release_version": true,
+        "notes_required": true,
+        "required_fields": [
+          "version",
+          "notes",
+          "pub_date",
+          "platforms.darwin-aarch64.signature",
+          "platforms.darwin-aarch64.url"
+        ]
+      },
+      "archive_policy": {
+        "signed": true,
+        "notarized": true
+      },
+      "signing": {
+        "private_key_environment": "TAURI_SIGNING_PRIVATE_KEY",
+        "private_key_password_environment": "TAURI_SIGNING_PRIVATE_KEY_PASSWORD",
+        "distinct_from_apple_signing": true,
+        "offline_backup_owner": "Ticketry release owner"
       }
     },
     "runtime_resources": [
@@ -52,10 +61,15 @@
       }
     },
     "update": {
-      "delivery": "verified-manual-installer",
+      "delivery": "in-app-user-initiated",
+      "feed": {
+        "repository": "ticketry-hq/ticketry-updates",
+        "repository_visibility": "public",
+        "channel": "stable",
+        "latest_url": "https://github.com/ticketry-hq/ticketry-updates/releases/latest/download/latest.json"
+      },
       "compatibility": [
         "app_version",
-        "sidecar_version",
         "runtime_protocol",
         "database_schema",
         "signed",
@@ -83,17 +97,12 @@
       "architecture": "aarch64",
       "build_architecture": "arm64",
       "rust_target": "aarch64-apple-darwin",
-      "sidecar": {
-        "target_triple": "aarch64-apple-darwin",
-        "bundle_binary_name": "muxed-backend"
-      },
       "compatibility": {
         "minimum_os": "11.0",
         "tmux": "external-prerequisite",
         "runtime_protocol": "1",
         "database_schema": "forward-migrations-required",
-        "app_version": "0.2.0",
-        "sidecar_version": "0.2.0"
+        "app_version": "0.2.0"
       }
     }
   ]

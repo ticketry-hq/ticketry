@@ -7,18 +7,20 @@ import {
 } from "react";
 import { toast } from "../../../../../state/clientStore";
 import { useOnboardingTourStore } from "../../../../onboarding/onboardingTourStore";
-import { apiErrorMessage } from "../../../../../shared/api/client";
-import * as api from "../../../../../shared/api/client";
-import { useStudioStore } from "../../../../../features/projects/store";
+import { apiErrorMessage } from "../../../../../shared/api/errors";
+import { useCreateWorkItem } from "../../../../../features/work-items";
+import { useStudioStore } from "../../../../../features/projects";
 import { loadIssueTypes } from "../../../../../features/settings";
-import { queryClient } from "../../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../../shared/query/keys";
 import { useClientStore } from "../../../../../state/clientStore";
 import { focusFirstStory } from "../storiesFocus";
 
 export function IdeaEntry() {
   const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
   const selectedModuleId = useClientStore((state) => state.selectedModuleId);
+  const createStory = useCreateWorkItem({
+    projectId: selectedProjectId ?? "",
+    moduleId: selectedModuleId ?? "",
+  });
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   // #623: focus needs to read at a glance — the caret alone was invisible
@@ -63,15 +65,10 @@ export function IdeaEntry() {
         (type) => type.level === "task" && type.name === "Story",
       );
       if (!storyType) throw new Error("The Story issue type is unavailable.");
-      const created = await api.createTask(
-        projectId,
+      const created = await createStory.mutateAsync({
         name,
-        moduleId,
-        storyType.id,
-      );
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.tasks.byModule(projectId, moduleId),
-        exact: true,
+        parent_id: moduleId,
+        issue_type_id: storyType.id,
       });
       if (
         submissionRef.current !== submission ||

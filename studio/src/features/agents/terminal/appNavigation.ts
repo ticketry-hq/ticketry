@@ -12,4 +12,3 @@ export {
   foregroundKey,
   useTerminalForegroundStore,
 } from "./internal/foregroundStore";
-export { launchFailureMessage } from "./internal/launchFailure";

@@ -67,17 +67,6 @@ export function isResolved(state: State | null | undefined): boolean {
 // backend didn't record one) renders as an em-dash, not "0 B".
 // Absolute calendar date for the issue metadata row (G07); "—" when missing
 // or unparseable so a malformed timestamp never throws in render.
-export function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 export function formatBytes(size: number | null | undefined): string {
   if (size == null) return "—";
   if (size < 1024) return `${size} B`;

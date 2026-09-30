@@ -1,4 +1,7 @@
 import http from "node:http";
+import net from "node:net";
+import path from "node:path";
+import readline from "node:readline";
 
 const name = process.env.MUXED_SMOKE_FIXTURE_NAME;
 const dataDirectory = process.env.MUXED_DATA_DIR;
@@ -21,12 +24,29 @@ const backend = await listen((request, response) => {
   }
   response.end(name);
 });
-const mcp = await listen((_request, response) => response.end(name));
+const socketPath = path.join(dataDirectory, "mcp.sock");
+const mcp = net.createServer((socket) => {
+  readline.createInterface({ input: socket }).on("line", (line) => {
+    const message = JSON.parse(line);
+    if (message.ticketry_mcp_auth) {
+      socket.write(`${JSON.stringify({ ticketry_mcp_auth: 1, ok: true })}\n`);
+    } else if (message.id !== undefined) {
+      const result = message.method === "initialize"
+        ? { protocolVersion: "2024-11-05", capabilities: {} }
+        : { structuredContent: { owner: name } };
+      socket.write(`${JSON.stringify({ jsonrpc: "2.0", id: message.id, result })}\n`);
+    }
+  });
+});
+await new Promise((resolve, reject) => {
+  mcp.once("error", reject);
+  mcp.listen(socketPath, resolve);
+});
 
 console.log(`MUXED_DEVELOPMENT_IDENTITY ${JSON.stringify({
   frontend: frontendOrigin,
   backend: `http://127.0.0.1:${backend.address().port}`,
-  mcp: `http://127.0.0.1:${mcp.address().port}`,
+  mcp: socketPath,
   dataDirectory,
 })}`);
 

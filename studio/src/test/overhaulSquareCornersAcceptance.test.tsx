@@ -46,7 +46,7 @@ function offendingLines(
 }
 
 describe("overhaul acceptance — square corners", () => {
-  it("[overhaul-89] declares no rounded-corner utility anywhere in Studio source", () => {
+  it("[overhaul-143] declares no rounded-corner utility anywhere in Studio source", () => {
     expect(offendingLines(findRoundedUtilities)).toEqual([]);
   });
 

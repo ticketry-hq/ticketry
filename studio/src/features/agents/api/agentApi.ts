@@ -1,71 +1,13 @@
-import { createWorkTrackerClient } from "@worktracker/typescript-sdk/client";
-import { WorkTrackerApiError } from "@worktracker/typescript-sdk/errors";
-import type {
-  DesignDoc,
-  PersistedTerminalSession,
-  ResumableTerminalSession,
-} from "../types";
-import { apiBase, apiKey } from "../../../shared/api/client";
-export { documentUrl as docUrl } from "../../../shared/api/documentUrl";
+import {
+  createTerminalSession,
+  resumeTerminalSession,
+  terminateTerminalSession,
+  type ResumeTerminalRunInput,
+} from "../terminal/internal/mutationTransport";
 
-const documentsApi = () =>
-  createWorkTrackerClient({ baseUrl: apiBase(), apiKey: apiKey() }).documents;
-const terminalsApi = () =>
-  createWorkTrackerClient({ baseUrl: apiBase(), apiKey: apiKey() }).terminals;
-
-export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-    public body: unknown,
-  ) {
-    super(message);
-    this.name = "ApiError";
-  }
-}
-
-async function terminalCall<T>(operation: () => Promise<T>): Promise<T> {
-  try {
-    return await operation();
-  } catch (error) {
-    if (error instanceof WorkTrackerApiError) {
-      throw new ApiError(error.status, error.message, error.body);
-    }
-    throw error;
-  }
-}
-
-export const getTerminals = (taskId: string, signal?: AbortSignal) =>
-  terminalCall(
-    () => terminalsApi().terminalsList({ taskId }, { signal }),
-  ) as Promise<PersistedTerminalSession[]>;
-export const listResumableTerminals = (
-  taskId?: string,
-  projectId?: string,
-  moduleId?: string,
-  signal?: AbortSignal,
-) =>
-  terminalCall(() =>
-    terminalsApi().terminalsResumableList(
-      { taskId, projectId, moduleId },
-      { signal },
-    ),
-  ) as Promise<ResumableTerminalSession[]>;
-export const getScratchTerminals = (
-  projectId: string,
-  moduleId?: string,
-  signal?: AbortSignal,
-) =>
-  terminalCall(() =>
-    terminalsApi().terminalsScratchList(
-      { projectId, moduleId },
-      { signal },
-    ),
-  ) as Promise<PersistedTerminalSession[]>;
-export const terminateTerminal = (agentRunId: string) =>
-  terminalCall(() => terminalsApi().terminalsDestroy({ agentRunId }));
-export const resumeTerminal = (agentRunId: string) =>
-  terminalCall(() => terminalsApi().terminalsResumeCreate({ agentRunId }));
+export const terminateTerminal = terminateTerminalSession;
+export const resumeTerminal = (input: ResumeTerminalRunInput) =>
+  resumeTerminalSession(input);
 export interface CreateTerminalRunRequest {
   agent: "claude" | "agy" | "codex" | "gemini";
   project_id: string;
@@ -78,22 +20,12 @@ export interface CreateTerminalRunRequest {
 }
 
 export const createTerminalRun = (body: CreateTerminalRunRequest) =>
-  terminalCall(() => terminalsApi().terminalsCreate({ createTerminal: body }));
-
-export const getDocuments = (
-  taskId: string,
-  projectId?: string,
-  moduleId?: string,
-  signal?: AbortSignal,
-) =>
-  documentsApi().documentsRetrieve(
-    { taskId, projectId, moduleId },
-    { signal },
-  ) as Promise<{ documents: DesignDoc[] }>;
-export const getScratchDocuments = (moduleId: string, signal?: AbortSignal) =>
-  documentsApi().documentsRetrieve(
-    { scope: "scratch", moduleId },
-    { signal },
-  ) as Promise<{ documents: DesignDoc[] }>;
-export const fsComplete = (path: string, signal?: AbortSignal) =>
-  documentsApi().fsCompleteRetrieve({ path }, { signal });
+  createTerminalSession({
+    agent: body.agent,
+    projectId: body.project_id,
+    moduleId: body.module_id,
+    taskId: body.task_id,
+    initialPrompt: body.is_instant ? body.instant_prompt : body.initial_prompt,
+    isPlanning: body.is_planning,
+    isInstant: body.is_instant,
+  });

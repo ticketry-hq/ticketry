@@ -1,25 +1,48 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../shared/api/client", async () => {
-  const actual = await vi.importActual<typeof import("../shared/api/client")>(
-    "../shared/api/client",
+vi.mock("./legacyApiFixture", async () => {
+  const actual = await vi.importActual<typeof import("./legacyApiFixture")>(
+    "./legacyApiFixture",
   );
   return {
     ...actual,
-    listModulePresentations: vi.fn(),
     listModules: vi.fn(),
     listProjects: vi.fn(),
-    reorderModulePresentation: vi.fn(),
-    updateModulePresentation: vi.fn(),
+    reorderWorkItem: vi.fn(),
   };
 });
+vi.mock("../features/projects/queries/readTransport", async () => {
+  const actual = await vi.importActual<typeof import("../features/projects/queries/readTransport")>(
+    "../features/projects/queries/readTransport",
+  );
+  const api = await import("./legacyApiFixture");
+  const { projectOpenFixture } = await import("./projectOpenFixture");
+  return {
+    ...actual,
+    readProjectOpen: async (projectId: string) => {
+      const [projects, modules] = await Promise.all([api.listProjects(), api.listModules(projectId)]);
+      const project = projects.find((candidate: { id: string }) => candidate.id === projectId) ?? projects[0];
+      if (!project) throw new Error(`Project ${projectId} was not found.`);
+      return projectOpenFixture(project, modules);
+    },
+    readOnboardingProjects: vi.fn(),
+  };
+});
+vi.mock("../features/projects/modulePresentationTransport", async () => {
+  const actual = await vi.importActual<typeof import("../features/projects/modulePresentationTransport")>(
+    "../features/projects/modulePresentationTransport",
+  );
+  const api = await import("./legacyApiFixture");
+  return { ...actual, reorderModulePresentation: api.reorderWorkItem };
+});
 
-import { loadProjects } from "../features/projects";
-import type { ModulePresentation } from "../shared/api/types";
+import { loadModules, loadProjects } from "../features/projects";
+import type { WorkItem } from "../shared/api/types";
 import { useClientStore } from "../state/clientStore";
 import { dragModule } from "./moduleDragGestures";
 import {
+  PROJECT_ID,
   deferred,
   listModules,
   listProjects,
@@ -27,7 +50,7 @@ import {
   moved,
   project,
   renderAutomaticProject,
-  reorderModulePresentation,
+  reorderWorkItem,
   resetModuleReorderHarness,
   rowFor,
   rows,
@@ -40,15 +63,15 @@ describe("module sidebar reorder acceptance", () => {
 
   it("[overhaul-42] freezes the visible module order on the first sidebar drag", async () => {
     await renderAutomaticProject();
-    const settle = deferred<ModulePresentation>();
-    reorderModulePresentation.mockReturnValue(settle.promise);
+    const settle = deferred<WorkItem>();
+    reorderWorkItem.mockReturnValue(settle.promise);
 
-    // Drag the last module above the first. The visible server order is the
-    // first-drag baseline.
+    // Drag the last module above the first. The canonical order the user can
+    // see must be the baseline sent to the server.
     dragModule("module-c", "module-a", "near");
 
-    await waitFor(() => expect(reorderModulePresentation).toHaveBeenCalled());
-    expect(reorderModulePresentation).toHaveBeenCalledWith("module-c", {
+    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalled());
+    expect(reorderWorkItem).toHaveBeenCalledWith("module-c", {
       before_id: null,
       after_id: "module-a",
       initial_order_ids: ["module-a", "module-b", "module-c"],
@@ -64,9 +87,10 @@ describe("module sidebar reorder acceptance", () => {
   it("[overhaul-43] converges on authoritative project and module data after a drag", async () => {
     await renderAutomaticProject();
 
-    const settle = deferred<ModulePresentation>();
-    reorderModulePresentation.mockReturnValue(settle.promise);
-    // The server now owns the whole order.
+    const settle = deferred<WorkItem>();
+    reorderWorkItem.mockReturnValue(settle.promise);
+    // The server has taken the project manual and now owns the whole order.
+    listProjects.mockResolvedValue([project(true)]);
     listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
 
     dragModule("module-c", "module-a", "near");
@@ -80,6 +104,8 @@ describe("module sidebar reorder acceptance", () => {
 
     settle.resolve(moved("module-c"));
 
+    // A manual project keeps the server's persisted order after the refresh.
+    await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
     await waitFor(() =>
       expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]),
     );
@@ -87,26 +113,62 @@ describe("module sidebar reorder acceptance", () => {
     expect(rows().every((row) => row.getAttribute("draggable") === "true")).toBe(true);
   });
 
-  it("[overhaul-59] keeps module order independent of an older projects read", async () => {
+  it("keeps an accepted first drag when the project refresh fails", async () => {
     await renderAutomaticProject();
 
-    // Another consumer has a projects read in flight across the accepted reorder.
+    // The write is accepted — which is what takes the project manual — and the
+    // server now returns its persisted rank order. Only the project read fails,
+    // so the sole thing left claiming "automatic" is the stale cached project.
+    const settle = deferred<WorkItem>();
+    reorderWorkItem.mockReturnValue(settle.promise);
+    listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
+    listProjects.mockRejectedValue(new Error("offline"));
+
+    dragModule("module-c", "module-a", "near");
+    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalled());
+    expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]);
+
+    settle.resolve(moved("module-c"));
+
+    // The failed refresh must not visually undo the drag the server accepted.
+    await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(rows().every((row) => row.getAttribute("draggable") === "true")).toBe(true),
+    );
+    expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]);
+    expect(tabStripOrder()).toEqual(["C", "A", "B"]);
+
+    // Once reads recover, the server's creation-order automatic mode wins.
+    listProjects.mockResolvedValue([project(false)]);
+    listModules.mockResolvedValue(modules("module-a", "module-b", "module-c"));
+    await loadModules(PROJECT_ID);
+
+    await waitFor(() =>
+      expect(sidebarOrder()).toEqual(["module-a", "module-b", "module-c"]),
+    );
+  });
+
+  it("[overhaul-59] ignores a projects read that predates an accepted first drag", async () => {
+    await renderAutomaticProject();
+
+    // Another consumer starts refreshing projects while the project is still
+    // automatic. Keep that old answer in flight across the accepted reorder.
     const staleProjects = deferred<ReturnType<typeof project>[]>();
     listProjects.mockReturnValueOnce(staleProjects.promise);
     const staleLoad = loadProjects().catch(() => undefined);
-    await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
 
-    const settle = deferred<ModulePresentation>();
-    reorderModulePresentation.mockReturnValue(settle.promise);
+    const settle = deferred<WorkItem>();
+    reorderWorkItem.mockReturnValue(settle.promise);
     listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
+    listProjects.mockResolvedValue([project(true)]);
 
     dragModule("module-c", "module-a", "near");
-    await waitFor(() => expect(reorderModulePresentation).toHaveBeenCalled());
+    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalled());
     settle.resolve(moved("module-c"));
 
-    await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]),
-    );
+    // Settlement must retire the pre-reorder request and start a new mode read.
+    await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(3));
     staleProjects.resolve([project(false)]);
     await staleLoad;
 
@@ -119,7 +181,7 @@ describe("module sidebar reorder acceptance", () => {
   it("[overhaul-44] restores the previous order when a reorder is refused, and retries", async () => {
     await renderAutomaticProject();
 
-    reorderModulePresentation.mockRejectedValueOnce(new Error("nope"));
+    reorderWorkItem.mockRejectedValueOnce(new Error("nope"));
     dragModule("module-c", "module-a", "near");
 
     // The optimistic order is shown first, then withdrawn with an explanation.
@@ -137,7 +199,8 @@ describe("module sidebar reorder acceptance", () => {
     ).toBe(true);
 
     // Retry: the same gesture is accepted and the authoritative order arrives.
-    reorderModulePresentation.mockResolvedValue(moved("module-c"));
+    reorderWorkItem.mockResolvedValue(moved("module-c"));
+    listProjects.mockResolvedValue([project(true)]);
     listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
 
     dragModule("module-c", "module-a", "near");
@@ -146,6 +209,45 @@ describe("module sidebar reorder acceptance", () => {
       expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]),
     );
     expect(tabStripOrder()).toEqual(["C", "A", "B"]);
+  });
+
+  it("[overhaul-168] refreshes stale neighbors and completes the same module drag", async () => {
+    await renderAutomaticProject();
+
+    reorderWorkItem
+      .mockRejectedValueOnce(
+        new Error("before/after are not ordered neighbors."),
+      )
+      .mockResolvedValue(moved("module-c"));
+    listProjects.mockResolvedValue([project(true)]);
+    // The rejected write proves the visible a, b, c order is stale. The first
+    // refresh reveals b, c, a; after the recomputed write the server owns b, a, c.
+    listModules
+      .mockResolvedValueOnce(modules("module-b", "module-c", "module-a"))
+      .mockResolvedValue(modules("module-b", "module-a", "module-c"));
+
+    dragModule("module-c", "module-a", "far");
+
+    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalledTimes(2));
+    expect(reorderWorkItem).toHaveBeenNthCalledWith(1, "module-c", {
+      before_id: "module-a",
+      after_id: "module-b",
+      initial_order_ids: ["module-a", "module-b", "module-c"],
+    });
+    expect(reorderWorkItem).toHaveBeenNthCalledWith(2, "module-c", {
+      before_id: "module-a",
+      after_id: null,
+      initial_order_ids: ["module-b", "module-c", "module-a"],
+    });
+    await waitFor(() =>
+      expect(sidebarOrder()).toEqual(["module-b", "module-a", "module-c"]),
+    );
+    expect(tabStripOrder()).toEqual(["B", "A", "C"]);
+    expect(
+      useClientStore
+        .getState()
+        .toasts.some((toast) => toast.message.includes("could not be reordered")),
+    ).toBe(false);
   });
 
   it("[overhaul-45] writes nothing for a cancelled or no-op module drop", async () => {
@@ -164,7 +266,7 @@ describe("module sidebar reorder acceptance", () => {
     dragModule("module-b", "module-a", "far");
     dragModule("module-a", "module-a", "far");
 
-    expect(reorderModulePresentation).not.toHaveBeenCalled();
+    expect(reorderWorkItem).not.toHaveBeenCalled();
     expect(sidebarOrder()).toEqual(["module-a", "module-b", "module-c"]);
 
     // A drop must not select the module it landed on, but an ordinary click must.
@@ -172,9 +274,7 @@ describe("module sidebar reorder acceptance", () => {
     fireEvent.click(target);
     expect(useClientStore.getState().modulesCursorId).toBeNull();
 
-    await waitFor(() =>
-      expect(reorderModulePresentation).toHaveBeenCalledTimes(1),
-    );
+    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalledTimes(1));
     fireEvent.click(rowFor("module-b"));
     expect(useClientStore.getState().modulesCursorId).toBe("module-b");
   });

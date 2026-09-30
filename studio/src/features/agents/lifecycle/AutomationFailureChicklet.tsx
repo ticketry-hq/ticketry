@@ -1,6 +1,6 @@
 import { useState, type MouseEvent } from "react";
 import { retryAutomationAttempt } from "../status/retryAutomationAttempt";
-import { selectTaskAutomationAttempts, useAgentStatusStore } from "../status";
+import { useTaskAutomationAttempts } from "../status";
 
 interface Props {
   issueId: string;
@@ -13,14 +13,12 @@ export function AutomationFailureChicklet({
   descendantIds = [],
   className,
 }: Props) {
-  const attempts = useAgentStatusStore((state) =>
-    selectTaskAutomationAttempts(state, issueId, descendantIds),
-  );
+  const attempts = useTaskAutomationAttempts(issueId, descendantIds);
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
-  if (attempts.length === 0) return null;
-
   const failed = attempts.filter((attempt) => attempt.status === "failed");
+  if (failed.length === 0) return null;
+
   const retryable = failed.filter((attempt) => attempt.retryable);
   const pending = attempts.filter((attempt) => attempt.status === "pending");
   const retryPending = isRetrying || pending.length > 0;

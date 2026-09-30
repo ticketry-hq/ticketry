@@ -1,4 +1,3 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
@@ -7,23 +6,24 @@ import { AgentStateBadge } from "../features/agents/lifecycle";
 import {
   startStallDeadlines,
   stopStallDeadlines,
-  useAgentStatusStore,
   STALL_AFTER_MS,
 } from "../features/agents/status";
-import { dispatchStatusFrame } from "../features/agents/status/statusFeed";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
+import { applyRunStatusFrame } from "../features/agents/status/stream/runStatusHolding";
+import {
+  lifecycleStatusFrame,
+  statusRunHolding,
+  terminalActivityStatusFrame,
+} from "../features/agents/status/testing/durableStatusFrames";
 import {
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
-import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
 import type { RunRecord } from "../features/agents/status";
 
 const terminalApi = vi.hoisted(() => ({
   getDocuments: vi.fn(),
-  getTerminals: vi.fn(),
-  listResumableTerminals: vi.fn(),
   resumeTerminal: vi.fn(),
 }));
 
@@ -32,6 +32,8 @@ vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
   ...terminalApi,
 }));
 
+// Terminal session reads moved to the Rust Terminal Session graph, so the seam
+// a test controls is the read transport, not a host API module.
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
   () => ({
@@ -69,8 +71,11 @@ function run(overrides: Partial<RunRecord> = {}): RunRecord {
     module_id: "module-1",
     agent: "codex",
     scope: "task",
+    launch_state: "Implement",
+    launch_model: "gpt-5.6",
     started_at: LAUNCHED_AT,
     state: "working",
+    effective_state: "working",
     updated_at: LAUNCHED_AT,
     output_sequence: 1,
     last_output_at: LAUNCHED_AT,
@@ -80,7 +85,7 @@ function run(overrides: Partial<RunRecord> = {}): RunRecord {
 
 function renderWorkspace() {
   return render(
-    <QueryClientProvider client={queryClient}>
+    <>
       <AgentStateBadge issueId="story-1" />
       <SelectedTicketContent
         bucket="story-1"
@@ -89,12 +94,12 @@ function renderWorkspace() {
         owner="studio"
         details={<div>Issue details</div>}
       />
-    </QueryClientProvider>,
+    </>,
   );
 }
 
 function terminalTab() {
-  return screen.getByRole("tab", { name: "codex terminal" });
+  return screen.getByRole("tab", { name: "Implement codex terminal" });
 }
 
 describe("overhaul acceptance — terminal output stall", () => {
@@ -102,8 +107,6 @@ describe("overhaul acceptance — terminal output stall", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(LAUNCHED_AT));
     localStorage.clear();
-    queryClient.clear();
-    seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
       selectedModuleId: "module-1",
@@ -128,27 +131,24 @@ describe("overhaul acceptance — terminal output stall", () => {
       stallEpoch: 0,
     });
     terminalApi.getDocuments.mockResolvedValue({ documents: [] });
-    terminalApi.getTerminals.mockResolvedValue([]);
-    terminalApi.listResumableTerminals.mockResolvedValue([]);
-  });
-
+});
   afterEach(() => {
     stopStallDeadlines();
     vi.useRealTimers();
   });
 
-  it("[overhaul-85] presents a silent live terminal as stalled and recovers on output", () => {
+  it("[overhaul-139] presents a silent live terminal as stalled and recovers on output", () => {
     renderWorkspace();
     startStallDeadlines();
 
     // The provider's last word is that it is working.
     act(() => {
-      dispatchStatusFrame({
-        v: 1,
-        type: "agent_lifecycle",
+      applyRunStatusFrame(lifecycleStatusFrame({
+        projectId: "project-1",
+        agentRunId: "run-1",
+        state: "working",
         at: "2026-08-15T12:00:10.000Z",
-        run: run({ state: "working", updated_at: "2026-08-15T12:00:10.000Z" }),
-      });
+      }));
     });
     expect(
       within(terminalTab()).getByLabelText("Agent is actively working"),
@@ -175,15 +175,16 @@ describe("overhaul acceptance — terminal output stall", () => {
     // Changed output restores the latest real provider fact, with no remount
     // or reload.
     act(() => {
-      dispatchStatusFrame({
-        v: 1,
-        type: "terminal_activity",
-        at: new Date().toISOString(),
-        run: run({
+      const at = new Date().toISOString();
+      applyRunStatusFrame(terminalActivityStatusFrame({
+        projectId: "project-1",
+        agentRunId: "run-1",
+        at,
+        run: statusRunHolding(run({
           output_sequence: 2,
-          last_output_at: new Date().toISOString(),
-        }),
-      });
+          last_output_at: at,
+        })),
+      }));
     });
     expect(screen.queryByLabelText(STALLED_TITLE)).not.toBeInTheDocument();
     expect(
@@ -199,12 +200,12 @@ describe("overhaul acceptance — terminal output stall", () => {
     // terminal produces no further output, so the inactivity heuristic must
     // not take the signal away from them (#681).
     act(() => {
-      dispatchStatusFrame({
-        v: 1,
-        type: "agent_lifecycle",
+      applyRunStatusFrame(lifecycleStatusFrame({
+        projectId: "project-1",
+        agentRunId: "run-1",
+        state: "needs_input",
         at: "2026-08-15T12:05:00.000Z",
-        run: run({ state: "needs_input", updated_at: "2026-08-15T12:05:00.000Z" }),
-      });
+      }));
       vi.advanceTimersByTime(STALL_AFTER_MS * 10);
     });
 
@@ -223,15 +224,12 @@ describe("overhaul acceptance — terminal output stall", () => {
     // A pending permission decision is silent for the same reason, and keeps
     // its own presentation just as long.
     act(() => {
-      dispatchStatusFrame({
-        v: 1,
-        type: "agent_lifecycle",
+      applyRunStatusFrame(lifecycleStatusFrame({
+        projectId: "project-1",
+        agentRunId: "run-1",
+        state: "permission_required",
         at: "2026-08-15T12:20:00.000Z",
-        run: run({
-          state: "permission_required",
-          updated_at: "2026-08-15T12:20:00.000Z",
-        }),
-      });
+      }));
       vi.advanceTimersByTime(STALL_AFTER_MS * 10);
     });
     expect(screen.queryByLabelText(STALLED_TITLE)).not.toBeInTheDocument();
@@ -240,4 +238,3 @@ describe("overhaul acceptance — terminal output stall", () => {
     ).toBeInTheDocument();
   });
 });
-

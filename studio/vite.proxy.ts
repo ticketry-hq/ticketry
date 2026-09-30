@@ -1,23 +1,29 @@
 import type { ProxyOptions } from "vite";
 
 // Studio dev proxy table (:5174).
-// /api forwards same-origin to the worktracker backend, so the x-api-key
-// client never triggers CORS and the backend needs no CORS header.
+// /graphql forwards same-origin to the Rust browser-development adapter.
 //
-// Studio opens the terminal stream on `/ws/terminal` and the project status
-// feed on `/ws/status`; both are forwarded to this instance's selected backend.
+// GraphQL subscriptions use an SSE-over-fetch POST. There is
+// no WebSocket entry on that route. Terminal bytes attach through the
+// adapter's /ws/terminal socket, forwarded with WebSocket upgrades enabled.
 export function developmentProxy(
-  backendOrigin = process.env.MUXED_VITE_BACKEND_ORIGIN ?? "http://127.0.0.1:8787",
+  graphQlOrigin = process.env.MUXED_VITE_GRAPHQL_ORIGIN ?? "http://127.0.0.1:8790",
 ): Record<string, ProxyOptions> {
-  const webSocketOrigin = backendOrigin.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
   return {
-    "/api": {
-      target: backendOrigin,
+    "/graphql/subscribe": {
+      target: graphQlOrigin,
       changeOrigin: false,
-      ws: true,
     },
-    "/ws": {
-      target: webSocketOrigin,
+    "/graphql": {
+      target: graphQlOrigin,
+      changeOrigin: false,
+    },
+    "/documents": {
+      target: graphQlOrigin,
+      changeOrigin: false,
+    },
+    "/ws/terminal": {
+      target: graphQlOrigin,
       changeOrigin: false,
       ws: true,
     },

@@ -87,6 +87,8 @@ export function projectRunPresentation(
   run: RunRecord,
   now: number = Date.now(),
 ): RunPresentationState {
+  if (isTerminalOutcome(run.state) || isAwaitingUser(run.state)) return run.state;
+  if (run.effective_state === "stalled") return "stalled";
   const deadline = stallDeadlineAt(run);
   if (deadline !== null && now >= deadline) return "stalled";
   return run.state;

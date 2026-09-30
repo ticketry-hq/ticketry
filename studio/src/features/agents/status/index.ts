@@ -1,10 +1,10 @@
 export {
   isLiveAgentRunState,
   MODULE_LIFECYCLE_STATES,
+  selectModuleLifecycleChips,
   selectModuleLifecycleCounts,
   selectRunState,
   selectScratchLifecycleChips,
-  selectScratchRunIds,
   selectTaskAgentLifecycle,
   selectTaskAutomationAttempts,
   selectTaskLifecycleChips,
@@ -16,21 +16,51 @@ export type {
   ModuleLifecycleState,
   TaskLifecycleChip,
 } from "./selectors";
+export {
+  AUTOMATION_DELIVERY_PRESENTATION,
+  selectTaskAutomationDelivery,
+} from "./automationDelivery";
+export type {
+  AutomationDelivery,
+  AutomationDeliveryMode,
+  AutomationDeliveryPresentation,
+} from "./automationDelivery";
 export { isAgentlessRun, SHELL_RUN_SCOPE } from "./runScopes";
-export { useAgentStatusStore } from "./store";
 export { ModuleLifecycleChicklets } from "./ModuleLifecycleChicklets";
-export type { AgentStatusStore } from "./store";
+export {
+  useAgentStatusRuns,
+  useAgentStatusSelection,
+  useModuleLifecycleChips,
+  useRunState,
+  useScratchLifecycleChips,
+  useTaskAgentLifecycle,
+  useTaskAutomationAttempts,
+  useTaskAutomationDelivery,
+  useTaskLifecycleChips,
+  useTaskRunCount,
+} from "./hooks";
 export {
   projectRunPresentation,
   stallDeadlineAt,
   STALL_AFTER_MS,
 } from "./runPresentation";
 export { startStallDeadlines, stopStallDeadlines } from "./stallDeadlines";
-// statusFeed (live-feed wiring: SDK client, retry service, store fan-out) and
-// retryAutomationAttempt are NOT re-exported: most hub consumers only need
-// selectors/store, and re-exporting the feed would pull its whole dependency
-// graph into their dev module graphs (bundle-barrel-imports). The app shell
-// imports ./statusFeed directly; lifecycle imports ./retryAutomationAttempt.
+export {
+  recordLaunchDiscoveryForAgentRun,
+  setLaunchDiscoveryRuntimeInstance,
+} from "./launchDiscoveryTrace";
+export {
+  readAgentRun,
+  readAgentStatusHolding,
+  retainRestoredAgentRun,
+  subscribeAgentStatusHolding,
+} from "./apolloHolding";
+// stream/statusStreamFeed (subscription wiring, transport client, and cursor
+// retention) and retryAutomationAttempt are NOT re-exported: most hub
+// consumers only need selectors/cache hooks, and re-exporting the feed
+// would pull its whole dependency graph into their dev module graphs
+// (bundle-barrel-imports). The app shell imports ./stream/statusStreamFeed
+// directly; lifecycle imports ./retryAutomationAttempt.
 export type {
   AgentLifecycle,
   AgentRunScope,

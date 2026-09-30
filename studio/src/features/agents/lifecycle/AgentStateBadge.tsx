@@ -1,9 +1,9 @@
 import {
-  selectTaskAgentLifecycle,
-  selectTaskLifecycleChips,
-  useAgentStatusStore,
+  useTaskAgentLifecycle,
+  useTaskLifecycleChips,
 } from "../status";
 import { LifecycleBadge } from "../terminal/LifecycleBadge";
+import { ClaudeStartupAttentionAction } from "./ClaudeStartupAttentionAction";
 
 interface Props {
   /** The issue's UUID (what the agent host keys runs by). */
@@ -19,14 +19,8 @@ interface Props {
  * without them the badge reflects this issue's runs only.
  */
 export function AgentStateBadge({ issueId, descendantIds, className }: Props) {
-  const state = useAgentStatusStore((s) =>
-    issueId
-      ? selectTaskAgentLifecycle(s, issueId, descendantIds ?? [])
-      : "idle",
-  );
-  const chips = useAgentStatusStore((s) =>
-    issueId ? selectTaskLifecycleChips(s, issueId, descendantIds ?? []) : [],
-  );
+  const state = useTaskAgentLifecycle(issueId, descendantIds ?? []);
+  const chips = useTaskLifecycleChips(issueId, descendantIds ?? []);
   if (!issueId) return null;
   if (chips.length === 0) return null;
 
@@ -38,13 +32,15 @@ export function AgentStateBadge({ issueId, descendantIds, className }: Props) {
     >
       {chips.map((chip) => (
         <LifecycleBadge
-          key={chip.state}
+          key={`${chip.state}|${chip.agent ?? ""}`}
           state={chip.state}
+          agent={chip.agent}
           count={chip.count}
           showLabel={false}
           alwaysShowCount
         />
       ))}
+      <ClaudeStartupAttentionAction issueId={issueId} />
     </span>
   );
 }

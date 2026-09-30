@@ -1,11 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 
+import {
+  createWorkItemShell,
+  launchFailureMessage,
+} from "../../../../../features/agents/terminal";
+import { toast } from "../../../../../state/clientStore";
+
 interface IssueActionsMenuProps {
+  taskId: string;
+  moduleId: string | null;
   hasSubtasks: boolean;
   onDelete: () => Promise<void>;
 }
 
 export default function IssueActionsMenu({
+  taskId,
+  moduleId,
   hasSubtasks,
   onDelete,
 }: IssueActionsMenuProps) {
@@ -38,6 +48,14 @@ export default function IssueActionsMenu({
     void onDelete();
   };
 
+  const chooseTerminal = () => {
+    setOpen(false);
+    if (!moduleId) return;
+    void createWorkItemShell(taskId, moduleId).catch((error: unknown) => {
+      toast.error(`Terminal could not be opened: ${launchFailureMessage(error)}`);
+    });
+  };
+
   return (
     <div ref={containerRef} className="relative">
       <button
@@ -62,6 +80,21 @@ export default function IssueActionsMenu({
           aria-label="Issue actions"
           className="absolute right-0 top-full z-10 mt-1 min-w-[150px] border border-pane-border bg-pane-panel py-1 shadow-lg"
         >
+          <button
+            type="button"
+            role="menuitem"
+            disabled={moduleId === null}
+            title={
+              moduleId === null
+                ? "Select a module first"
+                : "Open a shell in this issue's worktree"
+            }
+            data-testid="open-issue-terminal"
+            onClick={chooseTerminal}
+            className="block w-full px-3 py-1.5 text-left text-sm text-text-primary hover:bg-pane-title disabled:cursor-not-allowed disabled:text-text-muted"
+          >
+            Open terminal
+          </button>
           <button
             type="button"
             role="menuitem"

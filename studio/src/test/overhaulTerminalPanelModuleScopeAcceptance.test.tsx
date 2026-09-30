@@ -18,9 +18,14 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../shared/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shared/api/client")>()),
+vi.mock("./legacyApiFixture", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./legacyApiFixture")>()),
   getTasks: vi.fn(),
+}));
+
+vi.mock("../features/work-items/queries/readTransport", async () => ({
+  ...(await vi.importActual("../features/work-items/queries/readTransport")),
+  readModuleTreeRecords: vi.fn(),
 }));
 
 import { StudioFooter } from "../app/shell/StudioFooter";
@@ -34,8 +39,7 @@ import { useModuleShellStore } from "../features/terminal-panel/moduleShellStore
 import { PANEL_OPEN_KEY } from "../features/terminal-panel/panelOpenMemory";
 import { useTerminalPanelStore } from "../features/terminal-panel/panelStore";
 import { TerminalPanel } from "../features/terminal-panel/TerminalPanel";
-import * as api from "../shared/api/client";
-import { queryClient } from "../shared/query/queryClient";
+import * as workItemReadTransport from "../features/work-items/queries/readTransport";
 import { useClientStore } from "../state/clientStore";
 import { TERMINAL_PANEL_KEY } from "../state/persistence";
 
@@ -70,7 +74,7 @@ vi.mock(
   }),
 );
 
-const getTasks = api.getTasks as ReturnType<typeof vi.fn>;
+const getTasks = workItemReadTransport.readModuleTreeRecords as ReturnType<typeof vi.fn>;
 
 class ResizeObserverStub {
   observe() {}
@@ -116,7 +120,6 @@ function persistedFurniture(): Record<string, unknown> | null {
 describe("terminal panel module scope acceptance", () => {
   beforeEach(() => {
     localStorage.clear();
-    queryClient.clear();
     runtime.desktop = false;
     runtime.nativeAvailable = false;
     getTasks.mockReset().mockResolvedValue({
@@ -147,24 +150,11 @@ describe("terminal panel module scope acceptance", () => {
       sidebarVisible: false,
       editViewZone: "active-tab-body",
       editViewBodyEngaged: false,
-      modalStack: [],
     });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     seedModuleLinks([
-      {
-        id: "link-1",
-        module_id: "module-1",
-        local_path: "/repo/module-1",
-        created_at: "2026-08-19T00:00:00Z",
-        updated_at: "2026-08-19T00:00:00Z",
-      },
-      {
-        id: "link-2",
-        module_id: "module-2",
-        local_path: "/repo/module-2",
-        created_at: "2026-08-19T00:00:00Z",
-        updated_at: "2026-08-19T00:00:00Z",
-      },
+      { id: "link-module-1", moduleId: "module-1", path: "/repo/module-1" },
+      { id: "link-module-2", moduleId: "module-2", path: "/repo/module-2" },
     ]);
   });
 

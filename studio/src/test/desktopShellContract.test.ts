@@ -1,9 +1,5 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import {
-  assertDevelopmentEndpointAgreement,
-  buildDevelopmentSmokeConfiguration,
-} from "../../scripts/desktop-smoke-config.mjs";
 
 async function json(relativePath: string): Promise<Record<string, unknown>> {
   return JSON.parse(
@@ -16,13 +12,13 @@ async function text(relativePath: string): Promise<string> {
 }
 
 const NATIVE_TERMINAL_MODULES = [
-  "../../src-tauri/src/native_terminal.rs",
-  "../../src-tauri/src/native_terminal/macos/mod.rs",
-  "../../src-tauri/src/native_terminal/macos/state.rs",
-  "../../src-tauri/src/native_terminal/macos/lifecycle.rs",
-  "../../src-tauri/src/native_terminal/macos/attach_commands.rs",
-  "../../src-tauri/src/native_terminal/macos/presentation_commands.rs",
-  "../../src-tauri/src/native_terminal/macos/platform_bridge.rs",
+  "../../src-tauri/crates/app/ticketry-desktop/src/native_terminal.rs",
+  "../../src-tauri/crates/app/ticketry-desktop/src/native_terminal/macos/mod.rs",
+  "../../src-tauri/crates/app/ticketry-desktop/src/native_terminal/macos/state.rs",
+  "../../src-tauri/crates/app/ticketry-desktop/src/native_terminal/macos/lifecycle.rs",
+  "../../src-tauri/crates/app/ticketry-desktop/src/native_terminal/macos/attach_commands.rs",
+  "../../src-tauri/crates/app/ticketry-desktop/src/native_terminal/macos/presentation_commands.rs",
+  "../../src-tauri/crates/app/ticketry-desktop/src/native_terminal/macos/platform_bridge.rs",
 ];
 
 async function nativeTerminalSources(): Promise<string> {
@@ -31,7 +27,6 @@ async function nativeTerminalSources(): Promise<string> {
   );
   return sources.join("\n");
 }
-
 function snakeCase(value: string): string {
   return value.replace(/[A-Z]/g, (character, index) =>
     `${index === 0 ? "" : "_"}${character.toLowerCase()}`
@@ -40,7 +35,7 @@ function snakeCase(value: string): string {
 
 describe("desktop shell security contract", () => {
   it("keeps Rust and TypeScript service-health states in agreement", async () => {
-    const rust = await text("../../src-tauri/src/lib.rs");
+    const rust = await text("../../src-tauri/crates/app/ticketry-desktop/src/desktop/service_health.rs");
     const typescript = await text("../../src/runtime/contract.ts");
     const rustStates = rust
       .match(/enum ServiceHealthState \{(?<states>[^}]+)\}/s)
@@ -73,11 +68,24 @@ describe("desktop shell security contract", () => {
       windows: ["main"],
       permissions: [
         "allow-desktop-runtime-configuration",
+        "allow-desktop-file-logging-enabled",
         "allow-desktop-append-frontend-log",
         "allow-desktop-retry-services",
         "allow-desktop-pick-folder",
+        "allow-desktop-prepare-directory-trust",
+        "allow-desktop-validate-module-folder",
         "allow-desktop-preflight-report",
         "allow-desktop-approve-executable-path",
+        "allow-desktop-launch-default-coding-agent",
+        "allow-desktop-toggle-handy-transcription",
+        "allow-desktop-update-check",
+        "allow-desktop-update-download-and-install",
+        "allow-desktop-update-restart",
+        "allow-desktop-latest-crash-collection-outcome",
+        "allow-desktop-reveal-crash-report-folder",
+        "allow-TauRPC--graphql-execute",
+        "allow-TauRPC--graphql-subscribe",
+        "allow-TauRPC--graphql-unsubscribe",
         "allow-viewer-attach",
         "allow-viewer-input",
         "allow-viewer-resize",
@@ -90,15 +98,199 @@ describe("desktop shell security contract", () => {
         "allow-native-terminal-hide",
         "allow-native-terminal-show",
         "allow-native-terminal-focus",
+        "allow-native-terminal-set-webview-interaction",
         "allow-native-terminal-detach",
+        "allow-native-terminal-retention-benchmark",
+        "launchkey-adaptor:default",
+        "opener:default",
         "core:event:allow-listen",
         "core:event:allow-unlisten",
         "core:webview:allow-set-webview-zoom",
       ],
     });
+    // CODING-1487 — the retired WASM renderer was the only caller that needed
+    // a prepared artifact from the desktop host; no command serves it now.
+    expect(JSON.stringify(capability)).not.toContain("ghostty-vt");
     expect(JSON.stringify(capability)).not.toContain("remote");
     expect(JSON.stringify(capability)).not.toContain("shell");
     expect(JSON.stringify(capability)).not.toContain("dialog:");
+  });
+
+  it("pins and registers the Launchkey adaptor with its default permission", async () => {
+    const revision = "60e7b541ba1225491f2b3083960bdf1f1f362b8c";
+    const studioPackage = await json("../../package.json");
+    const cargo = await text("../../src-tauri/Cargo.toml");
+    const desktopCargo = await text(
+      "../../src-tauri/crates/app/ticketry-desktop/Cargo.toml",
+    );
+    const run = await text(
+      "../../src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs",
+    );
+    const capability = await json("../../src-tauri/capabilities/studio-main.json");
+
+    expect((studioPackage.dependencies as Record<string, string>)[
+      "@bandwati/launchkey-adaptor"
+    ]).toBe(
+      `git+https://github.com/charleeagni/launchkey-adaptor.git#${revision}`,
+    );
+    expect(cargo).toContain(
+      `tauri-plugin-launchkey-adaptor = { git = "https://github.com/charleeagni/launchkey-adaptor", rev = "${revision}" }`,
+    );
+    expect(desktopCargo).toContain("tauri-plugin-launchkey-adaptor.workspace = true");
+    expect(run).toContain("tauri_plugin_launchkey_adaptor::init()");
+
+    const permissions = capability.permissions as string[];
+    expect(permissions.filter((permission) => permission.startsWith("launchkey-adaptor:")))
+      .toEqual(["launchkey-adaptor:default"]);
+  });
+
+  it("returns the Launchkey to standalone mode before desktop shutdown", async () => {
+    const lifecycle = await text(
+      "../../src-tauri/crates/app/ticketry-desktop/src/desktop/lifecycle.rs",
+    );
+    const shutdown = lifecycle.match(
+      /pub(?:\(crate\))? fn shutdown_rust_runtime[\s\S]*?\n}/,
+    )?.[0];
+    const dawExit = shutdown?.match(
+      /launchkey\.send\(\s*PortName::Daw,\s*&\[\s*0x9f,\s*0x0c,\s*(?:0x00|0)\s*\]\s*\)/i,
+    )?.[0];
+
+    expect(lifecycle).toContain("LaunchkeyAdaptorExt");
+    expect(shutdown).toContain("application.launchkey_adaptor()");
+    expect(dawExit).toBeDefined();
+    expect(shutdown).toContain("launchkey.disconnect()");
+    expect(shutdown!.indexOf(dawExit!)).toBeLessThan(
+      shutdown!.indexOf("launchkey.disconnect()"),
+    );
+    expect(shutdown!.indexOf("launchkey.disconnect()")).toBeLessThan(
+      shutdown!.indexOf("state.stopping.store"),
+    );
+  });
+
+  it("exposes only the permissioned desktop update actions through the updater plugin", async () => {
+    const cargo = await text("../../src-tauri/crates/app/ticketry-desktop/Cargo.toml");
+    const build = await text("../../src-tauri/build.rs");
+    const run = await text("../../src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs");
+    const appUpdates = await text("../../src-tauri/crates/app/ticketry-desktop/src/app_updates/mod.rs");
+    const acceptanceTls = await text(
+      "../../src-tauri/crates/app/ticketry-desktop/src/app_updates/acceptance_tls.rs",
+    );
+    const capability = await json("../../src-tauri/capabilities/studio-main.json");
+    const configuration = await json("../../src-tauri/tauri.conf.json");
+
+    expect(cargo).toContain('tauri-plugin-updater = "2"');
+    expect(run).toContain("tauri_plugin_updater::Builder::new().build()");
+    expect(build).toContain('"desktop_update_check"');
+    expect(build).toContain('"desktop_update_download_and_install"');
+    expect(build).toContain('"desktop_update_restart"');
+    expect(run).toContain("app_updates::desktop_update_check");
+    expect(run).toContain("app_updates::install::desktop_update_download_and_install");
+    expect(run).toContain("app_updates::install::desktop_update_restart");
+    expect(appUpdates).toContain("pub async fn desktop_update_check");
+    expect(appUpdates).toContain("UpdaterExt");
+    expect(appUpdates).toContain("updater_builder()");
+    expect(appUpdates).not.toContain("TICKETRY_UPDATE_FEED_URL");
+    expect(appUpdates).toContain('#[cfg(feature = "desktop-acceptance")]');
+    expect(appUpdates).toContain("add_root_certificate");
+    expect(acceptanceTls).toContain("TICKETRY_DESKTOP_ACCEPTANCE_CA_CERT");
+
+    const permissions = capability.permissions as string[];
+    expect(permissions).toContain("allow-desktop-update-check");
+    expect(permissions).toContain(
+      "allow-desktop-update-download-and-install",
+    );
+    expect(permissions).toContain("allow-desktop-update-restart");
+    expect(permissions.some((permission) => permission.startsWith("updater:")))
+      .toBe(false);
+    expect(configuration.plugins).toEqual({
+      updater: {
+        pubkey: expect.any(String),
+        endpoints: [
+          "https://github.com/ticketry-hq/ticketry-updates/releases/latest/download/latest.json",
+        ],
+      },
+    });
+    expect((configuration.bundle as Record<string, unknown>).createUpdaterArtifacts)
+      .toBeUndefined();
+  });
+
+  it("installs and restarts through the same permissioned update seam", async () => {
+    const build = await text("../../src-tauri/build.rs");
+    const run = await text("../../src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs");
+    const appUpdates = await text("../../src-tauri/crates/app/ticketry-desktop/src/app_updates/mod.rs");
+    const install = await text("../../src-tauri/crates/app/ticketry-desktop/src/app_updates/install.rs");
+    const lifecycle = await text("../../src-tauri/crates/app/ticketry-desktop/src/desktop/lifecycle.rs");
+
+    for (const command of [
+      "desktop_update_download_and_install",
+      "desktop_update_restart",
+    ]) {
+      expect(build).toContain(`"${command}"`);
+      expect(run).toContain(`app_updates::install::${command}`);
+      expect(install).toContain(command);
+    }
+
+    // Both operations route through the one endpoint-overridable updater the
+    // check already uses, so an acceptance feed cannot be reached by install
+    // alone.
+    expect(appUpdates).toContain("fn stable_channel_updater");
+    expect(install).toContain("super::stable_channel_updater(&app)");
+
+    // Restarting into an update performs the same teardown as a normal exit.
+    expect(lifecycle).toContain("pub fn tear_down_before_exit");
+    expect(lifecycle).toContain("release_data_directory_ownership(application)");
+    expect(install).toContain(
+      "crate::tear_down_before_exit(&handle)",
+    );
+    expect(run).toContain("tear_down_before_exit(application)");
+
+    expect(install).toContain('"desktop-update-progress"');
+  });
+
+  it("runs the packaged update acceptance through the shipped update path", async () => {
+    const run = await text("../../src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs");
+    const acceptance = await text("../../src-tauri/crates/app/ticketry-desktop/src/app_updates/acceptance.rs");
+
+    // The harness only ever gets the real check, install, and restart.
+    expect(acceptance).toContain("super::desktop_update_check(app.clone())");
+    expect(acceptance).toContain(
+      "super::install::desktop_update_download_and_install(app.clone())",
+    );
+    expect(acceptance).toContain("super::install::restart_into_update(&app)");
+    // No launch without the harness environment performs an acceptance run.
+    expect(acceptance).toContain('"TICKETRY_UPDATE_ACCEPTANCE_RESULT"');
+    expect(acceptance).toContain("AcceptanceRun::from_environment");
+    expect(run).toContain("app_updates::acceptance::run_if_requested");
+    expect(acceptance).not.toContain("dangerous");
+  });
+
+  it("exposes only fixed Crash Report outcome and reveal commands", async () => {
+    const build = await text("../../src-tauri/build.rs");
+    const run = await text("../../src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs");
+    const commands = await text(
+      "../../src-tauri/crates/app/ticketry-desktop/src/desktop/crash_reports.rs",
+    );
+    const capability = await json(
+      "../../src-tauri/capabilities/studio-main.json",
+    );
+
+    for (const command of [
+      "desktop_latest_crash_collection_outcome",
+      "desktop_reveal_crash_report_folder",
+    ]) {
+      expect(build).toContain(`"${command}"`);
+      expect(run).toContain(`crash_reports::${command}`);
+      expect(commands).toContain(`pub fn ${command}`);
+    }
+    expect(run).toContain("CrashReportsRuntime::new(");
+    expect(run).toContain(".manage(crash_reports)");
+    expect(capability.permissions).toEqual(
+      expect.arrayContaining([
+        "allow-desktop-latest-crash-collection-outcome",
+        "allow-desktop-reveal-crash-report-folder",
+      ]),
+    );
+    expect(JSON.stringify(capability)).not.toContain("shell:");
   });
 
   // Tauri defaults `dragDropEnabled` to true, which installs an OS drag
@@ -123,12 +315,14 @@ describe("desktop shell security contract", () => {
 
     expect(presenter).toContain("nativeGhosttyAvailable");
     expect(presenter).toContain("<NativeGhosttyTerminal");
-    expect(presenter).toContain("<XtermTerminal");
-    expect(presenter).toContain("if (!nativeFailureReason) return fallback");
+    expect(presenter).toContain("<LazyXtermTerminal");
+    expect(presenter).toContain(
+      "if (!nativeFailureReason || session?.transport === \"ready\") return fallback",
+    );
     expect(presenter).toContain("onUnavailable={markNativeUnavailable}");
   });
 
-  it("initializes packaged libghostty from Ticketry's bundled resources", async () => {
+  it("initializes retained native libghostty from its prepared resources", async () => {
     const runtime = await text("../../src-tauri/native/libghostty_runtime.m");
 
     expect(runtime).toContain('setenv("GHOSTTY_RESOURCES_DIR"');
@@ -140,12 +334,17 @@ describe("desktop shell security contract", () => {
 
   it("launches tmux directly in libghostty without a Ticketry byte bridge", async () => {
     const nativeTerminal = await nativeTerminalSources();
-    const tmuxViewer = await text("../../src-tauri/src/tmux_viewer.rs");
+    const tmuxViewer = await text(
+      "../../src-tauri/crates/execution/ticketry-terminal/src/terminal/viewer/tmux_client.rs",
+    );
+    const tmuxAdapter = await text(
+      "../../src-tauri/crates/execution/ticketry-terminal/src/tmux_adapter.rs",
+    );
     const main = await text("../../src-tauri/src/main.rs");
 
     expect(nativeTerminal).toContain("TerminalCommandAttachment::prepare");
-    expect(tmuxViewer).toContain('"attach-session"');
-    expect(tmuxViewer).toContain('format!("/usr/bin/env {arguments}")');
+    expect(tmuxAdapter).toContain('"attach-session"');
+    expect(tmuxViewer).toContain('"/usr/bin/env {}"');
     expect(nativeTerminal).not.toContain("UnixStream");
     expect(nativeTerminal).not.toContain("io::copy");
     expect(main).not.toContain("--muxed-ghostty-bridge");
@@ -170,7 +369,7 @@ describe("desktop shell security contract", () => {
     expect(view.indexOf("self.hidden = YES")).toBeLessThan(
       view.indexOf("ghostty_surface_new(runtime->app, &config)"),
     );
-    expect(view.indexOf("[parent addSubview:self")).toBeLessThan(
+    expect(view.indexOf("muxed_ghostty_place_sibling(self, _webview, true)")).toBeLessThan(
       view.indexOf("CGFloat scale = self.window.backingScaleFactor"),
     );
     expect(view).toContain("- (void)viewDidChangeBackingProperties");
@@ -182,9 +381,9 @@ describe("desktop shell security contract", () => {
     const bridge = await text("../../src-tauri/native/libghostty_view_bridge.m");
     const nativeTerminal = await nativeTerminalSources();
     const attachCommands = await text(
-      "../../src-tauri/src/native_terminal/macos/attach_commands.rs",
+      "../../src-tauri/crates/app/ticketry-desktop/src/native_terminal/macos/attach_commands.rs",
     );
-    const desktop = await text("../../src-tauri/src/lib.rs");
+    const desktop = await text("../../src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs");
     const build = await text("../../src-tauri/build.rs");
 
     expect(build).toContain('"native_terminal_hide"');
@@ -201,7 +400,7 @@ describe("desktop shell security contract", () => {
       bridge.indexOf("muxed_ghostty_view_present(opaque)"),
     );
     const attach = attachCommands.match(
-      /pub fn native_terminal_attach[\s\S]*?pub fn native_terminal_reconcile_frame/,
+      /pub(?:\(crate\))? fn native_terminal_attach[\s\S]*?pub(?:\(crate\))? fn native_terminal_reconcile_frame/,
     )?.[0];
     expect(attach).toContain("visibility: NativeTerminalVisibility::hidden()");
     expect(attach).not.toContain("muxed_ghostty_view_present");
@@ -231,8 +430,20 @@ describe("desktop shell security contract", () => {
     expect(armRedraw).not.toContain("ghostty_surface_refresh(view->_surface)");
   });
 
+  it("registers directory trust setup only for the local main window", async () => {
+    const commandName = "desktop_prepare_directory_trust";
+    const run = await text("../../src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs");
+    const build = await text("../../src-tauri/build.rs");
+    const capability = await json("../../src-tauri/capabilities/studio-main.json");
+    expect(run).toContain(`commands::directory_trust::${commandName}`);
+    expect(build).toContain(`"${commandName}"`);
+    expect(capability.local).toBe(true);
+    expect(capability.windows).toEqual(["main"]);
+    expect(capability.permissions).toContain("allow-desktop-prepare-directory-trust");
+  });
+
   it("keeps the service retry command free of webview-supplied values", async () => {
-    const rust = await text("../../src-tauri/src/lib.rs");
+    const rust = await text("../../src-tauri/crates/app/ticketry-desktop/src/desktop/commands.rs");
     const build = await text("../../src-tauri/build.rs");
     const command = rust.match(
       /fn desktop_retry_services\((?<parameters>[^)]*)\)[^{]*\{/s,
@@ -251,10 +462,12 @@ describe("desktop shell security contract", () => {
 
     expect(rootPackage.scripts).toMatchObject({
       "dev": "npm run desktop:dev",
-      "desktop:dev": "npm run desktop:dev --workspace @worktracker/studio",
+      "web": "node scripts/web-dev.mjs",
+      "web:dev": "node scripts/web-dev.mjs --development-profile",
+      "desktop:dev": "npm run desktop:dev --workspace @worktracker/studio --",
       "desktop:build": "npm run desktop:build --workspace @worktracker/studio",
       "desktop:deploy": "npm run desktop:deploy --workspace @worktracker/studio",
-      "deploy": "npm run desktop:deploy --workspace @worktracker/studio && open /Applications/Ticketry.app",
+      "deploy": "npm run desktop:deploy --workspace @worktracker/studio",
       "desktop:smoke": "npm run desktop:smoke --workspace @worktracker/studio",
       "desktop:smoke:dev": "npm run desktop:smoke:dev --workspace @worktracker/studio",
       "desktop:smoke:packaged": "npm run desktop:smoke:packaged --workspace @worktracker/studio",
@@ -265,8 +478,10 @@ describe("desktop shell security contract", () => {
       "desktop:deploy": "node scripts/desktop-deploy.mjs",
       "release:build": "node scripts/release-build.mjs",
       "release:validate": "node scripts/release-build.mjs --validate",
-      "release:test": "node --test scripts/release-build.test.mjs scripts/desktop-deploy.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/release-publish.test.mjs",
-      "desktop:smoke": "vitest run src/test/desktopShellContract.test.ts && node --test scripts/desktop-concurrent-smoke.test.mjs && node scripts/desktop-smoke.mjs && cargo test --manifest-path src-tauri/Cargo.toml",
+      "release:test": "node --test scripts/release-build.test.mjs scripts/release-provenance.test.mjs scripts/desktop-deploy.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/packaged-update-build.test.mjs scripts/packaged-update-feed.test.mjs scripts/packaged-update-acceptance.test.mjs scripts/packaged-update-acceptance-command.test.mjs scripts/packaged-update-acceptance-environment.test.mjs scripts/packaged-update-acceptance-driver.test.mjs scripts/packaged-update-acceptance-runner.test.mjs scripts/packaged-update-webdriver.test.mjs scripts/release-publish.test.mjs scripts/public-update-publisher.test.mjs scripts/update-acceptance.test.mjs scripts/update-acceptance-driver.test.mjs",
+      "release:acceptance": "node scripts/installed-artifact-acceptance.mjs",
+      "release:acceptance:update": "node scripts/packaged-update-acceptance.mjs",
+      "desktop:smoke": "vitest run src/test/desktopShellContract.test.ts src/test/nativeLibghosttyShippingContract.test.ts && node --test scripts/desktop-concurrent-smoke.test.mjs && node scripts/desktop-smoke.mjs && cargo test --manifest-path src-tauri/Cargo.toml",
       "desktop:smoke:dev": "node scripts/desktop-smoke.mjs dev",
       "desktop:smoke:packaged": "node scripts/desktop-smoke.mjs packaged",
     });
@@ -280,13 +495,14 @@ describe("desktop shell security contract", () => {
       active: true,
       targets: ["app", "dmg"],
       icon: ["icons/icon.icns", "icons/icon.png"],
+      // CODING-1486 — the shipping desktop renderer is embedded native
+      // libghostty, so its configuration and pinned runtime resources are
+      // bundle contents, not a development-only extra.
       resources: {
-        "../../LICENSE": "LICENSE.txt",
-        "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
         "native/ticketry-ghostty.conf": "ticketry-ghostty.conf",
         "vendor/libghostty/resources/": "",
       },
-      externalBin: ["binaries/muxed-backend", "binaries/ticketry-hook"],
+      externalBin: ["binaries/ticketry-hook"],
       macOS: {
         minimumSystemVersion: "11.0",
         hardenedRuntime: true,
@@ -295,27 +511,13 @@ describe("desktop shell security contract", () => {
     });
   });
 
-  it("keeps development smoke runtime endpoints on the smoke webview port", () => {
-    const configuration = buildDevelopmentSmokeConfiguration("15174");
+  it("keeps desktop smoke free of retired Python service endpoints", async () => {
+    const smoke = await text("../../scripts/desktop-smoke.mjs");
 
-    expect(configuration.runtimeEnvironment).toEqual({
-      MUXED_DESKTOP_WORKTRACKER_API: "http://127.0.0.1:15174/api/work-tracker",
-      MUXED_DESKTOP_AGENT_API: "http://127.0.0.1:15174/api",
-      MUXED_DESKTOP_STATUS_API: "http://127.0.0.1:15174/api",
-      MUXED_DESKTOP_STATUS_WEBSOCKET: "ws://127.0.0.1:15174/ws/status",
-      MUXED_DESKTOP_TERMINAL_WEBSOCKET: "ws://127.0.0.1:15174/ws/terminal",
-    });
-    expect(() =>
-      assertDevelopmentEndpointAgreement(
-        configuration.webviewUrl,
-        configuration.runtimeEnvironment,
-      ),
-    ).not.toThrow();
-    expect(() =>
-      assertDevelopmentEndpointAgreement(configuration.webviewUrl, {
-        ...configuration.runtimeEnvironment,
-        MUXED_DESKTOP_STATUS_API: "http://127.0.0.1:5174/api",
-      }),
-    ).toThrow("MUXED_DESKTOP_STATUS_API does not match the webview");
+    expect(smoke).not.toContain("MUXED_DESKTOP_WORKTRACKER_API");
+    expect(smoke).not.toContain("MUXED_DESKTOP_AGENT_API");
+    expect(smoke).not.toContain("MUXED_DESKTOP_STATUS_API");
+    expect(smoke).not.toContain("assertDevelopmentEndpointAgreement");
+    expect(smoke).toContain("MUXED_DATA_DIR");
   });
 });

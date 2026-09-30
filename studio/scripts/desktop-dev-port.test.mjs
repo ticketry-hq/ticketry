@@ -9,9 +9,24 @@ test("uses the default frontend port and coordinates strict Vite with Tauri", as
   const port = await selectFrontendPort({ isAvailable: async () => true });
   assert.equal(port, 5174);
   assert.deepEqual(buildTauriDevelopmentConfig(port), {
+    productName: "Ticketry Dev",
+    identifier: "com.ticketry.desktop.dev",
     build: {
       beforeDevCommand: "npm run dev -- --host 127.0.0.1 --port 5174 --strictPort",
       devUrl: "http://127.0.0.1:5174",
+    },
+    app: {
+      windows: [{
+        label: "main",
+        title: "Ticketry Dev",
+        width: 1440,
+        height: 960,
+        minWidth: 1024,
+        minHeight: 700,
+        resizable: true,
+        zoomHotkeysEnabled: true,
+        dragDropEnabled: false,
+      }],
     },
   });
 });

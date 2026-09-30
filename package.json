@@ -3,9 +3,9 @@
   "license": "MIT",
   "private": true,
   "version": "0.2.0",
+  "packageManager": "pnpm@10.15.1",
   "workspaces": [
-    "studio",
-    "surfaces/worktracker-typescript-sdk"
+    "studio"
   ],
   "scripts": {
     "catalog:build": "npm --prefix docs/eventcatalog run build",
@@ -16,23 +16,15 @@
     "catalog:preview": "npm --prefix docs/eventcatalog run preview",
     "catalog:sync": "npm --prefix docs/eventcatalog run sync",
     "dev": "npm run desktop:dev",
-    "db:setup": "bash scripts/local-postgres.sh setup",
-    "db:status": "bash scripts/local-postgres.sh status",
-    "db:disable": "bash scripts/local-postgres.sh disable",
     "web": "node scripts/web-dev.mjs",
-    "web:dev": "npm run web",
-    "openapi:export": "node scripts/export-openapi.mjs",
-    "sdk:generate": "node scripts/generate-typescript-sdk.mjs",
-    "python-sdk:generate": "node scripts/generate-python-sdk.mjs",
-    "wire:export": "node scripts/export-wire-frames.mjs",
-    "contract:generate": "npm run openapi:export && npm run sdk:generate && npm run python-sdk:generate && npm run wire:export",
-    "contract:check": "node scripts/check-contract-drift.mjs",
+    "web:dev": "node scripts/web-dev.mjs --development-profile",
     "boundary:check": "node scripts/check-boundary.mjs",
-    "prototype:supabase": "node backend/prototypes/supabase-migration/tui.mjs",
+    "caller:check": "node scripts/shipping-caller-gate.mjs",
     "desktop:build": "npm run desktop:build --workspace @worktracker/studio",
     "desktop:deploy": "npm run desktop:deploy --workspace @worktracker/studio",
-    "deploy": "npm run desktop:deploy --workspace @worktracker/studio && open /Applications/Ticketry.app",
-    "desktop:dev": "npm run desktop:dev --workspace @worktracker/studio",
+    "deploy": "npm run desktop:deploy --workspace @worktracker/studio",
+    "desktop:dev": "npm run desktop:dev --workspace @worktracker/studio --",
+    "desktop:dev:prod": "npm run desktop:dev --workspace @worktracker/studio -- --production-data",
     "desktop:smoke": "npm run desktop:smoke --workspace @worktracker/studio",
     "desktop:smoke:concurrent": "npm run desktop:smoke:concurrent --workspace @worktracker/studio",
     "desktop:smoke:dev": "npm run desktop:smoke:dev --workspace @worktracker/studio",
@@ -41,23 +33,22 @@
     "logs:path": "node scripts/dev-logs.mjs path",
     "logs:follow": "node scripts/dev-logs.mjs follow",
     "logs:clear": "node scripts/dev-logs.mjs clear",
+    "logs:trace": "node scripts/dev-logs.mjs trace",
+    "logs:startup": "node scripts/dev-logs.mjs startup",
+    "logs:test": "node --test scripts/dev-logs.test.mjs scripts/launch-trace-report.test.mjs scripts/launch-trace-harness-report.test.mjs scripts/startup-trace-report.test.mjs scripts/startup-trace-regression.test.mjs",
     "serve:dmg": "node scripts/serve-dmg.mjs",
-    "test:sdk": "npm run test --workspace @worktracker/typescript-sdk",
-    "test:mcp:unit": "cd surfaces/worktracker-agent && env -u VIRTUAL_ENV uv run --group dev python -m pytest -q",
-    "test:mcp:integration": "cd backend && env -u VIRTUAL_ENV uv run --extra dev python -m pytest -q worktracker/tests/test_mcp_integration.py worktracker/tests/test_mcp_workflow_integration.py worktracker/tests/test_mcp_execution_integration.py packaging/tests/test_sidecar.py::test_mcp_owner_eof_after_initialize_releases_the_listener",
-    "test:mcp": "npm run test:mcp:unit && npm run test:mcp:integration",
-    "typecheck": "npm run typecheck --workspace @worktracker/typescript-sdk && npm run typecheck --workspace @worktracker/studio",
-    "build": "npm run build --workspace @worktracker/typescript-sdk && npm run build --workspace @worktracker/studio"
-  },
-  "devDependencies": {
-    "@openapitools/openapi-generator-cli": "2.40.1"
-  },
-  "overrides": {
-    "@mdxeditor/editor": {
-      "js-yaml": "4.3.1"
-    },
-    "nanoid": "3.3.18",
-    "rolldown": "1.2.4",
-    "shell-quote": "1.9.0"
+    "verify:slice5-copy": "cargo run --locked --manifest-path studio/src-tauri/Cargo.toml -p ticketry-dev-tools --bin verify_slice5_copy --",
+    "verify:slice6-copy": "cargo run --locked --manifest-path studio/src-tauri/Cargo.toml -p ticketry-dev-tools --bin verify_slice6_copy --",
+    "typecheck": "npm run typecheck --workspace @worktracker/studio",
+    "build": "npm run build --workspace @worktracker/studio",
+    "perf:prepare": "npm run perf:prepare --workspace @worktracker/studio",
+    "perf:run": "npm run perf:run --workspace @worktracker/studio --",
+    "perf:desktop": "npm run perf:desktop --workspace @worktracker/studio --",
+    "perf:compare": "npm run perf:compare --workspace @worktracker/studio --",
+    "perf:webcontent": "npm run perf:webcontent --workspace @worktracker/studio --",
+    "perf:webcontent:packaged": "npm run perf:webcontent:packaged --workspace @worktracker/studio --",
+    "perf:verify": "npm run perf:verify --workspace @worktracker/studio",
+    "perf:test": "npm run perf:test --workspace @worktracker/studio",
+    "perf:typecheck": "npm run perf:typecheck --workspace @worktracker/studio"
   }
 }

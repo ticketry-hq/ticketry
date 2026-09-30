@@ -1,31 +1,48 @@
 import { TEMP_TASK_ID } from "../../../../features/agents/types";
-import { scratchBucketId } from "../../../../features/agents/terminal";
+import {
+  scratchBucketId,
+  useInstantRunTicketTitle,
+  useTerminalStore,
+} from "../../../../features/agents/terminal";
 import { PaneShell } from "../../PaneShell";
-import { useStudioStore } from "../../../../features/projects/store";
+import { useStudioStore } from "../../../../features/projects";
 import { useClientStore } from "../../../../state/clientStore";
-import { useCachedStates } from "../../../../shared/query/stateCatalog";
-import { useWorkItem } from "../../../../features/work-items";
+import { useCachedStates } from "../../../../features/projects";
 import type { WorkspaceLauncherContext } from "./SelectedTicketContent";
 import { SelectedTicketDetails } from "./details/SelectedTicketDetails";
 import { SelectedTicketContent } from "./SelectedTicketContent";
 import {
-  startInstantChangeFlow,
-  startPlanFlow,
-} from "../../../../features/studio/modals/PlanFeature";
-import { StateConfigurationPanel } from "../../../../features/workflows/StateConfigurationPanel";
+  useSelectedInstantRunId,
+  useSelectedPlanningRowId,
+} from "../tasks/internal/instantRunTicketNavigation";
+import { StateConfigurationPanel } from "../../../../features/workflows";
+import { ConversationConfigurationPanel } from "../../../../features/settings";
+import { recordSelectionProfilePoint } from "../../../../shared/utilities/selectionProfile";
+import { selectedRunSession } from "../../../../features/agents/actions/agentRunActions";
 
 /** Adapts Studio selection state to the selected-ticket workspace. */
-export function SelectedTicket() {
+export function SelectedTicket({ active = true }: { active?: boolean }) {
+  recordSelectionProfilePoint("selected-ticket-render");
   const selectedTaskId = useClientStore((s) => s.selectedTaskId);
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
   const workspaceSelection = useClientStore((s) => s.workspaceSelection);
+  const conversationRunId = useSelectedInstantRunId();
+  // The New conversation row is an action, not a workspace: keep its scratch
+  // tabs mounted (terminals stay attached) but show nothing.
+  const newConversationRowSelected =
+    useSelectedPlanningRowId() === TEMP_TASK_ID;
+  const conversationTitle = useInstantRunTicketTitle(
+    selectedProjectId,
+    selectedModuleId,
+    conversationRunId,
+  );
   const states = useCachedStates(selectedProjectId);
   const dismissStateConfiguration = useClientStore(
     (s) => s.dismissStateConfiguration,
   );
-  const { data: task } = useWorkItem(
-    selectedTaskId && selectedTaskId !== TEMP_TASK_ID ? selectedTaskId : null,
+  const dismissConversationConfiguration = useClientStore(
+    (s) => s.dismissConversationConfiguration,
   );
   const bucket =
     selectedTaskId === TEMP_TASK_ID
@@ -38,18 +55,15 @@ export function SelectedTicket() {
           taskId: selectedTaskId,
           projectId: selectedProjectId,
           moduleId: selectedModuleId,
-          taskKey: task?.id ?? selectedTaskId,
-          taskName: task?.name ?? "",
         }
-      : selectedTaskId === TEMP_TASK_ID && selectedProjectId && selectedModuleId
-        ? {
-            kind: "scratch",
-            onChooseMode: (mode) => {
-              if (mode === "plan") startPlanFlow();
-              else startInstantChangeFlow();
-            },
-          }
-        : null;
+      : null;
+  const closeConversationConfiguration = () => {
+    dismissConversationConfiguration();
+    requestAnimationFrame(() => {
+      const session = selectedRunSession();
+      if (session) useTerminalStore.getState().focusSession(session.sessionId);
+    });
+  };
   const configuredState =
     workspaceSelection.kind === "state-configuration" &&
     workspaceSelection.projectId === selectedProjectId
@@ -57,20 +71,35 @@ export function SelectedTicket() {
       : null;
 
   return (
-    <PaneShell pane="details-or-terminal">
+    <PaneShell
+      pane="details-or-terminal"
+      title={conversationRunId ? conversationTitle ?? undefined : undefined}
+      titleCasing="preserve"
+    >
       <div className="relative h-full min-h-0">
-        <SelectedTicketContent
-          bucket={bucket}
-          projectId={selectedProjectId}
-          moduleId={selectedModuleId}
-          owner="studio"
-          details={<SelectedTicketDetails />}
-          launchContext={launchContext}
-        />
+        <div className="h-full" hidden={newConversationRowSelected}>
+          <SelectedTicketContent
+            bucket={bucket}
+            projectId={selectedProjectId}
+            moduleId={selectedModuleId}
+            owner="studio"
+            workspaceActive={active}
+            details={<SelectedTicketDetails />}
+            launchContext={launchContext}
+            conversationRunId={conversationRunId}
+            conversationTitle={conversationTitle}
+          />
+        </div>
         {configuredState ? (
           <StateConfigurationPanel
             state={configuredState}
             onClose={dismissStateConfiguration}
+          />
+        ) : workspaceSelection.kind === "conversation-configuration" &&
+          workspaceSelection.projectId === selectedProjectId &&
+          workspaceSelection.moduleId === selectedModuleId ? (
+          <ConversationConfigurationPanel
+            onClose={closeConversationConfiguration}
           />
         ) : null}
       </div>

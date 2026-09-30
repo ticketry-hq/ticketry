@@ -47,12 +47,44 @@ static void runtime_wakeup(void *userdata) {
 static bool runtime_action(ghostty_app_t app, ghostty_target_s target,
                            ghostty_action_s action);
 
+static bool runtime_read_clipboard(void *userdata, ghostty_clipboard_e clipboard,
+                                   void *state) {
+  // Paste bindings originate on AppKit's main thread. Keep pasteboard access
+  // there and refuse unsupported selection-clipboard or OSC requests instead
+  // of handing libghostty an owner that may outlive its view.
+  if (![NSThread isMainThread] || clipboard != GHOSTTY_CLIPBOARD_STANDARD)
+    return false;
+  ghostty_surface_t surface = muxed_ghostty_owned_surface(userdata);
+  if (surface == NULL) return false;
+
+  NSString *value =
+      [[NSPasteboard generalPasteboard] stringForType:NSPasteboardTypeString];
+  if (value == nil) return false;
+  ghostty_surface_complete_clipboard_request(surface, value.UTF8String, state,
+                                             false);
+  return true;
+}
+
+static void runtime_confirm_clipboard(
+    void *userdata, const char *value, void *state,
+    ghostty_clipboard_request_e request) {
+  ghostty_surface_t surface = muxed_ghostty_owned_surface(userdata);
+  if (surface == NULL || state == NULL) return;
+
+  // Ticketry already requires an explicit Cmd+V while the terminal is
+  // engaged. Complete Ghostty's multiline-paste safety round trip in place;
+  // terminal-initiated OSC 52 reads remain denied.
+  const char *confirmed =
+      request == GHOSTTY_CLIPBOARD_REQUEST_PASTE && value != NULL ? value : "";
+  ghostty_surface_complete_clipboard_request(surface, confirmed, state, true);
+}
+
 static void runtime_write_clipboard(
     void *userdata, ghostty_clipboard_e clipboard,
     const ghostty_clipboard_content_s *content, size_t count, bool confirm) {
   (void)userdata;
   (void)clipboard;
-  (void)confirm;
+  if (confirm) return;
   if (count == 0 || content == NULL || content[0].data == NULL) return;
   NSString *value = [NSString stringWithUTF8String:content[0].data];
   if (value == nil) return;
@@ -138,10 +170,26 @@ void *muxed_ghostty_runtime_new(void) {
   return runtime;
 }
 
+// Retires the runtime in place instead of freeing the record.
+//
+// `runtime_wakeup` captures this pointer in a block it hands to the main
+// queue, and dispatch offers no way to cancel a block that is already queued.
+// libghostty's io and renderer threads post wakeups continuously, so a free
+// here leaves any wakeup queued just before it reading `runtime->app` out of
+// released memory and ticking a wild app pointer. That is a use-after-free
+// whose fault address is whatever the heap reused, and it crashes the process
+// with no Rust panic to attribute it (CODING-1368 investigation).
+//
+// The record is two pointers and a process creates a handful of runtimes at
+// most, so it is cleared and kept. A late wakeup then reads a NULL app and
+// does nothing.
 void muxed_ghostty_runtime_free(void *opaque) {
   MuxedGhosttyRuntime *runtime = opaque;
   if (runtime == NULL) return;
-  if (runtime->app != NULL) ghostty_app_free(runtime->app);
-  if (runtime->config != NULL) ghostty_config_free(runtime->config);
-  free(runtime);
+  ghostty_app_t app = runtime->app;
+  ghostty_config_t config = runtime->config;
+  runtime->app = NULL;
+  runtime->config = NULL;
+  if (app != NULL) ghostty_app_free(app);
+  if (config != NULL) ghostty_config_free(config);
 }

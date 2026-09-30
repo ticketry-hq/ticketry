@@ -13,34 +13,8 @@ export const CONFIGURABLE_PROVIDERS: readonly ConfigurableProvider[] = [
   "gemini",
 ];
 
-/**
- * A client-side mirror of the server's `PROVIDER_CAPABILITIES`
- * (`worktracker/launch_capabilities.py`), used only to describe a provider the
- * user has just switched on. The capabilities payload carries activated
- * providers only, so until the save round-trips there is no entry for one — and
- * an empty placeholder made setting its reasoning take two saves with no
- * explanation. The authoritative payload still wins the moment it arrives.
- */
-export const PROVIDER_CAPABILITY_DEFAULTS: Record<
-  ConfigurableProvider,
-  ProviderCapabilities
-> = {
-  claude: {
-    agent: "claude",
-    models: [],
-  },
-  codex: {
-    agent: "codex",
-    models: [],
-  },
-  gemini: {
-    agent: "gemini",
-    models: [],
-  },
-};
-
 export interface LaunchBindingValidationError {
-  field: "agent" | "model" | "reasoning";
+  field: "agent" | "profile" | "model" | "reasoning";
   message: string;
 }
 
@@ -71,25 +45,6 @@ export function launchBindingsByStateId(
 
 const text = (value: string | null | undefined) => value?.trim() ?? "";
 
-const USER_INVOKE_ONLY_SKILLS = new Set([
-  "grill-with-docs",
-  "implement",
-  "setup-matt-pocock-skills",
-  "to-spec",
-  "to-tickets",
-]);
-
-export function entrySkillWarning(
-  requiredSkills: string[],
-  entrySkill: string | null | undefined,
-): string | null {
-  const misplaced = requiredSkills.filter(
-    (skill) => USER_INVOKE_ONLY_SKILLS.has(skill) && skill !== text(entrySkill),
-  );
-  if (misplaced.length === 0) return null;
-  return `${misplaced.join(", ")} can only start through user input. Select it as the entry skill.`;
-}
-
 export function validateLaunchBindingOptions(
   binding: LaunchBindingInput,
   capabilities: ProviderCapabilities[],
@@ -97,8 +52,9 @@ export function validateLaunchBindingOptions(
   const agent = text(binding.agent);
   const model = text(binding.model);
   const reasoning = text(binding.reasoning);
+  const profile = text(binding.profile);
   if (!agent) {
-    return model || reasoning ? {
+    return profile || model || reasoning ? {
       field: "agent",
       message: "Choose an agent/provider before configuring model or reasoning.",
     } : null;
@@ -108,25 +64,36 @@ export function validateLaunchBindingOptions(
   if (!capability) {
     return { field: "agent", message: unavailableProviderMessage(agent) };
   }
-  if (!model) {
-    return reasoning ? {
-      field: "model",
-      message: "Choose a catalog model before configuring reasoning.",
-    } : null;
+  if (profile && agent !== "codex") {
+    return { field: "profile", message: "Only Codex supports launch profiles." };
   }
-  const selectedModel = capability.models.find(
-    (candidate) => candidate.name === model,
-  );
-  if (!selectedModel) {
+  if (profile && (model || reasoning)) {
+    return { field: "profile", message: "A Codex profile cannot be combined with model or reasoning overrides." };
+  }
+  if (
+    model &&
+    !capability.accepts_any_model &&
+    !(capability.model_aliases ?? []).includes(model) &&
+    !(capability.model_prefixes ?? []).some((prefix) => model.startsWith(prefix))
+  ) {
     return {
       field: "model",
       message: `Model '${model}' is not compatible with agent/provider '${agent}'.`,
     };
   }
-  if (reasoning && !selectedModel.reasoning_levels.includes(reasoning)) {
+  if (reasoning && !model) {
     return {
       field: "reasoning",
-      message: `Reasoning '${reasoning}' is not supported by model '${model}'.`,
+      message: "Choose a catalog model before configuring reasoning.",
+    };
+  }
+  const reasoningLevels = model
+    ? capability.model_reasoning_levels?.[model] ?? capability.reasoning_levels ?? []
+    : capability.reasoning_levels ?? [];
+  if (reasoning && !(reasoningLevels).includes(reasoning)) {
+    return {
+      field: "reasoning",
+      message: `Reasoning '${reasoning}' is not supported by agent/provider '${agent}'.`,
     };
   }
   return null;

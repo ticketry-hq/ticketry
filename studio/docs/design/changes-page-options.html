@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Changes page — redesign options</title>
+<style>
+  :root{
+    --bg:#0a0a0a;--panel:#111317;--border:#2a2f3a;--title:#1f2530;--sel:#2d3a5a;
+    --accent:#7aa2f7;--p:#d6deeb;--s:#9aa5b8;--m:#7a8599;
+    --ok:#9ece6a;--warn:#e0af68;--bad:#f7768e;--info:#7dcfff;
+    --mono:ui-monospace,"JetBrains Mono",Menlo,monospace;--sans:-apple-system,Inter,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;border-radius:0}
+  body{margin:0;background:#050505;color:var(--p);font:14px/1.5 var(--sans);padding:40px 48px 120px}
+  h1{font-size:22px;margin:0 0 6px}
+  h2{font-size:18px;margin:64px 0 4px;display:flex;gap:12px;align-items:baseline}
+  h2 small{font-size:12px;color:var(--m);font-weight:normal}
+  h3{font-size:13px;color:var(--s);text-transform:uppercase;letter-spacing:.08em;margin:20px 0 8px}
+  p,li{color:var(--s);max-width:78ch}
+  .lead{color:var(--p);font-size:15px}
+  nav a{color:var(--accent);margin-right:18px;font-size:13px;text-decoration:none}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:32px;max-width:1180px}
+  ul{padding-left:18px}li{margin:3px 0}
+  b{color:var(--p);font-weight:600}
+  code{font-family:var(--mono);font-size:12px;color:var(--info)}
+  .tag{display:inline-block;font:11px var(--mono);padding:1px 6px;border:1px solid var(--border);color:var(--s);margin-left:6px}
+  .diag{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;max-width:1180px}
+  .diag div{border:1px solid var(--border);background:var(--panel);padding:12px 14px}
+  .diag div b{display:block;margin-bottom:4px}
+  .diag div span{color:var(--m);font-size:12px}
+  .verdict{border-left:3px solid var(--accent);padding:10px 16px;background:var(--panel);max-width:1180px;margin-top:24px}
+
+  /* ---------- mockup chrome ---------- */
+  .mock{width:1180px;background:var(--bg);border:1px solid var(--border);font:12px/1.45 var(--sans);color:var(--p);margin-top:14px;overflow:hidden}
+  .mock .tabs{display:flex;gap:2px;padding:6px 8px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11px}
+  .mock .tabs span{padding:3px 10px;border:1px solid transparent;color:var(--m)}
+  .mock .tabs span.on{border-color:var(--accent);color:var(--p)}
+  .mock .body{display:grid;height:560px}
+  .pane{min-width:0;overflow:hidden;border-right:1px solid var(--border);display:flex;flex-direction:column}
+  .pane:last-child{border-right:0}
+  .pane .hd{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--s);font-size:11px;text-transform:uppercase;letter-spacing:.06em;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+  .pane .hd .right{text-transform:none;letter-spacing:0;font-family:var(--mono)}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--border);color:var(--p);font-size:12px;background:transparent;white-space:nowrap}
+  .btn.pri{background:var(--p);color:var(--bg);border-color:var(--p);font-weight:600}
+  .btn.dis{opacity:.45}
+  .btn.ghost{border-color:transparent;color:var(--s)}
+  .btn.danger{border-color:rgba(247,118,142,.6);color:var(--bad)}
+  .bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+  .bar .grow{flex:1}
+  .chip{display:inline-flex;align-items:center;gap:6px;font:11px var(--mono);color:var(--s);padding:2px 8px;border:1px solid var(--border)}
+  .dot{width:7px;height:7px;display:inline-block}
+  .ok{background:var(--ok)}.warn{background:var(--warn)}.bad{background:var(--bad)}.info{background:var(--info)}.mut{background:var(--m)}
+  .t-ok{color:var(--ok)}.t-warn{color:var(--warn)}.t-bad{color:var(--bad)}.t-info{color:var(--info)}.t-m{color:var(--m)}.t-s{color:var(--s)}
+  .files{overflow:auto;flex:1}
+  .f{display:flex;align-items:center;gap:8px;padding:5px 12px;font-family:var(--mono);font-size:11.5px;border-bottom:1px solid #15181e}
+  .f.sel{background:var(--sel)}
+  .f .st{width:14px;text-align:center;font-weight:700;flex-shrink:0}
+  .f .dir{color:var(--m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;min-width:0;flex:1;text-align:left}
+  .f .base{color:var(--p);white-space:nowrap}
+  .f .num{color:var(--m);flex-shrink:0;font-size:10.5px;width:64px;text-align:right}
+  .f .num i{font-style:normal}.f .num .a{color:var(--ok)}.f .num .d{color:var(--bad)}
+  .grp{padding:6px 12px 2px;font:10.5px var(--mono);color:var(--m);letter-spacing:.04em}
+  .diff{font-family:var(--mono);font-size:11px;padding:0;overflow:auto;flex:1}
+  .diff .hunk{color:var(--info);background:#0f1620;padding:2px 12px}
+  .diff div{padding:0 12px;white-space:pre}
+  .diff .add{background:rgba(158,206,106,.1);color:#c7e5a8}
+  .diff .del{background:rgba(247,118,142,.1);color:#f3b0be}
+  .diff .ctx{color:var(--s)}
+  .diff .ln{display:inline-block;width:34px;color:var(--m);opacity:.6;user-select:none}
+  .wt{padding:8px 10px;border-bottom:1px solid #15181e;display:flex;gap:8px;align-items:flex-start}
+  .wt.sel{background:var(--title);box-shadow:inset 2px 0 var(--accent)}
+  .wt .dot{margin-top:5px;flex-shrink:0}
+  .wt .n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wt .b{font:10.5px var(--mono);color:var(--m);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wt .meta{font:10.5px var(--mono);color:var(--s);margin-top:2px;display:flex;gap:8px}
+  .note{background:var(--panel);border:1px solid var(--border);padding:8px 12px;font-size:11.5px;color:var(--s);display:flex;gap:10px;align-items:center;flex-shrink:0}
+  .note.bad{border-color:rgba(247,118,142,.5);color:var(--p)}
+  .note .btn{margin-left:auto}
+  .steps{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+  .step{flex:1;padding:8px 12px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:3px;position:relative}
+  .step:last-child{border-right:0}
+  .step .k{font:10.5px var(--mono);color:var(--m);text-transform:uppercase;letter-spacing:.06em;display:flex;gap:6px;align-items:center}
+  .step .v{font-size:12px;color:var(--p)}
+  .step .v.m{color:var(--m)}
+  .step.now{background:var(--title);box-shadow:inset 0 -2px var(--accent)}
+  .step .btn{margin-top:4px;align-self:flex-start;padding:2px 8px;font-size:11px}
+  .caption{font-size:12px;color:var(--m);margin:8px 0 0;max-width:1180px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font:11px var(--mono);padding:8px 12px}
+  .kv dt{color:var(--m)}.kv dd{margin:0;color:var(--p);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  details.sec{border-bottom:1px solid var(--border)}
+  details.sec summary{list-style:none;padding:8px 12px;cursor:default;display:flex;align-items:center;gap:8px;font-size:12px}
+  details.sec summary::before{content:"▸";color:var(--m);font-size:10px}
+  details.sec[open] summary::before{content:"▾"}
+  details.sec summary .chip{margin-left:auto}
+  .sect-body{padding:0 12px 12px;display:flex;flex-direction:column;gap:8px}
+  select.sel-branch{background:var(--bg);color:var(--p);border:1px solid var(--border);font:11px var(--mono);padding:3px 6px;width:100%}
+  .menu{position:absolute;right:12px;top:40px;background:var(--panel);border:1px solid var(--border);min-width:190px;padding:4px 0;font-size:12px;z-index:5;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+  .menu div{padding:5px 12px;color:var(--p);display:flex;justify-content:space-between}
+  .menu div.m{color:var(--m)}
+  .menu hr{border:0;border-top:1px solid var(--border);margin:4px 0}
+  .menu kbd{font:10px var(--mono);color:var(--m)}
+  .crumb{display:flex;align-items:center;gap:6px;font:12px var(--mono)}
+  .crumb .sw{border:1px solid var(--border);padding:2px 8px;display:inline-flex;gap:8px;align-items:center}
+  .compare{display:grid;grid-template-columns:repeat(4,1fr);gap:0;max-width:1180px;border:1px solid var(--border);font-size:12px}
+  .compare div{padding:8px 12px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+  .compare div:nth-child(4n){border-right:0}
+  .compare .h{background:var(--panel);color:var(--s);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+  .compare .r{color:var(--m)}
+</style>
+</head>
+<body>
+
+<h1>Changes page — redesign options</h1>
+<p class="lead">Five layouts for the same data, ordered from smallest change to largest. Each keeps every capability that exists today. Mockups use the live Studio palette and square-corner rule.</p>
+<nav>
+  <a href="#diag">Diagnosis</a>
+  <a href="#common">Fixes common to all</a>
+  <a href="#a">A · Status bar</a>
+  <a href="#b">B · Ship pipeline</a>
+  <a href="#c">C · Branch inspector</a>
+  <a href="#d">D · Worktree switcher</a>
+  <a href="#e">E · Review + Ship modes</a>
+  <a href="#compare">Compare</a>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="diag">What is wrong with the current page</h2>
+<p>Measured against Norman's fundamentals and Tognazzini's principles, the screenshot has seven concrete defects. All five options fix the first four; they differ in how they treat the rest.</p>
+<div class="diag">
+  <div><b>1 · The content is below the fold <span class="tag">Visibility</span></b><span>The file list, which is what the page is for, starts at 64% of the viewport. Eight controls, two status boxes, a definition list, a branch picker and an error sit above it. The user came to read a diff and gets a settings form.</span></div>
+  <div><b>2 · No action hierarchy <span class="tag">Affordance · Defaults</span></b><span>Commit &amp; push, Commit, Push, Open PR, Prepare merge, Refresh merge eligibility all render as identical bordered boxes. The one filled button is disabled. Nothing says "this is what you should do next."</span></div>
+  <div><b>3 · Four navigation layers say the same thing <span class="tag">Consistency · Simplicity</span></b><span>Module tabs, Details/Changes tabs, the row of "instant" chips, and the "Current worktrees" list all pick a context. The left column is a second copy of the tab strip and costs 22% of the width.</span></div>
+  <div><b>4 · State is scattered <span class="tag">Visibility · Mapping</span></b><span>"Merge conflicts / Merge preparation available", "The mapped pull request has not merged", "Dirty · 3 unpushed", "Finish or abort the Git operation" appear in four places with four visual treatments. One branch has one state; show it once.</span></div>
+  <div><b>5 · Errors without an exit <span class="tag">Error recovery</span></b><span>"Finish or abort the Git operation in the destination checkout, then retry" is red text with no button. The recovery actions exist in the code (Finish merge / Abort merge) but render in a different section.</span></div>
+  <div><b>6 · The diff pane wastes its width <span class="tag">Efficiency</span></b><span>Right column is 58% of the screen and shows 12 lines. The file header is a single truncated line of mono text with no status, no counts, no navigation between files.</span></div>
+  <div><b>7 · File rows lose the signal <span class="tag">Readability</span></b><span>Paths truncate in the middle of the directory, so eight rows read "studio/scripts/performanc…". The status is a full word in the same colour weight as the counts.</span></div>
+  <div><b>8 · Everything is the same box <span class="tag">Aesthetics</span></b><span>Buttons, status notices, confirm dialogs, the worktree list and the file list all use the same 1px border on the same background. Nothing groups, nothing recedes.</span></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="common">Fixes that apply to every option</h2>
+<div class="cols">
+  <div>
+    <h3>File rows</h3>
+    <ul>
+      <li>Single-letter status badge <code>M A D R C U !</code> in the lifecycle colour, left-aligned, so the eye scans a column.</li>
+      <li>Path split: directory in muted, truncated from the <b>left</b>; filename in primary, never truncated.</li>
+      <li>Optional grouping by top-level directory with a count, collapsed when a group exceeds ~8 files.</li>
+      <li><code>+n −n</code> right-aligned in green/red, fixed width so counts line up.</li>
+      <li>Keyboard: <code>j / k</code> or arrows move selection, <code>Enter</code> focuses the diff, <code>[ ]</code> previous/next file from inside the diff.</li>
+    </ul>
+    <h3>Diff pane header</h3>
+    <ul>
+      <li>Status badge + full path + counts + "3 of 34" + prev/next buttons.</li>
+      <li>Empty state says what to do: "Select a file, or press <code>j</code>."</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Actions</h3>
+    <ul>
+      <li>Exactly <b>one primary</b> button, derived from state: dirty → "Commit &amp; push"; clean + unpushed → "Push"; pushed, no PR → "Create PR"; PR open → "Open PR"; PR merged → "Merge locally" / "Clean up".</li>
+      <li>Everything else moves into a <code>⋯</code> menu with its enabling condition shown as a disabled reason ("Push · nothing to push").</li>
+      <li>Confirmations become an inline popover anchored to the button, not a box that reflows the column.</li>
+      <li>Every red message carries the action that resolves it on the same row.</li>
+    </ul>
+    <h3>Status</h3>
+    <ul>
+      <li>One status line per branch: coloured dot + short phrase + PR badge. The long explanation goes in a tooltip or a disclosure.</li>
+      <li>Local merge preview and worktree cleanup are secondary; they should be one click away, not always expanded.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="a">Option A · Status bar, files first <small>smallest change · keeps three columns</small></h2>
+<p>Collapse the whole action stack into a single toolbar row above the files: state chip, one primary button, PR button, overflow menu. Local merge and cleanup live in a collapsed disclosure under the toolbar. The left column stays but becomes denser and carries a status dot per worktree so it earns its space.</p>
+
+<div class="mock">
+  <div class="tabs"><span>Details</span><span class="on">Changes</span><span>instant 1</span><span>instant 2</span><span>instant 3</span></div>
+  <div class="body" style="grid-template-columns:210px 440px 1fr">
+    <div class="pane">
+      <div class="hd">Worktrees <span class="right">6</span></div>
+      <div class="wt"><span class="dot mut"></span><div style="min-width:0"><div class="n">Module checkout</div><div class="b">rust-migration</div></div></div>
+      <div class="wt sel"><span class="dot warn"></span><div style="min-width:0"><div class="n">CODING-1656 Worktrees tracking…</div><div class="b">wt/CODING-1656-worktrees-tracking…</div><div class="meta"><span>34 files</span><span class="t-warn">PR conflicts</span></div></div></div>
+      <div class="wt"><span class="dot ok"></span><div style="min-width:0"><div class="n">CODING-1850 Port missing Cha…</div><div class="b">wt/CODING-1850-port-missing-chang…</div><div class="meta"><span>3 files</span><span class="t-ok">PR ready</span></div></div></div>
+      <div class="wt"><span class="dot info"></span><div style="min-width:0"><div class="n">CODING-1866 Require a shared…</div><div class="b">wt/CODING-1866-require-a-shared-p…</div><div class="meta"><span>12 files</span><span class="t-info">checks running</span></div></div></div>
+      <div class="wt"><span class="dot mut"></span><div style="min-width:0"><div class="n">CODING-1885 The run mechanics</div><div class="b">wt/CODING-1885-the-run-mechanics</div><div class="meta"><span>clean</span></div></div></div>
+      <div class="wt"><span class="dot warn"></span><div style="min-width:0"><div class="n">CODING-1886 Make Changes a f…</div><div class="b">wt/CODING-1886-make-changes-a-foc…</div><div class="meta"><span>7 files</span><span class="t-warn">2 unpushed</span></div></div></div>
+    </div>
+    <div class="pane" style="position:relative">
+      <div class="bar">
+        <span class="chip"><span class="dot bad"></span>dirty · 3 ahead · PR conflicts</span>
+        <span class="grow"></span>
+        <span class="btn pri">Commit &amp; push</span>
+        <span class="btn">Open PR ↗</span>
+        <span class="btn ghost">⋯</span>
+      </div>
+      <div class="menu">
+        <div>Commit <kbd>⌘↵</kbd></div>
+        <div class="m">Push <span>nothing to push</span></div>
+        <div>Prepare merge <span class="t-warn">recommended</span></div>
+        <hr>
+        <div>Merge locally into…</div>
+        <div>Refresh status</div>
+        <hr>
+        <div class="t-bad">Clean up worktree…</div>
+      </div>
+      <details class="sec"><summary>Local merge <span class="chip t-bad">blocked</span></summary></details>
+      <div class="note bad"><span class="dot bad"></span>rust-migration has a merge in progress.<span class="btn">Finish</span><span class="btn danger" style="margin-left:0">Abort</span></div>
+      <div class="hd">34 files <span class="right"><i class="t-ok">+1577</i> <i class="t-bad">−163</i></span></div>
+      <div class="files">
+        <div class="grp">studio/docs · 1</div>
+        <div class="f sel"><span class="st t-warn">M</span><span class="dir">studio/docs/</span><span class="base">overhaul-acceptance.md</span><span class="num"><i class="a">+6</i></span></div>
+        <div class="grp">studio/performance · 2</div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/performance/</span><span class="base">README.md</span><span class="num"><i class="a">+13</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/performance/fixtures/</span><span class="base">changes.json</span><span class="num"><i class="a">+9</i> <i class="d">−1</i></span></div>
+        <div class="grp">studio/scripts/performance · 6</div>
+        <div class="f"><span class="st t-ok">A</span><span class="dir">studio/scripts/performance/</span><span class="base">changesBench.ts</span><span class="num"><i class="a">+127</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/scripts/performance/</span><span class="base">harness.ts</span><span class="num"><i class="a">+143</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/scripts/performance/</span><span class="base">report.ts</span><span class="num"><i class="a">+13</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/scripts/performance/</span><span class="base">runner.ts</span><span class="num"><i class="a">+6</i> <i class="d">−1</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/scripts/performance/</span><span class="base">scenarios.ts</span><span class="num"><i class="a">+8</i> <i class="d">−1</i></span></div>
+        <div class="f"><span class="st t-bad">D</span><span class="dir">studio/scripts/performance/</span><span class="base">legacy.ts</span><span class="num"><i class="d">−41</i></span></div>
+        <div class="grp">studio/src · 25</div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/src/features/agents/worktrees/changes/</span><span class="base">ChangesActions.tsx</span><span class="num"><i class="a">+88</i> <i class="d">−30</i></span></div>
+        <div class="f"><span class="st t-ok">A</span><span class="dir">studio/src/features/agents/worktrees/changes/</span><span class="base">MergeDestinationPicker.tsx</span><span class="num"><i class="a">+86</i></span></div>
+        <div class="f"><span class="st t-m">R</span><span class="dir">studio/src/features/agents/worktrees/changes/</span><span class="base">changesWorkspaceState.ts</span><span class="num"><i class="a">+4</i> <i class="d">−4</i></span></div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="bar"><span class="st t-warn" style="font-weight:700">M</span><span style="font-family:var(--mono)">studio/docs/overhaul-acceptance.md</span><span class="chip"><i class="t-ok">+6</i></span><span class="grow"></span><span class="t-m" style="font-family:var(--mono)">1 / 34</span><span class="btn ghost">‹</span><span class="btn ghost">›</span></div>
+      <div class="diff">
+        <div class="hunk">@@ -313,6 +313,12 @@ 313 unmodified lines</div>
+        <div class="ctx"><span class="ln">321</span>| 321 | Finishing or aborting a conflicting merge retires its recovery state…</div>
+        <div class="ctx"><span class="ln">322</span>| 322 | Committing dirty source work refreshes local merge eligibility…</div>
+        <div class="ctx"><span class="ln">323</span>| 323 | Refreshing merge eligibility after an external destination fix…</div>
+        <div class="add"><span class="ln">324</span>| 324 | A saved Changes workspace target without a Back origin migrates to Details.</div>
+        <div class="add"><span class="ln">325</span>| 325 | Saved workspace-tab order drops the retired Changes tab on read and write.</div>
+        <div class="add"><span class="ln">326</span>| 326 | Changes opens independently, and Back restores the exact planning origin.</div>
+        <div class="add"><span class="ln">327</span>| 327 | If the planning origin disappears, Back returns to the module's Details.</div>
+        <div class="add"><span class="ln">328</span>| 328 | Back stays usable while Changes is loading or reports an error.</div>
+        <div class="add"><span class="ln">329</span>| 329 | Selecting a task checkout marks it selected and keeps Back usable.</div>
+        <div class="ctx"><span class="ln">330</span></div>
+        <div class="ctx"><span class="ln">331</span>Each executable case carries one stable `[overhaul-NN]` marker. The gate has a</div>
+        <div class="ctx"><span class="ln">332</span>contract test that fails if a marker is missing or duplicated. A case whose</div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="caption">Overflow menu shown open for illustration. Disabled items state their reason inline ("nothing to push"), so a disabled state is never a dead end.</p>
+<div class="cols">
+  <div><h3>Fixes</h3><ul><li>Files reach the top third of the column (defect 1).</li><li>One primary button derived from state; rest behind ⋯ (defect 2).</li><li>Branch state collapses to two chips (defect 4).</li><li>The blocking error carries Finish / Abort on its row (defect 5).</li><li>Worktree list gains status dots and counts, so it is a dashboard, not a duplicate tab strip (partly defect 3).</li></ul></div>
+  <div><h3>Trade-offs</h3><ul><li>Still three columns; the diff pane stays cramped at narrow widths.</li><li>The ⋯ menu hides Prepare merge and Merge locally. Acceptable because the status chip tells you when they matter, but discoverability drops.</li><li>Implementation: restyle <code>ChangesActions</code>, <code>ChangedFilesList</code>, <code>CurrentWorktreesList</code>; wrap <code>WorktreeMergePreview</code> in a disclosure. No state or query changes.</li></ul></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="b">Option B · The ship pipeline <small>state as a horizontal stepper</small></h2>
+<p>Shipping a worktree is linear: commit → push → pull request → merge → clean up. Render that as a five-step strip across the top of the workspace. Each step shows its current state and, when it is the active step, exactly one action. Errors attach to the step they belong to. The files and diff take the whole area below.</p>
+
+<div class="mock">
+  <div class="tabs"><span>Details</span><span class="on">Changes</span><span>instant 1</span><span>instant 2</span><span>instant 3</span></div>
+  <div class="bar" style="border-bottom:0;padding:8px 12px 0"><span class="crumb"><span class="sw">CODING-1656 Worktrees tracking and closing with link <span class="t-m">▾</span></span><span class="t-m">wt/CODING-1656-worktrees-tracking-and-closing-with-link</span></span><span class="grow"></span><span class="btn ghost">Refresh</span><span class="btn ghost">⋯</span></div>
+  <div class="steps">
+    <div class="step now"><span class="k"><span class="dot warn"></span>1 · Commit</span><span class="v">4 files uncommitted</span><span class="btn pri">Commit &amp; push</span></div>
+    <div class="step"><span class="k"><span class="dot warn"></span>2 · Push</span><span class="v">3 commits ahead of origin</span></div>
+    <div class="step"><span class="k"><span class="dot bad"></span>3 · Pull request</span><span class="v">#412 · merge conflicts</span><span class="btn">Prepare merge</span></div>
+    <div class="step"><span class="k"><span class="dot bad"></span>4 · Merge</span><span class="v">rust-migration blocked · merge in progress</span><span style="display:flex;gap:6px"><span class="btn" style="margin-top:4px">Finish</span><span class="btn danger" style="margin-top:4px">Abort</span></span></div>
+    <div class="step"><span class="k"><span class="dot mut"></span>5 · Clean up</span><span class="v m">After merge</span></div>
+  </div>
+  <div class="body" style="grid-template-columns:400px 1fr;height:440px">
+    <div class="pane">
+      <div class="hd">34 files <span class="right"><i class="t-ok">+1577</i> <i class="t-bad">−163</i></span></div>
+      <div class="files">
+        <div class="grp">uncommitted · 4</div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/src/features/documents/</span><span class="base">DescriptionEditor.tsx</span><span class="num"><i class="a">+12</i> <i class="d">−3</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/src/features/documents/</span><span class="base">RichMarkdownEditor.tsx</span><span class="num"><i class="a">+4</i> <i class="d">−1</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/src/test/</span><span class="base">overhaulTypographyReadabilityAcceptance.test.tsx</span><span class="num"><i class="a">+20</i></span></div>
+        <div class="f"><span class="st t-ok">U</span><span class="dir">.local/state/gh/</span><span class="base">device-id</span><span class="num"><i class="a">+1</i></span></div>
+        <div class="grp">committed since base · 30</div>
+        <div class="f sel"><span class="st t-warn">M</span><span class="dir">studio/docs/</span><span class="base">overhaul-acceptance.md</span><span class="num"><i class="a">+6</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/performance/</span><span class="base">README.md</span><span class="num"><i class="a">+13</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/performance/fixtures/</span><span class="base">changes.json</span><span class="num"><i class="a">+9</i> <i class="d">−1</i></span></div>
+        <div class="f"><span class="st t-ok">A</span><span class="dir">studio/scripts/performance/</span><span class="base">changesBench.ts</span><span class="num"><i class="a">+127</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/scripts/performance/</span><span class="base">harness.ts</span><span class="num"><i class="a">+143</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/scripts/performance/</span><span class="base">report.ts</span><span class="num"><i class="a">+13</i></span></div>
+        <div class="f"><span class="st t-bad">D</span><span class="dir">studio/scripts/performance/</span><span class="base">legacy.ts</span><span class="num"><i class="d">−41</i></span></div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="bar"><span class="st t-warn" style="font-weight:700">M</span><span style="font-family:var(--mono)">studio/docs/overhaul-acceptance.md</span><span class="chip"><i class="t-ok">+6</i></span><span class="grow"></span><span class="t-m" style="font-family:var(--mono)">5 / 34</span><span class="btn ghost">‹</span><span class="btn ghost">›</span></div>
+      <div class="diff">
+        <div class="hunk">@@ -313,6 +313,12 @@</div>
+        <div class="ctx"><span class="ln">321</span>| 321 | Finishing or aborting a conflicting merge retires its recovery state and gives the next merge…</div>
+        <div class="ctx"><span class="ln">322</span>| 322 | Committing dirty source work refreshes local merge eligibility and enables Merge without reopening.</div>
+        <div class="ctx"><span class="ln">323</span>| 323 | Refreshing merge eligibility after an external destination fix enables Merge without reopening.</div>
+        <div class="add"><span class="ln">324</span>| 324 | A saved Changes workspace target without a Back origin migrates to Details.</div>
+        <div class="add"><span class="ln">325</span>| 325 | Saved workspace-tab order drops the retired Changes tab on read and write.</div>
+        <div class="add"><span class="ln">326</span>| 326 | Changes opens independently, and Back restores the exact planning origin and active session.</div>
+        <div class="add"><span class="ln">327</span>| 327 | If the planning origin disappears, Back returns to the same module's conversation Details.</div>
+        <div class="add"><span class="ln">328</span>| 328 | Back stays usable while Changes is loading or reports an error.</div>
+        <div class="add"><span class="ln">329</span>| 329 | Selecting a task checkout marks it selected and keeps Back usable while fresh task changes load.</div>
+        <div class="ctx"><span class="ln">330</span></div>
+        <div class="ctx"><span class="ln">331</span>Each executable case carries one stable `[overhaul-NN]` marker. The gate has a</div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="caption">The worktree switcher is a dropdown in the breadcrumb, which removes the left column. Files split into "uncommitted" and "committed since base", so the "cumulative" caveat becomes visible structure instead of a footnote.</p>
+<div class="cols">
+  <div><h3>Fixes</h3><ul><li>Strongest answer to defect 4: the whole lifecycle is one row, read left to right (Mapping, Visibility).</li><li>Anticipation: the next step is highlighted before the user asks.</li><li>Errors sit on the step they block, with the fix beside them (defect 5).</li><li>Removes the left column (defect 3) and gives the diff ~65% width (defect 6).</li><li>The "Includes committed work from the recorded base" footnote becomes file groups.</li></ul></div>
+  <div><h3>Trade-offs</h3><ul><li>Module checkout has no PR / merge / cleanup steps, so the strip is three steps there. Fine, but two variants to maintain.</li><li>Fixed 5-column strip needs ~900px; below that it should stack to a vertical list.</li><li>Loses the at-a-glance view of all worktrees. The dropdown can carry the same status dots, and the footer "Changes" toggle could open the list.</li><li>Implementation: new <code>ShipPipeline</code> component composed from the existing action callbacks; <code>WorktreeMergePreview</code> becomes the body of step 4; <code>WorktreeLifecycle</code> step 5. Needs the dirty/committed split from the backend, or fall back to a single group until then.</li></ul></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="c">Option C · Branch inspector <small>files + diff full width, actions in a toggleable side panel</small></h2>
+<p>The editor pattern from VS Code and Xcode: the review surface owns the window; branch state lives in an inspector that slides in from the right. Collapsed, it is a single status pill in the toolbar. Open, it holds the full detail in sections: Status, Pull request, Local merge, Worktree. Users who only review never see the plumbing.</p>
+
+<div class="mock">
+  <div class="tabs"><span>Details</span><span class="on">Changes</span><span>instant 1</span><span>instant 2</span><span>instant 3</span></div>
+  <div class="bar"><span class="crumb"><span class="sw">CODING-1656 Worktrees tracking… <span class="t-m">▾</span></span></span><span class="chip"><span class="dot warn"></span>dirty · 3 unpushed · PR conflicts</span><span class="grow"></span><span class="btn pri">Commit &amp; push</span><span class="btn" style="border-color:var(--accent);color:var(--accent)">Branch ▸</span></div>
+  <div class="body" style="grid-template-columns:360px 1fr 300px;height:500px">
+    <div class="pane">
+      <div class="hd">34 files <span class="right"><i class="t-ok">+1577</i> <i class="t-bad">−163</i></span></div>
+      <div class="files">
+        <div class="f sel"><span class="st t-warn">M</span><span class="dir">studio/docs/</span><span class="base">overhaul-acceptance.md</span><span class="num"><i class="a">+6</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/performance/</span><span class="base">README.md</span><span class="num"><i class="a">+13</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/performance/fixtures/</span><span class="base">changes.json</span><span class="num"><i class="a">+9</i> <i class="d">−1</i></span></div>
+        <div class="f"><span class="st t-ok">A</span><span class="dir">studio/scripts/performance/</span><span class="base">changesBench.ts</span><span class="num"><i class="a">+127</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/scripts/performance/</span><span class="base">harness.ts</span><span class="num"><i class="a">+143</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/scripts/performance/</span><span class="base">report.ts</span><span class="num"><i class="a">+13</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/scripts/performance/</span><span class="base">runner.ts</span><span class="num"><i class="a">+6</i> <i class="d">−1</i></span></div>
+        <div class="f"><span class="st t-bad">D</span><span class="dir">studio/scripts/performance/</span><span class="base">legacy.ts</span><span class="num"><i class="d">−41</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/src/features/agents/worktrees/changes/</span><span class="base">ChangesActions.tsx</span><span class="num"><i class="a">+88</i> <i class="d">−30</i></span></div>
+        <div class="f"><span class="st t-ok">A</span><span class="dir">studio/src/features/agents/worktrees/changes/</span><span class="base">MergeDestinationPicker.tsx</span><span class="num"><i class="a">+86</i></span></div>
+        <div class="f"><span class="st t-m">R</span><span class="dir">studio/src/features/agents/worktrees/changes/</span><span class="base">changesWorkspaceState.ts</span><span class="num"><i class="a">+4</i> <i class="d">−4</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/src/features/agents/worktrees/changes/</span><span class="base">WorktreeMergePreview.tsx</span><span class="num"><i class="a">+61</i> <i class="d">−12</i></span></div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="bar"><span class="st t-warn" style="font-weight:700">M</span><span style="font-family:var(--mono)">studio/docs/overhaul-acceptance.md</span><span class="grow"></span><span class="t-m" style="font-family:var(--mono)">1 / 34</span><span class="btn ghost">‹</span><span class="btn ghost">›</span></div>
+      <div class="diff">
+        <div class="hunk">@@ -313,6 +313,12 @@</div>
+        <div class="ctx"><span class="ln">321</span>| 321 | Finishing or aborting a conflicting merge retires…</div>
+        <div class="ctx"><span class="ln">322</span>| 322 | Committing dirty source work refreshes local merge…</div>
+        <div class="ctx"><span class="ln">323</span>| 323 | Refreshing merge eligibility after an external fix…</div>
+        <div class="add"><span class="ln">324</span>| 324 | A saved Changes workspace target without a Back origin…</div>
+        <div class="add"><span class="ln">325</span>| 325 | Saved workspace-tab order drops the retired Changes tab…</div>
+        <div class="add"><span class="ln">326</span>| 326 | Changes opens independently, and Back restores…</div>
+        <div class="add"><span class="ln">327</span>| 327 | If the planning origin disappears, Back returns…</div>
+        <div class="add"><span class="ln">328</span>| 328 | Back stays usable while Changes is loading…</div>
+        <div class="add"><span class="ln">329</span>| 329 | Selecting a task checkout marks it selected…</div>
+        <div class="ctx"><span class="ln">330</span></div>
+      </div>
+    </div>
+    <div class="pane" style="background:var(--panel)">
+      <div class="hd">Branch <span class="right t-m">esc</span></div>
+      <details class="sec" open><summary>Status <span class="chip"><span class="dot warn"></span>dirty</span></summary>
+        <div class="sect-body">
+          <dl class="kv" style="padding:0"><dt>branch</dt><dd>wt/CODING-1656-worktrees-tracking-and-closing-with-link</dd><dt>ahead</dt><dd>3 commits</dd><dt>uncommitted</dt><dd>4 files</dd><dt>last commit</dt><dd>Update 190 files · generated</dd></dl>
+          <div style="display:flex;gap:6px"><span class="btn">Commit</span><span class="btn dis">Push</span></div>
+          <span class="t-warn" style="font-size:11px">Push sends committed work only.</span>
+        </div>
+      </details>
+      <details class="sec" open><summary>Pull request <span class="chip"><span class="dot bad"></span>conflicts</span></summary>
+        <div class="sect-body">
+          <dl class="kv" style="padding:0"><dt>#412</dt><dd>→ rust-migration</dd><dt>state</dt><dd class="t-bad">merge conflicts</dd></dl>
+          <div style="display:flex;gap:6px"><span class="btn">Open ↗</span><span class="btn">Prepare merge</span></div>
+        </div>
+      </details>
+      <details class="sec" open><summary>Local merge <span class="chip"><span class="dot bad"></span>blocked</span></summary>
+        <div class="sect-body">
+          <select class="sel-branch"><option>rust-migration</option></select>
+          <div class="note bad" style="padding:6px 8px;flex-wrap:wrap">Destination has a merge in progress.<span style="display:flex;gap:6px;width:100%;margin-top:4px"><span class="btn">Finish</span><span class="btn danger">Abort</span></span></div>
+        </div>
+      </details>
+      <details class="sec"><summary>Worktree <span class="chip t-m">active</span></summary></details>
+    </div>
+  </div>
+</div>
+<p class="caption">Inspector shown open. Closed, the toolbar keeps the state chip and primary button, and the diff gains the 300px.</p>
+<div class="cols">
+  <div><h3>Fixes</h3><ul><li>Cleanest separation of the two jobs the page does: <b>review</b> (files, diff) and <b>ship</b> (status, actions). Each gets a coherent surface.</li><li>Progressive disclosure done properly: the detail is one click away, sectioned, and remembers its open/closed state.</li><li>Room for the long-form explanations the backend already returns (reasons, unmerged paths, recovery text) without pushing files down.</li><li>Diff gets 55–75% of the width depending on inspector state.</li></ul></div>
+  <div><h3>Trade-offs</h3><ul><li>Two places carry actions: primary in the toolbar, secondaries in the inspector. Keep them consistent or it becomes defect 4 again.</li><li>Sections inside a 300px panel need ruthless copy. The current merge-recovery paragraphs will not fit unedited.</li><li>Worktree list becomes a dropdown, same as B.</li><li>Implementation: moderate. <code>ChangesActions</code>, <code>PullRequestStatus</code>, <code>WorktreeMergePreview</code>, <code>WorktreeLifecycle</code> already map one-to-one to the four sections; add an inspector shell and a persisted open flag in the Apollo local store.</li></ul></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="d">Option D · Worktree board <small>the left column becomes the point, not a duplicate</small></h2>
+<p>Lean into the multi-worktree situation the screenshot shows: nine agents, six worktrees. The left column becomes a status board where every worktree shows its lifecycle position and one action. Selecting one loads files + diff on the right. The board is the thing you glance at between agent runs to see what is ready to ship.</p>
+
+<div class="mock">
+  <div class="tabs"><span>Details</span><span class="on">Changes</span><span>instant 1</span><span>instant 2</span><span>instant 3</span></div>
+  <div class="body" style="grid-template-columns:300px 360px 1fr">
+    <div class="pane" style="background:var(--panel)">
+      <div class="hd">Worktrees <span class="right">2 ready · 2 blocked</span></div>
+      <div class="wt"><span class="dot mut"></span><div style="min-width:0;flex:1"><div class="n">Module checkout</div><div class="b">rust-migration · 3 uncommitted</div><div class="meta"><span class="btn" style="padding:1px 6px;font-size:10.5px">Commit &amp; push</span></div></div></div>
+      <div class="wt sel"><span class="dot bad"></span><div style="min-width:0;flex:1"><div class="n">CODING-1656 Worktrees tracking and closing…</div><div class="b">34 files · PR #412</div><div class="meta"><span class="t-bad">conflicts with rust-migration</span></div><div class="meta"><span class="btn" style="padding:1px 6px;font-size:10.5px">Prepare merge</span></div></div></div>
+      <div class="wt"><span class="dot ok"></span><div style="min-width:0;flex:1"><div class="n">CODING-1850 Port missing Changes…</div><div class="b">3 files · PR #418</div><div class="meta"><span class="t-ok">ready to merge</span></div><div class="meta"><span class="btn pri" style="padding:1px 6px;font-size:10.5px">Merge locally</span></div></div></div>
+      <div class="wt"><span class="dot info"></span><div style="min-width:0;flex:1"><div class="n">CODING-1866 Require a shared…</div><div class="b">12 files · PR #420</div><div class="meta"><span class="t-info">checks running · 4 min</span></div></div></div>
+      <div class="wt"><span class="dot ok"></span><div style="min-width:0;flex:1"><div class="n">CODING-1885 The run mechanics</div><div class="b">merged</div><div class="meta"><span class="btn danger" style="padding:1px 6px;font-size:10.5px">Clean up worktree</span></div></div></div>
+      <div class="wt"><span class="dot warn"></span><div style="min-width:0;flex:1"><div class="n">CODING-1886 Make Changes a focused…</div><div class="b">7 files · 2 unpushed</div><div class="meta"><span class="btn" style="padding:1px 6px;font-size:10.5px">Push</span></div></div></div>
+    </div>
+    <div class="pane">
+      <div class="bar"><span class="chip"><span class="dot bad"></span>PR #412 conflicts</span><span class="grow"></span><span class="btn">Open PR ↗</span><span class="btn ghost">⋯</span></div>
+      <div class="note bad"><span class="dot bad"></span>rust-migration has a merge in progress.<span class="btn">Finish</span><span class="btn danger" style="margin-left:0">Abort</span></div>
+      <div class="hd">34 files <span class="right"><i class="t-ok">+1577</i> <i class="t-bad">−163</i></span></div>
+      <div class="files">
+        <div class="f sel"><span class="st t-warn">M</span><span class="dir">studio/docs/</span><span class="base">overhaul-acceptance.md</span><span class="num"><i class="a">+6</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/performance/</span><span class="base">README.md</span><span class="num"><i class="a">+13</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/performance/fixtures/</span><span class="base">changes.json</span><span class="num"><i class="a">+9</i> <i class="d">−1</i></span></div>
+        <div class="f"><span class="st t-ok">A</span><span class="dir">studio/scripts/performance/</span><span class="base">changesBench.ts</span><span class="num"><i class="a">+127</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/scripts/performance/</span><span class="base">harness.ts</span><span class="num"><i class="a">+143</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/scripts/performance/</span><span class="base">report.ts</span><span class="num"><i class="a">+13</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/scripts/performance/</span><span class="base">runner.ts</span><span class="num"><i class="a">+6</i> <i class="d">−1</i></span></div>
+        <div class="f"><span class="st t-bad">D</span><span class="dir">studio/scripts/performance/</span><span class="base">legacy.ts</span><span class="num"><i class="d">−41</i></span></div>
+        <div class="f"><span class="st t-warn">M</span><span class="dir">studio/src/features/agents/worktrees/changes/</span><span class="base">ChangesActions.tsx</span><span class="num"><i class="a">+88</i> <i class="d">−30</i></span></div>
+        <div class="f"><span class="st t-ok">A</span><span class="dir">studio/src/features/agents/worktrees/changes/</span><span class="base">MergeDestinationPicker.tsx</span><span class="num"><i class="a">+86</i></span></div>
+        <div class="f"><span class="st t-m">R</span><span class="dir">studio/src/features/agents/worktrees/changes/</span><span class="base">changesWorkspaceState.ts</span><span class="num"><i class="a">+4</i> <i class="d">−4</i></span></div>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="bar"><span class="st t-warn" style="font-weight:700">M</span><span style="font-family:var(--mono)">studio/docs/overhaul-acceptance.md</span><span class="grow"></span><span class="t-m" style="font-family:var(--mono)">1 / 34</span><span class="btn ghost">‹</span><span class="btn ghost">›</span></div>
+      <div class="diff">
+        <div class="hunk">@@ -313,6 +313,12 @@</div>
+        <div class="ctx"><span class="ln">321</span>| 321 | Finishing or aborting a conflicting merge retires its recovery…</div>
+        <div class="ctx"><span class="ln">322</span>| 322 | Committing dirty source work refreshes local merge eligibility…</div>
+        <div class="ctx"><span class="ln">323</span>| 323 | Refreshing merge eligibility after an external destination fix…</div>
+        <div class="add"><span class="ln">324</span>| 324 | A saved Changes workspace target without a Back origin migrates…</div>
+        <div class="add"><span class="ln">325</span>| 325 | Saved workspace-tab order drops the retired Changes tab…</div>
+        <div class="add"><span class="ln">326</span>| 326 | Changes opens independently, and Back restores the exact…</div>
+        <div class="add"><span class="ln">327</span>| 327 | If the planning origin disappears, Back returns to the same…</div>
+        <div class="add"><span class="ln">328</span>| 328 | Back stays usable while Changes is loading or reports an error.</div>
+        <div class="add"><span class="ln">329</span>| 329 | Selecting a task checkout marks it selected and keeps Back…</div>
+        <div class="ctx"><span class="ln">330</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="caption">Each card carries the one action that matters for that worktree. The header summarises the board: "2 ready · 2 blocked".</p>
+<div class="cols">
+  <div><h3>Fixes</h3><ul><li>Turns the redundant column into the page's reason to exist (defect 3 inverted rather than removed).</li><li>Anticipation across worktrees: you see what is mergeable without clicking each one.</li><li>Primary action moves onto the card, so the middle column loses the whole button stack (defects 1, 2).</li><li>Matches the actual workflow in the screenshot: many agents, one human shipping their output.</li></ul></div>
+  <div><h3>Trade-offs</h3><ul><li>Needs status per worktree in the list query (dirty, unpushed, PR state). Today <code>currentWorktrees</code> returns only identity and branch, so this is a backend change.</li><li>Actions on cards invite mis-clicks on the wrong worktree. Confirm popovers must name the branch.</li><li>Three columns again, so the diff is the narrowest of the five options at 1180px. Pair with a collapsible board (⌘B) to reclaim it.</li><li>Implementation: largest. New list query shape, new card component, and the per-card action reuses <code>ChangesActions</code> callbacks per task.</li></ul></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="e">Option E · Two modes: Review and Ship <small>segmented control decides what the column shows</small></h2>
+<p>Keep a two-column layout and accept that the page has two jobs. A segmented control at the top of the left column switches it between <b>Review</b> (the file list) and <b>Ship</b> (status, actions, PR, local merge, cleanup as a readable vertical form). The right column is always the diff. Mode defaults to Review; it flips to Ship automatically when an action needs attention, with a badge on the segment.</p>
+
+<div class="mock">
+  <div class="tabs"><span>Details</span><span class="on">Changes</span><span>instant 1</span><span>instant 2</span><span>instant 3</span></div>
+  <div class="bar"><span class="crumb"><span class="sw">CODING-1656 Worktrees tracking… <span class="t-m">▾</span></span></span><span class="grow"></span><span class="btn pri">Commit &amp; push</span><span class="btn">Open PR ↗</span></div>
+  <div class="body" style="grid-template-columns:420px 1fr;height:500px">
+    <div class="pane">
+      <div class="bar" style="padding:6px 12px;gap:0"><span class="btn" style="border-right:0">Review · 34</span><span class="btn" style="background:var(--title);border-color:var(--accent)">Ship <span class="dot bad" style="margin-left:4px"></span></span></div>
+      <div style="overflow:auto">
+        <div class="grp" style="padding-top:10px">Branch</div>
+        <dl class="kv"><dt>branch</dt><dd>wt/CODING-1656-worktrees-tracking-and-closing-with-link</dd><dt>state</dt><dd><span class="t-warn">dirty</span> · 4 uncommitted · 3 unpushed</dd><dt>last commit</dt><dd>Update 190 files · generated message</dd></dl>
+        <div style="display:flex;gap:6px;padding:0 12px 6px"><span class="btn">Commit</span><span class="btn dis">Push · nothing to push</span></div>
+        <div class="grp">Pull request</div>
+        <dl class="kv"><dt>#412</dt><dd>→ rust-migration</dd><dt>state</dt><dd class="t-bad">merge conflicts</dd><dt>next</dt><dd>Prepare merge starts an agent that rebases and resolves.</dd></dl>
+        <div style="display:flex;gap:6px;padding:0 12px 6px"><span class="btn">Prepare merge</span><span class="btn">Replace PR</span></div>
+        <div class="grp">Local merge</div>
+        <div style="padding:4px 12px"><select class="sel-branch"><option>rust-migration — /Users/karthik/merge_conflicts/coding/ticketry-rust</option></select></div>
+        <div class="note bad" style="margin:4px 12px"><span class="dot bad"></span>Destination has a merge in progress.<span class="btn">Finish</span><span class="btn danger" style="margin-left:0">Abort</span></div>
+        <div class="grp">Worktree</div>
+        <dl class="kv"><dt>path</dt><dd>~/…/wt/CODING-1656-worktrees-tracking-and-closing-with-link</dd><dt>cleanup</dt><dd class="t-m">available after the pull request merges</dd></dl>
+      </div>
+    </div>
+    <div class="pane">
+      <div class="bar"><span class="st t-warn" style="font-weight:700">M</span><span style="font-family:var(--mono)">studio/docs/overhaul-acceptance.md</span><span class="grow"></span><span class="t-m" style="font-family:var(--mono)">1 / 34</span><span class="btn ghost">‹</span><span class="btn ghost">›</span></div>
+      <div class="diff">
+        <div class="hunk">@@ -313,6 +313,12 @@</div>
+        <div class="ctx"><span class="ln">321</span>| 321 | Finishing or aborting a conflicting merge retires its recovery state and gives the next merge…</div>
+        <div class="ctx"><span class="ln">322</span>| 322 | Committing dirty source work refreshes local merge eligibility and enables Merge…</div>
+        <div class="ctx"><span class="ln">323</span>| 323 | Refreshing merge eligibility after an external destination fix enables Merge…</div>
+        <div class="add"><span class="ln">324</span>| 324 | A saved Changes workspace target without a Back origin migrates to Details.</div>
+        <div class="add"><span class="ln">325</span>| 325 | Saved workspace-tab order drops the retired Changes tab on read and write.</div>
+        <div class="add"><span class="ln">326</span>| 326 | Changes opens independently, and Back restores the exact planning origin and active session.</div>
+        <div class="add"><span class="ln">327</span>| 327 | If the planning origin disappears, Back returns to the same module's conversation Details.</div>
+        <div class="add"><span class="ln">328</span>| 328 | Back stays usable while Changes is loading or reports an error.</div>
+        <div class="add"><span class="ln">329</span>| 329 | Selecting a task checkout marks it selected and keeps Back usable while fresh task changes load.</div>
+        <div class="ctx"><span class="ln">330</span></div>
+        <div class="ctx"><span class="ln">331</span>Each executable case carries one stable `[overhaul-NN]` marker.</div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="caption">Ship mode shown. Review mode is the same column with the grouped file list from Option A. The diff column never changes, so switching modes never loses your place.</p>
+<div class="cols">
+  <div><h3>Fixes</h3><ul><li>Gives the ship form room to breathe: keys and values line up, every section has a heading, every message has its action.</li><li>Files, when you want them, have the whole column (defect 1).</li><li>Two columns: the diff is wide at any window size (defect 6).</li><li>Mode is a familiar segmented control; nothing hides in a menu.</li></ul></div>
+  <div><h3>Trade-offs</h3><ul><li>You cannot see files and status at the same time. The toolbar chip and the badge on "Ship" cover the glance case, but not all of it.</li><li>Auto-switching modes when an action needs attention violates Autonomy if done aggressively. Recommend: badge only, never auto-switch.</li><li>Implementation: small to moderate. Existing components render unchanged inside the Ship panel; the mode flag joins the review-selection Apollo store.</li></ul></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="compare">Comparison</h2>
+<div class="compare">
+  <div class="h">Option</div><div class="h">Best at</div><div class="h">Weakest at</div><div class="h">Cost</div>
+  <div><b>A</b> Status bar</div><div class="r">Fastest win; every fix is a restyle</div><div class="r">Diff still cramped; secondary actions hidden in ⋯</div><div class="r">Frontend only · ~1 day</div>
+  <div><b>B</b> Ship pipeline</div><div class="r">Making lifecycle state legible; errors attach to steps</div><div class="r">Needs width; module variant differs; loses worktree overview</div><div class="r">Frontend + optional dirty/committed split · ~2–3 days</div>
+  <div><b>C</b> Branch inspector</div><div class="r">Clean review/ship separation; room for long explanations</div><div class="r">Actions in two places; copy must shrink to fit 300px</div><div class="r">Frontend only · ~2 days</div>
+  <div><b>D</b> Worktree board</div><div class="r">Many-agent workflow; see what is shippable at a glance</div><div class="r">Narrowest diff; needs per-worktree status from backend</div><div class="r">Backend + frontend · ~4–5 days</div>
+  <div><b>E</b> Review / Ship modes</div><div class="r">Widest diff; ship form gets proper layout</div><div class="r">Files and status never visible together</div><div class="r">Frontend only · ~1–2 days</div>
+</div>
+
+<div class="verdict">
+  <b>Recommendation.</b> Ship <b>A</b> first: it removes the four worst defects with no query changes and everything in it survives into the others. Then decide between <b>B</b> and <b>D</b> based on which question the page answers more often. If it is "what is the state of <i>this</i> branch", B. If it is "which of my six worktrees can I ship right now", D, and the status-dot worktree list from A is the first step toward it.
+</div>
+
+</body>
+</html>

@@ -1,0 +1,16 @@
+query WorktreeMergeRecovery($taskId: String!) {
+  worktree_merge_recovery(task_id: $taskId) {
+    operation_id
+    outcome
+    source_branch
+    source_commit
+    destination_branch
+    destination_commit
+    destination_checkout
+    unmerged_paths {
+      path
+    }
+    blocker
+    reason
+  }
+}

@@ -1,32 +1,26 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   IssueType,
   ScopedWorkflowImpact,
-  ScopedWorkflowLaunchBinding,
   ScopedWorkflowImpactOperation,
   ScopedWorkflowSettings,
   State,
 } from "../../shared/api/types";
-import { LaunchConfigurationForm } from "./LaunchConfigurationForm";
-import { validateLaunchBindingOptions } from "./launchBindingValidation";
 import { useWorkflowEditorStore } from "./workflowEditorStore";
 import { workflowMemberStateIds } from "./workflowMembership";
+import { StateLaunchConfiguration } from "./StateLaunchConfiguration";
+import { TransitionDisclosure } from "./TransitionDisclosure";
 import {
-  SETTINGS_CHECKBOX_CLASS,
-  SETTINGS_EYEBROW_CLASS,
+  WorkflowImpactDialog,
+  type PendingWorkflowChange,
+} from "./WorkflowImpactDialog";
+import {
   SETTINGS_FIELD_CLASS,
   SettingsStatusLine,
   settingsButtonClass,
 } from "../../shared/ui/SettingsPrimitives";
 
 const controlKey = (...parts: string[]) => parts.join(":");
-
-interface PendingWorkflowChange {
-  title: string;
-  confirmLabel: string;
-  impact: ScopedWorkflowImpact;
-  commit: () => Promise<void>;
-}
 
 export function IssueTypesSection() {
   const issueTypes = useWorkflowEditorStore((state) => state.issueTypes);
@@ -388,212 +382,6 @@ function WorkflowSourceGroup({
   );
 }
 
-interface TransitionDisclosureProps {
-  action: string | null;
-  controlErrors: Record<string, string>;
-  edge: ScopedWorkflowSettings["transitions"][number];
-  expanded: boolean;
-  issueType: IssueType;
-  onToggle: () => void;
-  removeTransition: WorkflowSourceGroupProps["requestRemoveTransition"];
-  setTransitionPermission: WorkflowSourceGroupProps["setTransitionPermission"];
-  source: State;
-  target: State;
-}
-
-function TransitionDisclosure({
-  action,
-  controlErrors,
-  edge,
-  expanded,
-  issueType,
-  onToggle,
-  removeTransition,
-  setTransitionPermission,
-  source,
-  target,
-}: TransitionDisclosureProps) {
-  const sourceId = source.id as string;
-  const targetId = target.id as string;
-  const permissionControl = controlKey(
-    "permission",
-    issueType.id,
-    sourceId,
-    targetId,
-  );
-  const removeControl = controlKey(
-    "remove",
-    issueType.id,
-    sourceId,
-    targetId,
-  );
-
-  return (
-    <li aria-label={`${source.name} to ${target.name} transition`}>
-      <button
-        type="button"
-        aria-label={`${expanded ? "Collapse" : "Expand"} ${source.name} to ${target.name}`}
-        aria-expanded={expanded}
-        onClick={onToggle}
-        className="flex w-full flex-wrap items-center gap-2 px-2 py-2 text-left text-sm text-text-primary outline-none hover:bg-pane-title focus-visible:ring-1 focus-visible:ring-focus-accent"
-      >
-        <span className="min-w-24 flex-1 font-medium">{target.name}</span>
-        <TransitionTag>{edge.agent_allowed ? "Agents + people" : "People only"}</TransitionTag>
-        <span aria-hidden="true" className={expanded ? "rotate-90 text-text-muted" : "text-text-muted"}>
-          ›
-        </span>
-      </button>
-
-      {expanded ? (
-        <div className="space-y-5 border-t border-pane-border px-2 py-4">
-          <section
-            aria-label={`${source.name} to ${target.name} transition properties`}
-            className="space-y-3"
-          >
-            <h4 className={SETTINGS_EYEBROW_CLASS}>Transition properties</h4>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <label className="flex items-center gap-2 text-sm text-text-primary">
-                <input
-                  type="checkbox"
-                  aria-label={`Agents may move ${source.name} to ${target.name}`}
-                  checked={edge.agent_allowed}
-                  disabled={action !== null}
-                  className={SETTINGS_CHECKBOX_CLASS}
-                  onChange={(event) => void setTransitionPermission(
-                    issueType.id,
-                    sourceId,
-                    targetId,
-                    event.target.checked,
-                    permissionControl,
-                  )}
-                />
-                Agents may make this move
-              </label>
-              <button
-                type="button"
-                aria-label={`Remove transition ${source.name} to ${target.name}`}
-                disabled={action !== null}
-                onClick={() => void removeTransition(
-                  issueType.id,
-                  sourceId,
-                  targetId,
-                  removeControl,
-                )}
-                className={settingsButtonClass("danger")}
-              >
-                Remove transition
-              </button>
-            </div>
-            <InlineError message={
-              controlErrors[permissionControl] || controlErrors[removeControl]
-            } />
-          </section>
-        </div>
-      ) : null}
-    </li>
-  );
-}
-
-function StateLaunchConfiguration({
-  action,
-  binding,
-  controlErrors,
-  issueType,
-  providerCapabilities,
-  setAutoStart,
-  setSubtreeRun,
-  state,
-  upsertLaunchBinding,
-}: {
-  action: string | null;
-  binding?: ScopedWorkflowLaunchBinding;
-  controlErrors: Record<string, string>;
-  issueType: IssueType;
-  providerCapabilities: WorkflowSourceGroupProps["providerCapabilities"];
-  setAutoStart: WorkflowSourceGroupProps["setAutoStart"];
-  setSubtreeRun: WorkflowSourceGroupProps["setSubtreeRun"];
-  state: State;
-  upsertLaunchBinding: WorkflowSourceGroupProps["upsertLaunchBinding"];
-}) {
-  const stateId = state.id as string;
-  const autoControl = controlKey("auto", issueType.id, stateId);
-  const subtreeControl = controlKey("subtree", issueType.id, stateId);
-  const launchControl = controlKey("launch", issueType.id, stateId);
-  const launchIsValid = validLaunchBinding(binding, providerCapabilities);
-
-  return (
-    <section
-      aria-label={`${state.name} state launch settings`}
-      className="ml-6 mt-2 space-y-5 border border-pane-border px-3 py-4"
-    >
-      <section aria-label={`${state.name} on entry`} className="space-y-3">
-        <h4 className={SETTINGS_EYEBROW_CLASS}>On entry · {state.name}</h4>
-        <div className="flex flex-wrap items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-text-primary">
-            <input
-              type="checkbox"
-              aria-label={`Run subtree ${state.name}`}
-              checked={binding?.subtree_run_enabled === true}
-              disabled={action !== null}
-              className={SETTINGS_CHECKBOX_CLASS}
-              onChange={(event) => void setSubtreeRun(
-                issueType.id,
-                stateId,
-                event.target.checked,
-                subtreeControl,
-              )}
-            />
-            Run subtree
-          </label>
-          <label className="flex items-center gap-2 text-sm text-text-primary">
-            <input
-              type="checkbox"
-              aria-label={`Auto-start ${state.name}`}
-              checked={binding?.auto_start === true}
-              disabled={action !== null || (!launchIsValid && binding?.auto_start !== true)}
-              className={SETTINGS_CHECKBOX_CLASS}
-              onChange={(event) => void setAutoStart(
-                issueType.id,
-                stateId,
-                event.target.checked,
-                autoControl,
-              )}
-            />
-            Auto-start
-          </label>
-        </div>
-        <InlineError message={controlErrors[autoControl]} />
-        <InlineError message={controlErrors[subtreeControl]} />
-      </section>
-
-      <section aria-label={`${state.name} launch configuration`}>
-        <h4 className={SETTINGS_EYEBROW_CLASS}>Launch configuration</h4>
-        <LaunchConfigurationForm
-          binding={binding}
-          error={controlErrors[launchControl]}
-          issueType={issueType}
-          providerCapabilities={providerCapabilities}
-          save={(input) => upsertLaunchBinding(
-            issueType.id,
-            stateId,
-            input,
-            launchControl,
-          )}
-          state={state}
-        />
-      </section>
-    </section>
-  );
-}
-
-function TransitionTag({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="border border-pane-border px-2 py-0.5 text-xs text-text-muted">
-      {children}
-    </span>
-  );
-}
-
 interface AddDestinationProps {
   action: string | null;
   addTransition: WorkflowSourceGroupProps["addTransition"];
@@ -681,16 +469,6 @@ function AddDestination({
   );
 }
 
-function validLaunchBinding(
-  binding: ScopedWorkflowLaunchBinding | undefined,
-  capabilities: WorkflowSourceGroupProps["providerCapabilities"],
-): boolean {
-  return Boolean(
-    binding?.prompt.trim()
-      && validateLaunchBindingOptions(binding, capabilities) === null,
-  );
-}
-
 function InlineError({ message }: { message?: string }) {
   return message ? (
     <SettingsStatusLine className="mt-1" tone="danger">
@@ -703,71 +481,4 @@ function hasDeletedConfiguration(impact: ScopedWorkflowImpact): boolean {
   return impact.deleted_transitions.length > 0
     || impact.deleted_launch_bindings.length > 0
     || impact.disabled_auto_start_state_ids.length > 0;
-}
-
-function WorkflowImpactDialog({
-  change,
-  states,
-  close,
-  confirm,
-}: {
-  change: PendingWorkflowChange;
-  states: State[];
-  close: () => void;
-  confirm: () => Promise<void>;
-}) {
-  const stateName = (stateId: string) =>
-    states.find((state) => state.id === stateId)?.name ?? stateId;
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Workflow deletion impact"
-      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
-    >
-      <div className="w-full max-w-lg space-y-4 border border-pane-border bg-pane-panel p-5 shadow-xl">
-        <div>
-          <h2 className="text-base font-semibold text-text-primary">{change.title}</h2>
-          <p className="mt-1 text-sm text-text-muted">
-            This will delete the following type-specific transitions, launch prompts,
-            and subtree-run capability.
-          </p>
-        </div>
-        <ul aria-label="Configuration to delete" className="space-y-1 text-sm text-text-primary">
-          {change.impact.deleted_transitions.map((edge) => (
-            <li key={`${edge.from_state_id}:${edge.to_state_id}`}>
-              Transition: {stateName(edge.from_state_id)} → {stateName(edge.to_state_id)}
-            </li>
-          ))}
-          {change.impact.deleted_launch_bindings.map((binding) => (
-            <Fragment key={`binding:${binding.state_id}`}>
-              <li>Launch binding: {stateName(binding.state_id)}</li>
-              {binding.subtree_run_enabled ? (
-                <li>Subtree-run capability: {stateName(binding.state_id)}</li>
-              ) : null}
-            </Fragment>
-          ))}
-          {change.impact.disabled_auto_start_state_ids.map((stateId) => (
-            <li key={`auto:${stateId}`}>Auto-start: {stateName(stateId)}</li>
-          ))}
-        </ul>
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={close}
-            className={settingsButtonClass("secondary")}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void confirm()}
-            className={settingsButtonClass("danger-filled")}
-          >
-            {change.confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 }

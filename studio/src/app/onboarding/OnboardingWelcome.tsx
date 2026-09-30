@@ -1,8 +1,12 @@
 import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
-import { useStudioStore } from "../../features/projects/store";
+import { useStudioStore } from "../../features/projects";
 import { useOnboardingTourStore } from "./onboardingTourStore";
 import { OnboardingProviders } from "./OnboardingProviders";
 
+/**
+ * The first-run welcome introduces Ticketry, then offers optional provider
+ * setup before opening the installation project.
+ */
 export default function OnboardingWelcome() {
   const startTour = useOnboardingTourStore((state) => state.start);
 
@@ -23,8 +27,13 @@ export default function OnboardingWelcome() {
     >
       <main className="w-full max-w-xl border border-pane-border bg-pane-panel p-8 shadow-xl">
         <div className="text-xs font-bold uppercase tracking-[0.2em] text-focus-accent">
-          Welcome to WorkTracker
+          Welcome to Ticketry
         </div>
+        <p className="mt-3 text-sm leading-6 text-text-secondary">
+          Ticketry helps you turn ideas into planned work, run coding agents when you choose,
+          and review their changes. Start by capturing a Story. You can plan without an agent provider.
+        </p>
+
         <OnboardingProviders
           continueLabel="Get started"
           onContinue={continueFromProviders}

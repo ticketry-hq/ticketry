@@ -1,6 +1,6 @@
-import { create } from "zustand";
-import * as api from "../../shared/api/client";
-import { ApiError } from "../../shared/api/client";
+import { createApolloStore } from "../../shared/apollo/localState";
+import * as api from "../workflows";
+import { ApiError } from "../../shared/api/errors";
 import { toast } from "../../state/clientStore";
 import {
   getStatesSnapshot,
@@ -8,7 +8,7 @@ import {
   setStates,
   setStatesSorted,
   upsertState,
-} from "../../shared/query/stateCatalog";
+} from "../../features/projects";
 import {
   ensureSettings as ensureSettingsData,
   getIssueTypesSnapshot,
@@ -34,7 +34,7 @@ function errMessage(e: unknown): string {
 
 // Client state only: which project the settings surface is showing, and the
 // last mutation error. Issue types, workflow states, and the subtree-run
-// capability map live in the query cache (./queries, shared/query/stateCatalog).
+// capability map live in the query cache (./queries, features/projects).
 interface SettingsState {
   projectId: string | null;
   /** Mutation-error message — no longer rendered inline; mutations toast (#638). */
@@ -66,7 +66,7 @@ interface SettingsState {
   reorderStates: (orderedIds: string[]) => Promise<void>;
 }
 
-export const useSettingsStore = create<SettingsState>((set, get) => ({
+export const useSettingsStore = createApolloStore<SettingsState>("settings", (set, get) => ({
   projectId: null,
   error: null,
   loadError: null,
@@ -123,7 +123,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     );
     set({ error: null });
     try {
-      const updated = await api.patchIssueType(id, patch);
+      const updated = await api.updateIssueType(id, patch);
       setIssueTypesSorted(
         projectId,
         getIssueTypesSnapshot(projectId).map((t) => (t.id === id ? updated : t)),
@@ -164,15 +164,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     );
     set({ error: null });
     try {
-      const orderedIdSet = new Set(orderedIds);
-      let orderedIndex = 0;
-      const fullOrderedIds = (await api.listIssueTypes(projectId)).map((issueType) =>
-        orderedIdSet.has(issueType.id) ? orderedIds[orderedIndex++] : issueType.id,
-      );
-      setIssueTypesSorted(
-        projectId,
-        await api.reorderIssueTypes(projectId, fullOrderedIds),
-      );
+      setIssueTypesSorted(projectId, await api.reorderIssueTypes(projectId, orderedIds));
     } catch (e) {
       setIssueTypes(projectId, snapshot);
       set({ error: errMessage(e) });
@@ -206,7 +198,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     );
     set({ error: null });
     try {
-      const updated = await api.patchState(id, patch);
+      const updated = await api.updateState(id, patch);
       upsertState(projectId, updated);
     } catch (e) {
       setStates(projectId, snapshot);

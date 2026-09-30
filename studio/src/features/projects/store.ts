@@ -1,6 +1,5 @@
-import { create } from "zustand";
-import * as api from "../../shared/api/client";
-import { ApiError } from "../../shared/api/client";
+import { createApolloStore } from "../../shared/apollo/localState";
+import { ApiError } from "../../shared/api/errors";
 import { toast } from "../../state/clientStore";
 import { useClientStore } from "../../state/clientStore";
 import {
@@ -12,6 +11,7 @@ import {
   loadProjects,
   updateProjectRecord,
 } from "./queries";
+import { createWorkItem } from "../work-items";
 import type {
   Module,
   Project,
@@ -20,11 +20,12 @@ import type {
   View,
 } from "../../shared/api/types";
 import { loadIssueTypes } from "../settings";
-import { readLastSelectedModule } from "../../state/persistence";
+import { getModuleFolder } from "../module-links";
+import { readRecentModule } from "../../state/persistence";
 import {
-  getVisibleModulesSnapshot,
-  loadModulePresentations,
-} from "../module-tabs/queries";
+  getModulePresentationsSnapshot,
+  visibleModules,
+} from "./modulePresentation";
 
 const VIEWS: View[] = ["backlog", "settings"];
 
@@ -33,14 +34,32 @@ export function normalizeView(raw: string | undefined): View {
   return raw && (VIEWS as string[]).includes(raw) ? (raw as View) : "backlog";
 }
 
+/** Restore a visible linked module without opening a folder prompt at startup. */
+function startupModuleId(projectId: string): string | null {
+  const moduleId = readRecentModule();
+  if (!moduleId) return null;
+  const modules = getModulesSnapshot(projectId);
+  const remembered = modules.find((module) => module.id === moduleId);
+  if (!remembered) return null;
+
+  const visible = visibleModules(
+    modules,
+    getModulePresentationsSnapshot(projectId),
+  );
+  if (visible.some((module) => module.id === moduleId)) {
+    return getModuleFolder(moduleId) ? moduleId : null;
+  }
+  return visible.find((module) => getModuleFolder(module.id))?.id ?? null;
+}
+
 function errMessage(e: unknown): string {
   if (e instanceof ApiError) return `${e.status}: ${e.message}`;
   return e instanceof Error ? e.message : String(e);
 }
 
 // Client-only state: which project is open and which view is active. The
-// project and module lists themselves live in the TanStack Query cache
-// (features/projects/queries.ts); components subscribe with
+// project and module lists themselves live in Apollo's normalized cache;
+// components subscribe with
 // useProjectsQuery/useModulesQuery.
 interface StudioState {
   selectedProjectId: string | null;
@@ -51,7 +70,7 @@ interface StudioState {
   selectProject: (id: string) => Promise<void>;
   setView: (view: View) => void;
 
-  // Re-fetch the selected project's server-ordered modules (after a create, #919).
+  // Re-fetch + re-sort the selected project's modules (after a create, #919).
   reloadModules: () => Promise<void>;
   // Create a module in the selected project, reload the list, and return the
   // created module so the caller can auto-select it (#919 Slice A).
@@ -69,15 +88,15 @@ interface StudioState {
 
 /**
  * Outcome of a delete. `redirect` is true only when the *selected* project was
- * removed and the caller must navigate; `targetId` is the most-recently-used
- * surviving project to open, or null when none remain (→ create screen).
+ * removed and the caller must navigate; `targetId` is a surviving project to
+ * open, or null when none remain (→ create screen).
  */
 export interface DeleteProjectResult {
   redirect: boolean;
   targetId: string | null;
 }
 
-export const useStudioStore = create<StudioState>((set, get) => ({
+export const useStudioStore = createApolloStore<StudioState>("studio", (set, get) => ({
   selectedProjectId: null,
   activeView: "backlog",
   error: null,
@@ -100,22 +119,10 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       workspaceSelection: { kind: "task" },
     });
     try {
-      await Promise.all([loadModules(id), loadModulePresentations()]);
-      const recentModuleId = readLastSelectedModule();
-      const modules = getModulesSnapshot(id);
-      const visible = getVisibleModulesSnapshot(id);
-      const rememberedModule = modules.find(
-        (module) => module.id === recentModuleId,
-      );
-      if (rememberedModule) {
-        const target = visible.some((module) => module.id === rememberedModule.id)
-          ? rememberedModule
-          : visible[0];
-        if (target) {
-          await useClientStore.getState().selectModule(target.id);
-        } else {
-          useClientStore.getState().deselectModule();
-        }
+      await loadModules(id);
+      const startupModule = startupModuleId(id);
+      if (startupModule) {
+        await useClientStore.getState().selectModule(startupModule);
       }
     } catch (e) {
       set({ error: errMessage(e) });
@@ -154,8 +161,12 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       (issueType) => issueType.level === "module" && issueType.name === "Module",
     );
     if (!moduleType) throw new Error("The Module issue type is unavailable.");
-    const created = await api.createModule(projectId, name, moduleType.id);
-    // Reload so both normal create and guided create preserve the same ordering.
+    const created = await createWorkItem(projectId, {
+      name,
+      issue_type_id: moduleType.id,
+      parent_id: null,
+    });
+    // Reload so every surface adopts the server's canonical presentation order.
     await loadModules(projectId).catch(() => {});
     return created;
   },
@@ -199,9 +210,10 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     if (!wasSelected) return { redirect: false, targetId: null };
 
     // The open project is gone: drop any selection it owned (not auto-cleared)
-    // and resolve the MRU survivor for the caller to navigate to.
+    // and hand the caller the first surviving project to navigate to.
     useClientStore.getState().selectionClear();
-    const targetId = getProjectsSnapshot().find((project) => project.id !== id)?.id ?? null;
+    const targetId =
+      getProjectsSnapshot().find((project) => project.id !== id)?.id ?? null;
     return { redirect: true, targetId };
   },
 }));

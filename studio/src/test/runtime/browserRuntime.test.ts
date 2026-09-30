@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createBrowserRuntime } from "../../runtime/browserRuntime";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("browser runtime contract", () => {
   it("preserves Studio's relative browser endpoints and startup values", () => {
@@ -9,17 +13,10 @@ describe("browser runtime contract", () => {
 
     expect(runtime.platform).toBe("browser");
     expect(runtime.startup()).toEqual({
-      endpoints: {
-        workTrackerApi: "/api/work-tracker",
-        agentApi: "/api",
-        statusApi: "/api",
-        statusWebSocket: "/ws/status",
-        terminalWebSocket: "/ws/terminal",
-      },
-      values: { workTrackerApiKey: "" },
+      runtimeInstance: expect.stringMatching(/^browser-/),
       serviceHealth: {
         state: "ready",
-        service: "backend",
+        service: "rust-graphql-adapter",
         message: null,
         logPointer: null,
       },
@@ -34,36 +31,82 @@ describe("browser runtime contract", () => {
 
     expect(runtime.capabilities).toEqual({
       statusFeed: true,
-      websocketTerminal: true,
       nativeLifecycle: false,
       serviceSupervision: false,
       nativeTerminal: false,
       nativeFolderPicker: false,
+      appUpdates: false,
     });
     await expect(runtime.pickFolder()).resolves.toBeNull();
   });
 
-  it("derives websocket origins from valid absolute browser API configuration", () => {
+  it("keeps Launchkey native operations inert", async () => {
+    const requestMIDIAccess = vi.fn();
+    const nativeInvoke = vi.fn();
+    vi.stubGlobal("navigator", { requestMIDIAccess });
+    vi.stubGlobal("__TAURI_INTERNALS__", { invoke: nativeInvoke });
+    const runtime = createBrowserRuntime({ environment: {} });
+
+    expect(runtime.launchkey.midi()).toBeNull();
+    await expect(
+      runtime.launchkey.toggleHandyTranscription(),
+    ).resolves.toBeUndefined();
+    await expect(
+      runtime.launchkey.submitTerminal("viewer-1"),
+    ).resolves.toBeUndefined();
+    expect(requestMIDIAccess).not.toHaveBeenCalled();
+    expect(nativeInvoke).not.toHaveBeenCalled();
+  });
+
+  it("streams and cancels GraphQL subscriptions through the Rust adapter", async () => {
+    let stream!: ReadableStreamDefaultController<Uint8Array>;
+    const fetch = vi.fn().mockResolvedValue(new Response(new ReadableStream({
+      start(controller) {
+        stream = controller;
+      },
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetch);
+    const runtime = createBrowserRuntime({ environment: {} });
+    const transport = runtime.statusStream();
+    const received: string[] = [];
+
+    await expect(transport?.().graphql_subscribe(
+      "status_1",
+      '{"query":"subscription Status { status }"}',
+      (frame) => received.push(frame),
+    )).resolves.toBe('{"type":"accepted"}');
+    stream.enqueue(new TextEncoder().encode('data: {"type":"next",'));
+    stream.enqueue(new TextEncoder().encode('"payload":{"data":{"status":1}}}\n\n'));
+    await vi.waitFor(() => expect(received).toEqual([
+      '{"type":"next","payload":{"data":{"status":1}}}',
+    ]));
+
+    await expect(transport?.().graphql_unsubscribe("status_1")).resolves.toBe(true);
+    await expect(transport?.().graphql_unsubscribe("status_1")).resolves.toBe(false);
+    expect(fetch).toHaveBeenCalledWith(
+      "/graphql/subscribe",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          subscriptionId: "status_1",
+          request: '{"query":"subscription Status { status }"}',
+        }),
+      }),
+    );
+  });
+
+  it("accepts an absolute Rust GraphQL adapter endpoint", () => {
     const runtime = createBrowserRuntime({
       environment: {
-        VITE_WT_API_BASE: "https://tracker.example.test/work-tracker",
-        VITE_AGENT_API_BASE: "https://runtime.example.test/api",
-        VITE_WT_API_KEY: "browser-token",
+        VITE_GRAPHQL_API: "https://runtime.example.test/graphql",
       },
     });
 
     expect(runtime.startup()).toEqual({
-      endpoints: {
-        workTrackerApi: "https://tracker.example.test/work-tracker",
-        agentApi: "https://runtime.example.test/api",
-        statusApi: "https://runtime.example.test/api",
-        statusWebSocket: "wss://runtime.example.test/ws/status",
-        terminalWebSocket: "wss://runtime.example.test/ws/terminal",
-      },
-      values: { workTrackerApiKey: "browser-token" },
+      runtimeInstance: expect.stringMatching(/^browser-/),
       serviceHealth: {
         state: "ready",
-        service: "backend",
+        service: "rust-graphql-adapter",
         message: null,
         logPointer: null,
       },
@@ -71,14 +114,53 @@ describe("browser runtime contract", () => {
     });
   });
 
+  it("gives Apollo the same browser GraphQL adapter transport", async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { ok: true } }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const runtime = createBrowserRuntime({ environment: {} });
+    const request = JSON.stringify({
+      query: "query Probe { ok }",
+      operationName: "Probe",
+      variables: {},
+    });
+
+    await expect(runtime.graphQlTransport().graphql_execute(request)).resolves.toBe(
+      JSON.stringify({ data: { ok: true } }),
+    );
+    expect(fetch).toHaveBeenCalledWith("/graphql", expect.objectContaining({
+      method: "POST",
+      body: request,
+    }));
+  });
+
   it("rejects invalid browser endpoint configuration", () => {
     expect(() =>
       createBrowserRuntime({
-        environment: { VITE_AGENT_API_BASE: "ftp://runtime.example.test/api" },
+        environment: { VITE_GRAPHQL_API: "ftp://runtime.example.test/graphql" },
       }),
     ).toThrowError(
-      "Invalid Studio runtime configuration: agentApi must be a relative path or an HTTP(S) URL",
+      "Invalid Studio runtime configuration: graphQlApi must be a relative path or an HTTP(S) URL",
     );
+  });
+
+  it("derives the terminal WebSocket from the default same-origin endpoint", () => {
+    const runtime = createBrowserRuntime({ environment: {} });
+
+    expect(runtime.terminalWebSocketUrl?.()).toBe("/ws/terminal");
+  });
+
+  it("maps absolute GraphQL origins onto the terminal WebSocket", () => {
+    const httpRuntime = createBrowserRuntime({
+      environment: { VITE_GRAPHQL_API: "http://127.0.0.1:8790/graphql" },
+    });
+    const httpsRuntime = createBrowserRuntime({
+      environment: { VITE_GRAPHQL_API: "https://host.example/graphql" },
+    });
+
+    expect(httpRuntime.terminalWebSocketUrl?.()).toBe("ws://127.0.0.1:8790/ws/terminal");
+    expect(httpsRuntime.terminalWebSocketUrl?.()).toBe("wss://host.example/ws/terminal");
   });
 
   it("defaults to an empty startup and subscription notice source", () => {

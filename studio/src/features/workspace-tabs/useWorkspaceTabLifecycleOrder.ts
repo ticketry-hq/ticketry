@@ -1,9 +1,7 @@
 import { useEffect, useRef } from "react";
-import { queryClient } from "../../shared/query/queryClient";
-import { queryKeys } from "../../shared/query/keys";
-import { saveWorkspaceTabOrder } from "./mutations";
+import { appendWorkspaceTabs } from "./mutations";
 import { workspaceTabIdentityKey } from "./ordering";
-import type { WorkspaceTabIdentity, WorkspaceTabOrder } from "./types";
+import type { WorkspaceTabIdentity } from "./types";
 
 /** Append newly durable tabs without removing remembered dormant identities. */
 export function useWorkspaceTabLifecycleOrder({
@@ -18,15 +16,14 @@ export function useWorkspaceTabLifecycleOrder({
   visibleIdentities: readonly WorkspaceTabIdentity[];
 }): void {
   const visibleKey = visibleIdentities.map(workspaceTabIdentityKey).join("\n");
+  const savedKey = savedOrder.map(workspaceTabIdentityKey).join("\n");
   const visibleIdentitiesRef = useRef(visibleIdentities);
+  const lastAttemptRef = useRef<string | null>(null);
   visibleIdentitiesRef.current = visibleIdentities;
 
   useEffect(() => {
     if (!workItemId || !orderReady) return;
-    const queryKey = queryKeys.workspaceTabs.byWorkItem(workItemId);
-    const cached = queryClient.getQueryData<WorkspaceTabOrder>(queryKey);
-    const currentOrder = cached?.order ?? savedOrder;
-    const known = new Set(currentOrder.map(workspaceTabIdentityKey));
+    const known = new Set(savedOrder.map(workspaceTabIdentityKey));
     const appended = visibleIdentitiesRef.current.filter((identity) => {
       const key = workspaceTabIdentityKey(identity);
       if (known.has(key)) return false;
@@ -34,17 +31,9 @@ export function useWorkspaceTabLifecycleOrder({
       return true;
     });
     if (appended.length === 0) return;
-
-    const nextOrder = [...currentOrder, ...appended];
-    queryClient.setQueryData<WorkspaceTabOrder>(queryKey, { order: nextOrder });
-    void saveWorkspaceTabOrder(workItemId, nextOrder).then(
-      (saved) => {
-        const latest = queryClient.getQueryData<WorkspaceTabOrder>(queryKey);
-        if (latest?.order === nextOrder) {
-          queryClient.setQueryData(queryKey, saved);
-        }
-      },
-      () => queryClient.invalidateQueries({ queryKey }),
-    );
-  }, [orderReady, savedOrder, visibleKey, workItemId]);
+    const attemptKey = `${workItemId}\0${savedKey}\0${visibleKey}`;
+    if (lastAttemptRef.current === attemptKey) return;
+    lastAttemptRef.current = attemptKey;
+    void appendWorkspaceTabs(workItemId, appended).catch(() => undefined);
+  }, [orderReady, savedKey, savedOrder, visibleKey, workItemId]);
 }

@@ -1,0 +1,14 @@
+/** Internal type. DO NOT USE DIRECTLY. */
+type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
+/** Internal type. DO NOT USE DIRECTLY. */
+export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
+import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
+export type WorktreeStatusQueryVariables = Exact<{
+  taskId: string;
+}>;
+
+
+export type WorktreeStatusQuery = { worktree_status: { kind: string, task_id: string, top_level_task_id: string, is_shared: boolean, branch: string | null, base_branch: string | null, path: string | null, state: string | null, clean: boolean | null, dirty: boolean | null, ahead: number | null, behind: number | null, conflict: boolean | null, checkout_present: boolean | null, ephemeral: boolean, reason: string | null } };
+
+
+export const WorktreeStatusDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"WorktreeStatus"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"taskId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"worktree_status"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"task_id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"taskId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"task_id"}},{"kind":"Field","name":{"kind":"Name","value":"top_level_task_id"}},{"kind":"Field","name":{"kind":"Name","value":"is_shared"}},{"kind":"Field","name":{"kind":"Name","value":"branch"}},{"kind":"Field","name":{"kind":"Name","value":"base_branch"}},{"kind":"Field","name":{"kind":"Name","value":"path"}},{"kind":"Field","name":{"kind":"Name","value":"state"}},{"kind":"Field","name":{"kind":"Name","value":"clean"}},{"kind":"Field","name":{"kind":"Name","value":"dirty"}},{"kind":"Field","name":{"kind":"Name","value":"ahead"}},{"kind":"Field","name":{"kind":"Name","value":"behind"}},{"kind":"Field","name":{"kind":"Name","value":"conflict"}},{"kind":"Field","name":{"kind":"Name","value":"checkout_present"}},{"kind":"Field","name":{"kind":"Name","value":"ephemeral"}},{"kind":"Field","name":{"kind":"Name","value":"reason"}},{"kind":"Field","name":{"kind":"Name","value":"__typename"}}]}}]}}]} as unknown as DocumentNode<WorktreeStatusQuery, WorktreeStatusQueryVariables>;

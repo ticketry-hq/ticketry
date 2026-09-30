@@ -1,0 +1,22 @@
+mutation WorktreeMergeAbort(
+  $taskId: String!
+  $operationId: String!
+) {
+  worktree_merge_abort(
+    task_id: $taskId
+    operation_id: $operationId
+  ) {
+    operation_id
+    outcome
+    source_branch
+    source_commit
+    destination_branch
+    destination_commit
+    destination_checkout
+    unmerged_paths {
+      path
+    }
+    blocker
+    reason
+  }
+}

@@ -23,7 +23,7 @@ export default function NameEditor({
   if (!editing) {
     return (
       <h2
-        className="group inline-flex cursor-text items-center gap-2 text-lg font-semibold leading-snug text-text-primary hover:opacity-90"
+        className="group inline-flex cursor-text items-center gap-2 font-sans text-xl font-semibold leading-tight tracking-tight text-text-primary hover:opacity-90"
         onClick={() => setEditing(true)}
         data-testid="issue-name"
       >
@@ -54,7 +54,7 @@ export default function NameEditor({
           setEditing(false);
         }
       }}
-      className="w-full border border-pane-border bg-pane-bg px-2 py-1 text-lg font-semibold text-text-primary outline-none focus:border-focus-accent"
+      className="w-full border border-pane-border bg-pane-bg px-2 py-1 font-sans text-xl font-semibold text-text-primary outline-none focus:border-focus-accent"
     />
   );
 }

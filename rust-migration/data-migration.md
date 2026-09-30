@@ -41,7 +41,7 @@ serving:
 - configures hook-spool, media, authentication, and MCP state.
 
 Those behaviors live in
-[`../backend/packaging/sidecar.py`](../backend/packaging/sidecar.py) and are
+[`../backend/sidecar_packaging/sidecar.py`](../backend/sidecar_packaging/sidecar.py) and are
 product requirements, not Python implementation details. Tauri already owns the
 data-directory lease/marker and must remain the outer authority
 ([`../studio/src-tauri/src/ownership.rs`](../studio/src-tauri/src/ownership.rs)).
@@ -76,6 +76,14 @@ database-writer handoff after complete schema/effect parity. This is a single
 persistence handoff, not a big-bang implementation.
 
 ## Schema adoption sequence
+
+Entity recovery and migration ownership are separate steps. Before cutover,
+build a clean database from the current Django migration chain and generate the
+Django-owned entity cohort from it; this prevents handwritten Rust structure
+from becoming a competing schema source. After parity and the writer handoff,
+establish the equivalent SeaORM migration baseline below and generate all
+future entity changes from SeaORM migrations. Both paths must produce the same
+accepted entity and schema artifacts at the handoff boundary.
 
 ### 1. Freeze and classify supported inputs
 
@@ -137,7 +145,7 @@ For SQLite, acquire the installation lease, stop all writers, checkpoint WAL,
 copy the database and sidecars consistently, hash the snapshot, and verify the
 copy opens and passes integrity checks. Keep a rotation at least as strong as
 the current three-generation policy
-([`../backend/packaging/sidecar.py`](../backend/packaging/sidecar.py)).
+([`../backend/sidecar_packaging/sidecar.py`](../backend/sidecar_packaging/sidecar.py)).
 
 Do not duplicate bulk attachments, worktrees, or tmux state. Instead, record a
 cutover manifest of their root paths and relevant identifiers, and leave them in

@@ -1,32 +1,27 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { expect, vi } from "vitest";
 
 import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
-import { useAgentStatusStore } from "../features/agents/status";
-import { getModulesSnapshot } from "../features/projects";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
+import {
+  getModulesSnapshot,
+} from "../features/projects";
 import { useStudioStore } from "../features/projects/store";
-import { groupBacklog } from "../features/work-items";
-import * as api from "../shared/api/client";
-import { queryClient } from "../shared/query/queryClient";
-import type { Module, ModulePresentation, Project } from "../shared/api/types";
+import * as api from "./legacyApiFixture";
+import { resetStudioApolloClient } from "../shared/apollo/client";
+import type { Module, Project, WorkItem } from "../shared/api/types";
 import { useClientStore } from "../state/clientStore";
 
 /**
  * Shared fixtures and surface readers for the module reorder acceptance
- * suites. Each suite still declares its own `vi.mock("../shared/api/client")`
+ * suites. Each suite still declares its own `vi.mock("./legacyApiFixture")`
  * so the mock factory hoists; these accessors read the mocked functions.
  */
 
 export const listModules = api.listModules as ReturnType<typeof vi.fn>;
 export const listProjects = api.listProjects as ReturnType<typeof vi.fn>;
-export const listModulePresentations =
-  api.listModulePresentations as ReturnType<typeof vi.fn>;
-export const reorderModulePresentation =
-  api.reorderModulePresentation as ReturnType<typeof vi.fn>;
-export const updateModulePresentation =
-  api.updateModulePresentation as ReturnType<typeof vi.fn>;
+export const reorderWorkItem = api.reorderWorkItem as ReturnType<typeof vi.fn>;
 
 export const PROJECT_ID = "project-1";
 
@@ -42,22 +37,23 @@ export function modules(...ids: string[]): Module[] {
   })) as unknown as Module[];
 }
 
-export function project(_manualModuleOrder: boolean): Project {
+export function project(manual_module_order: boolean): Project {
   return {
     id: PROJECT_ID,
     name: "Project",
     slug: "PRJ",
     description: "",
+    manual_module_order,
   } as Project;
 }
 
 /** Both reorder-visible surfaces at once: they read one cached order. */
 export function ModuleSurfaces() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       <ModulesPane />
       <ModuleTabStrip />
-    </QueryClientProvider>
+    </>
   );
 }
 
@@ -96,13 +92,11 @@ export function tabBadges(moduleId: string): string[] {
 
 /** A representative read-only consumer: it takes the shared array, never sorts. */
 export function backlogGroupOrder(): string[] {
-  return groupBacklog([], getModulesSnapshot(PROJECT_ID), [], null, { query: "" })
-    .map((group) => group.epic?.name)
-    .filter((name): name is string => name !== undefined);
+  return getModulesSnapshot(PROJECT_ID).map((module) => module.name);
 }
 
-export function moved(id: string): ModulePresentation {
-  return { module_id: id, rank: "V", tab_hidden: false };
+export function moved(id: string): WorkItem {
+  return { id, rank: "V" } as unknown as WorkItem;
 }
 
 export function deferred<T>() {
@@ -113,19 +107,11 @@ export function deferred<T>() {
   return { promise, ...settle };
 }
 
-export function resetModuleReorderHarness(): void {
-  queryClient.clear();
+export async function resetModuleReorderHarness(): Promise<void> {
+  await resetStudioApolloClient();
   listModules.mockReset();
   listProjects.mockReset();
-  listModulePresentations.mockReset().mockResolvedValue([]);
-  reorderModulePresentation.mockReset().mockResolvedValue(moved("module-c"));
-  updateModulePresentation.mockReset().mockImplementation(
-    async (moduleId: string, body: { tab_hidden: boolean }) => ({
-      module_id: moduleId,
-      rank: "",
-      tab_hidden: body.tab_hidden,
-    }),
-  );
+  reorderWorkItem.mockReset().mockResolvedValue(moved("module-c"));
   useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
   useAgentStatusStore.setState({ runs: {} });
   useClientStore.setState({
@@ -135,11 +121,10 @@ export function resetModuleReorderHarness(): void {
   });
 }
 
-/** Render the server-ordered module collection used by reorder cases. */
+/** The server-owned creation order an automatic project shows: a, b, c. */
 export async function renderAutomaticProject(): Promise<void> {
   listModules.mockResolvedValue(modules("module-a", "module-b", "module-c"));
   listProjects.mockResolvedValue([project(false)]);
-
   render(<ModuleSurfaces />);
   await waitFor(() =>
     expect(sidebarOrder()).toEqual(["module-a", "module-b", "module-c"]),

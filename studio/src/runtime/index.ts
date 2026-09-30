@@ -2,16 +2,35 @@ import { createBrowserRuntime } from "./browserRuntime";
 import type { RuntimeStartupConfiguration, StudioRuntime } from "./contract";
 
 export type {
+  AppUpdateCheckErrorCode,
+  AppUpdateCheckResult,
+  AppUpdateOperationErrorCode,
+  AppUpdateProgress,
+  AppUpdateProgressListener,
+  AppUpdatesRuntime,
+  CrashCollectionOutcome,
+  CrashReportsRuntime,
+  DirectoryTrustResult,
+  DirectoryTrustStatus,
   RuntimeCapabilities,
-  RuntimeEndpoints,
   ServiceHealth,
   ServiceHealthListener,
   RuntimeStartupConfiguration,
-  RuntimeValues,
+  SettingsRoutes,
   StudioPlatform,
   StudioRuntime,
   UserNoticeListener,
+  WorkTrackerGraphQlExecute,
+  WorkTrackerReadRoutes,
 } from "./contract";
+export type {
+  LaunchkeyMidiPorts,
+  LaunchkeyMidiRuntime,
+  LaunchkeyMidiSelection,
+  LaunchkeyRuntime,
+} from "./launchkey";
+export { inertLaunchkeyRuntime } from "./launchkey";
+export { AppUpdateCheckError, AppUpdateOperationError } from "./contract";
 export {
   USER_NOTICE_SEVERITIES,
   validateUserNotice,
@@ -22,15 +41,15 @@ export {
 export { createBrowserRuntime } from "./browserRuntime";
 
 let installedRuntime: StudioRuntime | null = null;
+let fallbackRuntime: StudioRuntime | null = null;
 
 function defaultBrowserRuntime(): StudioRuntime {
-  return createBrowserRuntime({
+  fallbackRuntime ??= createBrowserRuntime({
     environment: {
-      VITE_WT_API_BASE: import.meta.env.VITE_WT_API_BASE,
-      VITE_WT_API_KEY: import.meta.env.VITE_WT_API_KEY,
-      VITE_AGENT_API_BASE: import.meta.env.VITE_AGENT_API_BASE,
+      VITE_GRAPHQL_API: import.meta.env.VITE_GRAPHQL_API,
     },
   });
+  return fallbackRuntime;
 }
 
 /** Install the runtime before the React application mounts. */
@@ -53,24 +72,16 @@ export function runtimeConfiguration(): RuntimeStartupConfiguration {
   return studioRuntime().startup();
 }
 
-/** Resolve an existing canonical /api path against the runtime's agent root. */
-export function agentApiUrl(path: string): string {
-  if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  const base = runtimeConfiguration().endpoints.agentApi.replace(/\/$/, "");
-  const suffix = path === "/api"
-    ? ""
-    : path.startsWith("/api/")
-      ? path.slice(4)
-      : path.startsWith("/")
-        ? path
-        : `/${path}`;
-  return `${base}${suffix}`;
+/** The transport the project status subscription opens on, if any. */
+export function statusStreamTransport() {
+  return studioRuntime().statusStream();
 }
 
-export function statusWebSocketUrl(): string {
-  return runtimeConfiguration().endpoints.statusWebSocket;
-}
-
+/** The WebSocket URL the browser terminal client attaches through. */
 export function terminalWebSocketUrl(): string {
-  return runtimeConfiguration().endpoints.terminalWebSocket;
+  const endpoint = studioRuntime().terminalWebSocketUrl?.();
+  if (!endpoint) {
+    throw new Error("This Studio platform has no browser terminal WebSocket endpoint.");
+  }
+  return endpoint;
 }

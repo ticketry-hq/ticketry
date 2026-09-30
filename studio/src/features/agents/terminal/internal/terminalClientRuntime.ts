@@ -1,4 +1,8 @@
-import { browserTerminalClient } from "./browserTerminalClient";
+import { isTauri } from "@tauri-apps/api/core";
 
-// Desktop temporarily shares the browser's backend tmux WebSocket transport.
-export const terminalClientTransport = browserTerminalClient;
+import { browserTerminalClient } from "./browserTerminalClient";
+import { tauriTerminalClient } from "./tauriTerminalClient";
+
+export const terminalClientTransport = isTauri()
+  ? tauriTerminalClient
+  : browserTerminalClient;

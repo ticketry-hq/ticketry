@@ -1,0 +1,15 @@
+query CurrentWorktrees($moduleId: String!) {
+  worktrees(
+    filters: { moduleId: { eq: $moduleId }, status: { is_in: ["active", "conflict"] } }
+    orderBy: { ticketSeq: ASC }
+    pagination: { offset: { offset: 0, limit: 101 } }
+  ) {
+    nodes {
+      id
+      taskId
+      branch
+      issue { id name sequenceId }
+      project { id slug }
+    }
+  }
+}

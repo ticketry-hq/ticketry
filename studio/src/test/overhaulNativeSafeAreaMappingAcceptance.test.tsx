@@ -8,7 +8,12 @@ describe("native Ghostty safe-area mapping acceptance", () => {
       "utf8",
     );
 
-    expect(hostSource).toContain("NSRect viewport = parent.safeAreaRect");
+    expect(hostSource).toContain(
+      "NSRect viewport = coordinateView.safeAreaRect",
+    );
+    expect(hostSource).toContain(
+      "[coordinateView convertRect:frame toView:parent]",
+    );
     expect(hostSource).toContain(
       "frame.origin.y = NSMaxY(viewport) - (y + height) * scale_y",
     );

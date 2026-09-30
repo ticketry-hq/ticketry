@@ -1,20 +1,22 @@
 import { useModalStore } from "../../../../app/modal/modalStore";
+import { useDialogStore } from "../../../../app/shell/dialogStore";
 import { useClientStore } from "../../../../state/clientStore";
 
 /**
  * The single window-level occlusion condition (CODING-718, CODING-733).
  *
- * Studio raises WebView surfaces that must cover the native terminal from the
- * modal stack, `DialogHost`, and the state-configuration workspace overlay.
- * Any one of them owns the foreground, so the condition is centralized here
- * rather than bolted onto each terminal gate. While it holds, no terminal may
- * be presented and none may hold the window's focus.
+ * Studio raises WebView surfaces above the native terminal from the modal
+ * stack, `DialogHost`, and the state-configuration workspace overlay. Any one
+ * of them owns the foreground, so the condition is centralized here rather
+ * than bolted onto each terminal gate. While it holds, terminals stay
+ * presented beneath the overlay as WebView siblings but none may take the
+ * window's focus or keyboard ownership (CODING-1497).
  */
 export function modalOcclusionActive(): boolean {
   return (
     useModalStore.getState().modalStack.length > 0 ||
-    useClientStore.getState().dialogs.length > 0 ||
-    useClientStore.getState().workspaceSelection.kind === "state-configuration"
+    useDialogStore.getState().dialogs.length > 0 ||
+    useClientStore.getState().workspaceSelection.kind.endsWith("-configuration")
   );
 }
 
@@ -24,12 +26,11 @@ export function modalOcclusionActive(): boolean {
  */
 export function useModalOcclusionActive(): boolean {
   const modalOpen = useModalStore((state) => state.modalStack.length > 0);
-  const clientOverlayOpen = useClientStore(
-    (state) =>
-      state.dialogs.length > 0 ||
-      state.workspaceSelection.kind === "state-configuration",
+  const dialogOpen = useDialogStore((state) => state.dialogs.length > 0);
+  const workspaceOverlayOpen = useClientStore(
+    (state) => state.workspaceSelection.kind.endsWith("-configuration"),
   );
-  return modalOpen || clientOverlayOpen;
+  return modalOpen || dialogOpen || workspaceOverlayOpen;
 }
 
 /**
@@ -48,6 +49,7 @@ export function onModalOcclusionBegin(listener: () => void): () => void {
   };
   const releases = [
     useModalStore.subscribe(observe),
+    useDialogStore.subscribe(observe),
     useClientStore.subscribe(observe),
   ];
   return () => {

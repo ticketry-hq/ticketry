@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apollo normalized cache — what it would hold for Ticketry</title>
+<style>
+  :root {
+    --bg: #14161a;
+    --panel: #1d2026;
+    --card: #23272f;
+    --border: #333a45;
+    --text: #d7dce3;
+    --dim: #8b93a1;
+    --accent: #6ea8fe;
+    --ref: #e3b341;
+    --ok: #56c271;
+    --bad: #e5675c;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: var(--dim); margin-bottom: 20px; max-width: 900px; }
+  .layout { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+  }
+  .panel h2 {
+    font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--dim); margin: 0 0 12px; font-weight: 600;
+  }
+
+  /* left column: queries + writers */
+  .doc {
+    font-family: var(--mono); font-size: 12px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;
+    white-space: pre; overflow-x: auto; color: var(--dim);
+  }
+  .doc b { color: var(--text); font-weight: 600; }
+  .writers { margin-top: 4px; }
+  .writers button {
+    display: block; width: 100%; text-align: left;
+    background: var(--card); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 8px; cursor: pointer;
+    font: 600 13px/1.4 inherit;
+  }
+  .writers button span { display: block; font-weight: 400; color: var(--dim); font-size: 12px; }
+  .writers button:hover { border-color: var(--accent); }
+  .writers button.reset { color: var(--dim); font-weight: 400; }
+  #narration {
+    min-height: 64px; font-size: 13px; color: var(--dim);
+    border-left: 3px solid var(--accent); padding: 4px 12px; margin-top: 8px;
+    transition: border-left-color .2s;
+  }
+  #narration.bad { border-left-color: var(--bad); }
+  #narration.ok { border-left-color: var(--ok); }
+  #narration b { color: var(--text); }
+
+  /* the store */
+  .store-section { margin-bottom: 18px; }
+  .store-label { font-size: 12px; color: var(--dim); margin-bottom: 8px; }
+  .store-label code { color: var(--accent); font-family: var(--mono); font-size: 12px; }
+  .cards { display: flex; flex-wrap: wrap; gap: 10px; }
+
+  .entity {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; min-width: 210px; max-width: 260px;
+    font-family: var(--mono); font-size: 11.5px;
+    transition: box-shadow .15s, border-color .15s;
+  }
+  .entity { scroll-margin: 16px; }
+  .entity .key {
+    padding: 6px 10px; border-bottom: 1px solid var(--border);
+    color: var(--accent); font-weight: 600; font-size: 12px;
+    cursor: pointer;
+  }
+  .entity .key:hover { text-decoration: underline; }
+  .entity .fields { padding: 6px 10px 8px; }
+  .entity .f { display: flex; justify-content: space-between; gap: 10px; padding: 1px 0; }
+  .entity .f .k { color: var(--dim); }
+  .entity .f .v { color: var(--text); text-align: right; }
+  .entity .f .v.ref, .entity .f .v .ref { color: var(--ref); cursor: pointer; }
+  .entity .f .v.ref:hover, .entity .f .v .ref:hover { text-decoration: underline; }
+  .entity.hi { border-color: var(--ref); box-shadow: 0 0 0 2px rgba(227,179,65,.25); }
+  .entity.pulse-ok { border-color: var(--ok); box-shadow: 0 0 0 2px rgba(86,194,113,.3); }
+  .entity.pulse-bad { border-color: var(--bad); box-shadow: 0 0 0 2px rgba(229,103,92,.3); }
+  .entity .f .v.changed { color: var(--ok); font-weight: 700; }
+  .entity .f .v.optimistic { color: var(--ref); font-weight: 700; }
+
+  .rootq .entity { max-width: none; width: 100%; }
+  .rootq .f { flex-wrap: wrap; justify-content: flex-start; }
+  .rootq .f .v { text-align: left; }
+
+  .legend { display: flex; gap: 18px; margin-top: 14px; font-size: 12px; color: var(--dim); flex-wrap: wrap; }
+  .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
+
+  .note {
+    margin-top: 20px; padding: 14px 16px; border: 1px solid var(--border);
+    border-radius: 10px; background: var(--panel); max-width: 900px;
+    color: var(--dim); font-size: 13px;
+  }
+  .note b { color: var(--text); }
+  .note code { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+
+  /* optimistic layer strip */
+  #optlayer {
+    display: none; margin-bottom: 14px; padding: 10px 12px;
+    border: 1px dashed var(--ref); border-radius: 8px;
+    font-family: var(--mono); font-size: 12px; color: var(--ref);
+  }
+</style>
+</head>
+<body>
+
+<h1>Apollo's cache, if Ticketry adopted it</h1>
+<div class="sub">
+  This is the literal in-memory object Apollo would hold after opening a module.
+  One flat table. Every entity stored once under <code>Type:id</code>. Query results
+  store only <span style="color:var(--ref)">references</span> (yellow) into the table —
+  each one is literally <code>{ __ref: "Type:id" }</code>, nothing more.
+  Click any yellow ref to follow it; click an entity's key to see everything that points at it.
+  Then use the buttons to watch each kind of write land.
+</div>
+
+<div class="layout">
+
+  <div>
+    <div class="panel">
+      <h2>What wrote this cache</h2>
+      <div class="doc"><b>query ModuleLoad</b> {
+  module: worktrackerIssue(...)
+  tasks: worktrackerIssue(
+    moduleId: "m-auth", type: "task")
+  states: worktrackerState(...)
+  issueTypes: worktrackerIssuetype(...)
+}</div>
+      <div class="doc"><b>subscription RunStatusStream</b> {
+  ...snapshot frame, then events
+}</div>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <h2>Simulate a write</h2>
+      <div class="writers">
+        <button onclick="simMutation()">1 · Mutation result arrives
+          <span>update_work_item renames PROJ-12 → merges into one row</span></button>
+        <button onclick="simOptimistic()">2 · Optimistic update in flight
+          <span>drag PROJ-14 to "In Progress" before the server answers</span></button>
+        <button onclick="simStale()">3 · Stale refetch arrives late
+          <span>old ModuleLoad response with state_revision 3 &lt; 4</span></button>
+        <button onclick="simEvent()">4 · Subscription event
+          <span>run-77 goes working → done; chips re-render from cache</span></button>
+        <button class="reset" onclick="resetAll()">reset</button>
+      </div>
+      <div id="narration">Waiting. The cache below is what exists right after module load.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>The normalized store — one flat table</h2>
+
+    <div id="optlayer">optimistic layer (sits above the table, discarded on mutation settle):&nbsp;<span id="optcontent"></span></div>
+
+    <div class="store-section rootq">
+      <div class="store-label">Query results — <code>ROOT_QUERY</code> holds no data, only refs keyed by field + arguments</div>
+      <div class="cards">
+        <div class="entity" data-key="ROOT_QUERY">
+          <div class="key">ROOT_QUERY</div>
+          <div class="fields">
+            <div class="f"><span class="k">worktrackerIssue({"id":"m-auth"})</span>
+              <span class="v">[ <span class="ref" data-ref="WorktrackerIssue:m-auth">→ WorktrackerIssue:m-auth</span> ]</span></div>
+            <div class="f"><span class="k">worktrackerIssue({"moduleId":"m-auth","type":"task"})</span>
+              <span class="v">[ <span class="ref" data-ref="WorktrackerIssue:t-12">→ :t-12</span>, <span class="ref" data-ref="WorktrackerIssue:t-14">→ :t-14</span>, <span class="ref" data-ref="WorktrackerIssue:t-15">→ :t-15</span> ]</span></div>
+            <div class="f"><span class="k">worktrackerState({"projectId":"p-1"})</span>
+              <span class="v">[ <span class="ref" data-ref="WorktrackerState:s-ideas">→ :s-ideas</span>, <span class="ref" data-ref="WorktrackerState:s-prog">→ :s-prog</span>, <span class="ref" data-ref="WorktrackerState:s-done">→ :s-done</span> ]</span></div>
+            <div class="f"><span class="k">worktrackerIssuetype({"projectId":"p-1"})</span>
+              <span class="v">[ <span class="ref" data-ref="WorktrackerIssuetype:it-story">→ :it-story</span> ]</span></div>
+            <div class="f"><span class="k">agentRuns({"moduleId":"m-auth"})</span>
+              <span class="v">[ <span class="ref" data-ref="AgentRun:run-77">→ AgentRun:run-77</span> ]</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="store-section">
+      <div class="store-label">Work items — each exists exactly once, no matter how many queries returned it</div>
+      <div class="cards">
+        <div class="entity" data-key="WorktrackerIssue:m-auth">
+          <div class="key">WorktrackerIssue:m-auth</div>
+          <div class="fields">
+            <div class="f"><span class="k">type</span><span class="v">"module"</span></div>
+            <div class="f"><span class="k">name</span><span class="v">"Auth"</span></div>
+            <div class="f"><span class="k">rank</span><span class="v">"0|hzzzzz:"</span></div>
+          </div>
+        </div>
+        <div class="entity" data-key="WorktrackerIssue:t-12">
+          <div class="key">WorktrackerIssue:t-12</div>
+          <div class="fields">
+            <div class="f"><span class="k">name</span><span class="v" id="t12-name">"Login form"</span></div>
+            <div class="f"><span class="k">sequenceId</span><span class="v">12</span></div>
+            <div class="f"><span class="k">stateRevision</span><span class="v" id="t12-rev">4</span></div>
+            <div class="f"><span class="k">state</span><span class="v ref" data-ref="WorktrackerState:s-prog">→ :s-prog</span></div>
+            <div class="f"><span class="k">issueType</span><span class="v ref" data-ref="WorktrackerIssuetype:it-story">→ :it-story</span></div>
+            <div class="f"><span class="k">parent</span><span class="v">null</span></div>
+          </div>
+        </div>
+        <div class="entity" data-key="WorktrackerIssue:t-14">
+          <div class="key">WorktrackerIssue:t-14</div>
+          <div class="fields">
+            <div class="f"><span class="k">name</span><span class="v">"Session tokens"</span></div>
+            <div class="f"><span class="k">sequenceId</span><span class="v">14</span></div>
+            <div class="f"><span class="k">state</span><span class="v ref" id="t14-state" data-ref="WorktrackerState:s-ideas">→ :s-ideas</span></div>
+            <div class="f"><span class="k">issueType</span><span class="v ref" data-ref="WorktrackerIssuetype:it-story">→ :it-story</span></div>
+            <div class="f"><span class="k">parent</span><span class="v ref" data-ref="WorktrackerIssue:t-12">→ :t-12</span></div>
+          </div>
+        </div>
+        <div class="entity" data-key="WorktrackerIssue:t-15">
+          <div class="key">WorktrackerIssue:t-15</div>
+          <div class="fields">
+            <div class="f"><span class="k">name</span><span class="v">"Password reset"</span></div>
+            <div class="f"><span class="k">sequenceId</span><span class="v">15</span></div>
+            <div class="f"><span class="k">state</span><span class="v ref" data-ref="WorktrackerState:s-done">→ :s-done</span></div>
+            <div class="f"><span class="k">issueType</span><span class="v ref" data-ref="WorktrackerIssuetype:it-story">→ :it-story</span></div>
+            <div class="f"><span class="k">parent</span><span class="v ref" data-ref="WorktrackerIssue:t-12">→ :t-12</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="store-section">
+      <div class="store-label">Catalogues — three tasks point at :it-story, but it is stored once</div>
+      <div class="cards">
+        <div class="entity" data-key="WorktrackerState:s-ideas">
+          <div class="key">WorktrackerState:s-ideas</div>
+          <div class="fields">
+            <div class="f"><span class="k">name</span><span class="v">"Ideas"</span></div>
+            <div class="f"><span class="k">color</span><span class="v">"#8b93a1"</span></div>
+          </div>
+        </div>
+        <div class="entity" data-key="WorktrackerState:s-prog">
+          <div class="key">WorktrackerState:s-prog</div>
+          <div class="fields">
+            <div class="f"><span class="k">name</span><span class="v">"In Progress"</span></div>
+            <div class="f"><span class="k">color</span><span class="v">"#6ea8fe"</span></div>
+          </div>
+        </div>
+        <div class="entity" data-key="WorktrackerState:s-done">
+          <div class="key">WorktrackerState:s-done</div>
+          <div class="fields">
+            <div class="f"><span class="k">name</span><span class="v">"Done"</span></div>
+            <div class="f"><span class="k">color</span><span class="v">"#56c271"</span></div>
+          </div>
+        </div>
+        <div class="entity" data-key="WorktrackerIssuetype:it-story">
+          <div class="key">WorktrackerIssuetype:it-story</div>
+          <div class="fields">
+            <div class="f"><span class="k">name</span><span class="v">"Story"</span></div>
+            <div class="f"><span class="k">startState</span><span class="v ref" data-ref="WorktrackerState:s-ideas">→ :s-ideas</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="store-section">
+      <div class="store-label">Run status — the Zustand store rolled in; chips read these rows, the resync protocol still feeds them</div>
+      <div class="cards">
+        <div class="entity" data-key="AgentRun:run-77">
+          <div class="key">AgentRun:run-77</div>
+          <div class="fields">
+            <div class="f"><span class="k">issue</span><span class="v ref" data-ref="WorktrackerIssue:t-14">→ :t-14</span></div>
+            <div class="f"><span class="k">state</span><span class="v" id="run77-state">"working"</span></div>
+            <div class="f"><span class="k">outputSequence</span><span class="v" id="run77-seq">18</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><span class="sw" style="background:var(--accent)"></span>cache key</span>
+      <span><span class="sw" style="background:var(--ref)"></span>reference (no data, just a pointer)</span>
+      <span><span class="sw" style="background:var(--ok)"></span>write accepted</span>
+      <span><span class="sw" style="background:var(--bad)"></span>write rejected by merge policy</span>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <b>What to take away.</b> The tree the UI renders does not live in this cache — there is still no
+  nested tree anywhere. The board reads the task list ref array plus each row's fields and rebuilds
+  the shape from <code>parent</code>, exactly like today. What changes is plumbing you no longer write:
+  the <code>byId</code> fan-out loop disappears (normalization is automatic on every query, forever),
+  and the skip-while-mutating guard disappears (button 2 — the optimistic layer sits <i>above</i> the
+  table, so refetches can't fight it). What relocates rather than disappears: the
+  <code>state_revision</code> rule becomes one declared merge policy on <code>WorktrackerIssue</code>
+  (button 3), and the snapshot/resync protocol keeps feeding <code>AgentRun</code> rows (button 4).
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const narr = $("#narration");
+
+function clearFx() {
+  $$(".entity").forEach(e => e.classList.remove("hi", "pulse-ok", "pulse-bad"));
+  $$(".v").forEach(v => v.classList.remove("changed", "optimistic"));
+}
+
+function say(html, tone) {
+  narr.innerHTML = html;
+  narr.className = tone || "";
+}
+
+/* ref following + reverse highlight */
+document.addEventListener("click", (ev) => {
+  const ref = ev.target.closest(".ref");
+  if (ref) {
+    clearFx(); hideOpt();
+    const target = document.querySelector(`.entity[data-key="${ref.dataset.ref}"]`);
+    if (target) { target.classList.add("hi"); target.scrollIntoView({behavior:"smooth", block:"nearest"}); }
+    say(`Followed the reference to <b>${ref.dataset.ref}</b>. In the cache this is literally <b>{ __ref: "${ref.dataset.ref}" }</b> — no data travels with it; the fields live only on that one row.`);
+    return;
+  }
+  const key = ev.target.closest(".entity .key");
+  if (key) {
+    clearFx(); hideOpt();
+    const id = key.parentElement.dataset.key;
+    key.parentElement.classList.add("hi");
+    if (id === "ROOT_QUERY") {
+      say(`<b>ROOT_QUERY</b> is the root of the table, not an entity — nothing references it. Each field on it is keyed by field name plus its JSON-serialized arguments, so the same field called with different arguments gets its own slot.`);
+      return;
+    }
+    let n = 0;
+    $$(`.ref[data-ref="${id}"]`).forEach(r => { r.closest(".entity").classList.add("hi"); n++; });
+    say(`<b>${id}</b> is referenced from ${n} place${n===1?"":"s"} (highlighted). Update this one row and every query watching it re-renders — that is the entire trick of normalization.`);
+  }
+});
+
+function hideOpt() { $("#optlayer").style.display = "none"; }
+
+function resetAll() {
+  clearFx(); hideOpt();
+  $("#t12-name").textContent = '"Login form"';
+  $("#t12-rev").textContent = "4";
+  $("#run77-state").textContent = '"working"';
+  $("#run77-seq").textContent = "18";
+  say("Reset to the state right after module load.");
+}
+
+function simMutation() {
+  clearFx(); hideOpt();
+  $("#t12-name").textContent = '"Login form v2"';
+  $("#t12-name").classList.add("changed");
+  const card = document.querySelector('.entity[data-key="WorktrackerIssue:t-12"]');
+  card.classList.add("pulse-ok");
+  $$('.ref[data-ref="WorktrackerIssue:t-12"]').forEach(r => r.closest(".entity").classList.add("hi"));
+  say(`The mutation returned <b>{ __typename: "WorktrackerIssue", id: "t-12", name: "Login form v2", ... }</b>. Apollo normalizes it to the same <b>WorktrackerIssue:t-12</b> key and merges into the existing row, done. Every watched query whose result read this row — the ROOT_QUERY task list, anything rendering t-14 or t-15 through their parent refs — re-renders with the new name. Nobody wrote cache-update code.`, "ok");
+}
+
+function simOptimistic() {
+  clearFx();
+  $("#optlayer").style.display = "block";
+  $("#optcontent").textContent = 'WorktrackerIssue:t-14 { state: → :s-prog }';
+  $("#t14-state").classList.add("optimistic");
+  document.querySelector('.entity[data-key="WorktrackerIssue:t-14"]').classList.add("hi");
+  say(`The optimistic write lives in a <b>separate layer above the table</b> — the row underneath still says :s-ideas. If a ModuleLoad refetch lands right now, it writes into the table <b>under</b> the layer; the UI keeps showing the optimistic value until the mutation settles, then the layer is discarded. This is the skip-while-mutating guard, deleted.`, "ok");
+}
+
+function simStale() {
+  clearFx(); hideOpt();
+  const card = document.querySelector('.entity[data-key="WorktrackerIssue:t-12"]');
+  card.classList.add("pulse-bad");
+  say(`A slow ModuleLoad response from before t-12's last transition arrives carrying <b>t-12 @ stateRevision 3</b>. The cache row holds revision 4. The <b>merge function in WorktrackerIssue's type policy</b> — the one place the revision rule now lives — compares revisions and returns the existing row, so the stale fields never land. Same rule as today's guard, but declared once instead of enforced at every write site.`, "bad");
+}
+
+function simEvent() {
+  clearFx(); hideOpt();
+  $("#run77-state").textContent = '"done"';
+  $("#run77-state").classList.add("changed");
+  $("#run77-seq").textContent = "19";
+  $("#run77-seq").classList.add("changed");
+  document.querySelector('.entity[data-key="AgentRun:run-77"]').classList.add("pulse-ok");
+  document.querySelector('.entity[data-key="WorktrackerIssue:t-14"]').classList.add("hi");
+  say(`A stream event writes <b>AgentRun:run-77 → done</b> into the same table everything else reads; t-14's chip re-renders with no separate store. What Apollo did <b>not</b> do: notice if event 18→19 had skipped a number. Gap detection and resync stay yours — the protocol survives, only its destination changed.`, "ok");
+}
+</script>
+</body>
+</html>

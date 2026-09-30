@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
   terminalApi,
@@ -8,7 +8,7 @@ import {
 } from "./taskAgentLaunchAcceptanceHarness";
 
 describe("overhaul acceptance — pending task agent launch navigation", () => {
-  it("[overhaul-78] completes pending launch acknowledgement after navigating away", async () => {
+  it("[overhaul-132] completes pending launch acknowledgement after navigating away", async () => {
     let acknowledgeCreate!: (value: { agent_run_id: string }) => void;
     terminalApi.createTerminalRun.mockReturnValue(
       new Promise((resolve) => {
@@ -41,8 +41,6 @@ describe("overhaul acceptance — pending task agent launch navigation", () => {
           taskId: "task-574",
           projectId: "project-574",
           moduleId: "module-574",
-          taskKey: "CODING-574",
-          taskName: "Retain pending task launch",
         },
         bucket: "task-574",
         projectId: "project-574",
@@ -51,7 +49,8 @@ describe("overhaul acceptance — pending task agent launch navigation", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "codex" }));
+    const picker = await screen.findByRole("dialog", { name: "Select Agent" });
+    fireEvent.click(within(picker).getByText("codex"));
     await waitFor(() => expect(terminalApi.createTerminalRun).toHaveBeenCalledOnce());
 
     fireEvent.click(screen.getByRole("tab", { name: "Details" }));

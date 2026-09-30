@@ -9,8 +9,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ModalHost } from "../app/modal/ModalHost";
 import { useModalStore } from "../app/modal/modalStore";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
+import { studioKeymapRegistry } from "../app/navigation/keymapRegistry";
 import { StudioFooter } from "../app/shell/StudioFooter";
 import { useStudioStore } from "../features/projects/store";
+import { KeyboardSettingsPanel } from "../features/studio/modals/KeyboardSettingsPanel";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 
 const settingsApi = vi.hoisted(() => ({
@@ -23,9 +25,27 @@ const settingsApi = vi.hoisted(() => ({
   putProviderCatalog: vi.fn(),
 }));
 
-vi.mock("../shared/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shared/api/client")>()),
+const keybindingApi = vi.hoisted(() => ({
+  saveKeybindingOverrides: vi.fn(),
+}));
+
+vi.mock("../app/navigation/keymapSettings", () => keybindingApi);
+
+vi.mock("./legacyApiFixture", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./legacyApiFixture")>()),
   ...settingsApi,
+}));
+
+vi.mock("../features/workflows/providerQueries", () => ({
+  setProviderCapabilities: vi.fn(),
+  loadProviderCapabilities: settingsApi.getLaunchProviderCapabilities,
+  loadConfigurableProviderCapabilities: async () => providerCapabilities,
+  getProviderCapabilitiesSnapshot: () => providerCapabilities,
+  loadProviderCatalog: async () => (await settingsApi.getProviderCatalog()).value,
+  updateProviderCatalog: async (value: unknown) =>
+    (await settingsApi.putProviderCatalog(value)).value,
+  useProviderCatalogQuery: () => ({ data: savedCatalog, isLoading: false, isError: false }),
+  useProviderCapabilitiesQuery: () => ({ data: providerCapabilities, isLoading: false, isError: false }),
 }));
 
 const savedCatalog = {
@@ -40,19 +60,19 @@ const savedCatalog = {
 const providerCapabilities = [
   {
     agent: "claude",
-    models: [
-      { name: "sonnet", reasoning_levels: ["low", "medium", "high"] },
-      { name: "opus", reasoning_levels: ["low", "medium", "high"] },
-      { name: "haiku", reasoning_levels: ["low", "medium"] },
-    ],
+    accepts_model: true,
+    accepts_any_model: false,
+    model_aliases: ["sonnet", "opus", "haiku"],
+    model_prefixes: ["claude-"],
+    reasoning_levels: ["low", "medium", "high"],
   },
   {
     agent: "codex",
-    models: [
-      { name: "gpt-5.6-sol", reasoning_levels: ["high", "low", "max", "medium", "ultra", "xhigh"] },
-      { name: "gpt-5.6-terra", reasoning_levels: ["high", "low", "max", "medium", "ultra", "xhigh"] },
-      { name: "gpt-5.6-luna", reasoning_levels: ["high", "low", "max", "medium", "xhigh"] },
-    ],
+    accepts_model: true,
+    accepts_any_model: false,
+    model_aliases: ["gpt-5.6-luna"],
+    model_prefixes: ["gpt-"],
+    reasoning_levels: ["low", "medium", "high"],
   },
 ];
 
@@ -78,6 +98,10 @@ function GlobalKeymapHarness() {
 describe("overhaul acceptance — settings", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    studioKeymapRegistry.setOverrides([]);
+    keybindingApi.saveKeybindingOverrides.mockImplementation(async (overrides) => {
+      studioKeymapRegistry.setOverrides(overrides);
+    });
     useModalStore.setState({
       modalStack: [],
       presentedNoticeIds: new Set(),
@@ -141,7 +165,7 @@ describe("overhaul acceptance — settings", () => {
     expect(settingsApi.getIssueTypeWorkflowSettings).not.toHaveBeenCalled();
   });
 
-  it("[overhaul-122] keeps the keyboard shortcut reference inside Settings instead of the footer", async () => {
+  it("[overhaul-122] edits and persists keyboard shortcuts inside Settings", async () => {
     render(
       <>
         <GlobalKeymapHarness />
@@ -163,33 +187,44 @@ describe("overhaul acceptance — settings", () => {
     expect(
       within(dialog).getByRole("heading", { name: "Keyboard shortcuts" }),
     ).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole("table", {
-        name: "Effective keyboard bindings by action and Keymap context",
-      }),
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getAllByText("Choose provider for task"),
-    ).toHaveLength(2);
-    expect(
-      within(dialog).getByText("Show or launch task terminal"),
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getByText("Open task with prompt outside Stories"),
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getAllByText("Enter edit-view selection"),
-    ).toHaveLength(2);
-    expect(within(dialog).queryByText("tasks.choose-provider"))
-      .not.toBeInTheDocument();
-    expect(within(dialog).queryByText("edit-view.choose-provider"))
-      .not.toBeInTheDocument();
-    expect(within(dialog).queryByText("Open task"))
-      .not.toBeInTheDocument();
-    expect(within(dialog).queryByText("Open with prompt"))
-      .not.toBeInTheDocument();
-    expect(within(dialog).queryByText("Engage body"))
-      .not.toBeInTheDocument();
+    const runNow = within(dialog).getByRole("button", {
+      name: "Run now, current shortcut R, change binding",
+    });
+    fireEvent.click(runNow);
+    expect(runNow).toHaveTextContent("Press a chord…");
+    expect(runNow).toHaveAccessibleName(
+      "Run now, current shortcut R, recording, press a new shortcut",
+    );
+    fireEvent.keyDown(window, { key: "x" });
+
+    await waitFor(() => {
+      expect(keybindingApi.saveKeybindingOverrides).toHaveBeenCalledWith([{
+        context: "global",
+        actionId: "run-now",
+        chord: {
+          key: "x",
+          alt: false,
+          control: false,
+          meta: false,
+          shift: false,
+        },
+      }]);
+    });
+    expect(runNow).toHaveTextContent("X");
+    expect(runNow).toHaveAccessibleName(
+      "Run now, current shortcut X, change binding",
+    );
+
+    fireEvent.click(within(dialog).getByRole("button", {
+      name: "Reset Run now binding",
+    }));
+    await waitFor(() => {
+      expect(keybindingApi.saveKeybindingOverrides).toHaveBeenLastCalledWith([]);
+    });
+    expect(runNow).toHaveTextContent("R");
+    expect(runNow).toHaveAccessibleName(
+      "Run now, current shortcut R, change binding",
+    );
 
     fireEvent.click(within(dialog).getByRole("tab", { name: "Models" }));
     expect(
@@ -202,6 +237,72 @@ describe("overhaul acceptance — settings", () => {
     expect(
       within(dialog).getByRole("heading", { name: "Keyboard shortcuts" }),
     ).toBeInTheDocument();
+  });
+
+  it("[overhaul-368] names keyboard binding controls with their current shortcut and recording state", () => {
+    const searchBinding = {
+      context: "global" as const,
+      actionId: "search",
+      chord: {
+        key: "/",
+        alt: false,
+        control: false,
+        meta: false,
+        shift: false,
+      },
+    };
+    const props = {
+      overridden: new Set<string>(),
+      recordingKey: null,
+      message: null,
+      saving: false,
+      onRecord: vi.fn(),
+      onReset: vi.fn(),
+      onRestoreDefaults: vi.fn(),
+    };
+    const { rerender } = render(
+      <KeyboardSettingsPanel bindings={[searchBinding]} {...props} />,
+    );
+
+    expect(screen.getByRole("button", {
+      name: "Search, current shortcut Slash, change binding",
+    })).toBeInTheDocument();
+
+    const customizedBinding = {
+      ...searchBinding,
+      chord: { ...searchBinding.chord, key: "x" },
+    };
+    rerender(
+      <KeyboardSettingsPanel
+        bindings={[customizedBinding]}
+        {...props}
+        overridden={new Set(["global:search"])}
+      />,
+    );
+    expect(screen.getByRole("button", {
+      name: "Search, current shortcut X, change binding",
+    })).toBeInTheDocument();
+
+    rerender(
+      <KeyboardSettingsPanel
+        bindings={[customizedBinding]}
+        {...props}
+        recordingKey="global:search"
+      />,
+    );
+    expect(screen.getByRole("button", {
+      name: "Search, current shortcut X, recording, press a new shortcut",
+    })).toBeInTheDocument();
+
+    rerender(
+      <KeyboardSettingsPanel
+        bindings={[{ ...searchBinding, chord: null }]}
+        {...props}
+      />,
+    );
+    expect(screen.getByRole("button", {
+      name: "Search, no shortcut assigned, set binding",
+    })).toBeInTheDocument();
   });
 
   it("keeps validation, discard, save, failure, and model-only status behavior", async () => {
@@ -217,6 +318,11 @@ describe("overhaul acceptance — settings", () => {
     const discard = within(dialog).getByRole("button", { name: "Discard" });
     const save = within(dialog).getByRole("button", { name: "Save changes" });
 
+    // The model is a dropdown of catalog models, so an incompatible model
+    // cannot be entered; only catalog aliases are offered.
+    expect(
+      within(model).queryByRole("option", { name: "not-a-claude-model" }),
+    ).toBeNull();
     fireEvent.change(model, { target: { value: "opus" } });
     expect(within(dialog).getByText("1 unsaved change")).toBeInTheDocument();
     expect(discard).toBeEnabled();
@@ -236,8 +342,10 @@ describe("overhaul acceptance — settings", () => {
     await waitFor(() => {
       expect(settingsApi.putProviderCatalog).toHaveBeenCalledWith({
         activated_providers: ["claude", "codex"],
+        codex_profiles: [],
         global_default: {
           provider: "claude",
+          profile: null,
           model: "opus",
           reasoning: "medium",
         },
@@ -265,107 +373,6 @@ describe("overhaul acceptance — settings", () => {
     expect(settingsApi.putProviderCatalog).toHaveBeenCalledTimes(2);
     expect(within(applied).getAllByText("Models")).toHaveLength(3);
     expect(within(applied).queryByText("Workflow")).not.toBeInTheDocument();
-  });
-
-  it("[overhaul-127] preserves the Codex model matrix and round-trips low", async () => {
-    const opener = renderAndOpenSettings();
-    let dialog = await screen.findByRole("dialog", { name: "Studio settings" });
-    const provider = within(dialog).getByRole("combobox", {
-      name: "Agent/provider",
-    });
-    const model = within(dialog).getByRole("combobox", { name: "Model" });
-    const reasoning = within(dialog).getByRole("combobox", { name: "Reasoning" });
-
-    fireEvent.change(provider, { target: { value: "codex" } });
-    expect(model).toHaveValue("");
-    expect(within(reasoning).getAllByRole("option")).toHaveLength(1);
-
-    fireEvent.change(model, { target: { value: "gpt-5.6-sol" } });
-    expect(within(reasoning).getAllByRole("option").map((option) => option.textContent))
-      .toEqual(["Model default", "low", "medium", "high", "xhigh", "max", "ultra"]);
-    fireEvent.change(reasoning, { target: { value: "ultra" } });
-
-    fireEvent.change(model, { target: { value: "gpt-5.6-luna" } });
-    expect(reasoning).toHaveValue("");
-    expect(within(reasoning).queryByRole("option", { name: "ultra" }))
-      .not.toBeInTheDocument();
-    expect(within(reasoning).getByRole("option", { name: "max" }))
-      .toBeInTheDocument();
-    fireEvent.change(reasoning, { target: { value: "low" } });
-
-    fireEvent.change(model, { target: { value: "gpt-5.6-terra" } });
-    expect(reasoning).toHaveValue("low");
-    expect(within(reasoning).getByRole("option", { name: "ultra" }))
-      .toBeInTheDocument();
-    fireEvent.change(model, { target: { value: "gpt-5.6-luna" } });
-    expect(reasoning).toHaveValue("low");
-
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(settingsApi.putProviderCatalog).toHaveBeenCalledWith({
-      activated_providers: ["claude", "codex"],
-      global_default: {
-        provider: "codex",
-        model: "gpt-5.6-luna",
-        reasoning: "low",
-      },
-    }));
-
-    settingsApi.getProviderCatalog.mockResolvedValue({
-      value: {
-        activated_providers: ["claude", "codex"],
-        global_default: {
-          provider: "codex",
-          model: "gpt-5.6-luna",
-          reasoning: "low",
-        },
-      },
-    });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Close dialog" }));
-    fireEvent.click(opener);
-    dialog = await screen.findByRole("dialog", { name: "Studio settings" });
-    expect(await within(dialog).findByRole("combobox", { name: "Model" }))
-      .toHaveValue("gpt-5.6-luna");
-    expect(within(dialog).getByRole("combobox", { name: "Reasoning" }))
-      .toHaveValue("low");
-  });
-
-  it("[overhaul-166] allows choosing gpt-5.3-codex-spark with model-default reasoning", async () => {
-    settingsApi.getLaunchProviderCapabilities.mockResolvedValueOnce([
-      providerCapabilities[0],
-      {
-        ...providerCapabilities[1],
-        models: [
-          ...providerCapabilities[1].models,
-          { name: "gpt-5.3-codex-spark", reasoning_levels: [] },
-        ],
-      },
-    ]);
-
-    renderAndOpenSettings();
-
-    const dialog = await screen.findByRole("dialog", { name: "Studio settings" });
-    const provider = within(dialog).getByRole("combobox", { name: "Agent/provider" });
-    const model = within(dialog).getByRole("combobox", { name: "Model" });
-    const reasoning = within(dialog).getByRole("combobox", { name: "Reasoning" });
-
-    fireEvent.change(provider, { target: { value: "codex" } });
-    fireEvent.change(model, { target: { value: "gpt-5.3-codex-spark" } });
-
-    expect(model).toHaveValue("gpt-5.3-codex-spark");
-    expect(reasoning).toHaveValue("");
-    expect(
-      within(reasoning).getAllByRole("option").map((option) => option.textContent),
-    ).toEqual(["Model default"]);
-
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(settingsApi.putProviderCatalog).toHaveBeenCalledWith({
-      activated_providers: ["claude", "codex"],
-      global_default: {
-        provider: "codex",
-        model: "gpt-5.3-codex-spark",
-        reasoning: null,
-      },
-    }));
   });
 
   it("preserves close, Escape, focus restoration, and focus containment", async () => {

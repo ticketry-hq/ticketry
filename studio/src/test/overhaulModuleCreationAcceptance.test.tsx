@@ -1,4 +1,3 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -6,26 +5,77 @@ const api = vi.hoisted(() => ({
   createModule: vi.fn(),
   getTasks: vi.fn(),
   listIssueTypes: vi.fn(),
-  listModuleLinks: vi.fn(),
-  listModulePresentations: vi.fn(),
   listModules: vi.fn(),
   listProjects: vi.fn(),
-  putProfile: vi.fn(),
   updateProject: vi.fn(),
-  updateModulePresentation: vi.fn(),
-  upsertModuleLink: vi.fn(),
-  validateModuleFolder: vi.fn(),
+  writeModuleLink: vi.fn(),
 }));
 
 const moduleFolderValidationApi = vi.hoisted(() => ({
   validateModuleFolder: vi.fn(),
 }));
 
-vi.mock("../shared/api/client", async () => {
-  const actual = await vi.importActual<typeof import("../shared/api/client")>(
-    "../shared/api/client",
+vi.mock("./legacyApiFixture", async () => {
+  const actual = await vi.importActual<typeof import("./legacyApiFixture")>(
+    "./legacyApiFixture",
   );
   return { ...actual, ...api };
+});
+
+vi.mock("../features/projects/queries/readTransport", async () => {
+  const actual = await vi.importActual<typeof import("../features/projects/queries/readTransport")>(
+    "../features/projects/queries/readTransport",
+  );
+  const { projectOpenFixture } = await import("./projectOpenFixture");
+  return {
+    ...actual,
+    readProjects: api.listProjects,
+    readProjectOpen: async (projectId: string) => {
+      const [projects, modules] = await Promise.all([api.listProjects(), api.listModules(projectId)]);
+      const project = projects.find((candidate: { id: string }) => candidate.id === projectId) ?? projects[0];
+      if (!project) throw new Error(`Project ${projectId} was not found.`);
+      return projectOpenFixture(project, modules);
+    },
+    readOnboardingProjects: vi.fn(),
+  };
+});
+
+vi.mock("../features/workflows/queries/readTransport", async () => ({
+  ...(await vi.importActual("../features/workflows/queries/readTransport")),
+  readWorkflowIssueTypes: api.listIssueTypes,
+}));
+
+vi.mock("../features/module-links/moduleLinkTransport", async () => ({
+  ...(await vi.importActual("../features/module-links/moduleLinkTransport")),
+  writeModuleLink: api.writeModuleLink,
+}));
+
+vi.mock("../features/settings/queries", async () => ({
+  ...(await vi.importActual("../features/settings/queries")),
+  loadIssueTypes: api.listIssueTypes,
+}));
+
+vi.mock("../features/work-items/mutationTransport", async () => {
+  const actual = await vi.importActual<
+    typeof import("../features/work-items/mutationTransport")
+  >("../features/work-items/mutationTransport");
+  return {
+    ...actual,
+    createWorkItem: (projectId: string, body: { name?: string; issue_type_id?: string }) =>
+      api.createModule(projectId, body.name, body.issue_type_id),
+  };
+});
+
+vi.mock("../features/work-items/queries/readTransport", async () => ({
+  ...(await vi.importActual("../features/work-items/queries/readTransport")),
+  readModuleTreeRecords: api.getTasks,
+}));
+
+vi.mock("../features/projects/mutationTransport", async () => {
+  const actual = await vi.importActual<
+    typeof import("../features/projects/mutationTransport")
+  >("../features/projects/mutationTransport");
+  return { ...actual, updateProject: api.updateProject };
 });
 
 vi.mock("../features/studio/api/moduleFolderValidationApi", () =>
@@ -42,12 +92,11 @@ import {
   seedProjects,
 } from "../features/projects";
 import { useStudioStore } from "../features/projects/store";
-import { seedModuleLinks } from "../features/module-links";
 import {
-  getConfigSnapshot,
-  seedConfig,
-} from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
+  getModuleFolder,
+  getModuleLinks,
+  seedModuleLinks,
+} from "../features/module-links";
 import type { Module, Project } from "../shared/api/types";
 import { useClientStore } from "../state/clientStore";
 
@@ -67,30 +116,31 @@ function module(id: string, name: string, sequence_id: number): Module {
 }
 
 /** The two modules the project already had, in the server's answer order. */
-const EXISTING = [module("module-b", "Bravo", 2), module("module-a", "Alpha", 1)];
+const EXISTING = [module("module-a", "Alpha", 1), module("module-b", "Bravo", 2)];
 const CREATED = module(NEW_MODULE_ID, "Newest", 3);
 
-function project(_manualModuleOrder: boolean): Project {
+function project(manual_module_order: boolean): Project {
   return {
     id: PROJECT_ID,
     name: "Project",
     slug: "PRJ",
     description: "",
+    manual_module_order,
   } as Project;
 }
 
 /**
  * The Add Module modal mounted together with every Module surface it feeds.
- * Front placement is only real if the shared cached collection carries it, so
+ * Right placement is only real if the shared cached collection carries it, so
  * the sidebar and the Module tab strip are asserted from one render.
  */
 function ModuleCreationSurfaces() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       <ModulesPane />
       <ModuleTabStrip />
       <ModalHost />
-    </QueryClientProvider>
+    </>
   );
 }
 
@@ -112,14 +162,15 @@ function tabStripOrder(): string[] {
 
 /**
  * Create "Newest" through the ordinary Add Module flow. The server answers the
- * follow-up collection read with the module in front, which is exactly what a
- * project in either ordering mode returns after this create.
+ * follow-up collection read with the module at the end, which is exactly what a
+ * project in either ordering mode returns after this create. `initialOrder` is
+ * what the project shows before the create.
  */
 async function createNewestModule(initialOrder: string[]): Promise<void> {
   render(<ModuleCreationSurfaces />);
   await waitFor(() => expect(sidebarOrder()).toEqual(initialOrder));
 
-  api.listModules.mockResolvedValue([CREATED, ...EXISTING]);
+  api.listModules.mockResolvedValue([...EXISTING, CREATED]);
   fireEvent.change(await screen.findByPlaceholderText("Module name"), {
     target: { value: "Newest" },
   });
@@ -131,7 +182,7 @@ async function createNewestModule(initialOrder: string[]): Promise<void> {
   await waitFor(() => expect(useModalStore.getState().modalStack).toEqual([]));
 }
 
-/** The creation behaviors front placement must not disturb. */
+/** The creation behaviors right placement must not disturb. */
 function expectCreationFlowIntact(): void {
   expect(api.createModule).toHaveBeenCalledOnce();
   expect(api.createModule).toHaveBeenCalledWith(
@@ -141,22 +192,21 @@ function expectCreationFlowIntact(): void {
   );
   // Selection and the module-folder link still follow the created module.
   expect(useClientStore.getState().selectedModuleId).toBe(NEW_MODULE_ID);
-  expect(api.upsertModuleLink).toHaveBeenCalledWith(
-    NEW_MODULE_ID,
-    "/repos/newest",
-  );
+  expect(api.writeModuleLink).toHaveBeenCalledWith(NEW_MODULE_ID, "/repos/newest");
+  expect(getModuleFolder(NEW_MODULE_ID)).toBe("/repos/newest");
   // The sidebar's add control stays after its module rows.
   expect(sidebarRows().at(-1)).toBe("+ Add Module");
   expect(screen.getByRole("button", { name: "+ Add Module" })).toBeVisible();
 }
 
 /** Creation never changes the project's one-way ordering decision. */
-function expectOrderingModeUnchanged(): void {
+function expectOrderingModeUnchanged(manual: boolean): void {
+  void manual;
   expect(api.updateProject).not.toHaveBeenCalled();
-  expect(getProjectsSnapshot().map((entry) => entry.id)).toContain(PROJECT_ID);
+  expect(getProjectsSnapshot().find((entry) => entry.id === PROJECT_ID)).toBeDefined();
 }
 
-describe("module creation front-placement acceptance", () => {
+describe("module creation right-placement acceptance", () => {
   // The Module tab strip scrolls its selected tab into view, which jsdom does
   // not implement; selecting the created module is part of what these cases
   // exercise, so the no-op keeps that behavior observable.
@@ -165,7 +215,6 @@ describe("module creation front-placement acceptance", () => {
   });
 
   beforeEach(() => {
-    queryClient.clear();
     api.createModule.mockReset().mockResolvedValue(CREATED);
     moduleFolderValidationApi.validateModuleFolder
       .mockReset()
@@ -183,106 +232,80 @@ describe("module creation front-placement acceptance", () => {
         { id: "module-type", name: "Module", level: "module", sort_order: 0 },
       ]);
     api.listModules.mockReset().mockResolvedValue(EXISTING);
-    api.listModulePresentations.mockReset().mockResolvedValue([]);
-    api.listModuleLinks.mockReset().mockResolvedValue([]);
     api.updateProject.mockReset();
-    api.putProfile
+    api.writeModuleLink
       .mockReset()
-      .mockImplementation(async (_index: number, body: unknown) => ({
-        recent_profile_index: 0,
-        features: getConfigSnapshot().features,
-        profiles: [body],
-      }));
-    api.validateModuleFolder.mockReset().mockResolvedValue({ valid: true, reason: null });
-    api.upsertModuleLink.mockReset().mockImplementation(
-      async (moduleId: string, localPath: string) => ({
-        id: `link-${moduleId}`,
-        module_id: moduleId,
-        local_path: localPath,
-        created_at: "2026-08-19T00:00:00Z",
-        updated_at: "2026-08-19T00:00:00Z",
-      }),
-    );
-    seedConfig({
-      profiles: [
-        {
-          name: "Local",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_links: [],
-          recent_project_id: PROJECT_ID,
-          recent_module_ids: {},
-        },
-      ],
-      recentProfileIndex: 0,
-    });
+      .mockImplementation(async (moduleId: string, path: string) => {
+        seedModuleLinks([
+          ...getModuleLinks().filter((link) => link.moduleId !== moduleId),
+          { id: `link-${moduleId}`, moduleId, path },
+        ]);
+      });
     seedModuleLinks([]);
     useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
     useClientStore.setState({ selectedModuleId: null, modulesCursorId: null });
     useModalStore.setState({ modalStack: [{ type: "add-module" }] });
   });
 
-  it("[overhaul-46] leads an automatic project's module surfaces with the module just created", async () => {
+  it("[overhaul-46] appends a new module to an automatic project's module surfaces", async () => {
     api.listProjects.mockReset().mockResolvedValue([project(false)]);
     seedProjects([project(false)]);
-    await createNewestModule(["Bravo", "Alpha"]);
+    await createNewestModule(["Alpha", "Bravo"]);
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Newest", "Bravo", "Alpha"]),
+      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
     );
-    expect(tabStripOrder()).toEqual(["Newest", "Bravo", "Alpha"]);
+    expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Newest"]);
     expect(getModulesSnapshot(PROJECT_ID).map((entry) => entry.name)).toEqual([
-      "Newest",
-      "Bravo",
       "Alpha",
+      "Bravo",
+      "Newest",
     ]);
-    expectOrderingModeUnchanged();
+    expectOrderingModeUnchanged(false);
     expectCreationFlowIntact();
   });
 
-  it("[overhaul-55] adopts the server order on a later module refresh", async () => {
+  it("[overhaul-55] keeps the server's canonical order across reloads", async () => {
     api.listProjects.mockReset().mockResolvedValue([project(false)]);
     seedProjects([project(false)]);
-    await createNewestModule(["Bravo", "Alpha"]);
+    await createNewestModule(["Alpha", "Bravo"]);
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Newest", "Bravo", "Alpha"]),
+      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
     );
 
-    api.listModules.mockResolvedValue([EXISTING[0], CREATED, EXISTING[1]]);
     await useStudioStore.getState().reloadModules();
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Bravo", "Newest", "Alpha"]),
+      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
     );
-    expect(tabStripOrder()).toEqual(["Bravo", "Newest", "Alpha"]);
-    expectOrderingModeUnchanged();
+    expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Newest"]);
+    expectOrderingModeUnchanged(false);
   });
 
-  it("[overhaul-47] leads a manual project's module surfaces without leaving Manual module order", async () => {
+  it("[overhaul-47] appends to a manual project's module surfaces without leaving Manual module order", async () => {
     api.listProjects.mockReset().mockResolvedValue([project(true)]);
     seedProjects([project(true)]);
-    await createNewestModule(["Bravo", "Alpha"]);
+    await createNewestModule(["Alpha", "Bravo"]);
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Newest", "Bravo", "Alpha"]),
+      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
     );
-    expect(tabStripOrder()).toEqual(["Newest", "Bravo", "Alpha"]);
+    expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Newest"]);
     expect(getModulesSnapshot(PROJECT_ID).map((entry) => entry.name)).toEqual([
-      "Newest",
-      "Bravo",
       "Alpha",
+      "Bravo",
+      "Newest",
     ]);
-    expectOrderingModeUnchanged();
+    expectOrderingModeUnchanged(true);
     expectCreationFlowIntact();
 
-    // A later read continues to follow the server's response exactly.
+    // A later automatic response is still adopted exactly as returned.
     api.listProjects.mockResolvedValue([project(false)]);
-    api.listModules.mockResolvedValue([EXISTING[1], CREATED, EXISTING[0]]);
     await useStudioStore.getState().reloadModules();
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Alpha", "Newest", "Bravo"]),
+      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
     );
-    expect(tabStripOrder()).toEqual(["Alpha", "Newest", "Bravo"]);
+    expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Newest"]);
   });
 });

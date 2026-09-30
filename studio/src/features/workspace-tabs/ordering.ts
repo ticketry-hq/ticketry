@@ -1,8 +1,8 @@
 import type { WorkspaceTabIdentity } from "./types";
 
 export function workspaceTabIdentityKey(identity: WorkspaceTabIdentity): string {
-  return identity.kind === "details"
-    ? "details"
+  return identity.kind === "details" || identity.kind === "changes"
+    ? identity.kind
     : `${identity.kind}:${identity.id}`;
 }
 

@@ -2,14 +2,13 @@ import {
   getModulesSnapshot,
   getProjectsSnapshot,
 } from "../../features/projects";
-import { useStudioStore } from "../../features/projects/store";
-import { getModuleTreeSnapshot } from "../../features/work-items/queries";
-import { getStatesSnapshot } from "../../shared/query/stateCatalog";
-import { queryClient } from "../../shared/query/queryClient";
-import { queryKeys } from "../../shared/query/keys";
+import { useStudioStore } from "../../features/projects";
+import { getModuleTreeSnapshot, getWorkItemSnapshot } from "../../features/work-items";
+import { getStatesSnapshot } from "../../features/projects";
 import type { Module, ModuleTree, Project, State, WorkItem } from "../../shared/api/types";
 import { useClientStore } from "../../state/clientStore";
 import type {
+  Row,
   TreeRow,
   WorkItemRow,
 } from "../shell/ticket-workspace/tasks/TasksPane";
@@ -18,6 +17,11 @@ import {
   planningRowId,
 } from "../shell/ticket-workspace/tasks/TasksPane";
 import { focusIdeaEntry } from "../shell/ticket-workspace/tasks/storiesFocus";
+import {
+  currentPlanningRowId,
+  selectPlanningRowId,
+} from "../shell/ticket-workspace/tasks/internal/instantRunTicketNavigation";
+import { recordSelectionProfilePoint } from "../../shared/utilities/selectionProfile";
 
 type Direction = 1 | -1;
 
@@ -37,6 +41,7 @@ export interface NavigationTasks {
   selectedProjectId: string | null;
   selectedModuleId: string | null;
   selectedTaskId: string | null;
+  selectedPlanningRowId: string | null;
   selectProject: (id: string) => Promise<void>;
   selectModule: (id: string) => Promise<void>;
 }
@@ -50,7 +55,7 @@ export function createNavigationContext(
   const tree = getModuleTreeSnapshot(project.selectedProjectId, ui.selectedModuleId);
   const itemsById = Object.fromEntries(
     tree.order.flatMap((id) => {
-      const item = queryClient.getQueryData<WorkItem>(queryKeys.workItems.byId(id));
+      const item = getWorkItemSnapshot(id);
       return item ? [[id, item] as const] : [];
     }),
   );
@@ -66,6 +71,7 @@ export function createNavigationContext(
       selectedProjectId: project.selectedProjectId,
       selectedModuleId: ui.selectedModuleId,
       selectedTaskId: ui.selectedTaskId,
+      selectedPlanningRowId: currentPlanningRowId(),
       selectProject: project.selectProject,
       selectModule: ui.selectModule,
     },
@@ -91,10 +97,7 @@ export function selectedTaskIndex(
 export function selectTaskAt(rows: TreeRow[], index: number): void {
   const row = rows[index];
   if (!row || !isPlanningRow(row)) return;
-  useClientStore.setState({
-    selectedTaskId: planningRowId(row),
-    workspaceSelection: { kind: "task" },
-  });
+  selectPlanningRowId(planningRowId(row), { focusTerminal: false });
 }
 
 export function moveTaskSelection(
@@ -102,7 +105,11 @@ export function moveTaskSelection(
   direction: Direction,
 ): boolean {
   consume(ctx.event);
-  const selected = selectedTaskIndex(ctx.taskRows, ctx.tasks.selectedTaskId);
+  recordSelectionProfilePoint("keydown:tasks.move");
+  const selected = selectedTaskIndex(
+    ctx.taskRows,
+    ctx.tasks.selectedPlanningRowId,
+  );
   const firstTask = taskIndexFrom(ctx.taskRows, -1, 1);
   if (direction === -1 && selected === firstTask) {
     focusIdeaEntry();
@@ -120,9 +127,18 @@ export function moveTaskSelection(
 }
 
 export function currentTaskRow(ctx: NavigationContext): WorkItemRow | null {
-  const selected = selectedTaskIndex(ctx.taskRows, ctx.tasks.selectedTaskId);
-  const row = ctx.taskRows[selected];
+  const row = currentPlanningRow(ctx);
   return row?.kind === "work-item" ? row : null;
+}
+
+/** The selected Stories row of any kind, including Conversations rows. */
+export function currentPlanningRow(ctx: NavigationContext): Row | null {
+  const selected = selectedTaskIndex(
+    ctx.taskRows,
+    ctx.tasks.selectedPlanningRowId,
+  );
+  const row = ctx.taskRows[selected];
+  return row && isPlanningRow(row) ? row : null;
 }
 
 function taskIndexFrom(

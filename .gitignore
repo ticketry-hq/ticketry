@@ -16,7 +16,9 @@ dist/
 
 # Node / Studio
 node_modules/
+.pnpm-store/
 studio/dist/
+studio/dist-performance/
 studio/playwright-report/
 studio/test-results/
 docs/eventcatalog/.astro/
@@ -39,7 +41,8 @@ studio/src-tauri/binaries/
 
 # Editor / OS
 .DS_Store
-*.swp
-*.swo
-*~
-.claude/settings.local.json
+
+.superdesign/tmp/
+
+# Local GitHub CLI state
+/.local/state/gh/

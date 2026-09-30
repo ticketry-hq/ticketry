@@ -4,11 +4,8 @@ import {
   useModuleReorderDrag,
   useModulesQuery,
 } from "../../../../features/projects";
-import {
-  useModulePresentationsQuery,
-  useRestoreAndSelectModule,
-} from "../../../../features/module-tabs";
-import { useStudioStore } from "../../../../features/projects/store";
+import { useRestoreAndSelectModule } from "../../../../features/module-tabs";
+import { useStudioStore } from "../../../../features/projects";
 import {
   resolveCursorId,
   useClientStore,
@@ -20,16 +17,18 @@ export function ModulesPane() {
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const modulesQuery = useModulesQuery(selectedProjectId);
   const modules = modulesQuery.data ?? [];
-  const presentationsQuery = useModulePresentationsQuery();
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
   const restoreAndSelectModule = useRestoreAndSelectModule();
-  const loading = modulesQuery.isPending || presentationsQuery.isPending;
+  const loading = modulesQuery.isPending;
 
   const cursorId = useClientStore((s) => s.modulesCursorId);
   const setCursor = useClientStore((s) => s.setModulesCursor);
   const pushModal = useModalStore((s) => s.pushModal);
 
   const dragDrop = useModuleReorderDrag(selectedProjectId, "vertical");
+  const selectedModuleIsPresent =
+    selectedModuleId !== null &&
+    modules.some((module) => module.id === selectedModuleId);
 
   const handleSelect = useCallback(
     (moduleId: string) => {
@@ -53,13 +52,12 @@ export function ModulesPane() {
     </button>
   );
 
-  // Sync cursor when selected module or modules list changes
+  // Follow a newly selected module, or one that has just arrived in the list.
+  // The query maps cache data to a fresh array on every render, so depending on
+  // `modules` itself would undo keyboard cursor movement after each keydown.
   useEffect(() => {
-    if (selectedModuleId) {
-      const i = modules.findIndex((m) => m.id === selectedModuleId);
-      if (i >= 0) setCursor(selectedModuleId);
-    }
-  }, [selectedModuleId, modules, setCursor]);
+    if (selectedModuleId && selectedModuleIsPresent) setCursor(selectedModuleId);
+  }, [selectedModuleId, selectedModuleIsPresent, setCursor]);
 
   const visibleCursorId = resolveCursorId(
     cursorId,

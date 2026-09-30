@@ -1,4 +1,4 @@
-import { useState, type MutableRefObject } from "react";
+import { useRef, useState, type MutableRefObject } from "react";
 import type {
   DesignDoc,
   ResumableTerminalSession,
@@ -9,39 +9,34 @@ import {
   type ForegroundOwner,
   type SessionMeta,
 } from "../../../../../features/agents/terminal";
-import {
-  ApiError as AgentApiError,
-  resumeTerminal,
-} from "../../../../../features/agents/api/agentApi";
+import { resumeTerminal } from "../../../../../features/agents/api/agentApi";
+import { FoundationGraphQlError } from "../../../../../shared/apollo/errorLink";
 import {
   toast,
   useClientStore,
   useClientStore as useTicketWorkspaceStore,
 } from "../../../../../state/clientStore";
-import { queryClient } from "../../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../../shared/query/keys";
 import { closeTerminalTab } from "./closeTerminalTab";
-import { rememberStudioWorkspaceTarget } from "./studioWorkspaceTarget";
+import { rememberStudioWorkspaceTarget } from "../../../../../features/workspace-state/studioWorkspaceTarget";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
-import type {
-  TicketLaunchContext,
-  WorkspaceLauncherContext,
-} from "./WorkspaceLauncher";
-
-function resumeErrorCode(error: unknown): string {
-  if (!(error instanceof AgentApiError)) return "";
-  if (!error.body || typeof error.body !== "object") return "";
-  const body = error.body as Record<string, unknown>;
-  if (typeof body.code === "string") return body.code;
-  if (typeof body.detail === "string") return body.detail;
-  if (body.detail && typeof body.detail === "object" && "error" in body.detail) {
-    return String((body.detail as { error?: unknown }).error);
-  }
-  return "error" in body ? String(body.error) : "";
-}
+import type { WorkspaceLauncherContext } from "./WorkspaceLauncher";
+import {
+  openModuleChangesWorkspace,
+  openTaskChangesWorkspace,
+} from "../../../../../features/agents/worktrees";
 
 function resumeErrorMessage(error: unknown): string {
-  const code = resumeErrorCode(error);
+  const body = error instanceof FoundationGraphQlError ? error.extensions : null;
+  const detail =
+    body && typeof body === "object"
+      ? (body as { detail?: unknown }).detail
+      : null;
+  const code =
+    detail && typeof detail === "object" && "error" in detail
+      ? String((detail as { error?: unknown }).error)
+      : body && typeof body === "object" && "error" in body
+        ? String((body as { error?: unknown }).error)
+        : "";
   if (code === "cwd_missing") return "Working directory no longer exists";
   if (code === "run_still_active") {
     return "Session is still running - attach instead";
@@ -95,7 +90,10 @@ export function useWorkspaceTabActions({
   );
   const focusSession = useTerminalStore((state) => state.focusSession);
   const openSession = useTerminalStore((state) => state.openSession);
-  const [resumingRunId, setResumingRunId] = useState<string | null>(null);
+  const [resumingRunIds, setResumingRunIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const resumingRunIdsRef = useRef(new Set<string>());
 
   function selectWorkspaceTab(tab: TaskWorkspaceTabIdentity): void {
     if (!bucket) return;
@@ -105,6 +103,16 @@ export function useWorkspaceTabActions({
       setActive(bucket, "details");
       if (owner === "studio") {
         rememberStudioWorkspaceTarget(bucket, { kind: "details" });
+      }
+    } else if (tab.kind === "changes") {
+      if (owner === "studio" && moduleId) {
+        if (scratch) openModuleChangesWorkspace(moduleId);
+        else openTaskChangesWorkspace(moduleId, bucket);
+        return;
+      }
+      setActive(bucket, "changes");
+      if (owner === "studio") {
+        rememberStudioWorkspaceTarget(bucket, { kind: "changes" });
       }
     } else if (tab.kind === "doc") {
       setActiveDoc(bucket, tab.id);
@@ -133,6 +141,13 @@ export function useWorkspaceTabActions({
   ): void {
     setEditViewZone("active-tab-body");
     if (activate) selectWorkspaceTab(tab);
+  }
+
+  function activateWorkspaceTerminal(id: string): void {
+    const tab = { kind: "terminal", id } as const;
+    if (isEditView) setEditViewZone("active-tab-body");
+    selectWorkspaceTab(tab);
+    if (isEditView) engageTab(tab);
   }
 
   function claimPointerZone(
@@ -186,30 +201,32 @@ export function useWorkspaceTabActions({
   async function resumeWorkspaceTerminal(
     resumableSession: ResumableTerminalSession,
   ): Promise<void> {
-    if (!bucket || !projectId || resumingRunId) return;
-    setResumingRunId(resumableSession.agent_run_id);
+    const sourceRunId = resumableSession.agent_run_id;
+    if (!bucket || !projectId || resumingRunIdsRef.current.has(sourceRunId)) {
+      return;
+    }
+    resumingRunIdsRef.current.add(sourceRunId);
+    setResumingRunIds(new Set(resumingRunIdsRef.current));
     try {
-      const resumed = await resumeTerminal(resumableSession.agent_run_id);
-      const queryKey = queryKeys.terminalSessions.resumable(
-        scratch ? null : bucket,
-        scratch ? projectId : null,
-        scratch ? moduleId : null,
-      );
-      queryClient.setQueryData<ResumableTerminalSession[]>(queryKey, (current) =>
-        (current ?? []).filter(
-          (candidate) =>
-            candidate.agent_run_id !== resumableSession.agent_run_id,
-        ),
-      );
-      openSession({
-        taskId: scratch ? null : bucket,
+      const resumed = await resumeTerminal({
+        source: resumableSession,
         projectId,
-        moduleId: moduleId ?? undefined,
-        agent: resumableSession.agent,
-        agentRunId: resumed.agent_run_id,
-        isPlanning: resumableSession.scope === "plan",
-        isInstant: resumableSession.scope === "instant",
+        moduleId: moduleId ?? "",
+        taskId: scratch ? null : bucket,
       });
+      const restoredSessionId = useTerminalStore.getState()
+        .sessionByRun[resumed.agent_run_id];
+      const successorSessionId = restoredSessionId ??
+        openSession({
+          taskId: scratch ? null : bucket,
+          projectId,
+          moduleId: moduleId ?? undefined,
+          agent: resumableSession.agent,
+          agentRunId: resumed.agent_run_id,
+          isPlanning: resumableSession.scope === "plan",
+          isInstant: resumableSession.scope === "instant",
+        });
+      focusSession(successorSessionId);
       setActive(bucket, "terminal");
       if (owner === "studio") {
         rememberStudioWorkspaceTarget(bucket, {
@@ -217,43 +234,36 @@ export function useWorkspaceTabActions({
           agentRunId: resumed.agent_run_id,
         });
       }
-      void queryClient.invalidateQueries({ queryKey });
-      void queryClient.invalidateQueries({
-        queryKey: scratch
-          ? queryKeys.terminalSessions.scratch(projectId, moduleId)
-          : queryKeys.terminalSessions.persisted(bucket),
-      });
     } catch (error) {
       toast.error(resumeErrorMessage(error));
     } finally {
-      setResumingRunId(null);
+      resumingRunIdsRef.current.delete(sourceRunId);
+      setResumingRunIds(new Set(resumingRunIdsRef.current));
     }
   }
 
-  function launchTaskAgent(
-    agent: SessionMeta["agent"],
-    context: TicketLaunchContext,
-  ): void {
+  /**
+   * A task run launched from `＋ Agent` must survive leaving and re-entering
+   * the ticket (CODING-1436). The agent picker opens the session and activates
+   * the terminal surface itself; the run has no durable id yet, so the only
+   * thing left for the workspace is to arm the pending-terminal handoff that
+   * persists `{ kind: "terminal", agentRunId }` once the id arrives.
+   */
+  function rememberLaunchedTaskAgent(): void {
     if (!bucket || !launchContext || launchContext.kind !== "task") return;
-    openSession({
-      taskId: context.taskId,
-      projectId: context.projectId,
-      moduleId: context.moduleId ?? undefined,
-      agent,
-    });
-    setActive(bucket, "terminal");
     if (owner === "studio") rememberPendingTerminalRef.current = true;
   }
 
   return {
     selectWorkspaceTab,
+    activateWorkspaceTerminal,
     diveWorkspaceTab,
     claimPointerZone,
     closeWorkspaceDocument,
     reopenWorkspaceDocument,
     closeWorkspaceTerminal,
     resumeWorkspaceTerminal,
-    launchTaskAgent,
-    resumingRunId,
+    rememberLaunchedTaskAgent,
+    resumingRunIds,
   };
 }

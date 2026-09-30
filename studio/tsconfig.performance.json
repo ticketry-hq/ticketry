@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // The profiling suite shares plain-ESM modules with the Node orchestration
+    // scripts (see performance/report/*.mjs). `allowJs` lets TypeScript infer
+    // their types instead of forcing a duplicated declaration file.
+    "allowJs": true,
+    "noEmit": true
+  },
+  "include": [
+    "performance",
+    "playwright.performance.config.ts",
+    "scripts/performance"
+  ]
+}

@@ -1,19 +1,28 @@
 import { useCallback, useMemo } from "react";
 import { useClientStore } from "../../../../state/clientStore";
-import { useStudioStore } from "../../../../features/projects/store";
-import { useCachedStates } from "../../../../shared/query/stateCatalog";
+import { useStudioStore } from "../../../../features/projects";
+import { useCachedStates } from "../../../../features/projects";
 import {
+  isPlanningRow,
+  LOADING_PLACEHOLDER as PLACEHOLDER,
+  STATE_HEADER as HEADER,
+  type PlanningRow as Row,
+  type PlanningTreeRow as TreeRow,
+  StoriesTreeProvider,
+  useStoriesTree,
   useReorderWorkItem,
   useSetWorkItemState,
+  recordStoryMove,
 } from "../../../../features/work-items";
 import { TEMP_TASK_ID } from "../../../../features/agents/types";
 import { PaneShell } from "../../PaneShell";
 import { TaskRow } from "./components/TaskRow";
 import { StateHeaderRow } from "./components/StateHeaderRow";
+import { ConversationsHeaderRow } from "./components/ConversationsHeaderRow";
 import { LoadingPlaceholderRow } from "./components/LoadingPlaceholderRow";
 import { IdeaEntry } from "./components/IdeaEntry";
 import { StoriesSearchInput } from "./components/StoriesSearchInput";
-import { useStoriesTree } from "./useStoriesTree";
+import { StoriesSearchEmptyState } from "./components/StoriesSearchEmptyState";
 import {
   useAxisDragAndDrop,
   type DragPayloadCodec,
@@ -22,41 +31,33 @@ import {
   resolveTicketReorderNeighbors,
   type VisibleRootBlock,
 } from "./internal/ticketReorder";
-import { type WorkItemRow } from "../../../../features/studio/lib/taskTree";
-import { queryClient } from "../../../../shared/query/queryClient";
-import { queryKeys } from "../../../../shared/query/keys";
-import type { WorkItem } from "../../../../shared/api/types";
+import {
+  instantRunPlanningRowId,
+  selectPlanningRowId,
+  useSelectedPlanningRowId,
+} from "./internal/instantRunTicketNavigation";
+import { startInstantChangeFlow } from "../../../../features/studio/modals/PlanFeature";
+import {
+  ConversationDesignPrototype,
+  hasConversationDesignPrototype,
+} from "../../../../features/conversations/prototype/ConversationDesignPrototype";
 
-export type { WorkItemRow } from "../../../../features/studio/lib/taskTree";
-
-export interface ScratchRow {
-  kind: "scratch";
-  moduleId: string;
-}
-
-export type Row = WorkItemRow | ScratchRow;
-
-export const PLACEHOLDER = Symbol("loading-placeholder");
-export const HEADER = Symbol("state-header");
-
-export type TreeRow =
-  | Row
-  | { kind: typeof PLACEHOLDER; key: string; depth: number }
-  | {
-      kind: typeof HEADER;
-      key: string;
-      stateId?: string | null;
-      stateName: string;
-      stateColor: string;
-      count: number;
-    };
-
-export function isPlanningRow(row: TreeRow): row is Row {
-  return row.kind === "work-item" || row.kind === "scratch";
-}
+export {
+  isPlanningRow,
+  type PlanningRow as Row,
+  type PlanningTreeRow as TreeRow,
+  type InstantRunRow,
+  type ScratchRow,
+  type WorkItemRow,
+} from "../../../../features/work-items";
+import { recordSelectionProfilePoint } from "../../../../shared/utilities/selectionProfile";
+import { selectedRunSession } from "../../../../features/agents/actions/agentRunActions";
+import { useTerminalStore } from "../../../../features/agents/terminal/appNavigation";
 
 export function planningRowId(row: Row): string {
-  return row.kind === "work-item" ? row.id : TEMP_TASK_ID;
+  if (row.kind === "work-item") return row.id;
+  if (row.kind === "instant-run") return instantRunPlanningRowId(row.runId);
+  return TEMP_TASK_ID;
 }
 
 interface TicketDragPayload {
@@ -91,7 +92,7 @@ function groupRootBlocks(rows: TreeRow[]): RenderBlock[] {
   for (const row of rows) {
     if (!isPlanningRow(row)) {
       grouped.push({ kind: "row", row });
-    } else if (row.kind === "scratch" || row.depth === 0) {
+    } else if (row.kind !== "work-item" || row.depth === 0) {
       grouped.push({ kind: "block", rows: [row] });
     } else {
       const previous = grouped[grouped.length - 1];
@@ -102,8 +103,13 @@ function groupRootBlocks(rows: TreeRow[]): RenderBlock[] {
 }
 
 export function TasksPane() {
+  return <StoriesTreeProvider><TasksPaneContent /></StoriesTreeProvider>;
+}
+
+function TasksPaneContent() {
+  recordSelectionProfilePoint("tasks-pane-render");
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
-  const selectedTaskId = useClientStore((s) => s.selectedTaskId);
+  const selectedRowId = useSelectedPlanningRowId();
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
   const states = useCachedStates(selectedProjectId);
   const reorder = useReorderWorkItem({
@@ -121,10 +127,23 @@ export function TasksPane() {
   const {
     rows,
     tree,
+    itemsById,
     sectionIdsByState,
     loadingTasks,
     isSearchActive,
   } = useStoriesTree();
+  const hasVisibleStory = rows.some(
+    (row) => isPlanningRow(row) && row.kind === "work-item",
+  );
+  const noStoryMatches =
+    isSearchActive &&
+    !loadingTasks &&
+    tree.rootIds.length > 0 &&
+    !hasVisibleStory;
+  const selectedStoryOutsideFilter =
+    noStoryMatches &&
+    selectedRowId !== null &&
+    itemsById[selectedRowId] !== undefined;
   const renderBlocks = useMemo(() => groupRootBlocks(rows), [rows]);
   const visibleBlocks = useMemo<VisibleRootBlock[]>(
     () =>
@@ -144,27 +163,43 @@ export function TasksPane() {
       payload: TicketDragPayload,
       resolved: { targetId: string; intent: "near" | "far" },
     ) => {
-      const source = queryClient.getQueryData<WorkItem>(
-        queryKeys.workItems.byId(payload.taskId),
-      );
-      if (!source || !selectedProjectId || !selectedModuleId) return;
+      const source = itemsById[payload.taskId];
+      if (!source || !selectedProjectId || !selectedModuleId) {
+        recordStoryMove("drop-rejected", {
+          storyId: payload.taskId,
+          reason: !source
+            ? "source-not-cached"
+            : !selectedProjectId
+              ? "project-not-selected"
+              : "module-not-selected",
+          selectedProjectId,
+          selectedModuleId,
+        }, "warn");
+        return;
+      }
       const headerStateId = resolved.targetId.startsWith("state:")
         ? resolved.targetId.slice("state:".length)
         : null;
       const target = headerStateId
         ? null
-        : queryClient.getQueryData<WorkItem>(
-            queryKeys.workItems.byId(resolved.targetId),
-          );
+        : itemsById[resolved.targetId];
       const destinationState = states.find(
         (state) => state.id === (headerStateId ?? target?.state),
       );
-      if (!destinationState?.id) return;
+      if (!destinationState?.id) {
+        recordStoryMove("drop-rejected", {
+          storyId: payload.taskId,
+          reason: "destination-state-not-found",
+          sourceStateId: source.state,
+          targetId: resolved.targetId,
+          headerStateId,
+          targetStateId: target?.state ?? null,
+        }, "warn");
+        return;
+      }
 
       const sectionBlocks = visibleBlocks.filter((block) =>
-        queryClient.getQueryData<WorkItem>(
-          queryKeys.workItems.byId(block.rootId),
-        )?.state === destinationState.id,
+        itemsById[block.rootId]?.state === destinationState.id,
       );
       // Collapsed headers have no visible blocks. Rebuild their root-only
       // section from the ranked task list so a head drop still uses the real
@@ -180,7 +215,28 @@ export function TasksPane() {
         headerStateId ? null : resolved.targetId,
         resolved.intent,
       );
-      if (!neighbors) return;
+      if (!neighbors) {
+        recordStoryMove("drop-rejected", {
+          storyId: payload.taskId,
+          reason: "reorder-neighbors-not-resolved",
+          sourceStateId: source.state,
+          destinationStateId: destinationState.id,
+          targetId: resolved.targetId,
+          intent: resolved.intent,
+          destinationRootIds: destinationBlocks.map((block) => block.rootId),
+        }, "warn");
+        return;
+      }
+      recordStoryMove("drop-resolved", {
+        storyId: payload.taskId,
+        sourceStateId: source.state,
+        destinationStateId: destinationState.id,
+        targetId: resolved.targetId,
+        intent: resolved.intent,
+        beforeId: neighbors.beforeId,
+        afterId: neighbors.afterId,
+        requiresTransition: source.state !== destinationState.id,
+      });
       if (source.state === destinationState.id) {
         reorder.mutate({
           id: payload.taskId,
@@ -203,6 +259,7 @@ export function TasksPane() {
     [
       reorder,
       setState,
+      itemsById,
       selectedModuleId,
       selectedProjectId,
       states,
@@ -221,7 +278,11 @@ export function TasksPane() {
   // Stable, id-taking handlers so memoized rows don't re-render when the
   // pane does (e.g. on selection change).
   const handleSelect = useCallback((taskId: string) => {
-    useClientStore.getState().selectTask(taskId);
+    if (taskId === TEMP_TASK_ID) {
+      startInstantChangeFlow();
+      return;
+    }
+    selectPlanningRowId(taskId);
   }, []);
   const handleToggleExpand = useCallback(
     (taskId: string) => {
@@ -245,8 +306,33 @@ export function TasksPane() {
     },
     [selectedProjectId, toggleStateConfiguration],
   );
+  const handleToggleConversationConfiguration = useCallback(() => {
+    if (selectedProjectId && selectedModuleId) {
+      const closing = useClientStore.getState().workspaceSelection.kind ===
+        "conversation-configuration";
+      useClientStore.getState().toggleConversationConfiguration(
+        selectedProjectId,
+        selectedModuleId,
+      );
+      if (closing) {
+        requestAnimationFrame(() => {
+          const session = selectedRunSession();
+          if (session) useTerminalStore.getState().focusSession(session.sessionId);
+        });
+      }
+    }
+  }, [selectedModuleId, selectedProjectId]);
 
   function renderNonTaskRow(r: Exclude<TreeRow, Row>) {
+    if ("kind" in r && r.kind === HEADER && r.key === "header-conversations") {
+      return (
+        <ConversationsHeaderRow
+          key={r.key}
+          count={r.count}
+          onConfigure={handleToggleConversationConfiguration}
+        />
+      );
+    }
     if ("kind" in r && r.kind === HEADER) {
       const targetId = r.stateId ? stateDropTargetId(r.stateId) : null;
       const isTarget =
@@ -294,9 +380,8 @@ export function TasksPane() {
     const root = block.rows[0];
     const rootId = planningRowId(root);
     // Expansion is persisted on every real toggle. During a drag, hide only
-    // the active root's descendants in this view. They stay hidden across a
-    // transient document leave and return when drop, source drag end, Escape,
-    // disablement, or teardown clears the controller payload.
+    // the active root's descendants in this view so every drag termination
+    // path restores them when the controller clears its payload.
     const renderedRows =
       dragDrop.payload?.taskId === rootId
         ? block.rows.slice(0, 1)
@@ -340,7 +425,7 @@ export function TasksPane() {
             <TaskRow
               key={planningRowId(row)}
               row={row}
-              isSelected={planningRowId(row) === selectedTaskId}
+              isSelected={planningRowId(row) === selectedRowId}
               onClick={handleSelect}
               onToggleExpand={handleToggleExpand}
               dragSourceProps={
@@ -359,9 +444,16 @@ export function TasksPane() {
     <PaneShell pane="tasks">
       <StoriesSearchInput />
       <IdeaEntry />
-      {loadingTasks && tree.order.length === 0 ? (
+      {noStoryMatches ? (
+        <StoriesSearchEmptyState
+          selectedStoryOutsideFilter={selectedStoryOutsideFilter}
+        />
+      ) : null}
+      {hasConversationDesignPrototype() ? (
+        <ConversationDesignPrototype />
+      ) : loadingTasks && tree.order.length === 0 ? (
         <div className="text-text-muted">…</div>
-      ) : !rows.some(isPlanningRow) ? (
+      ) : rows.length === 0 ? (
         <div className="text-text-muted">No stories</div>
       ) : (
         <ul role="tree" tabIndex={-1}>

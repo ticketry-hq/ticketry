@@ -7,7 +7,12 @@ export const KEYMAP_CONTEXT_PRECEDENCE = [
   "global",
 ] as const;
 
-export type KeymapContext = (typeof KEYMAP_CONTEXT_PRECEDENCE)[number];
+export const KEYMAP_CONTEXTS = [
+  ...KEYMAP_CONTEXT_PRECEDENCE,
+  "changes",
+] as const;
+
+export type KeymapContext = (typeof KEYMAP_CONTEXTS)[number];
 
 export interface KeyChord {
   key: string;
@@ -109,11 +114,55 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
     configurable: false,
   },
   {
-    context: "capture",
-    actionId: "edit-view.choose-provider",
-    chord: chord("Enter", { shift: true }),
+    context: "changes",
+    actionId: "changes.checkout.previous",
+    chord: chord("ArrowUp"),
     configurable: false,
   },
+  {
+    context: "changes",
+    actionId: "changes.checkout.next",
+    chord: chord("ArrowDown"),
+    configurable: false,
+  },
+  {
+    context: "changes",
+    actionId: "changes.checkout.first",
+    chord: chord("Home"),
+    configurable: false,
+  },
+  {
+    context: "changes",
+    actionId: "changes.checkout.last",
+    chord: chord("End"),
+    configurable: false,
+  },
+  {
+    context: "changes",
+    actionId: "changes.checkout.select",
+    chord: chord("Enter"),
+    fixedAliases: [chord(" ")],
+    configurable: false,
+  },
+  {
+    context: "changes",
+    actionId: "changes.checkout.cancel",
+    chord: chord("Escape"),
+    configurable: false,
+  },
+  { context: "changes", actionId: "changes.file.previous", chord: chord("ArrowUp"), configurable: false },
+  { context: "changes", actionId: "changes.file.next", chord: chord("ArrowDown"), configurable: false },
+  { context: "changes", actionId: "changes.file.first", chord: chord("Home"), configurable: false },
+  { context: "changes", actionId: "changes.file.last", chord: chord("End"), configurable: false },
+  {
+    context: "changes",
+    actionId: "changes.file.activate",
+    chord: chord("Enter"),
+    fixedAliases: [chord(" ")],
+    configurable: false,
+  },
+  { context: "changes", actionId: "changes.file.expand", chord: chord("ArrowRight"), configurable: false },
+  { context: "changes", actionId: "changes.file.collapse", chord: chord("ArrowLeft"), configurable: false },
   { context: "capture", actionId: "cycle-terminal-forward", chord: chord("\\", { meta: true }) },
   {
     context: "capture",
@@ -136,7 +185,13 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
     return {
       context: "capture",
       actionId: `modules.select-position-${position}`,
-      chord: chord(position === 10 ? "0" : String(position), { meta: true }),
+      chord: chord(position === 10 ? "0" : String(position), {
+        meta: true,
+        shift: position === 10,
+      }),
+      defaultAliases: position === 10
+        ? [chord(")", { meta: true, shift: true })]
+        : undefined,
       configurable: false,
       platforms: ["desktop"],
     };
@@ -153,24 +208,12 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
     defaultAliases: [chord("Enter", { meta: true })],
   },
 
-  paneBinding("projects.next", "ArrowDown"),
-  paneBinding("projects.previous", "ArrowUp"),
-  paneBinding("projects.activate", "Enter"),
   paneBinding("modules.next", "ArrowDown"),
   paneBinding("modules.previous", "ArrowUp"),
   paneBinding("modules.activate", "Enter"),
   paneBinding("tasks.next", "ArrowDown"),
   paneBinding("tasks.previous", "ArrowUp"),
-  {
-    ...paneBinding("tasks.activate", "Enter"),
-    allowExtraModifiers: false,
-  },
-  {
-    context: "focused-pane",
-    actionId: "tasks.choose-provider",
-    chord: chord("Enter", { shift: true }),
-    configurable: false,
-  },
+  paneBinding("tasks.activate", "Enter"),
   {
     ...paneBinding("tasks.expand", "l"),
     fixedAliases: [chord("ArrowRight")],
@@ -188,11 +231,24 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
   globalBinding("open-agent", "o"),
   {
     context: "global",
-    actionId: "open-agent-command",
+    actionId: "normal-run-command",
     chord: chord("Enter", { meta: true }),
   },
   globalBinding("plan", "n"),
-  globalBinding("instant-change", "i"),
+  {
+    context: "global",
+    actionId: "instant-change-with-prompt",
+    chord: chord("I", { meta: true, shift: true }),
+    // WebKit reports the shifted letter; other engines keep it lowercase.
+    fixedAliases: [chord("i", { meta: true, shift: true })],
+  },
+  {
+    context: "global",
+    actionId: "instant-change",
+    chord: chord("i", { meta: true }),
+    // The bare key started a conversation before Cmd+I became the chord.
+    defaultAliases: [chord("i")],
+  },
   globalBinding("run-now", "r"),
   globalBinding("status", "s"),
   // Settings must also open from an engaged native terminal, where the WebView
@@ -201,7 +257,12 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
   // that chord resolves to this same action on the WebView route.
   globalBinding("settings", "e"),
   globalBinding("set-folder", "f"),
-  globalBinding("close-tab", "q"),
+  // `Cmd+W` is the platform's close-tab chord; the desktop menu no longer
+  // binds it to "Close Window", so it reaches this action (CODING-1547).
+  {
+    ...globalBinding("close-tab", "q"),
+    fixedAliases: [chord("w", { meta: true })],
+  },
   {
     context: "global",
     actionId: "open-with-prompt-command",

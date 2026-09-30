@@ -1,5 +1,4 @@
-import type { DesignDoc } from "../../../../../features/agents/types";
-import DocViewer from "./DocViewer";
+import { DocViewer, type DesignDoc } from "../../../../../features/documents";
 
 /**
  * Generated-document tab. Markdown flips in place between sanitized reading

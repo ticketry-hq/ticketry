@@ -16,19 +16,40 @@ import {
   routeSharedNavigation,
 } from "./sharedNavigation";
 import { routeTerminalPanelToggle } from "../../features/terminal-panel";
+import {
+  leaveChangesWorkspace,
+  useChangesWorkspace,
+} from "../../features/agents/worktrees";
 import { subscribeNativeTerminalChords } from "./nativeTerminalChords";
 import type { TreeRow } from "../shell/ticket-workspace/tasks/TasksPane";
 import { studioKeymapRegistry } from "./keymapRegistry";
 import { useRestoreAndSelectModule } from "../../features/module-tabs";
+import { routeTaskWorkspaceTabAction } from "../shell/ticket-workspace/selected-ticket/appNavigation";
 
 const EMPTY_TASK_ROWS: TreeRow[] = [];
 
-function hasOpenModal(
-  ui: ReturnType<typeof useClientStore.getState>,
-): boolean {
+function hasOpenModal(): boolean {
+  return useModalStore.getState().modalStack.length > 0;
+}
+
+function isLaunchMenuTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement &&
+    target.closest('[role="menu"][aria-label="Launch agent"]') !== null;
+}
+
+function hasModifier(event: KeyboardEvent): boolean {
+  return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
+}
+
+function isChangesEntryActivation(event: KeyboardEvent): boolean {
   return (
-    ui.modalStack.length > 0 ||
-    useModalStore.getState().modalStack.length > 0
+    (event.key === "Enter" || event.key === " ") &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    event.target instanceof HTMLElement &&
+    event.target.closest("[data-changes-keyboard-entry]") !== null
   );
 }
 
@@ -50,13 +71,41 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
     function onCaptureKeyDown(event: KeyboardEvent): void {
       const ui = useClientStore.getState();
       const sidebarVisible = ui.sidebarVisible;
-      if (hasOpenModal(ui)) return;
-
       const actionId = studioKeymapRegistry.resolve("capture", event);
+      if (actionId === "modules.select-position-10") {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      if (hasOpenModal()) return;
+      if (isLaunchMenuTarget(event.target)) return;
+      if (isChangesEntryActivation(event)) return;
+
       // Ahead of body engagement: the panel toggle must reverse itself from any
       // focus position, including an agent terminal in typing mode (#667).
       if (routeTerminalPanelToggle(event, actionId)) return;
       if (routeModulePositionNavigation(event, actionId)) return;
+      if (
+        useChangesWorkspace.getState().active &&
+        (actionId === "cycle-terminal-forward" ||
+          actionId === "cycle-terminal-backward")
+      ) {
+        routeFullSidebarViewCaptureNavigation(
+          event,
+          taskRowsRef.current,
+          actionId,
+        );
+        return;
+      }
+      // Changes owns its local keys before either planning layout sees them.
+      // The focused control resolves its exact action through the same registry.
+      if (useChangesWorkspace.getState().active) return;
+      if (
+        actionId === "workspace-tab-next" ||
+        actionId === "workspace-tab-previous"
+      ) {
+        routeTaskWorkspaceTabAction(event, actionId);
+        return;
+      }
       if (!sidebarVisible && routeThreeZoneBodyEngagement(event)) return;
       if (sidebarVisible) {
         routeFullSidebarViewCaptureNavigation(
@@ -65,28 +114,40 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
           actionId,
         );
       } else {
-        const routed = routeThreeZoneNavigation(
-          event,
-          taskRowsRef.current,
-          actionId,
-        );
-        if (
-          !routed &&
-          actionId === "edit-view.choose-provider" &&
-          !isTypingTarget(event.target)
-        ) {
-          routeSharedNavigation(
-            event,
-            taskRowsRef.current,
-            studioKeymapRegistry.resolve("global", event),
-          );
-        }
+        routeThreeZoneNavigation(event, taskRowsRef.current, actionId);
       }
     }
 
     function onKeyDown(event: KeyboardEvent): void {
       const ui = useClientStore.getState();
       const sidebarVisible = ui.sidebarVisible;
+      if (useChangesWorkspace.getState().active) {
+        if (
+          hasOpenModal() ||
+          isTypingTarget(event.target) ||
+          event.defaultPrevented
+        ) {
+          return;
+        }
+        // Every popup inside Changes (switcher, inspector, confirmations)
+        // stops Escape itself, so an Escape that reaches here has nothing
+        // left to close but the workspace.
+        if (event.key === "Escape" && !hasModifier(event)) {
+          event.preventDefault();
+          leaveChangesWorkspace();
+          requestAnimationFrame(() => {
+            document.querySelector<HTMLButtonElement>(
+              '[data-testid="footer-module-changes"]',
+            )?.focus();
+          });
+          return;
+        }
+        const globalAction = studioKeymapRegistry.resolve("global", event);
+        if (globalAction === "settings") {
+          routeSharedNavigation(event, taskRowsRef.current, globalAction);
+        }
+        return;
+      }
       if (!sidebarVisible && routeThreeZoneBodyEngagement(event)) return;
       const captureAction = studioKeymapRegistry.resolve("capture", event);
       if (
@@ -96,7 +157,7 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
         return;
       }
       if (
-        hasOpenModal(ui) ||
+        hasOpenModal() ||
         isTypingTarget(event.target) ||
         event.defaultPrevented
       ) {
@@ -108,7 +169,7 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
         event.metaKey &&
         !event.altKey &&
         !event.ctrlKey &&
-        (globalAction === "open-agent-command" ||
+        (globalAction === "normal-run-command" ||
           globalAction === "open-with-prompt-command")
       ) {
         routeSharedNavigation(event, taskRowsRef.current, globalAction);

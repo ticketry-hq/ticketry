@@ -1,10 +1,29 @@
 import type {
   RuntimeStartupConfiguration,
+  CrashCollectionOutcome,
+  DirectoryTrustStatus,
   ServiceHealth,
   ServiceHealthListener,
   StudioRuntime,
   UserNoticeListener,
 } from "./contract";
+import {
+  AppUpdateCheckError,
+  AppUpdateOperationError,
+  type AppUpdateOperationErrorCode,
+  type AppUpdateProgress,
+  type AppUpdateProgressListener,
+  type AppUpdateCheckErrorCode,
+  type AppUpdateCheckResult,
+} from "./contract";
+import {
+  executeGraphQlTransport,
+  type CreateGraphQlTransportProxy,
+} from "./graphQlTransport";
+import { createTauRPCProxy } from "../graphql-foundation/generated/taurpc";
+import { desktopDocumentUrl } from "./documentAssetUrl";
+import { desktopLaunchkeyMidi } from "./desktopLaunchkeyMidi";
+import type { LaunchkeyMidiRuntime } from "./launchkey";
 import {
   validateUserNotice,
   validateUserNotices,
@@ -13,17 +32,33 @@ import {
 type DesktopCommand =
   | "desktop_runtime_configuration"
   | "desktop_retry_services"
-  | "desktop_pick_folder";
+  | "desktop_pick_folder"
+  | "desktop_update_check"
+  | "desktop_update_download_and_install"
+  | "desktop_update_restart"
+  | "desktop_latest_crash_collection_outcome"
+  | "desktop_reveal_crash_report_folder"
+  | "desktop_prepare_directory_trust"
+  | "desktop_toggle_handy_transcription"
+  | "viewer_input";
 
-export type DesktopInvoke = <T>(command: DesktopCommand) => Promise<T>;
+export type DesktopInvoke = <T>(
+  command: DesktopCommand,
+  args?: Record<string, unknown>,
+) => Promise<T>;
 export type DesktopRuntimeListen = (
-  event: "desktop-service-health" | "desktop-user-notice",
+  event:
+    | "desktop-service-health"
+    | "desktop-user-notice"
+    | "desktop-update-progress",
   handler: (event: { payload: unknown }) => void,
 ) => Promise<() => void>;
 
 export interface DesktopRuntimeOptions {
   readonly invoke: DesktopInvoke;
   readonly listen?: DesktopRuntimeListen;
+  readonly createGraphQlProxy?: CreateGraphQlTransportProxy;
+  readonly launchkeyMidi?: LaunchkeyMidiRuntime;
 }
 
 function initializationError(field: string, expectation: string): never {
@@ -52,72 +87,154 @@ function validatePickedFolder(value: unknown): string | null {
   );
 }
 
-function endpoint(
-  source: Record<string, unknown>,
-  field: string,
-  protocols: readonly string[],
-  expectation: string,
-): string {
-  const value = source[field];
-  if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
-    return initializationError(field, expectation);
+function validateDirectoryTrustResult(value: unknown) {
+  const result = record(value);
+  const statuses = [
+    "already_trusted",
+    "approval_required",
+    "denied",
+    "unsupported",
+    "prepared",
+  ];
+  if (
+    !result ||
+    !statuses.includes(String(result.status)) ||
+    (result.approval !== null && typeof result.approval !== "string") ||
+    (result.directory !== undefined &&
+      (typeof result.directory !== "string" || !result.directory)) ||
+    (result.status === "approval_required" && !result.approval)
+  ) {
+    return initializationError(
+      "directory trust result",
+      "must contain a known status and any required approval token",
+    );
   }
-  try {
-    const url = new URL(value);
-    if (
-      protocols.includes(url.protocol) &&
-      (url.hostname === "127.0.0.1" || url.hostname === "localhost")
-    ) {
-      return value;
-    }
-  } catch {
-    // Fall through to the stable public initialization error.
+  return {
+    status: result.status as DirectoryTrustStatus,
+    approval: result.approval as string | null,
+    ...(typeof result.directory === "string"
+      ? { directory: result.directory }
+      : {}),
+  };
+}
+
+function validateAppUpdateCheckResult(value: unknown): AppUpdateCheckResult {
+  const result = record(value);
+  if (
+    result?.status === "current" &&
+    typeof result.installed_version === "string"
+  ) {
+    return Object.freeze({
+      installedVersion: result.installed_version,
+      status: "current",
+    });
   }
-  return initializationError(field, expectation);
+  if (
+    result?.status === "available" &&
+    typeof result.installed_version === "string" &&
+    typeof result.available_version === "string" &&
+    (typeof result.notes === "string" || result.notes === undefined)
+  ) {
+    return Object.freeze({
+      installedVersion: result.installed_version,
+      status: "available",
+      availableVersion: result.available_version,
+      ...(typeof result.notes === "string" ? { notes: result.notes } : {}),
+    });
+  }
+  return initializationError(
+    "update check result",
+    "must match the stable channel update feed contract",
+  );
+}
+
+function validateCrashCollectionOutcome(value: unknown): CrashCollectionOutcome {
+  const outcome = record(value);
+  if (outcome?.status === "none" || outcome?.status === "report_collected") {
+    return Object.freeze({ status: outcome.status });
+  }
+  return initializationError(
+    "Crash Report collection outcome",
+    "must be none or report_collected",
+  );
+}
+
+function appUpdateCheckError(value: unknown): AppUpdateCheckError {
+  const error = record(value);
+  const code = error?.code;
+  if (
+    error &&
+    (code === "update_feed_unreachable" ||
+      code === "update_manifest_invalid") &&
+    typeof error.message === "string" &&
+    error.message.length > 0 &&
+    error.retryable === true
+  ) {
+    return new AppUpdateCheckError(code as AppUpdateCheckErrorCode, error.message);
+  }
+  return new AppUpdateCheckError(
+    "update_check_failed",
+    "The stable channel update check failed. Retry the update check.",
+  );
+}
+
+function appUpdateOperationError(value: unknown): AppUpdateOperationError {
+  const error = record(value);
+  const retryabilityByCode: Readonly<
+    Record<AppUpdateOperationErrorCode, boolean>
+  > = {
+    update_signature_invalid: false,
+    update_download_failed: true,
+    update_operation_failed: true,
+  };
+  const code = error?.code as AppUpdateOperationErrorCode;
+  const retryable = retryabilityByCode[code];
+  if (
+    error &&
+    typeof retryable === "boolean" &&
+    typeof error.message === "string" &&
+    error.message.length > 0 &&
+    error.retryable === retryable
+  ) {
+    return new AppUpdateOperationError(code, error.message, retryable);
+  }
+  return new AppUpdateOperationError(
+    "update_operation_failed",
+    "The update could not be downloaded or installed. Retry the update.",
+    true,
+  );
+}
+
+function appUpdateProgress(value: unknown): AppUpdateProgress | null {
+  const progress = record(value);
+  const receivedBytes = progress?.received_bytes;
+  const totalBytes = progress?.total_bytes;
+  if (
+    !Number.isSafeInteger(receivedBytes) ||
+    Number(receivedBytes) < 0 ||
+    (totalBytes !== null &&
+      totalBytes !== undefined &&
+      (!Number.isSafeInteger(totalBytes) || Number(totalBytes) < 0))
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    receivedBytes: receivedBytes as number,
+    ...(typeof totalBytes === "number" ? { totalBytes } : {}),
+  });
 }
 
 function validateConfiguration(value: unknown): RuntimeStartupConfiguration {
   const configuration = record(value);
-  const endpoints = record(configuration?.endpoints);
-  const values = record(configuration?.values);
   const serviceHealth = record(configuration?.serviceHealth);
-  if (!configuration || !endpoints || !values || !serviceHealth) {
-    return initializationError("configuration", "must include endpoints, values, and serviceHealth");
+  if (!configuration || !serviceHealth) {
+    return initializationError("configuration", "must include serviceHealth");
   }
-
-  const workTrackerApi = endpoint(
-    endpoints,
-    "workTrackerApi",
-    ["http:", "https:"],
-    "must be a loopback HTTP(S) URL",
-  );
-  const agentApi = endpoint(
-    endpoints,
-    "agentApi",
-    ["http:", "https:"],
-    "must be a loopback HTTP(S) URL",
-  );
-  const statusApi = endpoint(
-    endpoints,
-    "statusApi",
-    ["http:", "https:"],
-    "must be a loopback HTTP(S) URL",
-  );
-  const statusWebSocket = endpoint(
-    endpoints,
-    "statusWebSocket",
-    ["ws:", "wss:"],
-    "must be a loopback WebSocket URL",
-  );
-  const terminalWebSocket = endpoint(
-    endpoints,
-    "terminalWebSocket",
-    ["ws:", "wss:"],
-    "must be a loopback WebSocket URL",
-  );
-  const workTrackerApiKey = values.workTrackerApiKey;
-  if (typeof workTrackerApiKey !== "string") {
-    return initializationError("workTrackerApiKey", "must be a string");
+  if (
+    configuration.runtimeInstance !== undefined &&
+    (typeof configuration.runtimeInstance !== "string" || configuration.runtimeInstance.length === 0)
+  ) {
+    return initializationError("configuration.runtimeInstance", "must be a non-empty string when present");
   }
   const state = serviceHealth.state;
   if (![
@@ -137,14 +254,7 @@ function validateConfiguration(value: unknown): RuntimeStartupConfiguration {
   }
 
   return Object.freeze({
-    endpoints: Object.freeze({
-      workTrackerApi,
-      agentApi,
-      statusApi,
-      statusWebSocket,
-      terminalWebSocket,
-    }),
-    values: Object.freeze({ workTrackerApiKey }),
+    runtimeInstance: configuration.runtimeInstance as string | undefined,
     serviceHealth: Object.freeze({
       state: state as RuntimeStartupConfiguration["serviceHealth"]["state"],
       service: serviceHealth.service as string | null,
@@ -158,27 +268,25 @@ function validateConfiguration(value: unknown): RuntimeStartupConfiguration {
 function serviceHealth(value: unknown): ServiceHealth | null {
   const recordValue = record(value);
   if (!recordValue) return null;
-  try {
-    return validateConfiguration({
-      endpoints: {
-        workTrackerApi: "http://127.0.0.1:1/api/work-tracker",
-        agentApi: "http://127.0.0.1:1/api",
-        statusApi: "http://127.0.0.1:1/api",
-        statusWebSocket: "ws://127.0.0.1:1/ws/status",
-        terminalWebSocket: "ws://127.0.0.1:1/ws/terminal",
-      },
-      values: { workTrackerApiKey: "" },
-      serviceHealth: recordValue,
-    }).serviceHealth;
-  } catch {
-    return null;
+  const state = recordValue.state;
+  if (!["starting", "migrating", "ready", "recovering", "degraded", "failed"].includes(String(state))) return null;
+  for (const field of ["service", "message", "logPointer"] as const) {
+    if (recordValue[field] !== null && typeof recordValue[field] !== "string") return null;
   }
+  return {
+    state: state as ServiceHealth["state"],
+    service: recordValue.service as string | null,
+    message: recordValue.message as string | null,
+    logPointer: recordValue.logPointer as string | null,
+  };
 }
 
 /** Load the desktop-only startup values before the shared Studio mounts. */
 export async function createDesktopRuntime({
   invoke,
   listen,
+  createGraphQlProxy = createTauRPCProxy,
+  launchkeyMidi = desktopLaunchkeyMidi,
 }: DesktopRuntimeOptions): Promise<StudioRuntime> {
   const startup = validateConfiguration(
     await invoke<unknown>("desktop_runtime_configuration"),
@@ -186,16 +294,98 @@ export async function createDesktopRuntime({
   const deliveredNoticeIds = new Set(
     startup.initialNotices.map((notice) => notice.id),
   );
+  const readWorkTracker: StudioRuntime["readWorkTracker"] = (routes) =>
+    routes.graphQl((document, variables) => executeGraphQlTransport(
+      document,
+      variables,
+      createGraphQlProxy,
+    ));
 
   return Object.freeze({
     platform: "desktop" as const,
+    graphQlTransport: createGraphQlProxy,
+    launchkey: Object.freeze({
+      midi: () => launchkeyMidi,
+      toggleHandyTranscription: async () => {
+        await invoke<void>("desktop_toggle_handy_transcription").catch(() => {});
+      },
+      submitTerminal: async (viewerHandle: string) => {
+        await invoke<void>("viewer_input", { viewerHandle, data: [13] });
+      },
+    }),
     capabilities: Object.freeze({
       statusFeed: true,
-      websocketTerminal: true,
       nativeLifecycle: false,
       serviceSupervision: true,
       nativeTerminal: false,
       nativeFolderPicker: true,
+      appUpdates: true,
+    }),
+    readWorkTracker,
+    writeWorkTracker: readWorkTracker,
+    readSettings: readWorkTracker,
+    writeSettings: readWorkTracker,
+    statusStream: () => createGraphQlProxy,
+    documentUrl: (documentId: string, relPath: string) =>
+      desktopDocumentUrl(documentId, relPath),
+    prepareDirectoryTrust: async (
+      provider: string,
+      directory: string,
+      approval: string | null,
+    ) =>
+      validateDirectoryTrustResult(
+        await invoke<unknown>("desktop_prepare_directory_trust", {
+          provider,
+          directory,
+          approval,
+        }),
+      ),
+    appUpdates: Object.freeze({
+      check: async () => {
+        try {
+          return validateAppUpdateCheckResult(
+            await invoke<unknown>("desktop_update_check"),
+          );
+        } catch (error) {
+          if (error instanceof AppUpdateCheckError) throw error;
+          throw appUpdateCheckError(error);
+        }
+      },
+      downloadAndInstall: async () => {
+        try {
+          await invoke<void>("desktop_update_download_and_install");
+        } catch (error) {
+          throw appUpdateOperationError(error);
+        }
+      },
+      restart: async () => {
+        await invoke<void>("desktop_update_restart");
+      },
+      subscribeProgress: (listener: AppUpdateProgressListener) => {
+        if (!listen) return () => {};
+        let active = true;
+        let unlisten: (() => void) | undefined;
+        void listen("desktop-update-progress", (event) => {
+          const progress = appUpdateProgress(event.payload);
+          if (active && progress) listener(progress);
+        }).then((stop) => {
+          unlisten = stop;
+          if (!active) stop();
+        });
+        return () => {
+          active = false;
+          unlisten?.();
+        };
+      },
+    }),
+    crashReports: Object.freeze({
+      latestCollectionOutcome: async () =>
+        validateCrashCollectionOutcome(
+          await invoke<unknown>("desktop_latest_crash_collection_outcome"),
+        ),
+      revealFolder: async () => {
+        await invoke<void>("desktop_reveal_crash_report_folder");
+      },
     }),
     pickFolder: async () =>
       validatePickedFolder(await invoke<unknown>("desktop_pick_folder")),
@@ -211,9 +401,18 @@ export async function createDesktopRuntime({
       void listen("desktop-service-health", (event) => {
         const health = serviceHealth(event.payload);
         if (active && health) listener(health);
-      }).then((stop) => {
+      }).then(async (stop) => {
         unlisten = stop;
-        if (!active) stop();
+        if (!active) {
+          stop();
+          return;
+        }
+        // Services finish behind the open window, so a `ready` event may have
+        // fired before this listener registered. Re-read the live health once.
+        const current = await invoke<unknown>("desktop_runtime_configuration")
+          .then((value) => serviceHealth(record(value)?.serviceHealth))
+          .catch(() => null);
+        if (active && current) listener(current);
       });
       return () => {
         active = false;

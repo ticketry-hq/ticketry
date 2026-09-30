@@ -5,21 +5,40 @@ and running agents before and during execution.
 
 ## Language
 
+**Changes workspace**:
+The full-window review workspace with checkout and worktree selection on the
+left, changed files in the middle, and the selected file's diff on the right.
+Each column can be resized. Global navigation remains available, and leaving
+Changes restores the prior planning workspace.
+_Avoid_: Git suite, operating-system fullscreen
+
 **Task-launch flow**:
 The Studio interaction that begins when a work item is activated for an agent
 run and ends when its required setup and agent choices are completed or dismissed.
 _Avoid_: Launch modal, task popup
 
 **Scratch workspace**:
-A module-scoped Studio workspace for taskless Plan and Instant runs. It belongs
-to a real module but not to a work item.
+A module-scoped internal workspace for taskless Plan and Instant runs. It belongs
+to a real module but not to a work item. The Stories pane presents it through
+the Conversations section rather than naming Scratch in the UI.
 _Avoid_: Temporary task, fake issue, unscoped terminal
 
-**Scratch launch flow**:
-The Studio interaction that begins from a scratch workspace's Agent action,
-chooses Plan or Instant and one real module, then completes the shared setup,
-prompt, and provider choices before foregrounding the new taskless run.
-_Avoid_: Task-launch flow, scratch task creation
+**Conversations section**:
+The Stories-pane section that replaces the old Scratch section. It contains a
+New conversation launcher and one ticket row for each active taskless Instant
+conversation in the selected module. The header shows the chat count and no
+lifecycle aggregate. New conversation immediately launches the configured
+global default model, and the user types their request in that conversation's
+terminal.
+_Avoid_: Scratch section, Instant section, temporary tasks
+
+**Conversation launch flow**:
+The Studio interaction that begins from New conversation and foregrounds the
+resulting taskless Instant run. Launch authority resolves provider, model,
+reasoning, standing instructions, and auto-close from Settings. The user types
+their first request directly in the terminal. There is no prompt, mode, or
+provider modal in this flow.
+_Avoid_: Scratch launch flow, Agent picker, task creation
 
 **Module scratch workspace**:
 The user-visible workspace for taskless Plan and Instant agent runs scoped to
@@ -27,19 +46,28 @@ one real module in the active project. Choosing another module opens that
 module's separate workspace; it does not retarget runs already opened here.
 _Avoid_: No-module workspace, shared scratch workspace
 
-**Scratch run chicklet**:
-A compact lifecycle-state summary shown on a module scratch workspace's Details
-surface for its module-scoped taskless runs. Like a Story's subtree lifecycle
-chicklets, each visible state has one glyph and count; it is neither a
-Stories-pane tree row nor a terminal tab.
-_Avoid_: Scratch child row, per-run chicklet, run tab
+**Conversation lifecycle badge**:
+The lifecycle badge on an Instant ticket. Each row presents only its own Agent
+Run lifecycle and updates with that run.
+_Avoid_: Header aggregate, cross-run summary, run tab
+
+**Instant ticket**:
+A Stories-pane row backed by one active, taskless Instant Agent Run. Its title
+is the Codex thread name once Codex has given the thread a real name; until
+then it uses the safe launch title available to Ticketry. Selecting it
+foregrounds the exact terminal conversation. It is presentation over an Agent Run, not a
+persisted WorkItem. The module-scoped workspace remains its internal owner. A
+row presents only that run's lifecycle badge, and selecting it presents only
+that run's terminal. It never presents an add-agent control.
+_Avoid_: Temporary task, fake issue, Instant WorkItem
 
 **Terminal panel**:
 The collapsible Studio surface along the bottom of the ticket workspace that
-hosts plain interactive shells for the selected module. It spans the Stories and
-workspace panes so its extent matches its module scope, and it never shows an
-agent run. Whether it is open and how tall it is belong to the window; which
-shells it holds belongs to the module.
+hosts the selected module's plain interactive shells and its app run, as
+visibly distinct segments of one panel. It spans the Stories and workspace
+panes so its extent matches its module scope, and it never shows an agent run.
+Whether it is open and how tall it is belong to the window; which shells and
+app run it holds belongs to the module.
 _Avoid_: Terminal drawer, bottom dock, console panel
 
 **Panel size mode**:
@@ -63,6 +91,30 @@ the code it ended on because it is the only record of the failure. It holds no
 viewer and no durable session; the action it offers is a shell restart, which
 puts a newly minted shell run in its slot rather than reopening the dead one.
 _Avoid_: Failed terminal, disconnected shell, stale tab
+
+**App run**:
+The single terminal in which a module's configured command is running or last
+ran, shown in the terminal panel's own segment apart from panel shell tabs. It
+is neither a panel shell nor an agent run: a module has at most one, it starts
+only from the Run control, and only an explicit Stop ends its process. It
+outlives the Studio session; on the next launch a still-live app run is
+re-adopted, while one whose process has died is simply gone.
+_Avoid_: Dev server shell, run terminal, script tab, app shell
+
+**Run control**:
+The always-visible footer control beside the Terminal toggle that starts the
+selected module's app run, focuses it while it is live, offers Stop, and opens
+the run configuration editor when no command is configured. It is disabled when
+the module has no module folder, and it is exactly as available as the
+Terminal toggle in each runtime.
+_Avoid_: Run button, play button, scripts menu
+
+**Run configuration**:
+A module's one stored run command together with its environment variables and
+preview URL, edited through the Run control. It belongs to the module and
+nothing else; a module may have none, and a work item that is not a module can
+never have one.
+_Avoid_: Project scripts, launch config, package scripts
 
 **Task workspace**:
 The Studio pane for one work item, containing its Details, design-document,
@@ -119,31 +171,17 @@ _Avoid_: Repo path, module directory, worktree, project folder
 
 **Module tab strip**:
 The single module switcher row spanning the Stories and Workspace panes, listing
-the profile's visible modules of the active project in the canonical module
-order, with module creation at its leftmost point. Selecting a tab is the same
-act as selecting that module anywhere else. The strip may be empty when every
-tab has been hidden.
-_Avoid_: Pane header tabs, browser-style tabs
-
-**Hidden module tab**:
-A module removed from the module tab strip via the tab's close affordance,
-without deleting or archiving the module. The module keeps its place in the
-canonical module order, stays in the Modules sidebar (where its module
-activity badge still appears), and selecting it in the sidebar restores its
-tab and selects it. The hidden set is installation data stored by the backend
-and shared by every client of the installation, and it is never undone by
-agent activity. Keyboard position shortcuts count visible tabs only, so a
-hidden module has no position shortcut.
-_Avoid_: Closed module, archived module, removed module
+every module of the active project in the canonical module order, with module
+creation at its rightmost point. Selecting a tab is the same act as selecting
+that module anywhere else.
+_Avoid_: Pane header tabs, open-tab set, browser-style tabs
 
 **Canonical module order**:
 The one project-wide module order every module surface — sidebar, tab strip,
 backlog grouping, module pickers, keyboard position shortcuts — renders
-identically. It is the recency order until the project is first manually
+identically. It is the creation order until the project is first manually
 reordered, and the manually set order from then on; a newly created module
-always enters at the front. In recency mode that front placement is held
-explicitly until the new module has agent activity of its own, since it would
-otherwise sort behind every module that has ever been worked in.
+always enters at the end.
 _Avoid_: Recency order, per-surface order, tab order
 
 **Manual module order**:
@@ -152,14 +190,6 @@ first module drag, seeded from the order visible at that moment. It belongs to
 the project, not the user, and once set it is never reshuffled by agent
 activity.
 _Avoid_: Pinned modules, per-user module order, sort preference
-
-**Module jump badge**:
-A small keycap hint shown inline on a module tab while the Command key is held
-alone, naming the chord that jumps to that module. It appears only where the
-module jump bindings themselves are available, disappears the moment another
-modifier joins, the key is released, or the window loses focus, and is never
-focusable or interactive.
-_Avoid_: Shortcut overlay, hint bar, command indicator
 
 **Module activity badge**:
 The per-module aggregate count of non-terminal agent runs — task-bound and
@@ -185,10 +215,48 @@ _Avoid_: Graph editor, drag-to-connect canvas, workflow diagram export
 The editing surface opened by selecting a workflow graph view node. It edits the state's shared attributes (name, group/color) and the current tab's type-scoped attributes (start/stop role, outgoing transitions, launch configuration), applying each change through scoped apply.
 _Avoid_: Node modal, state drawer, launch form
 
+**Handoff edge**:
+A workflow transition edge marked so that the work item's live agent survives
+the move. Ticketry submits the destination's composed prompt, including its
+Stage skills, once to that agent's session and starts no new run. An unmarked
+edge is a replacing edge — the move ends the live agent, and the destination
+starts fresh if it launches at all. Either edge starts fresh when no agent is
+live. It is the only setting that decides survive versus replace.
+_Avoid_: Continue flag, keep-agent flag, session reuse toggle
+
+**Handoff note**:
+The document an agent leaves in its work item's design directory before it
+crosses a replacing edge, named for the state it is leaving, so the agent that
+replaces it can pick up where it stopped. Writing it is the agent's duty under
+its launch prompt; Ticketry never writes, waits for, or requires it, and only
+points the replacement at it when it exists.
+_Avoid_: Handoff (unqualified), session summary, context dump
+
+**Agent move**:
+A workflow state change made by an agent or by Run Now. It enforces one live
+agent per work item: a replacing edge ends the current agent before anything
+new starts, a handoff edge continues it.
+_Avoid_: Automated move, MCP transition, system move
+
+**Manual move**:
+A workflow state change a person makes in Studio. While the work item has a
+live agent it leaves that agent alone and starts nothing; when no agent is
+live it behaves as an agent move would.
+_Avoid_: Human transition, drag, direct move
+
+**One live agent**:
+The rule that a work item has at most one live task run at any moment. Any
+deliberate launch on the work item — agent move, Run Now, retry — ends the
+current run before it starts another; if the current run cannot be ended,
+nothing starts and the failure is shown for retry.
+_Avoid_: Agent stacking, parallel agents, run slot
+
 **Run self-termination**:
-An agent-initiated action that ends only the agent's own active Studio run after
-the agent decides its objective is fulfilled. It is not an MCP-server completion
-decision and never accepts another run as a target.
+An agent-initiated action that ends only the agent's own active Studio run. A
+work-item run may use it only after its work item reaches a configured
+destination from the run's launch state. The workflow transition, rather than
+the agent's claim that it finished, is the completion condition. Taskless runs
+have no workflow condition. The action never accepts another run as a target.
 _Avoid_: Objective completion, arbitrary run termination, self-kill
 
 **Model configuration** (Settings section):
@@ -208,10 +276,12 @@ Model configuration section.
 _Avoid_: free-text model, code-owned reasoning list, unrelated dropdown trio
 
 **Keymap context**:
-One of Studio's fixed keyboard-resolution layers — the open modal,
-capture-phase chords, the focused pane, and global actions — consulted in that
-precedence order. The same chord may mean different things in different keymap
-contexts; the precedence order itself is not configurable.
+One of Studio's keyboard-resolution domains. The app-wide layers are the open
+modal, capture-phase chords, the focused pane, and global actions, consulted in
+that precedence order. Feature-local contexts such as Changes are resolved only
+by the focused control and never participate in the app-wide cascade. The same
+chord may mean different things in different keymap contexts; the app-wide
+precedence order itself is not configurable.
 _Avoid_: Keymap scope, shortcut group, key layer
 
 **Binding**:
@@ -278,21 +348,23 @@ _Avoid_: HTML doc, broken markdown, mislabeled file
 
 **Desktop development instance**:
 One Tauri development launch of Studio with a coordinated runtime identity —
-its worktree, frontend origin, backend endpoint, MCP endpoint, and data
+its worktree, frontend origin, backend endpoint, MCP Unix socket, and data
 directory — isolated so concurrent launches from different worktrees never
 share ports, origins, or state.
 _Avoid_: Dev window, second app copy, port profile
 
 **Edit view**:
-The two-column Studio layout with the Stories pane beside the Task workspace,
-shown when the user's persisted layout choice hides the sidebar. It has its
+The two-column Studio layout — Stories pane beside the Task workspace — used
+whenever installation configuration disables the sidebar, and shown when a
+configured sidebar is hidden by the user's visibility preference. It has its
 own modal, three-zone keyboard model.
 _Avoid_: Focused view, zen mode, two-pane mode
 
 **Full sidebar view**:
-The Studio layout that adds the Modules sidebar beside the Edit view work area
-and uses pane-focus navigation. It is shown when the user's persisted layout
-choice shows the sidebar.
+The Studio layout that adds the installation-configured sidebar panes beside
+the Edit view work area and uses pane-focus navigation. It is available only
+when installation configuration enables the sidebar; the user's visibility
+preference then chooses between this layout and the Edit view.
 _Avoid_: Default view, navigation mode, three-pane mode
 
 **Navigation zone**:
@@ -317,14 +389,6 @@ only chord Studio intercepts is Cmd+Esc — which leaves typing mode and returns
 to the un-engaged active tab body, still the focused navigation zone. Left then
 returns to the Stories list.
 _Avoid_: Insert mode, terminal focus, raw input mode
-
-**Workspace tab order**:
-The arrangement of a work item's Task workspace tabs — Details, documents and
-terminal tabs alike — as set by dragging tabs horizontally within the strip.
-Stored per work item and shared by every client of the installation. New tabs
-join at the right end; a reopened tab returns to its remembered place. The
-live-terminal cycle visits terminals in this order.
-_Avoid_: Tab order (unqualified), launch order (that's only the default)
 
 **Active tab**:
 The tab each ticket remembers as last-selected in its Task workspace. Entering

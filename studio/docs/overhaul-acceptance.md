@@ -40,32 +40,32 @@ named gate before the full Studio suite, typecheck, and build.
 | 31 | Pathless module selection preserves the prior selection on cancel or save failure and resumes after a valid link. |
 | 32 | A native attachment-process exit closes its viewer and releases outside viewer ownership without ending the durable terminal. |
 | 33 | Story-tree rows read as one left-aligned, truncating `identifier · name` label with state color on the identifier alone, keep trailing operational indicators separate, omit the separator when no compact identifier resolves, and leave canonical-key, sequence, and title search available. |
-| 34 | The Task workspace names child issues, review findings and their cancel labels, dependency chips and blocker candidates, the parent picker and Module link, and deletion confirmation copy as compact ticket identifiers without leaking canonical keys. |
-| 35 | Live and restored task-bound terminal tabs and their close affordances read the launch state their own durable run captured, with no ticket identifier, while scratch plan/instant runs keep their lowercase modes and an unrecorded state stays blank. |
+| 34 | The Task workspace names child issues, review findings and their cancel labels, dependency chips and blocker candidates, the parent picker and Module link, and deletion confirmation copy as compact ticket identifiers without leaking canonical keys. A child description edit refreshes its finding location through its normalized task subscription. |
+| 35 | After socket startup reaches ready, live and restored task-bound terminal tabs retain their session and Agent Run identities. Reattaching a reconciled surviving run is idempotent and does not resume a new provider run. Their labels and their close affordances read the launch state their own durable run captured, with no ticket identifier, while scratch plan/instant runs keep their lowercase modes and an unrecorded state stays blank. |
 | 36 | A live terminal falsely tombstoned by legacy runtime reconciliation returns to its active lifecycle when the repaired status snapshot arrives. |
 | 37 | The sidebar, Module tab strip, keyboard position shortcuts, and backlog grouping all render the one Canonical module order. |
-| 38 | A project in Manual module order preserves the order returned by the server. |
-| 39 | The module collection is the complete ordering source. |
-| 40 | A module list loads without warming the project cache. |
-| 41 | Module loading does not depend on a readable project collection. |
+| 38 | Agent activity does not overlay a second client-side order on the canonical module order. |
+| 39 | An automatic project keeps the server's canonical creation order when auxiliary project metadata cannot be read. |
+| 40 | A module list loaded before the project cache is warm still reads the project's durable ordering mode. |
+| 41 | A project whose ordering mode cannot be read is treated as automatic. |
 | 42 | The first sidebar module drag sends the exact visible order as its baseline and shows the move in the sidebar and Module tab strip at once. |
 | 43 | A pending module reorder disables further drag sources and converges on authoritative project and module data once it settles. |
 | 44 | A refused module reorder restores the previous order, reports the failure, and a retry succeeds. |
 | 45 | Cancelled and no-op module drops write nothing, and a drop does not select the module it landed on. |
-| 46 | A module created in an automatic project leads every module surface, and selection, its folder link, and the sidebar add control are unchanged. |
-| 47 | A module created in a project with Manual module order leads every module surface without leaving that mode, and later reads follow the server. |
+| 46 | A module created in an automatic project follows every existing module, and selection, its folder link, and the sidebar add control are unchanged. |
+| 47 | A module created in a project with Manual module order follows every existing module without leaving that mode. |
 | 48 | A live desktop run waits for the direct native libghostty-to-tmux viewer without opening the xterm/WebSocket fallback in parallel. |
-| 49 | A persisted terminal appears when its run projection arrives after the workspace first mounts. |
+| 49 | A terminal tab appears directly from ProjectRunStatus when its run projection arrives after the workspace first mounts, without a separate terminal-discovery read. |
 | 50 | Details and document navigation keep the same opened terminal mounted, then reactivate it in place. |
 | 51 | A tab-strip drag places a module at the indicated tab edge and every module surface follows. |
-| 52 | Tab navigation and the fixed add-module control remain intact across tab-strip reordering. |
-| 53 | A running client adopts a module order established elsewhere and returned by the server. |
-| 54 | Project-read failures do not affect module ordering. |
-| 55 | A later module refresh replaces creation order with the latest server order. |
+| 52 | Tab navigation and the trailing add-module control remain intact across tab-strip reordering. |
+| 53 | A running client adopts a Manual module order established elsewhere. |
+| 54 | A failed project read retains the last known module ordering mode. |
+| 55 | A newly created module remains at the end of the canonical order after a reload. |
 | 56 | Native first attach and reattach remain pending until exact clipped-frame presentation, while preparation failure retains fallback behavior. |
 | 57 | Run serially sits beside Run subtree under one capability, sends serial mode with independent pending and feedback, reports launched work as success and a press that launches nothing as nothing started, and both actions disappear together after a stale capability refresh. |
 | 58 | A native viewer resized while it prepares is presented at the pane's live geometry, and the pooled fallback is retired only once that grid is applied. |
-| 59 | A projects read started before an accepted first Module drag cannot affect the resulting server module order. |
+| 59 | A projects read started before an accepted first Module drag cannot restore automatic creation order over the resulting Manual module order. |
 | 60 | State transitions consume the authoritative landing rank, while cross-state drag finishes at its explicit drop seam. |
 | 61 | A StrictMode remount never overlaps two native attachments for the same durable terminal run. |
 | 62 | The native terminal clears the workspace tab boundary, sits flush against the pane's bottom edge, and retains its side pane insets. |
@@ -81,7 +81,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 72 | Details, document, and terminal destinations remain shielded until the previously presented retained native viewer finishes hiding. |
 | 73 | An authoritative scratch-run snapshot removes omitted foreign or orphaned activity from the visible summary. |
 | 74 | A task workspace launches one fresh promptless task run and activates its acknowledged terminal tab. |
-| 75 | Task launch lists each supported activated provider once, explains unavailable provider states without launching, and leaves scratch launch on Plan and Instant. |
+| 75 | Task launch lists each supported activated provider once, explains unavailable profile/provider states without launching, and leaves scratch launch on Plan and Instant. |
 | 76 | Task launch supports predictable keyboard choice, Escape focus restoration, and non-consuming outside-pointer dismissal. |
 | 77 | Task launch invalidates a changed workspace owner, commits one run per selection, and permits a later intentional fresh run and tab. |
 | 78 | A pending task launch completes create, acknowledgement, and terminal rekey after navigation leaves its terminal surface. |
@@ -119,76 +119,284 @@ named gate before the full Studio suite, typecheck, and build.
 | 110 | Two live terminals sharing a provider and launch state take launch-order ordinals, the numerals disappear once no live collision remains, and the ended tab left in the strip is still addressable by an accessible name that says it ended. |
 | 111 | Dormant resume and terminated-history chips name the phase their run launched in exactly as the tab for the same run does, carry the same hover facts and neutral ended treatment, show no ticket identifier, and leave an unrecorded phase blank. |
 | 112 | A reload with no client session state rebuilds each terminal tab's captured launch state and model, provider colour, live-collision ordinals, and the ended runs' neutral history chips from the authoritative run records alone. |
-| 113 | A live desktop terminal whose native viewer reports a render failure keeps the compatibility renderer and its native-failure notice, and one window-scoped campaign requests exactly one full Studio refresh 500 ms later. |
+| 113 | A live desktop terminal whose native viewer reports a render failure hands the same run and tmux session to xterm in place, records the failure origin, reason, run ID, session ID and available handle once, continues fallback if diagnostics fail, drops its notice once xterm connects, and never refreshes Studio. If xterm also fails, its terminal-scoped failure remains visible. |
 | 114 | Two live terminals whose runs recorded no launch state get distinct accessible tab names from their launch-order ordinals, while the visible tab label stays blank. |
-| 115 | Native rendering that keeps failing across refreshes waits 500 ms, 1 s, 2 s, 4 s, 8 s and then 10 s per attempt from a window-session campaign, each refresh detaches and releases its temporary viewer exactly once while the durable run is restored under the same foreground owner, and one native presentation clears the campaign so the next incident waits 500 ms again. |
-| 116 | A second terminal presenting a non-empty native grid recovers only its own run: a terminal still stranded on the compatibility renderer keeps its notice, its booked refresh still fires, and the consumed attempt is not reset to the initial delay. |
+| 115 | A terminal that fell back to xterm keeps working input and output and its run and session identities across selection after launch, later switching, closing and reopening, and restoration, with one native attempt per run and no Studio refresh. |
+| 116 | A native failure stays local to its terminal: a second live run renders natively beside it, and neither terminal loses its run or session identity or triggers a refresh. |
 | 117 | Opening Settings from the real footer action or its global binding over a presented native terminal hides that viewer without detaching it, releasing its lease, closing the terminal, or ending the run, and closing the dialog reveals the same handle against the host's current measurement. |
-| 118 | Every presentable native viewer, across concurrent Studio surfaces, hides for an open modal and only viewers still active and owned are revealed against a fresh measurement when it closes; attachment that completes while the stack is non-empty commits no reveal, out-of-order native hide/show promises settle on the latest modal intent, hidden viewers take no focus, a focus signal raised while Settings owns the foreground is discarded, and a pointer-opened dialog returns focus to its opener. A native visibility failure leaves Settings visible and interactive behind the compatibility fallback. The same window-level rule covers the client store's confirm dialogs: a `DialogHost` confirm raised with an empty modal stack hides a presented panel viewer, takes no focus from it, and reveals the same handle once it is answered. |
+| 118 | Every presentable native viewer, across concurrent Studio surfaces, hides for an open modal and only viewers still active and owned are revealed against a fresh measurement when it closes; attachment that completes while the stack is non-empty commits no reveal, out-of-order native hide/show promises settle on the latest modal intent, hidden viewers take no focus while a pointer-opened dialog returns focus to its opener, and a native visibility failure leaves Settings visible and interactive behind the compatibility fallback. The same window-level rule covers the client store's confirm dialogs: a `DialogHost` confirm raised with an empty modal stack hides a presented panel viewer, takes no focus from it, and reveals the same handle once it is answered. |
 | 119 | The footer's always-available Terminal control opens a hidden panel and the panel's own Minimize control hides it again, through the same action the shortcut uses: both are real buttons named for the action they perform and sit outside the shell tab list, and hiding leaves the shell alive, its tab active and no viewer presented under either renderer. |
 | 120 | Whether the terminal panel is showing belongs to the module it opens onto: opening it in one module leaves another module's closed, each module keeps its own answer across a switch, and a restart returns every module to the state it was left in while the window keeps only the height. |
 | 121 | The panel header's maximize control renders the panel at the geometry policy's current upper bound and restores the exact ordinary height without drift, keeps its size mode across hiding and a restart in one debounced furniture record, restores legacy and corrupt records as ordinary, recomputes the maximized height when the window changes without overwriting the ordinary preference, leaves maximized mode on a drag or separator nudge with the resulting height as the new ordinary one, and resizes the mounted browser and native viewers in place with no attach, detach, run, shell close or terminal input. |
-| 122 | The footer no longer carries a Keyboard Shortcuts control; Settings contains the searchable keyboard-shortcut reference with readable, current action descriptions, and the global `?` binding opens that Settings section directly. |
+| 122 | The footer no longer carries a Keyboard Shortcuts control; Settings contains the searchable keyboard-shortcut reference, and the global `?` binding opens that Settings section directly. |
 | 123 | Opening Settings from the footer over the selected terminal in a mounted Task workspace hides the retained native viewer without detaching, releasing its lease, closing its session, or replacing its handle, and closing Settings remeasures and reveals that same handle; the browser compatibility renderer stays mounted in the WebView without native visibility traffic. |
 | 124 | Task workspace Settings occlusion converges on the newest navigation and presentation intent: a pending modal hide shields a newer Details destination until native completion, and a close/reopen/close sequence cannot accept an older reveal merely because the newest request uses the same retained handle. Together with the shared mounted Settings cases 117–118, the gate preserves native-chord singleton routing, hidden-viewer focus exclusion, late attachment suppression, owner/geometry convergence, compatibility fallback, and failure recovery. |
 | 125 | Module creation refuses a missing folder before creating the module. |
 | 126 | Opening state configuration over a selected Task terminal hides the retained native viewer without detaching or replacing it, and closing state configuration remeasures and reveals the same handle. |
-| 127 | Codex model configuration preserves the supported model and reasoning-level matrix, including the `low` reasoning level, across editing and persistence. |
-| 128 | While an engaged native Ghostty view owns keyboard focus, AppKit gives Ghostty's Command-key bindings first refusal so `Cmd++` increases that terminal's font size instead of being consumed by WebView zoom. |
-| 129 | The internal PathFind orchestration role never appears in Studio's issue-type choices, while existing PathFind work items show their type as a read-only label. |
-| 130 | Module drags on the horizontal tab strip and vertical sidebar clear stale seams across a transient document leave, then resolve by their active axis outside the cross-axis bounds, commit exactly once, and expose one Canonical module order. |
-| 131 | Finishing the exactly-once onboarding tour acknowledges the installation's default Project and clears its project-owned onboarding state without workspace scope. |
-| 132 | Studio loads the default Project and its Modules without reading profile or feature configuration, creating a replacement Project, modifying extra Project rows, or changing the saved sidebar visibility choice. |
-| 133 | Studio restores the last selected Module from one frontend-only value and does not write the retired recent-Project or per-Project recent maps. |
-| 134 | Choosing or changing a Module folder validates the candidate and round-trips the accepted value through the typed Module link resource before selection resumes. |
-| 135 | An engaged native Ghostty terminal gives `Cmd+V` to Ghostty's standard binding, reads the current text from the macOS general pasteboard, and completes the request against its originating surface and opaque request state while `Ctrl+V` stays terminal input. |
-| 136 | Concurrent retained native terminals keep separate paste owners, and teardown invalidates only the departing viewer before its Ghostty surface is destroyed so unavailable viewers cannot complete a request or retain clipboard text. |
-| 137 | An engaged native terminal preserves `Cmd+1` through `Cmd+0` as module-tab position shortcuts and switches through the same canonical module order as the WebView keymap. |
-| 138 | Only the focused native terminal routes `Cmd+V` through Ghostty's binding path; an unfocused native surface cannot claim or receive the chord. |
-| 139 | The persistent footer control, direct visibility requests, focus-left navigation, and the effective global shortcut open and close the Modules pane through shared state transitions; the control reports its next action and expanded state, and displays configured shortcut overrides. |
-| 140 | A workflow launch binding can select one required skill as its entry skill or clear the selection, and each change is saved with the rest of the launch configuration. |
-| 141 | Enter on a real work item reveals its selected or newest live task terminal in both Stories layouts, restores a closed viewer from durable metadata, or starts and attaches one configured default run when only ended history exists. Pending activation cannot duplicate the request or tab, refusal preserves the previous tab and permits retry, and Stories keeps navigation ownership without entering terminal typing mode. |
-| 142 | Ideas, Grill, and Review use distinct gray, red, and teal workflow colors on state headers and work-item identifiers. |
-| 143 | The shared agent picker presents activated providers as compact wrapping choices with the same outlined and selected provider tones as live terminal tabs, while keyboard and pointer selection still launch exactly once. |
-| 144 | Module selection waits for the Module-link read before deciding that a folder is missing, and repeated selection keeps one folder prompt for that Module. |
-| 145 | A rejected provider resume explains the stable backend failure and leaves the dormant conversation available for another attempt. |
-| 146 | If hiding a Task workspace's native viewer fails while Settings opens, Settings stays mounted and interactive, the compatibility fallback reports the failure, and the incident does not schedule a Studio reload. |
-| 147 | Exact Shift+Enter on a real work item opens the activated-provider picker directly in both Stories layouts; cancelling preserves the workspace and run set, while choosing a provider launches one overridden task run. In the Edit view tab strip, active body, and terminal panel, the same chord keeps the existing prompt-bearing launch route. |
-| 148 | Stories labels Right Arrow as Expand / Dive, Enter as Open Terminal, and Shift+Enter as Choose Agent without changing the Right Arrow body route. |
-| 149 | A work item's server-owned Workspace tab order controls Details, document, and terminal placement and is restored after reload. |
-| 150 | Module selection uses one shared operation: a visible Module selects without a presentation write, while a hidden Module clears only `tab_hidden`, preserves canonical order and module-backed consumers, and becomes selected. |
-| 151 | Agent activity does not reopen a hidden Module tab, and its lifecycle badge remains visible on that Module's sidebar row. |
-| 152 | Hiding the selected Module tab chooses the nearest visible tab to the right. |
-| 153 | Workspace tab order survives document close and reopen, terminal dismissal and restore, appends new tabs at the right edge, and drives live-terminal cycling through mixed tab kinds. |
-| 154 | Details, document, and terminal workspace tabs stay locked until saved order loads, then reorder on a horizontal drag with a visible insertion edge, Escape cancellation, post-drop click suppression, pending-save lockout, full identity persistence, optimistic display, rollback on failure, and active-tab scroll retention. |
-| 155 | The last visible Module tab can be hidden; the empty strip retains module creation and the workspace points to the Modules sidebar for restoration. |
-| 156 | Module position shortcuts count only visible tabs in canonical order, so hidden Modules have no position shortcut. |
-| 157 | Hiding the rightmost selected Module tab falls back to the nearest visible tab on the left. |
-| 158 | Hiding a Module tab that is not selected leaves the current selection unchanged. |
-| 159 | Hidden Modules retain canonical order while visible tabs reorder, and restoration returns a hidden tab at its canonical position. |
-| 160 | Live-terminal cycling loads the saved Workspace tab order for every work item with a current stop, including unopened workspaces after reload, before choosing the next terminal. |
-| 161 | A project with no modules keeps the Stories and selected-ticket panes mounted instead of showing instructions to restore a tab that never existed. |
-| 162 | Startup never restores a hidden remembered Module: it selects the first visible tab instead, and hiding the last visible tab clears the remembered Module together with the in-memory selection. |
-| 163 | Pressing Enter on a hidden Module's focused sidebar row restores its tab at the canonical position and selects the Module. |
-| 164 | Holding Command alone shows non-interactive jump badges on the first ten visible Module tabs in visual order. Releasing it, adding Shift, Control, or Alt, blurring the window, handing keyboard ownership to a native terminal, changing document visibility, pressing a pointer, opening a modal, or losing the effective platform binding clears them. A new hold follows hidden and reordered tabs, and the matching position binding still selects its tab. |
-| 165 | With every Module tab hidden, the shell tells the user to open the closed Modules pane and keeps Add module available. Once the footer opens the pane, the guidance points to selecting a visible Module instead. Sidebar selection restores tabs in canonical order and selects the chosen Module, and closing the pane leaves the restored tabs visible. Together with case 139, the effective global binding and an override follow the same open and close transitions. |
-| 166 | Settings accepts a Codex model that uses model-default reasoning, shows no invented reasoning levels, and saves a null reasoning value. |
-| 167 | Ordinary typing does not re-render a consumer of Module jump badges when the held modifiers are unchanged, and keyboard events do no badge-tracking work while a modal disables the feature. |
-| 168 | Startup honors a stored-open Modules sidebar preference under the current key and ignores the poisoned closed value left under the retired key. |
-| 169 | Cmd+Escape reported by an engaged native terminal leaves typing mode, so Studio's engaged state follows the keyboard the native view handed back. |
-| 170 | The fixed plus trigger opens the Module picker without opening creation, and its first action opens the existing Module creation flow. |
-| 171 | The Module picker lists only non-archived Hidden module tabs in Canonical module order; mixed-case search filters only those choices, keeps their order, leaves creation available, and adds no empty-state choice. |
-| 172 | Pointer selection closes the Module picker, restores and selects the chosen Module at its canonical position, and writes no Module order. |
-| 173 | When every eligible Module tab is visible, the picker retains only Module search and creation. |
-| 174 | When every Hidden module tab belongs to an archived Module, the picker retains only Module search and creation. |
-| 175 | Opening the Module picker focuses its named search field; the trigger, creation action, and restore choices expose clear names, and Escape closes the picker, returns focus to the trigger, and leaves the next opening with an empty query. |
-| 176 | Arrow Down and Arrow Up move the active option through the currently filtered Module picker listbox while the focused search combobox exposes it through `aria-activedescendant`, and Enter on creation closes the picker and opens the existing creation flow. |
-| 177 | Enter on an active Hidden module choice closes the picker, restores its tab, and selects that Module. |
-| 178 | Moving focus from the Module picker to a Module tab closes the picker and leaves focus on the tab. |
-| 179 | With the Modules pane closed, the onboarding Module step does not anchor to or highlight the Module picker's trigger as though it opened Module creation. |
+| 142 | An upgraded profile uses distinct gray, red, and teal workflow colors on state headers and work-item identifiers while preserving a custom state color. |
+| 149 | The module shell uses the native renderer when available and the browser fallback otherwise. |
+| 153 | The desktop xterm fallback attaches, exchanges bytes, resizes, scrolls, suspends, resumes, and detaches through Tauri viewer commands instead of the Python terminal WebSocket. |
+| 154 | Desktop Run Now, agent and module-shell discovery and control use caller-owned GraphQL over TauRPC, deliberate launches get fresh request IDs while retries retain them, mutations refresh canonical terminal holdings, and native plus xterm viewers share generation-bound lease authority. |
+| 155 | Studio snapshots and live output events consume the same Rust run projection, including Shell scope, nullable provider, launch metadata, effective state, output sequence, and output time. |
+| 156 | Studio stays closed through adoption and names the verified snapshot recovery boundary. |
+| 157 | Startup failures distinguish unsupported, refused, snapshot, bridge, postflight, and recovery states. |
+| 158 | Browser development uses the Rust GraphQL adapter with no REST fallback. |
+| 159 | Startup failures point to the Ticketry application log and never show a retired sidecar notice. |
+| 160 | Studio keeps its established typefaces and readable native-terminal metrics. |
+| 161 | Native-render fallback keeps the compatibility renderer and does not refresh after viewer-ownership storage failure. |
+| 162 | A retained native viewer releases once when the WebView lifecycle ends, including listener-cleanup failure. |
+| 163 | Apollo is Studio's only server-state client. |
+| 164 | Module tickets with blocker edges render from the WorkTracker read contract. |
+| 165 | Details fills the pane width without a centered width cap, with a small matching side inset on the toolbar and document, compact section spacing, and one compact worktree control in the toolbar beside the run actions. |
+| 166 | Worktree confirmation and mutation errors do not leak across task selection. |
+| 167 | Apollo is Studio's only application-state owner; client-only UI state lives in the same cache as server records. |
+| 168 | A module drag rejected because its cached neighbors are stale refreshes the authoritative order, recomputes the same gesture, and completes without asking the person to retry. |
+| 169 | A native terminal viewer reports terminal output through the shared backend activity operation exactly once when it takes the run, and then never polls. |
+| 170 | Onboarding belongs to the installation project: the welcome appears while no project exists or while the installation project still requires it, an acknowledgement names the project the tour ran for, and a restart reads the acknowledged state back. |
+| 171 | A WorkItem's Apollo-owned workspace tab order interleaves Details, documents, and terminals across reload, close and reopen, dormant periods, and newly visible tabs. |
+| 172 | Workspace tabs stay locked until their saved order loads, then show horizontal drag placement, suppress only the drag's own trailing click while a deliberate Changes click or keyboard activation still lands at once, serialize saves, retain the active tab in view, commit desktop drags that end without a drop event, and roll back a failed optimistic save. |
+| 173 | Live-terminal cycling reads each candidate WorkItem's Apollo-owned saved order, including workspaces that have not been opened, before selecting the next terminal. |
+| 174 | When this data directory’s MCP socket cannot start, Studio remains usable with a visible agent-launch warning. Local shells remain available, restart retries listener startup, and acknowledgement does not claim to continue without MCP. |
+| 175 | A hidden Module tab stays hidden after the Apollo cache is rebuilt from the authoritative project read. |
+| 176 | Agent activity does not reopen a hidden Module tab. |
+| 177 | When every Module tab is hidden, the permanent top-strip control opens the Modules pane, hidden rows keep lifecycle status, and sidebar selection restores and selects the tab. A project with no Modules offers creation instead of recovery copy. |
+| 178 | While a native Ghostty view is engaged, only its live focused surface receives Ghostty-bound Command keys such as `Cmd++`; unbound application commands stay with AppKit, and retained or tearing-down viewers cannot query stale surfaces. |
+| 179 | Cmd+1 through Cmd+9 and Cmd+Shift+0 select the same canonical visible Module positions from WebView and focused native Ghostty input; hidden and archived Modules consume no position, and native keyboard engagement clears held-Command badges. |
+| 180 | Cmd+Escape from the live focused native terminal and the WebView leave typing through the same transition exactly once, return focus to the current zone, preserve the open terminal and workspace selection, ignore disposed viewers, and do not steal modal focus. |
+| 181 | Root tasks reorder through the GraphQL write path. |
+| 182 | Imported root tasks with equal ranks still send deterministic reorder neighbors. |
+| 183 | A Module tab wraps its label and lifecycle chicklets, reserves constant space for the close button, and keeps its close hover background compact. |
+| 184 | Story Changes stays inside the story pane, shows only its files and selected diff in two resizable columns, and never loads other worktrees; module Changes reuses the same two-column review. |
+| 185 | A task workspace restores Details and explains the state when its worktree disappears. |
+| 186 | One caught-up project feed selects one guarded launch's terminal from its authoritative update, defers viewer attachment until runtime acknowledgement, and never needs a second click, subscription, or reconnect. |
+| 187 | Worktree identities appear before module files finish loading, stay cached on file refresh, and converge after worktree creation/deletion. |
+| 188 | The worktree switcher lists checkout identities and branches and reuses the list when navigating module and task rows without a write. |
+| 189 | Module Changes distinguishes an unavailable module checkout. |
+| 190 | Task Commit and Push remain independent, and Push excludes dirty work. |
+| 191 | Module Push is offered for a clean ahead branch while Commit requires dirty work. |
+| 192 | Task Create PR pushes committed work first, then becomes Open PR. |
+| 193 | A rejected task Create PR remains retryable. |
+| 194 | Task Create PR requires committed work. |
+| 195 | A module-checkout pull request targets the default branch without changing a Work Item. |
+| 196 | The module default branch has no pull-request action. |
+| 197 | Every mapped pull-request state exposes only its safe actions. |
+| 198 | Closed pull requests can be replaced with explicit follow-ups. |
+| 199 | Merge preparation launches only after a click and reports refusal. |
+| 200 | Cleanup blockers explain why removal is unavailable. |
+| 201 | Cleanup confirmation keeps a partial failure retryable. |
+| 202 | Conversations replaces Scratch, gives each conversation row its own Agent Run lifecycle badge, and selects its exact terminal. |
+| 203 | Conversations settings persist edits and clearing of the starter prompt without exposing the retired auto-close control. |
+| 204 | Past Agent Runs remain independently resumable. |
+| 205 | A cold Changes restoration clears when the resolved worktree has no checkout. |
+| 206 | Browser update checks defer quietly to the desktop application. |
+| 207 | A collected Crash Report does not add a Crash Notice, banner, or file prompt to Studio. |
+| 208 | Desktop launch checks contact the update feed once, show available updates on the Settings entry point, retain the result in App updates, and keep launch failures quiet until that section opens. |
+| 209 | An update check reports the installed version and confirms when Ticketry is current. |
+| 210 | An available update shows its version and release notes without installing it. |
+| 211 | Update downloads report determinate and indeterminate progress. |
+| 212 | An unreachable update feed can be retried without restarting Ticketry. |
+| 213 | An invalid update signature is refused without requesting a restart. |
+| 214 | A failed update download can retry the same release without another feed check. |
+| 215 | Restart is requested exactly once and only after update installation finishes. |
+| 216 | Desktop launch checks for updates once and shares the result with Settings. |
+| 217 | Settings opens from the bootstrap connecting screen, so a web session held before the local server answers can still reach Settings. |
+| 218 | Settings opens from the failed service-health screen. |
+| 219 | Settings opens while service health is still starting up. |
+| 220 | A failed modal chunk shows a recoverable panel instead of blanking the app. |
+| 221 | Retrying a failed modal chunk opens the requested dialog. |
+| 222 | A failed modal can close without blanking the app. |
+| 223 | A pending modal chunk shows a visible loading status. |
+| 224 | An empty modal stack renders no modal UI. |
+| 225 | A saved launch model configuration reads back with its provider, model, and reasoning after reopening the workflow settings. |
+| 226 | A launch configuration naming an agent/provider without a model is refused with that reason rather than saved as unconfigured. |
+| 227 | Saving a launch configuration after the workflow editor loads sends the catalog's model and reasoning UUIDs, not name-keyed placeholders the host rejects with "Enter a valid UUID.". |
+| 228 | A retained live terminal viewer restores without rebuilding or reattaching it. Covered by the combined case 67 test after CODING-1487 retired the Ghostty WASM renderer. |
+| 229 | Task badges omit terminal history and quietly announce newly lost runs. |
+| 230 | Codex alternate-screen scrolling uses durable terminal history without sending cursor-key input to Codex. Covered by the combined case 232 test after CODING-1487 retired the Ghostty WASM renderer. |
+| 231 | Run agent selects its terminal from the authoritative status event before launch returns, then attaches its viewer only after runtime acknowledgement. |
+| 232 | Native Ghostty sends key presses directly to the terminal, routes captured wheel gestures to their program, and keeps ordinary shell scrollback in tmux. |
+| 233 | Normal native Ghostty terminals present above WebKit with input enabled so click-drag selection works immediately; the WebView-underlay comparison remains opt-in. |
+| 234 | The opt-in WebView-underlay comparison coordinates retained native Ghostty terminals through one generation-fenced window selection. |
+| 235 | Native Ghostty warm retention caps the total mounted set at the measured 20-view limit, keeps the selected run, refreshes recency on revisit, and evicts the least recently viewed inactive viewer. |
+| 236 | A bottom-left toast stays outside the selected native Ghostty host and above the Studio footer and safe areas; stacked notifications remain actionable without lowering, detaching, recreating, or focusing the terminal. |
+| 237 | The Modules pane toggle stays fixed at the workspace's left edge, while module creation sits after the last module tab and scrolls horizontally with the tabs. |
+| 238 | An authoritative snapshot that reports an agent run exited closes its mounted terminal tab and clears the local terminal session. |
+| 239 | Module Changes occupies the footer's left slot with a version-control symbol, stays disabled without a selected Module, and no longer appears beside Terminal and Settings. |
+| 240 | A newly captured Story appears first in its issue type's initial workflow state while creation is pending and remains first after the authoritative persisted result replaces it. |
+| 241 | Normal desktop development and packaged builds select embedded native libghostty by default and link and ship the pinned library; browser development selects xterm; development-only renderer overrides remain, and packaged builds ignore them. |
+| 242 | Development builds can compare three Conversations designs in the real Stories pane; each makes New chat obvious, caps the initial list at ten, and expands or hides the remaining chats. |
+| 243 | A workflow launch binding accepts free-form Stage skill tags on Enter or blur, ignores blank and duplicate normalized names without splitting spaces or commas, reloads saved tags, and uses accessible removal to persist each resulting list, including empty after the final tag is removed, through the existing binding upsert and save-error handling. |
+| 244 | Incoming and outgoing workflow transition rows show and save each edge's handoff setting. |
+| 245 | A fresh bound launch passes one composed prompt, including any Stage skills, in provider argv and submits no follow-on skill command; a handoff submits the same composed destination prompt once to the live agent. |
+| 246 | An untouched launch-configuration form follows canonical binding changes instead of retaining a stale mounted snapshot. |
+| 247 | A transitioned Story stays first in its destination state while the update is pending and after the authoritative result replaces it. |
+| 248 | Changing the selected Story writes its dirty description draft, opens the new Story's saved description in the always-live editor, and keeps later description updates bound to the new Story. Story names and Details descriptions share sans-serif typography at regular weight. |
+| 249 | Resuming one stopped terminal conversation opens and focuses one successor while every unselected stopped conversation stays independently resumable through holding refreshes and reload. |
+| 250 | The Stories pane says whether an automated transition continued the Story's live agent session or started a fresh one, and follows the newest delivery across the rolled-up subtree. |
+| 251 | The + Agent launcher follows every workspace tab inside the shared horizontal scroller and opens the same provider picker used by Cmd+Enter instead of an inline dropdown. |
+| 252 | Opening the Modules pane gives it keyboard focus; arrow keys move its cursor without snapping back, and Enter activates the cursor. |
+| 253 | Edit-view keyboard navigation reaches the + Agent launcher after the final workspace tab and opens it with Enter. |
+| 254 | Focusing an agent reveals its selected Story by expanding the containing status group and all ancestors, clearing a hiding search, and scrolling the row into view even on repeated pad presses, while keeping terminal typing focus. |
+| 255 | Novation pads exclude instant chats and historical failures on startup, retain newly observed failures until acknowledged, and show running in white, stalled in red, done in green, and permission requests in flashing white. |
+| 256 | Module Changes owns horizontal overflow below the workspace pane so checkout actions and files remain reachable in a narrow pane. |
+| 257 | Dormant workspace chips stay within their own bounded vertical scroller so accumulated closed documents and past runs cannot squeeze the active workspace tab. |
+| 258 | A long Details body stays reachable through the selected workspace's single vertical scroll owner. |
+| 259 | A selected non-Codex conversation never requests a thread title; a Codex conversation keeps its safe title through an unusable answer, adopts an accepted name in all three displays, and preserves that name when a later request fails. |
+| 260 | The + Agent launcher warms the provider catalog while it is on screen, so the first agent picker of a session opens on a usable provider list instead of an inert "Loading providers…". |
+| 261 | A settled Codex conversation selection refreshes its title once on first selection, return, and startup restoration; rapid selection changes coalesce, while visibility changes and terminal focus do not read titles. |
+| 262 | Implementation launch configuration and transitions survive optimistic ticket creation, issue-type metadata updates, and reopening the state editor. Covered by the combined case 246 test. |
+| 263 | An open Implementation editor follows authoritative Apollo workflow updates without retaining a stale snapshot. Covered by the combined case 246 test. |
+| 264 | A selected Codex conversation keeps its safe title while the title reader is unavailable, then refreshes the row, header, and terminal tab once its resident reader restarts. |
+| 265 | An obsolete document response cannot replace newer content or edits made while a reload is pending. |
+| 266 | A cross-module Work Item move received from another client refreshes both the source and destination module collections. |
+| 267 | Workspace focus, task selection, and status cursors leave pending dialogs and toasts intact without notifying their stores. |
+| 268 | Matching mutation/event timestamps skip duplicate refreshes while distinct sub-millisecond external edits still converge. |
+| 269 | Desktop builds render terminals with embedded native libghostty and browser development renders with xterm over the WebSocket adapter; the archived Ghostty WASM renderer is absent from source, build hooks, and selectable overrides. |
+| 270 | Queued native terminal commands are ignored after their view is detached. |
+| 271 | A long task Changes page scrolls through one workspace owner. |
+| 272 | Long module Changes columns remain bounded with one scroll owner per column. |
+| 273 | Module Changes columns stay inside the workspace without horizontal overflow. |
+| 274 | Dormant chips remain in a bounded scroll owner above the active tab. |
+| 275 | Refresh restores run status through a unique subscription identity; refused subscriptions retry. |
+
+| 276 | An explicit agent selection overrides remembered Details on the first press, and clicking a terminal tab engages its keyboard input. |
+
+| 277 | Native terminal selection transfers input ownership from the WebView before requesting first-responder focus, including repeated programmatic selection. |
+
+| 278 | The run status snapshot carries live runs only: a terminal outcome updates its run in place through the run's own event, a run the snapshot omits leaves the live holding without being presented as exited, and each snapshot costs one summary log record instead of one per run. |
+
+| 279 | Opening a Story restores its ended runs from the generated WorkItem-to-AgentRuns read: a run is restored because it still has a terminal session record and not because it ended recently, a Story whose ended runs have no record restores none, and a run the event already settled stays one chip because both paths share the AgentRuns cache identity. |
+
+| 280 | A module scratch workspace restores its ended plan, instant, and shell runs from the module WorkItem that owns them, across a reload and with an empty live holding; a module whose ended runs have no terminal session record restores none, and a run the event already settled stays one chip. |
+
+| 281 | Reopening a restored ended run works from either surface: clicking an ended instant Conversation row opens its terminal in the scratch bucket instead of falling back to Details, because run resolution reads the shared AgentRuns cache entity the WorkItem restore retains rather than the live-only holding. |
+
+| 282 | A selected instant conversation whose run has already left the live holding is still titled: eligibility comes from the module WorkItem ended-runs read, so a Codex conversation that ended keeps refreshing its thread title. |
+| 283 | Success, info, and error toasts paint an opaque panel beneath their lifecycle tint. |
+| 284 | A failed description save after switching Stories retains the draft for retry, including when the user returns before the failure arrives. |
+| 285 | Moving a Story through the sidebar refreshes both the source and destination module, including a previously cached empty destination. |
+
+| 286 | Same-Story description writes are serialized so the newest draft persists last. |
+| 287 | Details shows its rendered description before shared rich-editor code warms after a frame; the editor mounts in place once that code loads, with no click and no second load. |
+| 288 | Launch selects Details for the restored Story or scratch workspace even if a terminal, document, or changes tab was previously selected; document and terminal tab state remains available for subsequent selection. |
+| 289 | Studio opens from the initial ready configuration when backend startup finishes before the WebView subscribes to health events. |
+| 290 | Module fetching and hierarchy derivation stay shared as more Stories rows mount; normalized nonstructural task updates refresh their row and selected Details without rebuilding the module tree. |
+| 291 | Declining folder trust preserves the current module selection and its links; retrying with approval saves the requested folder once and resumes selection. |
+| 292 | An already-trusted folder links and resumes module selection without another trust prompt. |
+| 293 | Changing a module folder preserves its existing cached link and blocks completion until native trust setup finishes. |
+| 294 | Terminal folder recovery shows a retryable trust failure, preserves the existing link, and reopens the shell only after trust succeeds. |
+| 295 | Cancelling folder trust and Add Module creates no module, preserves first-module guidance, and allows a later successful creation. |
+| 296 | Native trust failure leaves module creation retryable without saving a module; retry completes once the folder is trusted. |
+| 297 | Model configuration trims and deduplicates registered Codex profile names, persists add/remove changes, and makes a selected global profile clear and disable model and reasoning overrides. |
+| 298 | A workflow launch binding saves, reloads, replaces, and clears a Codex profile while preserving removed registry names as unregistered selections. |
+| 299 | Native terminal zoom uses the application window's zoom-in, zoom-out, and reset hotkeys without moving focus or selecting a module. Native font size follows the WebView viewport scale; xterm scales with the WebView without a second font adjustment. |
+| 300 | Module-folder trust confirmation names the canonical directory and every Codex, Gemini, and Claude provider that needs approval; cancellation preserves the old link. |
+| 301 | A directory already trusted by Codex, Gemini, and Claude saves without another confirmation or provider write. |
+| 302 | Provider denial and inspection failure are reported without confirmation or a Module-link write. |
+| 303 | Replacement inspects provider trust, prepares approved trust, and only then saves the Module link. |
+| 304 | A partial provider success remains trusted; retry asks only for the provider still needing trust and saves once. |
+| 305 | Browser Module-folder setup keeps its existing behavior and performs no provider trust work. |
+| 306 | A canonical-directory or pending-provider change after consent requires a fresh confirmation before any provider preparation. |
+| 307 | Long truncated patches remain readable below the file list without wrapping their contents. |
+| 308 | Worktree creation finishes before Studio requests provider trust for the canonical external checkout and names every pending provider. |
+| 309 | An already-trusted recovered Worktree needs no confirmation; refusal keeps that checkout and exposes trust retry without another create or another prompt when its details reopen. |
+| 310 | Partial Worktree trust survives provider failure, and retry prepares only the remaining provider against the same checkout. |
+| 311 | Instant conversation rows react to their own Agent Run lifecycle changes without leaking activity across runs or modules. `starting`, `working`, `permission_required`, `reconnecting`, `needs_input`, `turn_complete`, `error`, `stalled`, and `quiet` show the eligible badge with count-one semantics; absent, `unknown`, `exited`, and `lost` states show none. The Conversations heading and New conversation show no lifecycle badge. |
+| 312 | The Conversations heading configures host-wide conversation defaults in the retained right workspace, including with zero chats. Close and repeated activation restore the prior workspace without launching a run, opening a modal, writing settings, or replacing terminal identities. |
+| 313 | Conversation settings report load and save failures without false success. A failed save keeps its draft for retry, and Discard restores the last loaded or saved prompt and auto-close values. |
+| 314 | Task Changes defaults to the origin branch and checkout, offers searchable branches in latest-commit order, and previews a selected destination without a Git write. |
+| 315 | Task Changes binds and runs a confirmed local fast-forward, keeps one operation identity across retry, and refreshes affected Apollo views on failure and success. |
+| 316 | Task Changes reports a completed divergent merge and refreshes affected checkout summaries. |
+| 317 | A conflicting local merge lists its unmerged files and destination checkout and remains recoverable after restart even when subsequent source edits block a new merge. |
+| 318 | Finish merge commits only the explicitly staged resolution after confirmation and stays retryable after hook failure. |
+| 319 | Abort merge targets the matching operation, preserves recovery after refusal, and reports completion truthfully. |
+| 320 | Restart recovery reports merges finished or aborted outside Ticketry without stale controls. |
+| 321 | Finishing or aborting a conflicting merge retires its recovery state and gives the next merge a fresh operation identity. |
+| 322 | Committing dirty source work refreshes local merge eligibility and enables Merge without reopening Changes. |
+| 323 | Refreshing merge eligibility after an external destination fix enables Merge without reopening Changes. |
+| 324 | A rejected cross-module Work Item move shows the backend worktree instruction, keeps the module picker open, and rolls the optimistic parent change back to the original module. |
+| 325 | A completed instant run whose tmux session is already gone presents a calm Conversation ended state instead of a Session lost error. |
+| 326 | Moving Ticketry between displays republishes each presented native terminal frame on window movement and display-scale changes, so the native view cannot drift over the module tabs and intercept their drag gestures. |
+| 327 | Recovery from a Claude version-inspection failure reuses the existing Worktree, still requires provider approval, and does not create another checkout. |
+| 328 | Rapid Stage skill additions wait for the prior save and workflow refresh, then persist the latest tag list with the refreshed revision. |
+| 329 | Removing a Stage skill while its addition is saving waits for the workflow refresh, then persists the empty selection with the refreshed revision. |
+| 330 | A saved Changes workspace target without a Back origin migrates to Details. |
+| 331 | Saved workspace-tab order drops the retired Changes tab on read and write. |
+| 332 | Changes opens independently, and Back restores the exact planning origin and active session. |
+| 333 | If the planning origin disappears, Back returns to the same module's conversation Details workspace. |
+| 334 | Back stays usable while Changes is loading or reports an error. |
+| 335 | Selecting a task checkout marks it selected and keeps Back usable while fresh task changes load. |
+| 336 | The branch inspector starts closed, opens from the toolbar, and closes again, leaving files and diff as the only review surface. |
+| 337 | The task Agent picker offers Terminal and opens a plain module shell in the terminal panel without launching an agent run. |
+| 338 | Clicking the open module picker trigger closes its portalled dialog without reopening it during the focus transition. |
+| 339 | A persisted subtree campaign with a live descendant replaces both launch actions with lifecycle status and Open, blocks Cmd+Enter, keeps Run item, and restores launch actions after completion. |
+| 340 | A stale subtree launch refusal refreshes the persisted campaign into status/Open without retrying execution. |
+| 341 | The live Changes toolbar checkout switcher clamps arrow navigation, supports Home/End and Enter/Space, cancels to its trigger with Escape, and follows checkout identity across refresh and removal. |
+| 342 | The diff keeps one named keyboard reading region focused while rendered content replaces its fallback. |
+| 343 | Diff reading keys scroll real overflow without activating another control. |
+| 344 | The panel-library separator remains a visible keyboard resize stop. |
+| 345 | File selection stays explicit per checkout, and Previous and Next wrap without moving focus. |
+| 346 | Empty, binary, truncated, and rendered diff content keep the same named reading region. |
+| 347 | A failed diff load keeps the named reading region stable and usable. |
+| 348 | File-list arrows traverse visible rows, while activation alone changes selection or disclosure state. |
+| 349 | File focus follows path identity across refresh, removal, directory collapse, and an empty-list fallback. |
+| 350 | Local-merge recovery confirmation focuses Cancel, nests Escape correctly, and submits once by keyboard. |
+| 351 | Branch opens on Close, nested Escape returns to Branch, and collapsing a disclosure recovers focus to its summary. |
+| 352 | The primary Changes confirmation opens on Cancel, Escape cancels, and focus returns to its enabled opener. |
+| 353 | The primary Changes confirmation submits once, locks cancellation while pending, and never steals focus after departure. |
+| 354 | Cleanup confirmation focuses Cancel, nests Escape, respects pending restrictions, and submits once. |
+| 355 | Closing the Branch inspector after opening Changes from a task tab returns focus to the visible Branch button while the planning copy remains mounted. |
+| 356 | Changes-only checkout and file-list keys stay out of planning capture, and shortcut help labels every Changes action instead of showing raw action IDs. |
+| 357 | Changes has a top command section and a bottom review section: Left/Right moves between enabled toolbar controls, Down enters the selected or first file, Right on a file focuses the diff, Left on an unscrolled diff returns to files, Up on the first row or at the top of the diff returns to commands, and directory rows keep their disclosure keys. |
+| 358 | Module folder trust names and inspects only the providers the user activated. |
+| 359 | A module folder saves with no trust prompt when no provider is activated. |
+| 360 | The state picker offers only workflow destinations configured from the current state. |
+| 361 | A missing-folder module keeps its unsent Idea entry draft when the Modules pane opens or closes. |
+| 362 | Provider onboarding allows planning without a provider and persists an empty provider catalog. |
+| 363 | After an interrupted tour, zero providers remains a valid choice through resume, skip, and restart. |
+| 364 | A user can create, read, and edit a work item with no active provider or agent launch. |
+| 365 | The production bundle initializes workspace navigation without a circular-import crash that leaves the desktop window blank. |
+| 366 | A planner completes zero-provider onboarding, receives launch guidance, activates a provider in Model configuration, and launches only after an explicit retry. |
+| 367 | A refused New conversation shows provider guidance without opening a conversation tab. |
+| 368 | Keyboard binding controls expose default, customized, unassigned, and recording states in their accessible names. |
+| 369 | An unmatched story search names the query, explains when the selected story remains open outside the filtered results, and clears without losing selection. |
+| 370 | Finishing zero-provider or selected-Codex onboarding keeps the real created module and selected Story visible immediately and restores both from retained server state after reload without returning to welcome or leaving guidance behind. |
+| 371 | A delayed onboarding acknowledgement keeps the final guidance and selected Story usable, blocks duplicate Finish requests, shows one failure for retry, then completes without a welcome flash and restores the same Story after reload. |
+| 372 | Welcome introduces Ticketry before provider setup; with zero or selected providers, the Story example leaves the real idea field empty, creates no sample Story or execution request, and Enter captures only the user's Story. |
+| 373 | A saved Story opens its persistent, read-only workflow guide from Details and closing it creates no run or state write. |
+| 374 | The guide shows only configured workflow stages and actual branching destinations, including the current state. |
+| 375 | Custom stage names and configured instructions appear as inert text without adding absent familiar stages. |
+| 376 | A current Story state outside the configured workflow is marked honestly and has no invented outgoing transition. |
+| 377 | Provider activation, stage binding, and entry auto-start are distinct facts beside the existing launch-control explanations. |
+| 378 | With zero activated providers, the guide gives a useful manual Details step and points to later Model configuration without launching. |
+| 379 | Scratch conversations and module-only selections have no Story workflow guide trigger. |
+| 380 | The guide contains keyboard focus, closes with Escape, and returns focus to its surviving trigger. |
+| 381 | A failed workflow read shows an accessible error and Retry without substituting default stages. |
+| 382 | Open guidance follows workflow revision, Story state, and provider changes from live cache updates. |
+| 383 | Selection changes discard prior Story guidance, and deleting the Story closes its guide. |
+| 384 | A renamed familiar stage receives the custom-stage explanation and an expandable empty-instructions message. |
+| 385 | While workflow details load, manual next-step and launch-control guidance stays visible without a fabricated workflow. |
+| 386 | Real first-Story capture teaches the Details planning step and states that saving does not launch an agent. |
+| 387 | Zero-provider and activated-provider handoffs offer appropriate next steps; the shared guide temporarily replaces the coach mark and restores it without acknowledging or launching. |
+| 388 | After tour completion and completed-state bootstrap, the selected Story's Details toolbar reopens the same guide without restarting onboarding. |
+| 389 | A workflow read failure in optional help does not block project-owned Finish tour acknowledgement. |
+| 390 | An activated provider with a current-stage launch binding receives Run item guidance with explicit executable, login, profile, and backend-readiness limits. |
+| 391 | Model configuration offers GPT-6 Sol and Luna for Codex, and a selected model saves as the launch default. |
+| 392 | Background automation Claude folder-trust attention stays passive and opens the original run's terminal without changing the pending attempt; activity clears its action. |
+| 393 | Reloaded startup attention retains the generic guidance and the original run identity without alleging trust failure. |
+| 394 | A Plan run's Claude trust attention remains passive and opens its existing terminal. |
+| 395 | An Instant run's trust action reattaches the persisted run after the terminal store is cleared. |
+| 396 | A desktop Run item refusal returned as the bare `no_activated_providers` code shows provider activation guidance and does not open a terminal. |
+| 397 | A rejected current-worktree list shows its alert inside the checkout switcher, which still opens and switches to the module checkout. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
-contract test that fails if a marker is missing or duplicated. When a Studio UI
+contract test that fails if a marker is missing or duplicated. A case whose
+behavior belongs to a Rust crate rather than the Studio UI carries its marker on
+the Rust test that exercises it, and the contract test counts those markers too.
+Case 245 is the current example: the runtime-path case lives in
+`studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/lifecycle/work.rs`,
+with failed-delivery pane teardown covered beside the delivery helper, so
+`cargo test` runs it rather than the Vitest gate. When a Studio UI
 change affects one of these behaviors, update that case in the same change. If
 the change introduces a new durable user behavior, add a new acceptance case
 and extend this matrix rather than returning to a manual checklist.

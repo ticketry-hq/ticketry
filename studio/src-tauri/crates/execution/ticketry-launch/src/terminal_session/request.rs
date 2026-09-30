@@ -1,0 +1,285 @@
+use sha2::{Digest, Sha256};
+
+use super::error::{TerminalLaunchError, TerminalLaunchErrorCode};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TerminalLaunchKind {
+    Task,
+    Planning,
+    Instant,
+    DocumentChat,
+    Automation,
+    Shell,
+    /// A plain login shell bound to one Work Item, opened in that item's
+    /// worktree. It is a durable Agent Run with no provider behind it.
+    TaskShell,
+}
+
+impl TerminalLaunchKind {
+    pub fn parse(value: &str) -> Result<Self, TerminalLaunchError> {
+        match value {
+            "task" => Ok(Self::Task),
+            "planning" => Ok(Self::Planning),
+            "instant" => Ok(Self::Instant),
+            "document_chat" => Ok(Self::DocumentChat),
+            "automation" => Ok(Self::Automation),
+            "shell" => Ok(Self::Shell),
+            "task_shell" => Ok(Self::TaskShell),
+            _ => Err(invalid("The terminal launch kind is unsupported.")),
+        }
+    }
+
+    pub fn scope(self) -> &'static str {
+        match self {
+            Self::Task | Self::Automation => "task",
+            Self::Planning => "plan",
+            Self::Instant => "instant",
+            Self::DocumentChat => "docchat",
+            // A task shell is durably the same agentless scope a module
+            // shell is. Only its workspace identity differs, so every
+            // provider-free rule already written for "shell" applies.
+            Self::Shell | Self::TaskShell => "shell",
+        }
+    }
+
+    pub fn target_kind(self) -> &'static str {
+        match self {
+            Self::Task => "task",
+            Self::Planning => "planning",
+            Self::Instant => "instant",
+            Self::DocumentChat => "document",
+            Self::Automation => "automation",
+            Self::Shell => "shell",
+            Self::TaskShell => "task_shell",
+        }
+    }
+
+    /// Whether this kind runs a plain shell instead of a provider agent.
+    pub fn is_shell(self) -> bool {
+        matches!(self, Self::Shell | Self::TaskShell)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreateTerminalSession {
+    pub client_request_id: String,
+    pub project_id: String,
+    pub issue_id: String,
+    pub module_id: String,
+    pub target_id: String,
+    pub kind: TerminalLaunchKind,
+    pub provider: Option<String>,
+    pub profile: Option<String>,
+    pub model: Option<String>,
+    pub reasoning: Option<String>,
+    pub policy_reference: Option<String>,
+    pub prompt: Option<String>,
+    pub resume_from_agent_run_id: Option<String>,
+    pub automation_attempt_id: Option<String>,
+    pub required_skills: Vec<String>,
+    pub working_directory_identity: String,
+    pub design_directory_identity: Option<String>,
+    pub document_relative_path: Option<String>,
+    pub columns: u16,
+    pub rows: u16,
+}
+
+impl CreateTerminalSession {
+    /// Validate the caller-owned request shape before launch authority reads
+    /// any policy. Interactive requests may omit provider and other launch
+    /// material because authority supplies those fields in the next stage.
+    pub fn validate_identity_and_geometry(&self) -> Result<(), TerminalLaunchError> {
+        for value in [
+            &self.client_request_id,
+            &self.project_id,
+            &self.issue_id,
+            &self.module_id,
+            &self.target_id,
+            &self.working_directory_identity,
+        ] {
+            if value.trim().is_empty() || value.len() > 255 || value.chars().any(char::is_control) {
+                return Err(invalid("A terminal launch identity is invalid."));
+            }
+        }
+        if !(1..=500).contains(&self.columns) || !(1..=500).contains(&self.rows) {
+            return Err(invalid("The terminal launch geometry is invalid."));
+        }
+        Ok(())
+    }
+
+    /// Validate the fully resolved launch before it can be persisted.
+    pub fn validate(&self) -> Result<(), TerminalLaunchError> {
+        self.validate_identity_and_geometry()?;
+        if (self.kind == TerminalLaunchKind::DocumentChat) != self.document_relative_path.is_some()
+        {
+            return Err(invalid("Document chat requires one document identity."));
+        }
+        if self.required_skills.iter().any(|value| {
+            value.trim().is_empty() || value.len() > 128 || value.chars().any(char::is_control)
+        }) {
+            return Err(invalid("A required skill identity is invalid."));
+        }
+        if self.kind.is_shell() {
+            if self.provider.is_some()
+                || self.model.is_some()
+                || self.reasoning.is_some()
+                || self.policy_reference.is_some()
+                || self.prompt.is_some()
+                || self.resume_from_agent_run_id.is_some()
+                || self.automation_attempt_id.is_some()
+                || !self.required_skills.is_empty()
+                || self.design_directory_identity.is_some()
+                || self.document_relative_path.is_some()
+            {
+                return Err(invalid("A shell launch cannot carry agent metadata."));
+            }
+        } else if self.provider.as_deref().is_none_or(str::is_empty) {
+            return Err(invalid("An agent terminal launch requires a provider."));
+        }
+        Ok(())
+    }
+
+    pub fn agent_run_id(&self) -> String {
+        derived("terminal-agent-run", &self.client_request_id)
+    }
+
+    pub fn effect_id(&self) -> String {
+        derived("terminal-launch-effect", &self.client_request_id)
+    }
+
+    pub fn terminal_task_id(&self) -> String {
+        match self.kind {
+            TerminalLaunchKind::Planning | TerminalLaunchKind::Instant => {
+                ticketry_documents::SCRATCH_TASK_ID.to_owned()
+            }
+            TerminalLaunchKind::Shell => ticketry_documents::SCRATCH_TASK_ID.to_owned(),
+            TerminalLaunchKind::TaskShell
+            | TerminalLaunchKind::Task
+            | TerminalLaunchKind::DocumentChat
+            | TerminalLaunchKind::Automation => self.issue_id.clone(),
+        }
+    }
+}
+
+fn derived(domain: &str, request_id: &str) -> String {
+    let mut hash = Sha256::new();
+    hash.update(domain.as_bytes());
+    hash.update([0]);
+    hash.update(request_id.as_bytes());
+    format!("{:x}", hash.finalize())[..32].to_owned()
+}
+
+fn invalid(message: &'static str) -> TerminalLaunchError {
+    TerminalLaunchError::new(TerminalLaunchErrorCode::InvalidRequest, message)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn shell() -> CreateTerminalSession {
+        CreateTerminalSession {
+            client_request_id: "shell-request".to_owned(),
+            project_id: "project".to_owned(),
+            issue_id: "module".to_owned(),
+            module_id: "module".to_owned(),
+            target_id: "module".to_owned(),
+            kind: TerminalLaunchKind::Shell,
+            provider: None,
+            profile: None,
+            model: None,
+            reasoning: None,
+            policy_reference: None,
+            prompt: None,
+            resume_from_agent_run_id: None,
+            automation_attempt_id: None,
+            required_skills: Vec::new(),
+            working_directory_identity: "module:module".to_owned(),
+            design_directory_identity: None,
+            document_relative_path: None,
+            columns: 80,
+            rows: 24,
+        }
+    }
+
+    #[test]
+    fn shell_requests_accept_no_agent_metadata() {
+        assert!(shell().validate().is_ok());
+        let mut provider = shell();
+        provider.provider = Some("codex".to_owned());
+        assert!(provider.validate().is_err());
+        let mut prompt = shell();
+        prompt.prompt = Some("pretend this is an agent".to_owned());
+        assert!(prompt.validate().is_err());
+        let mut resume = shell();
+        resume.resume_from_agent_run_id = Some("old-shell".to_owned());
+        assert!(resume.validate().is_err());
+    }
+
+    fn task_shell() -> CreateTerminalSession {
+        let mut request = shell();
+        request.kind = TerminalLaunchKind::TaskShell;
+        request.issue_id = "task".to_owned();
+        request.target_id = "task".to_owned();
+        request.working_directory_identity = "task:task".to_owned();
+        request
+    }
+
+    #[test]
+    fn a_task_shell_is_a_shell_bound_to_its_work_item() {
+        let request = task_shell();
+        assert!(request.validate().is_ok());
+        assert!(request.kind.is_shell());
+        // The run belongs to the Work Item, not the scratch bucket a
+        // module shell lands in.
+        assert_eq!(request.terminal_task_id(), "task");
+        assert_eq!(
+            shell().terminal_task_id(),
+            ticketry_documents::SCRATCH_TASK_ID
+        );
+        assert_eq!(
+            TerminalLaunchKind::parse("task_shell").expect("parse task_shell"),
+            TerminalLaunchKind::TaskShell
+        );
+        assert_eq!(request.kind.scope(), shell().kind.scope());
+    }
+
+    #[test]
+    fn a_task_shell_accepts_no_agent_metadata() {
+        for mutate in [
+            (|request: &mut CreateTerminalSession| request.provider = Some("codex".to_owned()))
+                as fn(&mut CreateTerminalSession),
+            |request| request.prompt = Some("pretend this is an agent".to_owned()),
+            |request| request.resume_from_agent_run_id = Some("old-run".to_owned()),
+            |request| request.required_skills = vec!["tdd".to_owned()],
+        ] {
+            let mut request = task_shell();
+            mutate(&mut request);
+            assert!(request.validate().is_err());
+        }
+    }
+
+    #[test]
+    fn unresolved_interactive_requests_accept_identity_only_until_authority_runs() {
+        let mut request = shell();
+        request.kind = TerminalLaunchKind::Task;
+        request.issue_id = "task".to_owned();
+        request.target_id = "task".to_owned();
+        request.working_directory_identity = "task:task".to_owned();
+
+        assert!(request.validate_identity_and_geometry().is_ok());
+        assert!(request.validate().is_err());
+    }
+
+    #[test]
+    fn client_request_identity_determines_run_effect_and_restart_identity() {
+        let first = shell();
+        let replay = shell();
+        let mut restart = shell();
+        restart.client_request_id = "shell-restart".to_owned();
+        assert_eq!(first.agent_run_id(), replay.agent_run_id());
+        assert_eq!(first.effect_id(), replay.effect_id());
+        assert_ne!(first.agent_run_id(), restart.agent_run_id());
+        assert_ne!(first.effect_id(), restart.effect_id());
+    }
+}

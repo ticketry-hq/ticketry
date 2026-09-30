@@ -9,3 +9,8 @@ export function isTypingTarget(target: EventTarget | null): boolean {
     target.getAttribute("contenteditable") === "true"
   );
 }
+
+/** True when focus is intentionally parked in a dialog outside a focus zone. */
+export function isDialogFocusTarget(target: Element | null): boolean {
+  return target instanceof HTMLElement && target.closest('[role="dialog"]') !== null;
+}

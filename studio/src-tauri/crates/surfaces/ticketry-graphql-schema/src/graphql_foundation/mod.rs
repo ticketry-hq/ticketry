@@ -1,0 +1,694 @@
+pub(crate) mod composed_commands;
+pub(crate) mod composition;
+mod database;
+mod entity_registration;
+pub(crate) use ticketry_entities as entities;
+mod adoption_timing;
+pub(crate) mod error;
+mod migration_probe;
+pub(crate) mod migrations;
+mod readiness_gate;
+
+use std::path::Path;
+
+use self::composed_commands::{AdoptedWorktracker, ComposedCommandRuntime};
+use self::error::{FoundationInitializationError, FoundationInitializationErrorCode};
+pub(crate) use entity_registration::register_entity_modules;
+pub(crate) use readiness_gate::Slice2CommandGate;
+use tauri_graphql::{GraphQlEndpoint, TransportApi};
+
+/// Whether this process owns the installation it is about to serve.
+///
+/// The desktop and browser adapter both own the installation they serve.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InstallationOwnership {
+    /// This process holds the installation lease and adopts.
+    Owned,
+}
+
+pub struct FoundationRuntime {
+    endpoint: GraphQlEndpoint,
+}
+
+impl FoundationRuntime {
+    pub fn endpoint(&self) -> &GraphQlEndpoint {
+        &self.endpoint
+    }
+}
+
+pub async fn initialize(
+    database_path: &Path,
+) -> Result<FoundationRuntime, FoundationInitializationError> {
+    let database = database::open(database_path).await?;
+    let schema = crate::query_root::foundation_schema_with_terminal_services(
+        database, None, None, None, None, None, None, None, None, None,
+    )?;
+    Ok(FoundationRuntime {
+        endpoint: GraphQlEndpoint::new(schema),
+    })
+}
+
+pub async fn initialize_with_worktracker_and_install(
+    foundation_database_path: &Path,
+    worktracker_database_path: &Path,
+    api: &tauri_graphql::TransportApiImpl,
+) -> Result<(), FoundationInitializationError> {
+    let foundation_database = database::open(foundation_database_path).await?;
+    let worktracker_database = ticketry_work_management::open(worktracker_database_path)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+                error.to_string(),
+            )
+        })?;
+    let schema = crate::query_root::foundation_schema_with_terminal_services(
+        foundation_database,
+        Some(worktracker_database),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )?;
+    api.install_endpoint(GraphQlEndpoint::new(schema))
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::EndpointInstall,
+                format!("could not install the GraphQL endpoint: {error}"),
+            )
+        })
+}
+
+pub async fn initialize_and_install(
+    database_path: &Path,
+    api: &tauri_graphql::TransportApiImpl,
+) -> Result<(), FoundationInitializationError> {
+    let runtime = initialize(database_path).await?;
+    api.install_endpoint(runtime.endpoint).map_err(|error| {
+        FoundationInitializationError::new(
+            FoundationInitializationErrorCode::EndpointInstall,
+            format!("could not install the GraphQL foundation endpoint: {error}"),
+        )
+    })
+}
+
+pub async fn initialize_with_keybinding_settings_and_install(
+    foundation_database_path: &Path,
+    settings_database_path: &Path,
+    api: &tauri_graphql::TransportApiImpl,
+) -> Result<(), FoundationInitializationError> {
+    let foundation_database = database::open(foundation_database_path).await?;
+    let settings_repository = ticketry_settings::AppSettingRepository::open(settings_database_path)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::SettingsDatabaseOpen,
+                error.to_string(),
+            )
+        })?;
+    let settings_database = settings_repository.database();
+    let schema = crate::query_root::keybinding_settings_schema(
+        foundation_database,
+        settings_database,
+        settings_repository,
+    )?;
+    api.install_endpoint(GraphQlEndpoint::new(schema))
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::EndpointInstall,
+                format!("could not install the GraphQL endpoint: {error}"),
+            )
+        })
+}
+
+/// Compose authored commands against an isolated writable WorkTracker store.
+/// Shipping uses the checked initializer below, which adds the readiness gate.
+pub async fn initialize_with_worktracker_commands_and_install(
+    foundation_database_path: &Path,
+    worktracker_database_path: &Path,
+    media_root: &Path,
+    api: &tauri_graphql::TransportApiImpl,
+) -> Result<ComposedCommandRuntime, FoundationInitializationError> {
+    let composed = initialize_with_worktracker_commands_and_install_inner(
+        foundation_database_path,
+        worktracker_database_path,
+        media_root,
+        None,
+        api,
+    )
+    .await?;
+    Ok(ComposedCommandRuntime::new(composed))
+}
+
+/// Compose and install the authored-command schema, handing back the command
+/// connection it now owns so callers reuse it instead of opening another pool.
+async fn initialize_with_worktracker_commands_and_install_inner(
+    foundation_database_path: &Path,
+    worktracker_database_path: &Path,
+    media_root: &Path,
+    readiness_data_directory: Option<&Path>,
+    api: &tauri_graphql::TransportApiImpl,
+) -> Result<composed_commands::ComposedWorktracker, FoundationInitializationError> {
+    let foundation_database = database::open(foundation_database_path).await?;
+    let worktracker_database =
+        ticketry_work_management::open_for_commands(worktracker_database_path)
+            .await
+            .map_err(|error| {
+                FoundationInitializationError::new(
+                    FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+                    error.to_string(),
+                )
+            })?;
+    ticketry_installation::install_final_schema_migrations(&worktracker_database)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+                format!("could not install the final WorkTracker schema: {error}"),
+            )
+        })?;
+    let settings_repository =
+        ticketry_settings::AppSettingRepository::open(worktracker_database_path)
+            .await
+            .map_err(|error| {
+                FoundationInitializationError::new(
+                    FoundationInitializationErrorCode::SettingsDatabaseOpen,
+                    error.to_string(),
+                )
+            })?;
+    // Where the durable outbox is adopted, authored writes publish their facts
+    // through it. Before adoption the same commands run unchanged and publish
+    // nothing, so composing this schema can never make a write depend on a
+    // table that does not exist yet.
+    let work_facts = ticketry_runs::outbox_adopted(&worktracker_database)
+        .await
+        .then(|| {
+            ticketry_work_management::commands::status_facts::WorkFactRecorder::new(
+                ticketry_runs::RunsServices::new(worktracker_database.clone())
+                    .outbox()
+                    .events()
+                    .clone(),
+            )
+        });
+    // Worktree operations own a Rust-authored journal, so installation is
+    // idempotent rather than an adoption. A journal that cannot be installed
+    // simply leaves creation uncomposed: the capability reports itself
+    // unavailable instead of running Git without a recovery record.
+    let worktrees = compose_worktree_operations(&worktracker_database, work_facts.is_some()).await;
+    // Document saves are Workspace Operations over the same journal. One
+    // bounded pass finishes a rename a previous process staged and abandoned,
+    // before any window can ask for that document again.
+    let saves_reconciled =
+        compose_document_saves(&worktracker_database, work_facts.is_some()).await;
+    // Whether every startup pass completed. This is deliberately not "the
+    // backlog is empty": an ambiguous document or repository is meant to stay
+    // deferred without making unrelated ones unusable. What the readiness gate
+    // needs to know is that the pass ran and finished, not that it had nothing
+    // left to defer.
+    let workspace_reconciled = worktrees.reconciled && saves_reconciled;
+    let worktree_operations = worktrees.operations;
+    // Documents is composed once, here, and shared. GraphQL reads the registry
+    // through this service, the desktop asset protocol serves bytes through it,
+    // and the watcher supervisor settles through it, so path authorization and
+    // fact publication have exactly one implementation in the process.
+    let documents = ticketry_documents::DocumentsService::new(worktracker_database.clone())
+        .publishing(document_facts(&worktracker_database).await);
+    let document_watch = compose_document_watch(&documents).await;
+    let viewer_ownership =
+        ticketry_terminal::ViewerOwnershipService::new(worktracker_database.clone());
+    let terminal_runtime = ticketry_terminal::InteractiveTerminalLaunchRuntime::new();
+    let instant_run_ticket_titles =
+        ticketry_terminal::InstantRunTicketTitleService::production(worktracker_database.clone());
+    let terminal_services = Some(crate::query_root::TerminalServices {
+        launch: ticketry_terminal::TerminalLaunchService::new(
+            worktracker_database.clone(),
+            std::sync::Arc::new(terminal_runtime.clone()),
+        )
+        .with_authority(std::sync::Arc::new(
+            ticketry_launch::LaunchAuthorityService::new(worktracker_database.clone()),
+        )),
+        viewers: viewer_ownership.clone(),
+        output_activity: ticketry_terminal::TerminalOutputActivityService::production(
+            worktracker_database.clone(),
+        ),
+        instant_run_ticket_titles: Some(instant_run_ticket_titles.clone()),
+    });
+    let schema = crate::query_root::foundation_schema_with_terminal_services(
+        foundation_database,
+        Some(worktracker_database.clone()),
+        Some(ticketry_work_management::commands::CommandDatabase(
+            worktracker_database.clone(),
+        )),
+        Some(ticketry_work_management::commands::attachments::AttachmentStorage::new(media_root)),
+        Some(settings_repository),
+        readiness_data_directory.map(Path::to_path_buf),
+        work_facts,
+        worktree_operations,
+        Some(documents.clone()),
+        terminal_services.clone(),
+    )?;
+    api.install_endpoint(GraphQlEndpoint::new(schema))
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::EndpointInstall,
+                format!("could not install the GraphQL endpoint: {error}"),
+            )
+        })?;
+    Ok(composed_commands::ComposedWorktracker {
+        commands: worktracker_database,
+        documents,
+        document_watch,
+        workspace_reconciled,
+        viewer_ownership,
+        terminal_runtime,
+        output_activity: terminal_services
+            .as_ref()
+            .expect("terminal services were composed")
+            .output_activity
+            .clone(),
+        instant_run_ticket_titles,
+    })
+}
+
+/// The durable publisher registry settlements append their facts through.
+///
+/// Before the Runs outbox is adopted there is nowhere to append to, so
+/// discovery reconciles exactly as it does afterwards and simply publishes
+/// nothing. A caller's own response stays authoritative either way.
+async fn document_facts(
+    worktracker_database: &sea_orm::DatabaseConnection,
+) -> Option<ticketry_documents::DocumentFactRecorder> {
+    ticketry_runs::outbox_adopted(worktracker_database)
+        .await
+        .then(|| {
+            ticketry_documents::DocumentFactRecorder::new(
+                ticketry_runs::RunsServices::new(worktracker_database.clone())
+                    .outbox()
+                    .events()
+                    .clone(),
+            )
+        })
+}
+
+/// Start live document discovery for the runs that are still active.
+///
+/// The first reconciliation runs before this returns, so a restart has
+/// reconstructed its eligible watchers — and rescanned their roots for whatever
+/// was written while Ticketry was down — before Studio can ask for a registry.
+/// Supervision then continues in the background.
+async fn compose_document_watch(
+    documents: &ticketry_documents::DocumentsService,
+) -> Option<ticketry_documents::DocumentWatchSupervisor> {
+    let supervisor = ticketry_documents::DocumentWatchSupervisor::new(documents);
+    if let Err(error) = supervisor.reconcile().await {
+        // Live discovery is an optimization over rescanning, so failing to
+        // start it degrades promptness rather than the capability.
+        eprintln!("Ticketry could not start its document watchers: {error}");
+        return None;
+    }
+    supervisor.supervise();
+    Some(supervisor)
+}
+
+/// Compose the worktree write capabilities over the adopted store.
+///
+/// The Workspace Operation journal is Rust-authored, so installing it is
+/// idempotent and repeatable rather than a handoff. Bounded reconciliation
+/// passes run before the schema is reachable, so a creation, a discard, or a
+/// landing abandoned by a previous process is adopted, completed, or recorded
+/// as a conflict before a user can ask again. Every pass is bounded: whatever
+/// it does not reach stays due, and a second pass is harmless.
+///
+/// Creation and discard share the process-wide repository locks so neither can
+/// observe the other's half-finished tree.
+async fn compose_worktree_operations(
+    worktracker_database: &sea_orm::DatabaseConnection,
+    outbox_adopted: bool,
+) -> ComposedWorktreeOperations {
+    if let Err(error) =
+        ticketry_workspace_runtime::workspace_operations::schema::install(worktracker_database)
+            .await
+    {
+        eprintln!("Ticketry could not install the Workspace Operation journal: {error}");
+        return ComposedWorktreeOperations {
+            operations: None,
+            reconciled: false,
+        };
+    }
+    let mut reconciled = true;
+    let events = outbox_adopted.then(|| {
+        ticketry_runs::RunsServices::new(worktracker_database.clone())
+            .outbox()
+            .events()
+            .clone()
+    });
+    let journal = ticketry_workspace_runtime::workspace_operations::WorkspaceOperationJournal::new(
+        worktracker_database.clone(),
+    );
+    let locks = ticketry_workspace_runtime::status::RepositoryLocks::shared();
+    let create = ticketry_workspace_runtime::create::WorktreeCreateService::new(
+        worktracker_database.clone(),
+        journal.clone(),
+        events.clone(),
+        locks.clone(),
+    );
+    if let Err(error) = create.reconciler().reconcile().await {
+        eprintln!("Ticketry could not reconcile abandoned worktree operations: {error}");
+        reconciled = false;
+    }
+    let discard = ticketry_workspace_runtime::discard::WorktreeDiscardService::new(
+        worktracker_database.clone(),
+        journal.clone(),
+        events.clone(),
+        locks.clone(),
+    );
+    // A discard abandoned mid-removal is finished here, so a stale row, a
+    // pruned-but-unrecorded checkout, or an undeleted branch cannot survive a
+    // restart as a permanent half-state.
+    if let Err(error) = discard.reconciler().reconcile().await {
+        eprintln!("Ticketry could not reconcile abandoned worktree discards: {error}");
+        reconciled = false;
+    }
+    let changes = ticketry_workspace_runtime::changes::WorktreeChangesService::from_status(
+        create.status_service().clone(),
+    );
+    if let Err(error) = changes.merge_reconciler().reconcile().await {
+        eprintln!("Ticketry could not reconcile abandoned worktree merges: {error}");
+        reconciled = false;
+    }
+    ComposedWorktreeOperations {
+        operations: Some(
+            ticketry_workspace_runtime::worktree_operations::WorktreeOperations::new(
+                create, discard, changes,
+            ),
+        ),
+        reconciled,
+    }
+}
+
+/// The worktree write capabilities, and whether their startup reconciliation
+/// passes finished. The two are returned together because the readiness gate
+/// needs both: a composed capability whose backlog was never drained is not one
+/// a window may be pointed at yet.
+struct ComposedWorktreeOperations {
+    operations: Option<ticketry_workspace_runtime::worktree_operations::WorktreeOperations>,
+    reconciled: bool,
+}
+
+/// Drain abandoned document saves over the adopted store.
+///
+/// A save that was staged, or renamed, and never settled is finished here
+/// before the schema is reachable, so the first window to open a document sees
+/// one file version and one recorded digest. The pass is bounded and
+/// idempotent: whatever it does not reach stays due, and a second pass is
+/// harmless. A journal that cannot be installed simply leaves saving
+/// uncomposed rather than replacing a file without a recovery record.
+async fn compose_document_saves(
+    worktracker_database: &sea_orm::DatabaseConnection,
+    outbox_adopted: bool,
+) -> bool {
+    if let Err(error) =
+        ticketry_workspace_runtime::workspace_operations::schema::install(worktracker_database)
+            .await
+    {
+        eprintln!("Ticketry could not install the Workspace Operation journal: {error}");
+        return false;
+    }
+    let facts = outbox_adopted.then(|| {
+        ticketry_documents::DocumentFactRecorder::new(
+            ticketry_runs::RunsServices::new(worktracker_database.clone())
+                .outbox()
+                .events()
+                .clone(),
+        )
+    });
+    let service = ticketry_workspace_runtime::document_save::DocumentSaveService::new(
+        worktracker_database.clone(),
+        ticketry_workspace_runtime::workspace_operations::WorkspaceOperationJournal::new(
+            worktracker_database.clone(),
+        ),
+        facts,
+    );
+    if let Err(error) = service.reconciler().reconcile().await {
+        eprintln!("Ticketry could not reconcile abandoned document saves: {error}");
+        return false;
+    }
+    true
+}
+
+/// Import legacy profile module folders into typed Module Link rows.
+///
+/// The importer is handed a connection opened against this installation's own
+/// state database. It never resolves the established data directory itself, so
+/// an import cannot reach an installation the caller did not name.
+async fn import_module_links(data_directory: &Path) -> Result<(), FoundationInitializationError> {
+    let database = ticketry_work_management::open_for_commands(&data_directory.join("state.db"))
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::ModuleLinkImport,
+                error.to_string(),
+            )
+        })?;
+    let outcome = ticketry_work_management::import(&database, data_directory)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::ModuleLinkImport,
+                error.to_string(),
+            )
+        });
+    let _ = database.close().await;
+    outcome.map(drop)
+}
+
+/// Perform the checked one-writer handoff before exposing authored commands.
+pub async fn adopt_worktracker_and_install(
+    foundation_database_path: &Path,
+    data_directory: &Path,
+    api: &tauri_graphql::TransportApiImpl,
+    ownership: InstallationOwnership,
+) -> Result<AdoptedWorktracker, FoundationInitializationError> {
+    let mut timing = adoption_timing::AdoptionTiming::new();
+    // The installation itself changes hands first. Nothing below may touch a
+    // database whose ownership has not transferred: the capability handoffs
+    // write, and a write before the verified recovery snapshot exists is the
+    // one step of this migration that cannot be undone.
+    //
+    // Take the installation's one-writer lease, recover it if needed, and
+    // convert any adoption failure into the startup error this function returns.
+    let installation = match ownership {
+        InstallationOwnership::Owned => Some(
+            ticketry_installation::adopt(data_directory)
+                .await
+                .map_err(installation_adoption_error)?,
+        ),
+    };
+    timing.record("installation");
+    // Check that the settings store can be carried forward before changing it.
+    ticketry_settings::preflight(data_directory)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::SettingsDatabaseOpen,
+                error.to_string(),
+            )
+        })?;
+    timing.record("settings-preflight");
+    // Adopt WorkTracker's state database and its Rust-owned schema changes.
+    ticketry_work_management::ensure_adopted(data_directory)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+                error.to_string(),
+            )
+        })?;
+    timing.record("work-management");
+    // Open the adopted state database for provider-catalog initialization.
+    let provider_database =
+        ticketry_work_management::open_for_commands(&data_directory.join("state.db"))
+            .await
+            .map_err(|error| {
+                FoundationInitializationError::new(
+                    FoundationInitializationErrorCode::SettingsDatabaseOpen,
+                    error.to_string(),
+                )
+            })?;
+    ticketry_installation::install_final_schema_migrations(&provider_database)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+                format!("final schema migration failed: {error}"),
+            )
+        })?;
+    // Create or update the provider catalog against that adopted database.
+    ticketry_settings::ProviderCatalogService::open(provider_database)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::SettingsDatabaseOpen,
+                error.to_string(),
+            )
+        })?;
+    timing.record("provider-catalog");
+    // Adopt the settings store after its provider catalog is available.
+    ticketry_settings::adopt(data_directory)
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
+                FoundationInitializationErrorCode::SettingsDatabaseOpen,
+                error.to_string(),
+            )
+        })?;
+    timing.record("settings");
+    // Typed Module Links are imported once the settings store is Rust-owned
+    // and its profile snapshot is verified, so the rows commit while their
+    // legacy source is still recoverable. The import is idempotent: every
+    // later launch re-runs it and changes nothing.
+    import_module_links(data_directory).await?;
+    timing.record("module-links");
+    // The Runs write lease changes hands here, before any Rust Runs command is
+    // reachable. An unknown or corrupt Runs schema refuses adoption and leaves
+    // the pre-cutover snapshot restorable.
+    ticketry_runs::ensure_adopted(data_directory)
+        .await
+        .map_err(runs_adoption_error)?;
+    timing.record("runs");
+    // Terminal persistence depends on the adopted Agent Run and Launch Effect
+    // identities. Refuse an unknown Terminal leaf before the product schema or
+    // any Rust terminal writer becomes reachable.
+    ticketry_terminal::ensure_terminal_persistence_adopted(data_directory)
+        .await
+        .map_err(terminal_adoption_error)?;
+    timing.record("terminals");
+    // Execution campaigns depend on adopted Work Management, Runs, and
+    // Terminal identities. Classify and validate them only after those three
+    // stores are ready, and before any future Graph Run command is composed.
+    ticketry_agent_execution::ensure_adopted(data_directory)
+        .await
+        .map_err(execution_adoption_error)?;
+    timing.record("execution");
+    // The Documents and Worktrees write leases change hands here, after Runs
+    // because document and worktree facts are appended to the Runs outbox, and
+    // before any workspace command is composed. An unknown or malformed
+    // Documents, Worktree, or journal schema refuses the handoff and leaves the
+    // pre-cutover snapshots restorable.
+    ticketry_workspace_runtime::handoff::adopt(data_directory)
+        .await
+        .map_err(workspace_adoption_error)?;
+    timing.record("workspace");
+    // Every capability has handed over, so the durable status-event ledger the
+    // boundary is published into now exists. Readiness opens here, after the
+    // last handoff and before the endpoint is installed, because the endpoint
+    // is what makes a mutation reachable.
+    if let Some(installation) = installation {
+        ticketry_installation::open_readiness(data_directory, installation)
+            .await
+            .map_err(installation_adoption_error)?;
+    }
+    timing.record("readiness");
+    // Compose native command services and install their GraphQL endpoint.
+    let composed = initialize_with_worktracker_commands_and_install_inner(
+        foundation_database_path,
+        &data_directory.join("state.db"),
+        &data_directory.join("media"),
+        Some(data_directory),
+        api,
+    )
+    .await?;
+    timing.record("graphql-composition");
+    // Confirm the installed endpoint can answer its readiness query.
+    verify_graphql_readiness(api).await?;
+    timing.record("graphql-readiness");
+    // Return the services that the desktop runtime starts after initialization.
+    Ok(AdoptedWorktracker {
+        runtime: ComposedCommandRuntime::new(composed),
+    })
+}
+
+fn installation_adoption_error(
+    error: ticketry_installation::AdoptionFailure,
+) -> FoundationInitializationError {
+    FoundationInitializationError::new(
+        FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+        format!("{error}. {}", error.recovery()),
+    )
+}
+
+fn workspace_adoption_error(
+    error: ticketry_workspace_runtime::handoff::WorkspaceHandoffError,
+) -> FoundationInitializationError {
+    FoundationInitializationError::new(
+        FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+        format!(
+            "Documents and Worktrees adoption failed ({}): {error}",
+            error.code_str()
+        ),
+    )
+}
+
+fn runs_adoption_error(
+    error: ticketry_runs::RunsPersistenceError,
+) -> FoundationInitializationError {
+    FoundationInitializationError::new(
+        FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+        format!("Runs adoption failed ({}): {error}", error.code_str()),
+    )
+}
+
+fn terminal_adoption_error(
+    error: ticketry_terminal::TerminalPersistenceError,
+) -> FoundationInitializationError {
+    FoundationInitializationError::new(
+        FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+        format!("Terminal adoption failed ({}): {error}", error.code_str()),
+    )
+}
+
+fn execution_adoption_error(
+    error: ticketry_agent_execution::persistence::ExecutionPersistenceError,
+) -> FoundationInitializationError {
+    FoundationInitializationError::new(
+        FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+        format!("Execution adoption failed: {error}"),
+    )
+}
+
+async fn verify_graphql_readiness(
+    api: &tauri_graphql::TransportApiImpl,
+) -> Result<(), FoundationInitializationError> {
+    let response = api
+        .clone()
+        .graphql_execute(
+            serde_json::json!({"query": "query Slice2Readiness { __typename }"}).to_string(),
+        )
+        .await;
+    let value: serde_json::Value = serde_json::from_str(&response).map_err(|error| {
+        FoundationInitializationError::new(
+            FoundationInitializationErrorCode::EndpointInstall,
+            format!("could not decode the Slice 2 GraphQL readiness probe: {error}"),
+        )
+    })?;
+    if value.get("errors").is_some() || value.pointer("/data/__typename").is_none() {
+        return Err(FoundationInitializationError::new(
+            FoundationInitializationErrorCode::EndpointInstall,
+            "Slice 2 GraphQL readiness probe did not return a query root",
+        ));
+    }
+    Ok(())
+}
+
+pub async fn generated_schema_sdl() -> Result<String, FoundationInitializationError> {
+    let database = database::in_memory().await?;
+    crate::query_root::generated_contract_schema(database).map(|schema| schema.sdl())
+}
+
+pub fn export_transport_bindings(path: impl AsRef<Path>) -> Result<(), String> {
+    tauri_graphql::export_bindings(path)
+}

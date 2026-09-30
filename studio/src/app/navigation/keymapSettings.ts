@@ -1,7 +1,8 @@
 import {
-  getKeybindingOverrides,
-  putKeybindingOverrides,
-} from "../../shared/api/client";
+  LoadKeybindingSettingDocument,
+  UpdateKeybindingSettingDocument,
+} from "../../features/settings";
+import { studioRuntime } from "../../runtime";
 import {
   studioKeymapRegistry,
   type BindingOverride,
@@ -9,7 +10,12 @@ import {
 
 export async function loadKeybindingOverrides(): Promise<void> {
   try {
-    const { value } = await getKeybindingOverrides();
+    const { value } = await studioRuntime().readSettings({
+      graphQl: async (execute) => ({
+        value: (await execute(LoadKeybindingSettingDocument, {}))
+          .keybinding_setting?.value ?? null,
+      }),
+    });
     studioKeymapRegistry.setOverrides(value);
   } catch (error) {
     studioKeymapRegistry.setOverrides([]);
@@ -20,6 +26,12 @@ export async function loadKeybindingOverrides(): Promise<void> {
 export async function saveKeybindingOverrides(
   overrides: BindingOverride[],
 ): Promise<void> {
-  const { value } = await putKeybindingOverrides(overrides);
+  const { value } = await studioRuntime().writeSettings({
+    graphQl: async (execute) => ({
+      value: (await execute(UpdateKeybindingSettingDocument, {
+        value: overrides,
+      })).update_keybinding_setting.value,
+    }),
+  });
   studioKeymapRegistry.setOverrides(value);
 }

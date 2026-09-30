@@ -18,6 +18,7 @@ import {
   useNativeViewerFocusRegistration,
   useNativeViewerFocusSignal,
   useNativeViewerFrameSync,
+  useNativeViewerKeyboardOwnership,
 } from "./internal/useNativeViewerHostEffects";
 import {
   nativeFailureMessage,
@@ -30,8 +31,13 @@ import {
   useNativeViewerMount,
 } from "./internal/nativeViewerMountRegistry";
 import { ensureNativeViewerLifecycle } from "./internal/nativeViewerLifecycle";
-import { reportNativeRenderSuccess } from "./internal/nativeRenderRecovery";
+import {
+  publishRendererMeasurements,
+  recordAttachStart,
+  recordFirstPaint,
+} from "./internal/rendererMeasurement";
 import { activeElementLabel, traceViewerFocus } from "./internal/focusTrace";
+import { useNativeWebViewSiblingInteraction } from "./internal/useNativeWebViewSiblingInteraction";
 
 const OWNER_LABEL: Record<ForegroundOwner, string> = {
   studio: "the fallback workspace",
@@ -62,15 +68,18 @@ export function NativeGhosttyTerminal({
   const registerHost = useTerminalForegroundStore((state) => state.registerHost);
   const unregisterHost = useTerminalForegroundStore((state) => state.unregisterHost);
   const hostRef = useRef<HTMLDivElement | null>(null);
-  // Any window-level overlay — modal stack or DialogHost confirm — occludes.
+  // Any window-level overlay — modal stack or DialogHost confirm — takes
+  // focus and keyboard ownership. The viewer stays presented beneath it as a
+  // WebView sibling; only hide/show for surface ownership changes.
   const modalOpen = useModalOcclusionActive();
-  const modalOpenRef = useRef(modalOpen);
   const activeRef = useRef(active);
   const visibleRef = useRef(false);
   const openedRunRef = useRef<string | null>(null);
   const blockingHideCountRef = useRef(0);
-  modalOpenRef.current = modalOpen;
   activeRef.current = active;
+  // The one presentation gate, re-read at commit time by every queued show.
+  const shouldPresentRef = useRef<() => boolean>(() => false);
+  shouldPresentRef.current = () => visibleRef.current;
 
   const session = sessions[sessionId] ?? null;
   const runId = session?.agentRunId ?? null;
@@ -90,6 +99,20 @@ export function NativeGhosttyTerminal({
   const presentedHandleRef = useRef<string | null>(sharedHandle);
   presentedHandleRef.current = sharedHandle;
 
+  // CODING-1304 — the default renderer records the attach latency half of the
+  // comparison matrix. Bytes and paint duration have no JS-side equivalent
+  // here: they never leave Rust and libghostty, which is the native
+  // renderer's central advantage and shows in the matrix as an empty column.
+  useEffect(() => {
+    if (!runId) return;
+    publishRendererMeasurements();
+    recordAttachStart("native", runId);
+  }, [runId]);
+
+  useEffect(() => {
+    if (presentedHere && visible && runId) recordFirstPaint("native", runId);
+  }, [presentedHere, runId, visible]);
+
   useEffect(() => {
     if (failureReason) onUnavailable?.(failureReason);
   }, [failureReason, onUnavailable]);
@@ -98,16 +121,30 @@ export function NativeGhosttyTerminal({
     if (sharedHandle) onReady?.();
   }, [onReady, sharedHandle]);
 
-  // Recovery succeeds on presentation evidence only: this host is the visible
-  // one and its native show committed a non-empty grid. Holding a handle for a
-  // hidden retained viewer is not a working native terminal. Success retires
-  // this run alone — another run's failure keeps its own campaign armed.
-  useEffect(() => {
-    if (presentedHere && visible && runId) reportNativeRenderSuccess(runId);
-  }, [presentedHere, runId, visible]);
+  useNativeWebViewSiblingInteraction(
+    sharedHandle,
+    hostRef,
+    visible && presentedHere,
+    modalOpen,
+    (error) => {
+      if (runId) {
+        failNativeViewerMount(runId, nativeFailureMessage(error), {
+          origin: "webview-sibling-interaction",
+          error,
+        });
+      }
+    },
+  );
 
   useNativeViewerFocusRegistration({
     sessionId,
+    handle: sharedHandle,
+    presented: presentedHere,
+    visible,
+    modalOpen,
+  });
+  useNativeViewerKeyboardOwnership({
+    runId,
     handle: sharedHandle,
     presented: presentedHere,
     visible,
@@ -120,10 +157,13 @@ export function NativeGhosttyTerminal({
     currentHandleRef: presentedHandleRef,
     presented: presentedHere,
     visible,
-    modalOpen,
     onFailure: (error) => {
-      console.error("native libghostty frame update failed", error);
-      if (runId) failNativeViewerMount(runId, nativeFailureMessage(error));
+      if (runId) {
+        failNativeViewerMount(runId, nativeFailureMessage(error), {
+          origin: "frame-sync",
+          error,
+        });
+      }
     },
   });
   useNativeViewerFocusSignal({
@@ -138,7 +178,7 @@ export function NativeGhosttyTerminal({
   useLayoutEffect(() => {
     const handle = sharedHandle;
     if (!retained || !runId) return;
-    const hidden = !visible || modalOpen;
+    const hidden = !visible;
     if (!handle) return;
     traceViewerFocus(hidden ? "wants hidden" : "wants presented", {
       run: runId,
@@ -151,10 +191,9 @@ export function NativeGhosttyTerminal({
     });
     // The destination host moves the one shared view. The prior host must not
     // race that move with a hide merely because foreground ownership changed.
-    // Modal occlusion is window-level and has no destination host: while the
-    // stack is non-empty nobody may present, so the deferral would otherwise
-    // leave the losing host's view uncovered over the dialog.
-    if (hidden && !modalOpen && resolvedOwner !== owner) return;
+    // A modal never hides: the viewer presents beneath it as a WebView sibling
+    // and only surrenders focus and keyboard ownership.
+    if (hidden && resolvedOwner !== owner) return;
     if (hidden && !presentedHere) return;
     if (!hidden && presentedHere) return;
     const blocksDestination = hidden && !active && !modalOpen;
@@ -168,11 +207,12 @@ export function NativeGhosttyTerminal({
           return null;
         })
       : showNativeViewer(runId, handle, async () => {
-          // Re-read presentation intent at commit time. This closure is queued
-          // behind every other retained hide/show, so a modal opened (or the
-          // surface deactivated) while it waited must cancel the reveal rather
-          // than uncover a native island over the dialog.
-          if (modalOpenRef.current || !visibleRef.current) return null;
+          // Re-read presentation intent at commit time with the same gate the
+          // lifecycle's first show uses. This closure is queued behind every
+          // other retained hide/show, so a surface deactivated while it waited
+          // cancels the reveal. An open modal does not: as a WebView sibling
+          // the viewer presents beneath the dialog.
+          if (!shouldPresentRef.current()) return null;
           const host = hostRef.current;
           if (!host) return null;
           const frame = clippedNativeTerminalFrame(host);
@@ -191,8 +231,10 @@ export function NativeGhosttyTerminal({
         });
     void command
       .catch((error) => {
-        console.error("native libghostty visibility change failed", error);
-        failNativeViewerMount(runId, nativeFailureMessage(error));
+        failNativeViewerMount(runId, nativeFailureMessage(error), {
+          origin: "visibility-change",
+          error,
+        });
       })
       .finally(() => {
         if (!blocksDestination) return;
@@ -235,18 +277,21 @@ export function NativeGhosttyTerminal({
       sessionId,
       token,
       host: () => hostRef.current,
-      shouldPresent: () => visibleRef.current && !modalOpenRef.current,
+      shouldPresent: () => shouldPresentRef.current(),
     });
   }, [mayOwnAttachment, retained, runId, sessionId, token]);
 
   const presentedElsewhere = session !== null && resolvedOwner !== owner;
   return (
-    <div className="relative h-full w-full bg-pane-panel">
+    <div
+      className="relative h-full w-full bg-transparent"
+    >
       <div
         ref={hostRef}
-        className="absolute bottom-0 left-2 right-2 top-[10px] bg-pane-panel"
+        className="absolute bottom-0 left-2 right-2 top-[10px] bg-transparent"
         data-testid="native-terminal-host"
         data-terminal-renderer="libghostty"
+        data-native-terminal-presented={visible && presentedHere ? "" : undefined}
       />
       {presentedElsewhere && resolvedOwner ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-pane-bg p-4 text-center text-sm text-text-muted">

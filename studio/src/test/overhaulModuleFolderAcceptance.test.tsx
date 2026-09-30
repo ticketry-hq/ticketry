@@ -1,56 +1,25 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ModuleFolder } from "../features/agents/terminal/ModuleFolder";
+import { useModalStore } from "../app/modal";
+import { getModuleFolder, seedModuleLinks } from "../features/module-links";
+import * as moduleLinkTransport from "../features/module-links/moduleLinkTransport";
 
-const api = vi.hoisted(() => ({
-  listModuleLinks: vi.fn(),
-  upsertModuleLink: vi.fn(),
-  validateModuleFolder: vi.fn(),
+const { selectModule } = vi.hoisted(() => ({
+  selectModule: vi.fn(),
 }));
-const selectModule = vi.hoisted(() => vi.fn());
 
-vi.mock("../shared/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shared/api/client")>()),
-  ...api,
-}));
 vi.mock("../state/clientStore", () => ({
   useClientStore: {
     getState: () => ({ selectModule }),
   },
 }));
 
-import { useModalStore } from "../app/modal";
-import { ModuleFolder } from "../features/agents/terminal/ModuleFolder";
-import {
-  getModuleFolder,
-  seedModuleLinks,
-} from "../features/module-links";
-import { queryClient } from "../shared/query/queryClient";
-
-const savedLink = (localPath: string) => ({
-  id: "link-1",
-  module_id: "module-1",
-  local_path: localPath,
-  created_at: "2026-08-19T00:00:00Z",
-  updated_at: "2026-08-19T00:00:01Z",
-});
-
-describe("Module-link folder mutation acceptance", () => {
+describe("module-folder selection acceptance", () => {
   beforeEach(() => {
-    queryClient.clear();
-    seedModuleLinks([savedLink("/repos/old")]);
-    api.listModuleLinks.mockReset().mockResolvedValue([
-      savedLink("/repos/old"),
-    ]);
-    api.validateModuleFolder.mockReset().mockResolvedValue({
-      valid: true,
-      reason: null,
-    });
-    api.upsertModuleLink
-      .mockReset()
-      .mockImplementation(async (_moduleId: string, path: string) =>
-        savedLink(path),
-      );
-    selectModule.mockReset().mockResolvedValue(undefined);
+    selectModule.mockReset();
+    selectModule.mockResolvedValue(undefined);
+    seedModuleLinks([]);
     useModalStore.setState({
       modalStack: [
         {
@@ -61,7 +30,14 @@ describe("Module-link folder mutation acceptance", () => {
     });
   });
 
-  it("[overhaul-134] validates and round-trips a changed folder through the Module link", async () => {
+  it("rejects blank folders, then trims the saved path before resuming selection", async () => {
+    // The write lands in the link graph, so the fake stands in for the host's
+    // authoritative row rather than for a rewritten profile.
+    const writeModuleLink = vi
+      .spyOn(moduleLinkTransport, "writeModuleLink")
+      .mockImplementation(async (moduleId, path) => {
+        seedModuleLinks([{ id: `link-${moduleId}`, moduleId, path }]);
+      });
     render(
       <ModuleFolder
         payload={{ moduleId: "module-1", resumeModuleSelection: true }}
@@ -69,18 +45,25 @@ describe("Module-link folder mutation acceptance", () => {
     );
 
     const input = screen.getByRole("textbox");
-    expect(input).toHaveValue("/repos/old");
-    fireEvent.change(input, { target: { value: "  /repos/new  " } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(save).toBeDisabled();
 
-    await waitFor(() =>
-      expect(api.validateModuleFolder).toHaveBeenCalledWith("/repos/new"),
-    );
-    expect(api.upsertModuleLink).toHaveBeenCalledWith(
-      "module-1",
-      "/repos/new",
-    );
-    expect(getModuleFolder("module-1")).toBe("/repos/new");
+    fireEvent.change(input, { target: { value: "   " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(save).toBeDisabled();
+    expect(writeModuleLink).not.toHaveBeenCalled();
+    expect(selectModule).not.toHaveBeenCalled();
+    expect(useModalStore.getState().modalStack).toHaveLength(1);
+
+    fireEvent.change(input, { target: { value: "  /repos/ticketry  " } });
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(writeModuleLink).toHaveBeenCalledWith("module-1", "/repos/ticketry");
+    expect(getModuleFolder("module-1")).toBe("/repos/ticketry");
     expect(selectModule).toHaveBeenCalledWith("module-1");
     expect(useModalStore.getState().modalStack).toEqual([]);
   });

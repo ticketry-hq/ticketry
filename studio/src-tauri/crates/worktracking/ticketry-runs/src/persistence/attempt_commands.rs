@@ -1,0 +1,635 @@
+use sea_orm::{
+    sea_query::{Expr, OnConflict},
+    ActiveValue::NotSet,
+    ActiveValue::Set,
+    ColumnTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, QueryFilter,
+    TransactionTrait,
+};
+use serde_json::{json, Value};
+
+use super::attempt_queries::{database_uuid, project};
+use super::entities::automation_attempt as automation_attempt_entity;
+use super::repositories::{automation_attempt, NewStatusEvent};
+use super::work_item_scope;
+use super::{
+    AttemptOutcome, AutomationAttemptProjection, AutomationAttemptRecord, RunsPersistenceError,
+    RunsPersistenceErrorCode, StatusEventRepository, TransitionOccurrence,
+};
+
+pub async fn materialize_root(
+    database: &DatabaseConnection,
+    events: &StatusEventRepository,
+    occurrence: &TransitionOccurrence,
+) -> Result<AutomationAttemptProjection, RunsPersistenceError> {
+    let occurrence_id = database_uuid(&occurrence.occurrence_id)?;
+    let issue_id = database_uuid(&occurrence.issue_id)?;
+    let project_id = database_uuid(&occurrence.project_id)?;
+    let from_state_id = database_uuid(&occurrence.from_state_id)?;
+    let to_state_id = database_uuid(&occurrence.to_state_id)?;
+    if occurrence.workflow_revision < 0 {
+        return Err(invalid(
+            "Automation Attempt workflow revision cannot be negative",
+        ));
+    }
+
+    let transaction = database.begin().await?;
+    validate_issue_scope(&transaction, &issue_id, &project_id).await?;
+    let attempt_id = uuid::Uuid::new_v4().simple().to_string();
+    let timestamp = now();
+    let inserted =
+        automation_attempt_entity::Entity::insert(automation_attempt_entity::ActiveModel {
+            id: Set(attempt_id),
+            transition_id: Set(occurrence_id.clone()),
+            issue_id: Set(issue_id.clone()),
+            from_state_id: Set(from_state_id.clone()),
+            to_state_id: Set(to_state_id.clone()),
+            workflow_revision: Set(occurrence.workflow_revision),
+            status: Set("pending".to_owned()),
+            agent: NotSet,
+            agent_run_id: NotSet,
+            delivery_mode: NotSet,
+            error: NotSet,
+            error_details: NotSet,
+            retryable: Set(true),
+            dismissed_at: NotSet,
+            retry_of_id: NotSet,
+            root_attempt_id: NotSet,
+            created_at: Set(timestamp.clone()),
+            updated_at: Set(timestamp),
+        })
+        .on_conflict(OnConflict::new().do_nothing().to_owned())
+        .exec_without_returning(&transaction)
+        .await?
+            == 1;
+    let attempt = attempt_by_occurrence(&transaction, &occurrence_id).await?;
+    validate_occurrence(
+        &attempt,
+        &issue_id,
+        &from_state_id,
+        &to_state_id,
+        occurrence.workflow_revision,
+    )?;
+    if inserted {
+        append_attempt_event(
+            events,
+            &transaction,
+            &project_id,
+            "automation_attempt_created",
+            &attempt,
+        )
+        .await?;
+    }
+    transaction.commit().await?;
+    if inserted {
+        events.wake_committed();
+    }
+    project(attempt)
+}
+
+pub async fn record_outcome(
+    database: &DatabaseConnection,
+    events: &StatusEventRepository,
+    attempt_id: &str,
+    outcome: AttemptOutcome,
+) -> Result<AutomationAttemptProjection, RunsPersistenceError> {
+    let transaction = database.begin().await?;
+    let projection = record_outcome_in(&transaction, events, attempt_id, outcome).await?;
+    transaction.commit().await?;
+    // A wake-up is a hint, never history. Publishing one for an idempotent
+    // repeat costs a subscriber one indexed reread that finds nothing.
+    events.wake_committed();
+    Ok(projection)
+}
+
+/// Attempt outcome inside a caller-owned transaction. A launch outcome
+/// projects onto its owning attempt in the same commit that settles the
+/// durable Launch Effect.
+pub async fn record_outcome_in(
+    transaction: &DatabaseTransaction,
+    events: &StatusEventRepository,
+    attempt_id: &str,
+    outcome: AttemptOutcome,
+) -> Result<AutomationAttemptProjection, RunsPersistenceError> {
+    validate_outcome(&outcome)?;
+    let attempt_id = database_uuid(attempt_id)?;
+    let (current, project_id) = attempt_with_project(transaction, &attempt_id).await?;
+    let desired_status = match &outcome {
+        AttemptOutcome::Skipped { .. } => "skipped",
+        AttemptOutcome::Succeeded { .. } => "succeeded",
+        AttemptOutcome::Failed { .. } => "failed",
+    };
+    if current.status != "pending" {
+        if current.status == desired_status {
+            return project(current);
+        }
+        return Err(conflict("Automation Attempt outcome is already final"));
+    }
+
+    let result = match outcome {
+        AttemptOutcome::Skipped { reason, details } => {
+            let timestamp = now();
+            automation_attempt_entity::Entity::update_many()
+                .col_expr(
+                    automation_attempt_entity::Column::Status,
+                    Expr::value("skipped"),
+                )
+                .col_expr(
+                    automation_attempt_entity::Column::Error,
+                    Expr::value(reason),
+                )
+                .col_expr(
+                    automation_attempt_entity::Column::ErrorDetails,
+                    Expr::value(details.to_string()),
+                )
+                .col_expr(
+                    automation_attempt_entity::Column::Retryable,
+                    Expr::value(false),
+                )
+                .col_expr(
+                    automation_attempt_entity::Column::UpdatedAt,
+                    Expr::value(timestamp),
+                )
+                .filter(automation_attempt_entity::Column::Id.eq(&attempt_id))
+                .filter(automation_attempt_entity::Column::Status.eq("pending"))
+                .exec(transaction)
+                .await?
+        }
+        AttemptOutcome::Succeeded {
+            agent,
+            agent_run_id,
+        } => {
+            let timestamp = now();
+            automation_attempt_entity::Entity::update_many()
+                .col_expr(
+                    automation_attempt_entity::Column::Status,
+                    Expr::value("succeeded"),
+                )
+                .col_expr(automation_attempt_entity::Column::Agent, Expr::value(agent))
+                .col_expr(
+                    automation_attempt_entity::Column::AgentRunId,
+                    Expr::value(agent_run_id),
+                )
+                .col_expr(
+                    automation_attempt_entity::Column::Error,
+                    Expr::value(None::<String>),
+                )
+                .col_expr(
+                    automation_attempt_entity::Column::ErrorDetails,
+                    Expr::value(None::<String>),
+                )
+                .col_expr(
+                    automation_attempt_entity::Column::Retryable,
+                    Expr::value(false),
+                )
+                .col_expr(
+                    automation_attempt_entity::Column::UpdatedAt,
+                    Expr::value(timestamp),
+                )
+                .filter(automation_attempt_entity::Column::Id.eq(&attempt_id))
+                .filter(automation_attempt_entity::Column::Status.eq("pending"))
+                .exec(transaction)
+                .await?
+        }
+        AttemptOutcome::Failed {
+            error,
+            failure,
+            retryable,
+        } => {
+            let timestamp = now();
+            automation_attempt_entity::Entity::update_many()
+                .col_expr(
+                    automation_attempt_entity::Column::Status,
+                    Expr::value("failed"),
+                )
+                .col_expr(automation_attempt_entity::Column::Error, Expr::value(error))
+                .col_expr(
+                    automation_attempt_entity::Column::ErrorDetails,
+                    Expr::value(failure.to_string()),
+                )
+                .col_expr(
+                    automation_attempt_entity::Column::Retryable,
+                    Expr::value(retryable),
+                )
+                .col_expr(
+                    automation_attempt_entity::Column::UpdatedAt,
+                    Expr::value(timestamp),
+                )
+                .filter(automation_attempt_entity::Column::Id.eq(&attempt_id))
+                .filter(automation_attempt_entity::Column::Status.eq("pending"))
+                .exec(transaction)
+                .await?
+        }
+    };
+    if result.rows_affected == 0 {
+        let (winner, _) = attempt_with_project(transaction, &attempt_id).await?;
+        if winner.status == desired_status {
+            return project(winner);
+        }
+        return Err(conflict("Automation Attempt outcome is already final"));
+    }
+    let (attempt, _) = attempt_with_project(transaction, &attempt_id).await?;
+    append_attempt_event(
+        events,
+        transaction,
+        &project_id,
+        "automation_attempt_outcome",
+        &attempt,
+    )
+    .await?;
+    project(attempt)
+}
+
+pub async fn dismiss(
+    database: &DatabaseConnection,
+    events: &StatusEventRepository,
+    attempt_id: &str,
+) -> Result<AutomationAttemptProjection, RunsPersistenceError> {
+    let attempt_id = database_uuid(attempt_id)?;
+    let transaction = database.begin().await?;
+    let (current, project_id) = attempt_with_project(&transaction, &attempt_id).await?;
+    if current.status != "failed" {
+        return Err(RunsPersistenceError::new(
+            RunsPersistenceErrorCode::AttemptNotFailed,
+            "Only failed Automation Attempts can be dismissed",
+        ));
+    }
+    if current.dismissed_at.is_some() {
+        transaction.commit().await?;
+        return project(current);
+    }
+    let changed_at = now();
+    let changed = automation_attempt_entity::Entity::update_many()
+        .col_expr(
+            automation_attempt_entity::Column::DismissedAt,
+            Expr::value(changed_at.clone()),
+        )
+        .col_expr(
+            automation_attempt_entity::Column::UpdatedAt,
+            Expr::value(changed_at),
+        )
+        .filter(automation_attempt_entity::Column::Id.eq(&attempt_id))
+        .filter(automation_attempt_entity::Column::Status.eq("failed"))
+        .filter(automation_attempt_entity::Column::DismissedAt.is_null())
+        .exec(&transaction)
+        .await?
+        .rows_affected
+        == 1;
+    let (attempt, _) = attempt_with_project(&transaction, &attempt_id).await?;
+    if changed {
+        append_attempt_event(
+            events,
+            &transaction,
+            &project_id,
+            "automation_attempt_dismissed",
+            &attempt,
+        )
+        .await?;
+    }
+    transaction.commit().await?;
+    if changed {
+        events.wake_committed();
+    }
+    project(attempt)
+}
+
+pub async fn retry(
+    database: &DatabaseConnection,
+    events: &StatusEventRepository,
+    source_id: &str,
+) -> Result<AutomationAttemptProjection, RunsPersistenceError> {
+    let source_id = database_uuid(source_id)?;
+    let transaction = database.begin().await?;
+    let (source, project_id) = attempt_with_project(&transaction, &source_id).await?;
+    if source.status != "failed" {
+        return Err(RunsPersistenceError::new(
+            RunsPersistenceErrorCode::AttemptNotFailed,
+            "Automation Attempt is not failed",
+        ));
+    }
+    if !source.retryable
+        || source.retry_of_id.is_some()
+        || retry_child(&transaction, &source_id).await?.is_some()
+    {
+        return Err(RunsPersistenceError::new(
+            RunsPersistenceErrorCode::AttemptNotRetryable,
+            "Automation Attempt has no retry remaining",
+        ));
+    }
+    let retry_id = uuid::Uuid::new_v4().simple().to_string();
+    let root_id = source
+        .root_attempt_id
+        .clone()
+        .unwrap_or_else(|| source.id.clone());
+    let timestamp = now();
+    let inserted =
+        automation_attempt_entity::Entity::insert(automation_attempt_entity::ActiveModel {
+            id: Set(retry_id),
+            transition_id: Set(source.transition_id.clone()),
+            issue_id: Set(source.issue_id.clone()),
+            from_state_id: Set(source.from_state_id.clone()),
+            to_state_id: Set(source.to_state_id.clone()),
+            workflow_revision: Set(source.workflow_revision),
+            status: Set("pending".to_owned()),
+            agent: NotSet,
+            agent_run_id: NotSet,
+            delivery_mode: NotSet,
+            error: NotSet,
+            error_details: NotSet,
+            retryable: Set(true),
+            dismissed_at: NotSet,
+            retry_of_id: Set(Some(source.id.clone())),
+            root_attempt_id: Set(Some(root_id)),
+            created_at: Set(timestamp.clone()),
+            updated_at: Set(timestamp),
+        })
+        .on_conflict(OnConflict::new().do_nothing().to_owned())
+        .exec_without_returning(&transaction)
+        .await?
+            == 1;
+    if !inserted {
+        return Err(RunsPersistenceError::new(
+            RunsPersistenceErrorCode::AttemptNotRetryable,
+            "Automation Attempt has no retry remaining",
+        ));
+    }
+    let retry = retry_child(&transaction, &source_id)
+        .await?
+        .ok_or_else(|| {
+            RunsPersistenceError::new(
+                RunsPersistenceErrorCode::Storage,
+                "Automation Attempt retry was not found after insertion",
+            )
+        })?;
+    append_attempt_event(
+        events,
+        &transaction,
+        &project_id,
+        "automation_attempt_retried",
+        &retry,
+    )
+    .await?;
+    transaction.commit().await?;
+    events.wake_committed();
+    project(retry)
+}
+
+async fn validate_issue_scope(
+    transaction: &DatabaseTransaction,
+    issue_id: &str,
+    project_id: &str,
+) -> Result<(), RunsPersistenceError> {
+    let row = work_item_scope::automation_scope(transaction, issue_id)
+        .await?
+        .ok_or_else(|| invalid("Transition occurrence references no WorkItem"))?;
+    if row.project_id != project_id || row.issue_type != "task" {
+        return Err(conflict(
+            "Transition occurrence scope does not match its WorkItem",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_occurrence(
+    attempt: &AutomationAttemptRecord,
+    issue_id: &str,
+    from_state_id: &str,
+    to_state_id: &str,
+    workflow_revision: i32,
+) -> Result<(), RunsPersistenceError> {
+    if attempt.retry_of_id.is_some()
+        || attempt.issue_id != issue_id
+        || attempt.from_state_id != from_state_id
+        || attempt.to_state_id != to_state_id
+        || attempt.workflow_revision != workflow_revision
+    {
+        return Err(conflict(
+            "Transition occurrence conflicts with its existing root Automation Attempt",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_outcome(outcome: &AttemptOutcome) -> Result<(), RunsPersistenceError> {
+    match outcome {
+        AttemptOutcome::Skipped { reason, details }
+            if reason.trim().is_empty()
+                || !details.is_object()
+                || details.get("code").and_then(Value::as_str).is_none() =>
+        {
+            Err(invalid(
+                "Skipped Automation Attempts require a reason and typed details object",
+            ))
+        }
+        AttemptOutcome::Succeeded {
+            agent,
+            agent_run_id,
+        } if agent.trim().is_empty() || agent_run_id.trim().is_empty() => Err(invalid(
+            "Successful Automation Attempts require agent and Agent Run identities",
+        )),
+        AttemptOutcome::Failed { error, failure, .. }
+            if error.trim().is_empty()
+                || !failure.is_object()
+                || failure.get("code").and_then(Value::as_str).is_none() =>
+        {
+            Err(invalid(
+                "Failed Automation Attempts require an error and typed failure object",
+            ))
+        }
+        _ => Ok(()),
+    }
+}
+
+async fn attempt_by_occurrence(
+    transaction: &DatabaseTransaction,
+    occurrence_id: &str,
+) -> Result<AutomationAttemptRecord, RunsPersistenceError> {
+    let row = automation_attempt_entity::Entity::find()
+        .filter(automation_attempt_entity::Column::TransitionId.eq(occurrence_id))
+        .filter(automation_attempt_entity::Column::RetryOfId.is_null())
+        .one(transaction)
+        .await?
+        .ok_or_else(|| {
+            RunsPersistenceError::new(
+                RunsPersistenceErrorCode::Storage,
+                "Root Automation Attempt was not found after insertion",
+            )
+        })?;
+    Ok(automation_attempt(row))
+}
+
+pub(super) async fn attempt_with_project(
+    transaction: &DatabaseTransaction,
+    attempt_id: &str,
+) -> Result<(AutomationAttemptRecord, String), RunsPersistenceError> {
+    let attempt = automation_attempt_entity::Entity::find_by_id(attempt_id)
+        .one(transaction)
+        .await?
+        .ok_or_else(|| {
+            RunsPersistenceError::new(
+                RunsPersistenceErrorCode::AttemptNotFound,
+                "Automation Attempt was not found",
+            )
+        })?;
+    let project_id = work_item_scope::project_id(transaction, &attempt.issue_id)
+        .await?
+        .ok_or_else(|| {
+            RunsPersistenceError::new(
+                RunsPersistenceErrorCode::InvalidHistory,
+                "Automation Attempt references no WorkItem",
+            )
+        })?;
+    Ok((automation_attempt(attempt), project_id))
+}
+
+async fn retry_child(
+    transaction: &DatabaseTransaction,
+    source_id: &str,
+) -> Result<Option<AutomationAttemptRecord>, RunsPersistenceError> {
+    Ok(automation_attempt_entity::Entity::find()
+        .filter(automation_attempt_entity::Column::RetryOfId.eq(source_id))
+        .one(transaction)
+        .await?
+        .map(automation_attempt))
+}
+
+pub(super) async fn append_attempt_event(
+    events: &StatusEventRepository,
+    transaction: &DatabaseTransaction,
+    project_id: &str,
+    event_kind: &str,
+    attempt: &AutomationAttemptRecord,
+) -> Result<(), RunsPersistenceError> {
+    let projection = project(attempt.clone())?;
+    let payload = serde_json::to_value(&projection).unwrap_or_else(|_| json!({}));
+    let event_id = uuid::Uuid::new_v4().simple().to_string();
+    events
+        .append(
+            transaction,
+            NewStatusEvent {
+                event_id: &event_id,
+                project_id,
+                event_kind,
+                payload_version: 1,
+                subject_kind: "automation_attempt",
+                subject_id: &attempt.id,
+                agent_run_id: attempt.agent_run_id.as_deref(),
+                automation_attempt_id: Some(&attempt.id),
+                work_item_id: Some(&attempt.issue_id),
+                payload: &payload,
+            },
+        )
+        .await?;
+    Ok(())
+}
+
+fn invalid(message: &'static str) -> RunsPersistenceError {
+    RunsPersistenceError::new(RunsPersistenceErrorCode::InvalidAttempt, message)
+}
+
+pub(super) fn conflict(message: &'static str) -> RunsPersistenceError {
+    RunsPersistenceError::new(RunsPersistenceErrorCode::Conflict, message)
+}
+
+pub(super) fn now() -> String {
+    super::timestamp::database_now()
+}
+
+#[cfg(test)]
+mod tests {
+    use sea_orm::{ConnectionTrait, Database};
+
+    use super::super::{AttemptOutcome, RunsPersistenceErrorCode, RunsServices};
+
+    async fn store() -> sea_orm::DatabaseConnection {
+        let database = Database::connect("sqlite::memory:").await.unwrap();
+        database
+            .execute_unprepared(
+                "CREATE TABLE worktracker_issue (
+                    id char(32) PRIMARY KEY,
+                    project_id char(32) NOT NULL,
+                    type varchar(32) NOT NULL
+                );
+                CREATE TABLE automation_attempts (
+                    id char(32) PRIMARY KEY,
+                    transition_id char(32) NOT NULL,
+                    issue_id char(32) NOT NULL,
+                    from_state_id char(32) NOT NULL,
+                    to_state_id char(32) NOT NULL,
+                    workflow_revision integer NOT NULL,
+                    status varchar(32) NOT NULL,
+                    agent varchar NULL,
+                    agent_run_id varchar NULL,
+                    delivery_mode varchar(16) NULL,
+                    error text NULL,
+                    error_details text NULL,
+                    retryable bool NOT NULL DEFAULT 1,
+                    dismissed_at datetime NULL,
+                    retry_of_id char(32) NULL,
+                    root_attempt_id char(32) NULL,
+                    created_at datetime NOT NULL,
+                    updated_at datetime NOT NULL
+                );
+                CREATE UNIQUE INDEX one_retry_per_attempt
+                    ON automation_attempts(retry_of_id)
+                    WHERE retry_of_id IS NOT NULL;
+                INSERT INTO worktracker_issue VALUES
+                    ('00000000000000000000000000000001',
+                     '00000000000000000000000000000002', 'task');
+                INSERT INTO automation_attempts (
+                    id, transition_id, issue_id, from_state_id, to_state_id,
+                    workflow_revision, status, error, error_details, retryable,
+                    created_at, updated_at
+                ) VALUES (
+                    '00000000000000000000000000000003',
+                    '00000000000000000000000000000004',
+                    '00000000000000000000000000000001',
+                    '00000000000000000000000000000005',
+                    '00000000000000000000000000000006',
+                    1, 'failed', 'handoff failed',
+                    '{\"code\":\"handoff_delivery_failed\"}', 1,
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                );",
+            )
+            .await
+            .unwrap();
+        database
+            .execute_unprepared(super::super::schema::FOCUSED_SCHEMA)
+            .await
+            .unwrap();
+        database
+    }
+
+    #[tokio::test]
+    async fn one_failed_attempt_allows_one_retry_only() {
+        let services = RunsServices::new(store().await);
+        let root = "00000000-0000-0000-0000-000000000003";
+
+        let retry = services.attempts().retry(root).await.unwrap();
+        assert_eq!(
+            services.attempts().retry(root).await.unwrap_err().code(),
+            RunsPersistenceErrorCode::AttemptNotRetryable,
+        );
+
+        let failed_retry = services
+            .attempts()
+            .record_outcome(
+                &retry.attempt_id,
+                AttemptOutcome::Failed {
+                    error: "handoff retry failed".to_owned(),
+                    failure: serde_json::json!({"code": "handoff_delivery_failed"}),
+                    retryable: true,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            services
+                .attempts()
+                .retry(&failed_retry.attempt_id)
+                .await
+                .unwrap_err()
+                .code(),
+            RunsPersistenceErrorCode::AttemptNotRetryable,
+        );
+    }
+}

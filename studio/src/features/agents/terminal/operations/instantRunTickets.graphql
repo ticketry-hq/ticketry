@@ -1,0 +1,10 @@
+query InstantRunTickets($projectId: String!, $moduleId: String!) {
+  tickets: instant_run_tickets(
+    project_id: $projectId
+    module_id: $moduleId
+  ) {
+    agent_run_id
+    title
+    started_at
+  }
+}

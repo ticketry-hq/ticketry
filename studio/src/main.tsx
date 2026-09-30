@@ -2,13 +2,15 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { QueryClientProvider } from "@tanstack/react-query";
 import StudioApp from "./app/StudioApp";
 import { ModalHost } from "./app/modal/ModalHost";
 import { DialogHost } from "./app/shell/DialogHost";
 import ToastHost from "./app/shell/ToastHost";
-import { queryClient } from "./shared/query/queryClient";
-import { installFrontendLogBridge } from "./shared/logging/frontendLogBridge";
+import { installDesktopFileLogging } from "./shared/logging/desktopFileLogging";
+import { installWebFileLogging } from "./shared/logging/webFileLogging";
+import { StudioApolloProvider } from "./shared/apollo/StudioApolloProvider";
+import { setLaunchDiscoveryRuntimeInstance } from "./features/agents/status";
+import { AppUpdatesLaunchCheck } from "./features/app-updates";
 
 // Self-hosted fonts (Fontsource, upright variable axes only — no external
 // request). Hanken Grotesk = UI/body; JetBrains Mono = KEY-N / code.
@@ -23,14 +25,13 @@ import "./app/styles/tailwind.css";
 import "./app/styles/studio-surface.css";
 import { createDesktopRuntime } from "./runtime/desktopRuntime";
 import { suppressNativeContextMenu } from "./app/startup/suppressNativeContextMenu";
+import { recordStartupStage } from "./app/startup/startupTrace";
+import { reportPendingStudioReload } from "./app/startup/reloadStudio";
 import {
   initializeBrowserRuntime,
   initializeStudioRuntime,
+  runtimeConfiguration,
 } from "./runtime";
-
-if (import.meta.env.DEV && isTauri()) {
-  installFrontendLogBridge({ invoke });
-}
 
 if (isTauri()) {
   suppressNativeContextMenu();
@@ -54,24 +55,34 @@ const root = ReactDOM.createRoot(document.getElementById("root")!);
 async function startStudio(): Promise<void> {
   try {
     if (isTauri()) {
-      initializeStudioRuntime(await createDesktopRuntime({ invoke, listen }));
+      await installDesktopFileLogging({ invoke });
+      recordStartupStage("frontend-file-logging-ready");
+      const runtime = await createDesktopRuntime({ invoke, listen });
+      initializeStudioRuntime(runtime);
     } else {
+      await installWebFileLogging();
+      recordStartupStage("frontend-file-logging-ready");
       initializeBrowserRuntime();
     }
+    reportPendingStudioReload();
+    setLaunchDiscoveryRuntimeInstance(runtimeConfiguration().runtimeInstance ?? null);
+    recordStartupStage("frontend-runtime-configured");
     root.render(
       <React.StrictMode>
-        <QueryClientProvider client={queryClient}>
+        <StudioApolloProvider>
           <div className="h-screen w-screen">
             <div className="studio-surface h-full">
+              <AppUpdatesLaunchCheck />
               <StudioApp />
             </div>
             <ModalHost />
             <DialogHost />
             <ToastHost />
           </div>
-        </QueryClientProvider>
+        </StudioApolloProvider>
       </React.StrictMode>,
     );
+    recordStartupStage("frontend-render-scheduled");
   } catch (error) {
     console.error("[startup] Studio could not start", error);
     const message = error instanceof Error ? error.message : String(error);

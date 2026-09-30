@@ -104,6 +104,7 @@ export function ModalShell({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      data-native-terminal-overlay
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) {
           (onClose ?? popModal)();

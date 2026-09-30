@@ -6,7 +6,6 @@
  * singleton modal host, and serialized native boundary all participate.
  */
 
-import { QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
   fireEvent,
@@ -21,19 +20,17 @@ import { ModalHost } from "../app/modal/ModalHost";
 import { useModalStore } from "../app/modal/modalStore";
 import { StudioFooter } from "../app/shell/StudioFooter";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
-import { useAgentStatusStore } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
-import {
-  INITIAL_NATIVE_RENDER_RECOVERY_DELAY_MS,
-  configureNativeRenderRecovery,
-  nativeRenderRecoveryPending,
-  resetNativeRenderRecovery,
-} from "../features/agents/terminal/internal/nativeRenderRecovery";
+import { modalOcclusionActive } from "../features/agents/terminal/internal/modalOcclusion";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useStudioStore } from "../features/projects/store";
-import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
+import {
+  installDesktopGraphQlRuntime,
+  terminalSessionReadExecutor,
+  type RecordedGraphQlOperation,
+} from "./desktopGraphQlRuntime";
 
 const tauri = vi.hoisted(() => ({
   desktop: true,
@@ -63,15 +60,13 @@ const settingsApi = vi.hoisted(() => ({
   putProviderCatalog: vi.fn(),
 }));
 
-vi.mock("../shared/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shared/api/client")>()),
+vi.mock("./legacyApiFixture", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./legacyApiFixture")>()),
   ...settingsApi,
 }));
 
 const terminalApi = vi.hoisted(() => ({
   getDocuments: vi.fn(),
-  getTerminals: vi.fn(),
-  listResumableTerminals: vi.fn(),
   resumeTerminal: vi.fn(),
 }));
 
@@ -79,6 +74,18 @@ vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../features/agents/api/agentApi")>()),
   ...terminalApi,
 }));
+
+// Terminal session reads moved to the Rust Terminal Session graph, so the seam
+// a test controls is the read transport, not a host API module.
+const terminalReads = vi.hoisted(() => {
+  const resumable = vi.fn();
+  return {
+    readTaskTerminalSessions: vi.fn(),
+    readScratchTerminalSessions: vi.fn(),
+    readTaskResumableTerminalSessions: resumable,
+    readScratchResumableTerminalSessions: resumable,
+  };
+});
 
 class ResizeObserverStub {
   observe() {}
@@ -96,6 +103,15 @@ const FRAME = {
 };
 
 let hostRequests: string[] = [];
+let leaseOperations: RecordedGraphQlOperation[] = [];
+
+// Renewal is an ongoing heartbeat; only claiming and releasing ownership count
+// as lease traffic a presentation change must not cause.
+const leaseClaims = () =>
+  leaseOperations.filter((operation) =>
+    operation.operationName === "CreateViewerLease" ||
+    operation.operationName === "DeleteViewerLease",
+  );
 
 function invocations(command: string): unknown[][] {
   return tauri.invoke.mock.calls
@@ -149,7 +165,7 @@ function seedTaskWorkspace(sessionId: string, runId: string): void {
 
 function mountTaskWorkspace() {
   return render(
-    <QueryClientProvider client={queryClient}>
+    <>
       <SelectedTicketContent
         bucket="task-792"
         projectId="project-1"
@@ -159,21 +175,20 @@ function mountTaskWorkspace() {
       />
       <StudioFooter />
       <ModalHost />
-    </QueryClientProvider>,
+    </>,
   );
 }
 
 describe("overhaul acceptance — Task workspace Settings occlusion", () => {
-  const reload = vi.fn();
-  let restoreNativeRenderRecovery: () => void;
-
   beforeEach(() => {
+    window.history.replaceState({}, "", "/?terminalRenderer=native");
     vi.resetAllMocks();
+    leaseOperations = installDesktopGraphQlRuntime(
+      terminalSessionReadExecutor(terminalReads),
+    );
     localStorage.clear();
-    queryClient.clear();
     hostRequests = [];
     tauri.desktop = true;
-    restoreNativeRenderRecovery = configureNativeRenderRecovery({ reload });
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.stubGlobal(
       "fetch",
@@ -205,11 +220,13 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
       configurable: true,
     });
 
-    seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useTerminalForegroundStore.setState({ claims: {}, hostTargets: {} });
     useModalStore.setState({ modalStack: [], presentedNoticeIds: new Set() });
     useClientStore.setState({
+      selectedModuleId: "module-1",
+      selectedTaskId: "task-792",
+      workspaceSelection: { kind: "task" },
       activeByTask: {},
       workspaces: {},
       sidebarVisible: true,
@@ -234,8 +251,9 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
       },
     });
     terminalApi.getDocuments.mockResolvedValue({ documents: [] });
-    terminalApi.getTerminals.mockResolvedValue([]);
-    terminalApi.listResumableTerminals.mockResolvedValue([]);
+    terminalReads.readTaskTerminalSessions.mockResolvedValue([]);
+    terminalReads.readScratchTerminalSessions.mockResolvedValue([]);
+    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
     tauri.listen.mockResolvedValue(() => {});
     tauri.invoke.mockImplementation(
       (command: string, input?: { runId?: string }) => {
@@ -259,15 +277,12 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
   });
 
   afterEach(() => {
-    resetNativeRenderRecovery();
-    restoreNativeRenderRecovery();
-    vi.useRealTimers();
     useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
     useModalStore.setState({ modalStack: [], presentedNoticeIds: new Set() });
     vi.unstubAllGlobals();
   });
 
-  it("[overhaul-123] hides and restores the retained Task viewer through Settings while browser compatibility remains in the WebView", async () => {
+  it("[overhaul-123] keeps the retained Task viewer visible beneath Settings while browser compatibility remains in the WebView", async () => {
     seedTaskWorkspace("session-792", "run-792");
     const nativeView = mountTaskWorkspace();
 
@@ -276,7 +291,7 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
     await waitFor(() =>
       expect(invocations("native_terminal_show")).toHaveLength(1),
     );
-    const requestsBeforeSettings = hostRequests.length;
+    const claimsBeforeSettings = leaseClaims().length;
 
     fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
     const dialog = await screen.findByRole("dialog", { name: "Studio settings" });
@@ -285,11 +300,14 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
       within(dialog).getByRole("button", { name: "Close dialog" }),
     ).toBeEnabled();
     await waitFor(() => {
-      expect(invocations("native_terminal_hide")).toEqual([[{ handle: HANDLE }]]);
+      expect(invocations("native_terminal_hide")).toHaveLength(0);
     });
     expect(invocations("native_terminal_detach")).toHaveLength(0);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
-    expect(hostRequests).toHaveLength(requestsBeforeSettings);
+    expect(leaseClaims()).toHaveLength(claimsBeforeSettings);
+    // Occlusion reaches no host route at all — the retired terminal REST
+    // surface is not something a presentation change may fall back to.
+    expect(hostRequests.some((url) => url.includes("/terminals"))).toBe(false);
     expect(useTerminalStore.getState().sessions["session-792"]).toMatchObject({
       agentRunId: "run-792",
       status: "ready",
@@ -297,18 +315,20 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Close dialog" }));
     await waitFor(() =>
-      expect(invocations("native_terminal_show")).toHaveLength(2),
+      expect(invocations("native_terminal_show")).toHaveLength(1),
     );
     expect(invocations("native_terminal_show").at(-1)).toEqual([
       { handle: HANDLE, frame: FRAME },
     ]);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
     expect(
-      hostRequests.filter((url) =>
-        url.endsWith("/api/terminals/viewers/lease"),
+      leaseOperations.filter((operation) =>
+        operation.operationName === "CreateViewerLease",
       ),
     ).toHaveLength(1);
-    expect(hostRequests.some((url) => url.includes("/lease/release"))).toBe(false);
+    expect(
+      leaseOperations.some((operation) => operation.operationName === "DeleteViewerLease"),
+    ).toBe(false);
 
     nativeView.unmount();
     await waitFor(() =>
@@ -339,58 +359,6 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
     expect(screen.getByTestId("terminal-host")).toBe(browserHost);
     expect(tauri.invoke.mock.calls).toHaveLength(nativeCommandCount);
     browserView.unmount();
-  });
-
-  it("[overhaul-146] keeps Settings mounted when its native viewer hide fails", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    seedTaskWorkspace("session-857", "run-857");
-    tauri.invoke.mockImplementation(
-      (command: string, input?: { runId?: string }) => {
-        if (command === "native_terminal_available") return Promise.resolve(true);
-        if (command === "native_terminal_hide") {
-          return Promise.reject(new Error("native terminal hide failed"));
-        }
-        if (
-          command === "native_terminal_attach" ||
-          command === "native_terminal_show" ||
-          command === "native_terminal_set_frame" ||
-          command === "native_terminal_reconcile_frame"
-        ) {
-          return Promise.resolve({
-            handle: HANDLE,
-            runId: input?.runId ?? "run-857",
-            columns: 100,
-            rows: 30,
-          });
-        }
-        return Promise.resolve();
-      },
-    );
-
-    const view = mountTaskWorkspace();
-    await waitFor(() =>
-      expect(invocations("native_terminal_show")).toHaveLength(1),
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-    const dialog = await screen.findByRole("dialog", { name: "Studio settings" });
-    await waitFor(() =>
-      expect(screen.getByTestId("native-terminal-fallback-notice")).toBeVisible(),
-    );
-
-    expect(dialog).toBeVisible();
-    expect(
-      within(dialog).getByRole("button", { name: "Close dialog" }),
-    ).toBeEnabled();
-    expect(nativeRenderRecoveryPending()).toBe(false);
-
-    await vi.advanceTimersByTimeAsync(
-      INITIAL_NATIVE_RENDER_RECOVERY_DELAY_MS + 200,
-    );
-    expect(reload).not.toHaveBeenCalled();
-    expect(dialog).toBeVisible();
-
-    view.unmount();
   });
 
   it("[overhaul-124] shields a newer Task destination until Settings' pending native hide commits", async () => {
@@ -441,26 +409,6 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
     expect(screen.getByTestId("native-viewer-transition-shield")).toBeVisible();
     expect(invocations("native_terminal_show")).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-    const reopenedDialog = await screen.findByRole("dialog", {
-      name: "Studio settings",
-    });
-    const closeControl = within(reopenedDialog).getByRole("button", {
-      name: "Close dialog",
-    });
-    expect(reopenedDialog).toBeVisible();
-    expect(closeControl).toBeVisible();
-    expect(closeControl).toBeEnabled();
-    expect(
-      screen.queryByTestId("native-viewer-transition-shield"),
-    ).not.toBeInTheDocument();
-
-    fireEvent.click(closeControl);
-    await waitFor(() =>
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
-    );
-    expect(screen.getByTestId("native-viewer-transition-shield")).toBeVisible();
-
     await act(async () => finishHide?.());
     await waitFor(() =>
       expect(
@@ -472,7 +420,7 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
     view.unmount();
   });
 
-  it("[overhaul-126] hides and restores the retained Task viewer through state configuration", async () => {
+  it("[overhaul-126] keeps the retained Task viewer beneath workspace configuration", async () => {
     seedTaskWorkspace("session-792", "run-792");
     const view = mountTaskWorkspace();
     await waitFor(() =>
@@ -485,92 +433,53 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
         .toggleStateConfiguration("project-1", "state-1"),
     );
     await waitFor(() =>
-      expect(invocations("native_terminal_hide")).toEqual([[{ handle: HANDLE }]]),
+      expect(invocations("native_terminal_hide")).toHaveLength(0),
     );
     expect(invocations("native_terminal_detach")).toHaveLength(0);
 
     act(() => useClientStore.getState().dismissStateConfiguration());
     await waitFor(() =>
-      expect(invocations("native_terminal_show")).toHaveLength(2),
+      expect(invocations("native_terminal_show")).toHaveLength(1),
     );
     expect(invocations("native_terminal_show").at(-1)).toEqual([
       { handle: HANDLE, frame: FRAME },
     ]);
     expect(invocations("native_terminal_attach")).toHaveLength(1);
 
+    act(() =>
+      useClientStore
+        .getState()
+        .toggleConversationConfiguration("project-1", "module-1"),
+    );
+    expect(modalOcclusionActive()).toBe(true);
+    expect(invocations("native_terminal_detach")).toHaveLength(0);
+
+    act(() => useClientStore.getState().dismissConversationConfiguration());
+    expect(modalOcclusionActive()).toBe(false);
+    expect(invocations("native_terminal_attach")).toHaveLength(1);
+
     view.unmount();
   });
 
-  it("suppresses an older same-handle reveal across a close-reopen-close Settings sequence", async () => {
+  it("keeps the same viewer presented across a close-reopen-close Settings sequence", async () => {
     seedTaskWorkspace("session-792", "run-792");
-    let deferShows = false;
-    const finishShows: Array<() => void> = [];
-    tauri.invoke.mockImplementation(
-      (command: string, input?: { runId?: string }) => {
-        if (command === "native_terminal_available") return Promise.resolve(true);
-        if (
-          command === "native_terminal_attach" ||
-          command === "native_terminal_set_frame" ||
-          command === "native_terminal_reconcile_frame"
-        ) {
-          return Promise.resolve({
-            handle: HANDLE,
-            runId: input?.runId ?? "run-792",
-            columns: 100,
-            rows: 30,
-          });
-        }
-        if (command === "native_terminal_show") {
-          const status = {
-            handle: HANDLE,
-            runId: "run-792",
-            columns: 100,
-            rows: 30,
-          };
-          if (!deferShows) return Promise.resolve(status);
-          return new Promise<typeof status>((resolve) => {
-            finishShows.push(() => resolve(status));
-          });
-        }
-        return Promise.resolve();
-      },
-    );
     const view = mountTaskWorkspace();
     await waitFor(() =>
       expect(invocations("native_terminal_show")).toHaveLength(1),
     );
 
-    let dialog = await (async () => {
+    for (const episode of [1, 2]) {
       fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-      return screen.findByRole("dialog", { name: "Studio settings" });
-    })();
-    await waitFor(() =>
-      expect(invocations("native_terminal_hide")).toHaveLength(1),
-    );
+      const dialog = await screen.findByRole("dialog", { name: "Studio settings" });
+      expect(dialog).toBeVisible();
+      expect(invocations("native_terminal_hide"), `episode ${episode}`).toHaveLength(0);
+      fireEvent.click(within(dialog).getByRole("button", { name: "Close dialog" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    }
 
-    deferShows = true;
-    fireEvent.click(within(dialog).getByRole("button", { name: "Close dialog" }));
-    await waitFor(() => expect(finishShows).toHaveLength(1));
-
-    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-    dialog = await screen.findByRole("dialog", { name: "Studio settings" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Close dialog" }));
-
-    // The first reveal now completes under a newer request for the same native
-    // handle. Handle equality is not enough: it must be hidden before the
-    // newest reveal can commit its current geometry and focus policy.
-    await act(async () => finishShows.shift()?.());
-    await waitFor(() =>
-      expect(invocations("native_terminal_hide")).toHaveLength(2),
-    );
-    await waitFor(() => expect(finishShows).toHaveLength(1));
-
-    await act(async () => finishShows.shift()?.());
-    await waitFor(() =>
-      expect(invocations("native_terminal_show")).toHaveLength(3),
-    );
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-
+    expect(invocations("native_terminal_show")).toHaveLength(1);
+    expect(invocations("native_terminal_attach")).toHaveLength(1);
+    expect(invocations("native_terminal_detach")).toHaveLength(0);
     view.unmount();
   });
 });

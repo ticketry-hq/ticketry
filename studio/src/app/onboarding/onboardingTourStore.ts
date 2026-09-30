@@ -1,4 +1,5 @@
-import { create } from "zustand";
+import { createApolloStore } from "../../shared/apollo/localState";
+
 export type OnboardingTourStep =
   | "inactive"
   | "module-create"
@@ -24,9 +25,10 @@ const INACTIVE = {
 };
 
 /** Run-local only by design: a refresh never resumes a half-finished tour. */
-export const useOnboardingTourStore = create<OnboardingTourState>((set) => ({
+export const useOnboardingTourStore = createApolloStore<OnboardingTourState>("onboarding-tour", (set) => ({
   ...INACTIVE,
   start: (projectId) =>
+    // One installation project: the tour opens on creating the first module.
     set({ ...INACTIVE, step: "module-create", projectId }),
   moduleCreated: (moduleId) => set({ step: "story-create", moduleId }),
   storyCreated: (storyId) =>

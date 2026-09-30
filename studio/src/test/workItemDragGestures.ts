@@ -1,5 +1,4 @@
 import { fireEvent } from "@testing-library/react";
-import { transientDocumentDragLeave } from "./moduleDragGestures";
 
 function dataTransfer(): DataTransfer {
   const values = new Map<string, string>();
@@ -37,33 +36,26 @@ export function dragWorkItem(
   target: Element,
   edge: "before" | "after",
 ) {
-  const targetBlock = target.closest("li[role='none']");
-  if (!(targetBlock instanceof HTMLElement)) {
-    throw new Error("Work-item drag target is missing its layout block");
-  }
-  Object.defineProperty(targetBlock, "getBoundingClientRect", {
-    configurable: true,
-    value: () => ({
-      top: 0,
-      bottom: 100,
-      height: 100,
-      left: 0,
-      right: 200,
-      width: 200,
-    }),
-  });
+  const transfer = beginWorkItemDrag(source, target, edge);
   const clientY = edge === "before" ? 25 : 75;
-  const transfer = dataTransfer();
-  dragEvent(source, "dragstart", transfer);
-  dragEvent(target, "dragover", transfer, clientY);
   dragEvent(target, "drop", transfer, clientY);
 }
 
-export function dragWorkItemAcrossTransientDocumentLeave(
+export function finishWorkItemDragWithoutDrop(
   source: Element,
   target: Element,
   edge: "before" | "after",
 ) {
+  const transfer = beginWorkItemDrag(source, target, edge);
+  dragEvent(target, "dragleave", transfer);
+  dragEvent(source, "dragend", transfer);
+}
+
+function beginWorkItemDrag(
+  source: Element,
+  target: Element,
+  edge: "before" | "after",
+): DataTransfer {
   const targetBlock = target.closest("li[role='none']");
   if (!(targetBlock instanceof HTMLElement)) {
     throw new Error("Work-item drag target is missing its layout block");
@@ -83,7 +75,5 @@ export function dragWorkItemAcrossTransientDocumentLeave(
   const transfer = dataTransfer();
   dragEvent(source, "dragstart", transfer);
   dragEvent(target, "dragover", transfer, clientY);
-  transientDocumentDragLeave(transfer);
-  dragEvent(document.body, "dragover", transfer, clientY);
-  dragEvent(document.body, "drop", transfer, clientY);
+  return transfer;
 }

@@ -2,17 +2,16 @@
 id: frontend-state-store
 name: Frontend State Store
 version: 1.0.0
-summary: In-memory Zustand projections used to render and interact with backend state.
+summary: Apollo cache records used to render and interact with server and client-only state.
 container_type: cache
-technology: Zustand
+technology: Apollo Client
 authoritative: false
 access_mode: readWrite
 classification: internal
 owners:
   - ticketry
 services:
-  - id: frontend-state-projections
-    version: 1.0.0
+  - frontend-state-projections
 badges:
   - content: Non-authoritative
     backgroundColor: amber

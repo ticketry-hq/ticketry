@@ -1,0 +1,26 @@
+mutation WorktreeMerge(
+  $taskId: String!
+  $operationId: String!
+  $destinationBranch: String!
+  $confirmationToken: String!
+) {
+  worktree_merge(
+    task_id: $taskId
+    operation_id: $operationId
+    destination_branch: $destinationBranch
+    confirmation_token: $confirmationToken
+  ) {
+    operation_id
+    outcome
+    source_branch
+    source_commit
+    destination_branch
+    destination_commit
+    destination_checkout
+    unmerged_paths {
+      path
+    }
+    blocker
+    reason
+  }
+}

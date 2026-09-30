@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import { runConcurrentDevelopmentSmoke } from "./desktop-concurrent-smoke.mjs";
 
 test("two worktree fixtures stay isolated through readiness and independent shutdown", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "muxed-concurrent-smoke-"));
+  const root = await mkdtemp("/tmp/ticketry-concurrent-");
   const fixtures = ["alpha", "bravo"].map((name) => ({
     name,
     cwd: path.join(root, name),
@@ -24,7 +23,8 @@ test("two worktree fixtures stay isolated through readiness and independent shut
 
     assert.notEqual(result.alpha.frontend, result.bravo.frontend);
     assert.notEqual(result.alpha.backend, result.bravo.backend);
-    assert.notEqual(result.alpha.mcp, result.bravo.mcp);
+    assert.equal(result.alpha.mcp, path.join(fixtures[0].dataDirectory, "mcp.sock"));
+    assert.equal(result.bravo.mcp, path.join(fixtures[1].dataDirectory, "mcp.sock"));
     assert.notEqual(result.alpha.dataDirectory, result.bravo.dataDirectory);
     assert.equal(result.alpha.frontendMarker, "alpha");
     assert.equal(result.bravo.frontendMarker, "bravo");

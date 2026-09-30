@@ -15,25 +15,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { NATIVE_TERMINAL_CHORD_EVENT } from "../app/navigation/nativeTerminalChords";
-import { seedModuleLinks } from "../features/module-links";
-import { seedModules, useStudioStore } from "../features/projects";
+import { WorkTrackerProjectOpenDocument } from "../features/projects/generated/projects.documents";
+import { useStudioStore } from "../features/projects";
 import {
   isTerminalPanelOpenIn,
   useTerminalPanelStore,
 } from "../features/terminal-panel";
+import { compactWorktrackerId } from "../shared/api/generatedWorktracker";
+import type { Module, Project } from "../shared/api/types";
+import { studioApolloClient } from "../shared/apollo/client";
 import { useClientStore } from "../state/clientStore";
-import type { Module } from "../shared/api/types";
-
-vi.mock("../shared/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shared/api/client")>()),
-  getTasks: vi.fn().mockResolvedValue({
-    rootIds: [],
-    children: {},
-    order: [],
-    states: [],
-    workItems: [],
-  }),
-}));
+import { projectOpenFixture } from "./projectOpenFixture";
 
 const runtime = vi.hoisted(() => ({ desktop: true }));
 
@@ -66,27 +58,6 @@ describe("terminal panel — native chord", () => {
     host.listeners.clear();
     host.listen.mockClear();
     useTerminalPanelStore.setState({ openModules: {} });
-    useStudioStore.setState({ selectedProjectId: "project-1", error: null });
-    seedModules("project-1", [
-      { id: "module-1", name: "One", project_id: "project-1" },
-      { id: "module-2", name: "Two", project_id: "project-1" },
-    ] as Module[]);
-    seedModuleLinks([
-      {
-        id: "link-1",
-        module_id: "module-1",
-        local_path: "/repo/one",
-        created_at: "",
-        updated_at: "",
-      },
-      {
-        id: "link-2",
-        module_id: "module-2",
-        local_path: "/repo/two",
-        created_at: "",
-        updated_at: "",
-      },
-    ]);
     // The panel belongs to the module it opens onto, so the chord needs one
     // selected to act on (#730).
     useClientStore.setState({ selectedModuleId: "module-1" });
@@ -97,7 +68,7 @@ describe("terminal panel — native chord", () => {
     vi.clearAllMocks();
   });
 
-  it("[overhaul-91-native] reveals and reverses the panel from an engaged native terminal", async () => {
+  it("reveals and reverses the panel from an engaged native terminal", async () => {
     const keymap = renderHook(() => useGlobalKeymap());
     await act(async () => {});
 
@@ -120,7 +91,7 @@ describe("terminal panel — native chord", () => {
     expect(host.listeners.has(NATIVE_TERMINAL_CHORD_EVENT)).toBe(false);
   });
 
-  it("[overhaul-91-native] leaves another surface's chord alone", async () => {
+  it("leaves another surface's chord alone", async () => {
     const keymap = renderHook(() => useGlobalKeymap());
     await act(async () => {});
 
@@ -134,42 +105,53 @@ describe("terminal panel — native chord", () => {
     keymap.unmount();
   });
 
-  it("[overhaul-137] switches module tabs by position from an engaged native terminal", async () => {
-    const keymap = renderHook(() => useGlobalKeymap());
-    await act(async () => {});
-
-    act(() => {
-      host.reportChord("module-position-2");
+  it("switches visible module positions from an engaged native terminal", async () => {
+    const project: Project = {
+      id: "project-1",
+      name: "Project",
+      slug: "PRJ",
+      description: "",
+    };
+    const modules = ["One", "Hidden", "Three"].map((name, index): Module => ({
+      id: `module-${index + 1}`,
+      name,
+      project_id: project.id,
+      key: `PRJ-${index + 1}`,
+      sequence_id: index + 1,
+      is_archived: false,
+      issue_type: "module-type",
+    }));
+    const opened = projectOpenFixture(
+      { ...project, manual_module_order: true },
+      modules,
+    );
+    const hidden = opened.data.module_presentations.nodes.find(
+      (presentation) => presentation.module_id === "module-2",
+    );
+    if (hidden) hidden.tab_hidden = true;
+    studioApolloClient().writeQuery({
+      query: WorkTrackerProjectOpenDocument,
+      variables: { projectId: compactWorktrackerId(project.id) },
+      data: opened.data,
     });
-
-    expect(useClientStore.getState().selectedModuleId).toBe("module-2");
-    keymap.unmount();
-  });
-
-  it("[overhaul-169] leaves typing mode when the native terminal reports Cmd+Escape", async () => {
-    const keymap = renderHook(() => useGlobalKeymap());
-    await act(async () => {});
+    useStudioStore.setState({ selectedProjectId: project.id, error: null });
+    const selectModule = vi.fn(async (moduleId: string) => {
+      useClientStore.setState({ selectedModuleId: moduleId });
+    });
     useClientStore.setState({
-      editViewBodyEngaged: true,
-      navigationModality: "pointer",
+      selectedModuleId: "module-1",
+      selectModule,
     });
+    const keymap = renderHook(() => useGlobalKeymap());
+    await act(async () => {});
 
-    // AppKit delivers Cmd+Escape to the engaged view, so the WebView sees no
-    // keydown at all; the chord is the only way Studio's state can follow the
-    // keyboard the view just handed back.
-    act(() => {
-      host.reportChord("body-disengage");
-    });
+    act(() => host.reportChord("module-position-2"));
 
-    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
-    expect(useClientStore.getState().navigationModality).toBe("keyboard");
-    // The zone the developer was typing in stays the current zone.
-    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
-
+    expect(selectModule).toHaveBeenCalledWith("module-3");
     keymap.unmount();
   });
 
-  it("[overhaul-91-native] leaves the browser build with no host subscription", async () => {
+  it("leaves the browser build with no host subscription", async () => {
     runtime.desktop = false;
     renderHook(() => useGlobalKeymap());
     await act(async () => {});

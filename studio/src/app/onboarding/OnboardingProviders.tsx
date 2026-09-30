@@ -1,28 +1,26 @@
-import { useEffect, useMemo, useState } from "react";
-import { apiErrorMessage } from "../../shared/api/client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { apiErrorMessage } from "../../shared/api/errors";
 import type {
   ConfigurableProvider,
-  ProviderCapabilities,
   ProviderCatalog,
 } from "../../shared/api/types";
-import * as api from "../../shared/api/client";
 import {
   LaunchDefaultPicker,
   type LaunchDefaultPickerValue,
-} from "../../features/workflows/LaunchDefaultPicker";
+} from "../../features/workflows";
 import {
   CONFIGURABLE_PROVIDERS,
   validateLaunchBindingOptions,
-} from "../../features/workflows/launchBindingValidation";
+} from "../../features/workflows";
 import {
-  setProviderCatalog,
-  setProviderCapabilities,
-  useProviderCapabilitiesQuery,
+  useConfigurableProviderCapabilitiesQuery,
   useProviderCatalogQuery,
-} from "../../features/workflows/providerQueries";
+  updateProviderCatalog,
+} from "../../features/workflows";
 
 const EMPTY_DEFAULT: LaunchDefaultPickerValue = {
   provider: "",
+  profile: "",
   model: "",
   reasoning: "",
 };
@@ -32,17 +30,11 @@ function pickerValueFrom(catalog: ProviderCatalog): LaunchDefaultPickerValue {
   return launchDefault
     ? {
         provider: launchDefault.provider,
+        profile: launchDefault.profile ?? "",
         model: launchDefault.model ?? "",
         reasoning: launchDefault.reasoning ?? "",
       }
     : EMPTY_DEFAULT;
-}
-
-function permissiveCapability(provider: ConfigurableProvider): ProviderCapabilities {
-  return {
-    agent: provider,
-    models: [],
-  };
 }
 
 interface Props {
@@ -56,42 +48,46 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
     useState<LaunchDefaultPickerValue>(EMPTY_DEFAULT);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hydratedCatalog = useRef(false);
   const catalogQuery = useProviderCatalogQuery();
-  const capabilitiesQuery = useProviderCapabilitiesQuery();
-  const capabilities = capabilitiesQuery.data ?? [];
-  const loading = catalogQuery.isPending || capabilitiesQuery.isPending;
+  const configurableCapabilitiesQuery =
+    useConfigurableProviderCapabilitiesQuery();
+  const capabilities = configurableCapabilitiesQuery.data ?? [];
+  const loading = catalogQuery.isPending
+    || configurableCapabilitiesQuery.isPending;
 
   useEffect(() => {
     const value = catalogQuery.data;
-    if (value) {
-        // An absent backend setting intentionally reads as all providers active
-        // with no default for pre-onboarding compatibility. On a pending first
-        // run that is not a declaration: only a catalog completed by this pane
-        // (and therefore carrying a default) is restored after a reload.
-        if (value.global_default) {
-          setActivated(value.activated_providers);
-          setLaunchDefault(pickerValueFrom(value));
-        } else {
-          setActivated([]);
-          setLaunchDefault(EMPTY_DEFAULT);
-        }
+    if (
+      value
+      && !catalogQuery.isPending
+      && !catalogQuery.error
+      && !hydratedCatalog.current
+    ) {
+      hydratedCatalog.current = true;
+      // An absent backend setting intentionally reads as all providers active
+      // with no default for pre-onboarding compatibility. On a pending first
+      // run that is not a declaration: only a catalog completed by this pane
+      // (and therefore carrying a default) is restored after a reload.
+      if (value.global_default) {
+        setActivated(value.activated_providers);
+        setLaunchDefault(pickerValueFrom(value));
+      } else {
+        setActivated([]);
+        setLaunchDefault(EMPTY_DEFAULT);
+      }
     }
-  }, [catalogQuery.data]);
+  }, [catalogQuery.data, catalogQuery.error, catalogQuery.isPending]);
 
-  useEffect(() => {
-    const cause = catalogQuery.error ?? capabilitiesQuery.error;
-    if (cause) setError(apiErrorMessage(cause));
-  }, [capabilitiesQuery.error, catalogQuery.error]);
+  const loadError = catalogQuery.error ?? configurableCapabilitiesQuery.error;
 
   const pickerCapabilities = useMemo(
     () =>
       CONFIGURABLE_PROVIDERS.filter((provider) =>
         activated.includes(provider),
-      ).map(
-        (provider) =>
-          capabilities.find((candidate) => candidate.agent === provider)
-          ?? permissiveCapability(provider),
-      ),
+      ).map((provider) =>
+        capabilities.find((candidate) => candidate.agent === provider),
+      ).filter((capability) => capability !== undefined),
     [activated, capabilities],
   );
 
@@ -99,28 +95,40 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
     activated_providers: CONFIGURABLE_PROVIDERS.filter((provider) =>
       activated.includes(provider),
     ),
+    codex_profiles: catalogQuery.data?.codex_profiles ?? [],
     global_default: launchDefault.provider
       ? {
           provider: launchDefault.provider as ConfigurableProvider,
+          profile: null,
           model: launchDefault.model.trim() || null,
           reasoning: launchDefault.reasoning.trim() || null,
         }
       : null,
   };
-  const validationError = validateLaunchBindingOptions(
-    {
-      agent: draft.global_default?.provider ?? null,
-      model: draft.global_default?.model ?? null,
-      reasoning: draft.global_default?.reasoning ?? null,
-    },
-    pickerCapabilities,
+  const providerOnlyDefault = Boolean(
+    draft.global_default?.provider
+      && !draft.global_default.model
+      && !draft.global_default.reasoning
+      && activated.includes(
+        draft.global_default.provider as ConfigurableProvider,
+      ),
   );
+  const validationError = providerOnlyDefault
+    ? null
+    : validateLaunchBindingOptions(
+      {
+        agent: draft.global_default?.provider ?? null,
+        model: draft.global_default?.model ?? null,
+        reasoning: draft.global_default?.reasoning ?? null,
+      },
+      pickerCapabilities,
+    );
   const needsExplicitDefault =
     activated.length >= 2 && !draft.global_default;
   const canContinue =
     !loading
+    && !loadError
     && !saving
-    && activated.length > 0
     && !needsExplicitDefault
     && validationError === null;
 
@@ -156,15 +164,8 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const { value } = await api.putProviderCatalog(draft);
-      setProviderCatalog(value);
-      setProviderCapabilities(
-        capabilities.filter((capability) =>
-          value.activated_providers.includes(
-            capability.agent as ConfigurableProvider,
-          ),
-        ),
-      );
+      const value = await updateProviderCatalog(draft);
+      setActivated(value.activated_providers);
       await onContinue();
     } catch (cause) {
       setError(apiErrorMessage(cause));
@@ -180,6 +181,11 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
       <p className="mt-2 text-sm leading-6 text-text-secondary">
         Which coding-agent subscriptions do you hold? We’ll only offer agents
         you can run.
+      </p>
+      <p className="mt-2 text-sm leading-6 text-text-secondary">
+        You can plan work without an agent subscription. Select the providers
+        you use, or leave them unchecked and configure them later in Settings
+        &gt; Model configuration.
       </p>
 
       {loading ? (
@@ -233,12 +239,13 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
         </div>
       )}
 
-      {validationError || error ? (
+      {validationError || loadError || error ? (
         <p
           role="alert"
           className="mt-4 text-sm text-lifecycle-danger"
         >
-          {validationError?.message ?? error}
+          {validationError?.message
+            ?? (loadError ? apiErrorMessage(loadError) : error)}
         </p>
       ) : null}
 

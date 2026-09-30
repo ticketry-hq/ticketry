@@ -4,6 +4,7 @@ import {
   prepareWorkspaceTabOrderWrite,
   reorderVisibleWorkspaceTabs,
 } from "./ordering";
+import { workspaceTabOrderFromJson } from "./types";
 
 describe("workspace tab ordering", () => {
   it("moves any identity to either edge and ignores no-op drops", () => {
@@ -31,7 +32,7 @@ describe("workspace tab ordering", () => {
     )).toBeNull();
   });
 
-  it("puts saved visible identities first and appends omitted tabs in default order", () => {
+  it("applies saved precedence and appends omitted visible tabs", () => {
     const visible = [
       { kind: "details" as const },
       { kind: "doc" as const, id: "design" },
@@ -51,7 +52,7 @@ describe("workspace tab ordering", () => {
     ]);
   });
 
-  it("prunes stale identities while retaining known closed and dismissed tabs", () => {
+  it("retains known hidden tabs and prunes stale identities on write", () => {
     expect(prepareWorkspaceTabOrderWrite(
       [
         { kind: "terminal", id: "visible-terminal" },
@@ -62,19 +63,32 @@ describe("workspace tab ordering", () => {
         { kind: "details" },
         { kind: "doc", id: "deleted-doc" },
         { kind: "terminal", id: "visible-terminal" },
-        { kind: "terminal", id: "dismissed-terminal" },
+        { kind: "terminal", id: "dormant-terminal" },
       ],
       [
         { kind: "details" },
         { kind: "doc", id: "closed-doc" },
         { kind: "terminal", id: "visible-terminal" },
-        { kind: "terminal", id: "dismissed-terminal" },
+        { kind: "terminal", id: "dormant-terminal" },
       ],
     )).toEqual([
       { kind: "doc", id: "closed-doc" },
       { kind: "terminal", id: "visible-terminal" },
       { kind: "details" },
-      { kind: "terminal", id: "dismissed-terminal" },
+      { kind: "terminal", id: "dormant-terminal" },
     ]);
+  });
+
+  it("rejects malformed and duplicate JSON identities", () => {
+    expect(workspaceTabOrderFromJson([
+      { kind: "details" },
+      { kind: "terminal", id: "run-1" },
+    ]).order).toHaveLength(2);
+    expect(workspaceTabOrderFromJson([
+      { kind: "details" },
+      { kind: "details" },
+    ])).toEqual({ order: [] });
+    expect(workspaceTabOrderFromJson([{ kind: "doc", id: "" }]))
+      .toEqual({ order: [] });
   });
 });

@@ -5,6 +5,7 @@ import {
   type ViewerLease,
   type ViewerLeaseClient,
 } from "./viewerLease";
+import { isViewerLeaseLost } from "./viewerLeaseFailure";
 
 import type {
   TerminalClient,
@@ -36,6 +37,7 @@ interface ViewerStatus {
 export interface TauriViewerBridge {
   attach(
     params: TerminalClientAttachParams,
+    viewerId: string,
     onChannelEvent: (event: ViewerChannelEvent) => void,
   ): Promise<ViewerStatus>;
   input(viewerHandle: string, data: number[]): Promise<void>;
@@ -45,11 +47,12 @@ export interface TauriViewerBridge {
 }
 
 const tauriViewerBridge: TauriViewerBridge = {
-  attach(params, onChannelEvent) {
+  attach(params, viewerId, onChannelEvent) {
     const output = new Channel<ViewerChannelEvent>();
     output.onmessage = onChannelEvent;
     return invoke<ViewerStatus>("viewer_attach", {
       runId: params.agentRunId,
+      viewerId,
       columns: params.cols,
       rows: params.rows,
       output,
@@ -115,9 +118,7 @@ export function openTauriTerminalClient(
       const lease = viewerLease;
       if (!lease) return;
       void lease.renew().catch((error) => {
-        if ((error as { code?: string }).code === "replaced_by_another_viewer") {
-          replacedByAnotherViewer();
-        }
+        if (isViewerLeaseLost(error)) replacedByAnotherViewer();
       });
     }, 10_000);
   }
@@ -167,10 +168,10 @@ export function openTauriTerminalClient(
     state = "connecting";
     onEvent({ type: "connecting", attempt: 0 });
     const nextLease = leaseClient
-      ? createViewerLease(leaseClient, params.agentRunId)
+      ? createViewerLease(leaseClient, params.agentRunId, "xterm")
       : null;
     viewerLease = nextLease;
-    const attachViewer = () => bridge.attach(params, (event) => {
+    const attachViewer = () => bridge.attach(params, nextLease?.viewerId ?? crypto.randomUUID(), (event) => {
         if (generation !== attachGeneration || detached) return;
         if (event.type === "output") {
           onEvent({ type: "output", bytes: new Uint8Array(event.data) });
@@ -181,7 +182,16 @@ export function openTauriTerminalClient(
         }
       });
     const attachment = nextLease
-      ? nextLease.acquire().then((acquired) => acquired ? attachViewer() : null)
+      ? attachViewer().then(async (viewer) => {
+          try {
+            if (await nextLease.acquire()) return viewer;
+          } catch (error) {
+            await bridge.detach(viewer.viewerHandle).catch(() => {});
+            throw error;
+          }
+          await bridge.detach(viewer.viewerHandle).catch(() => {});
+          return null;
+        })
       : attachViewer();
     void attachment
       .then((viewer) => {

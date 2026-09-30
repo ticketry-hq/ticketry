@@ -56,12 +56,6 @@ function typeName(issueTypes: IssueType[], typeId: string): string {
   return issueTypes.find((type) => type.id === typeId)?.name ?? typeId;
 }
 
-function cloneCollections(
-  input: ConfirmedCollections,
-): ConfirmedCollections {
-  return structuredClone(input);
-}
-
 function diffStates(previous: State[], next: State[]): string[] {
   const changes: string[] = [];
   const previousById = new Map(previous.map((state) => [stateKey(state), state]));
@@ -240,7 +234,7 @@ export function observeConfirmedSettings(
   }
   if (input.action !== null) return ledger;
 
-  const nextConfirmed = cloneCollections(input);
+  const nextConfirmed: ConfirmedCollections = structuredClone(input);
   if (
     !ledger.confirmed ||
     ledger.confirmed.projectId !== input.projectId
@@ -288,12 +282,21 @@ export function describeModelConfigurationChanges(
       );
     }
   }
+  const savedProfiles = saved.codex_profiles ?? [];
+  const draftProfiles = draft.codex_profiles ?? [];
+  for (const name of draftProfiles) {
+    if (!savedProfiles.includes(name)) changes.push(`Codex profile ${name} registered`);
+  }
+  for (const name of savedProfiles) {
+    if (!draftProfiles.includes(name)) changes.push(`Codex profile ${name} removed`);
+  }
   const fields = [
     [
       "launch provider",
       saved.global_default?.provider,
       draft.global_default?.provider,
     ],
+    ["launch profile", saved.global_default?.profile, draft.global_default?.profile],
     ["launch model", saved.global_default?.model, draft.global_default?.model],
     [
       "launch reasoning",

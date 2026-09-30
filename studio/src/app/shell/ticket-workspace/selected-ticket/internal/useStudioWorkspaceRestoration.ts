@@ -13,11 +13,12 @@ import {
 } from "../../../../../features/agents/terminal";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
 import type { DesignDoc } from "../../../../../features/agents/types";
+import type { TabKind } from "../../../../../features/agents/types";
 import {
   readStudioWorkspaceTarget,
   rememberStudioWorkspaceTarget,
   type StudioWorkspaceTarget,
-} from "./studioWorkspaceTarget";
+} from "../../../../../features/workspace-state/studioWorkspaceTarget";
 
 export function useStudioWorkspaceRestoration({
   bucket,
@@ -26,13 +27,19 @@ export function useStudioWorkspaceRestoration({
   requestedSurfaceRef,
   requestedTerminalRef,
   rememberPendingTerminalRef,
+  explicitTerminalRunId = null,
 }: {
   bucket: string | null;
   owner: ForegroundOwner;
-  setActive: (bucket: string, active: "details" | "terminal") => void;
+  setActive: (bucket: string, active: TabKind) => void;
   requestedSurfaceRef: MutableRefObject<TaskWorkspaceTabIdentity | null>;
   requestedTerminalRef: MutableRefObject<string | null>;
   rememberPendingTerminalRef: MutableRefObject<boolean>;
+  /**
+   * The run this workspace was entered for, when the caller already chose one
+   * (clicking a Conversations row). Durable restoration must not override it.
+   */
+  explicitTerminalRunId?: string | null;
 }) {
   const restoreRequestRef = useRef<{
     bucket: string;
@@ -40,6 +47,11 @@ export function useStudioWorkspaceRestoration({
     target: StudioWorkspaceTarget;
   } | null>(null);
   const restoreGenerationRef = useRef(0);
+  // Read at effect time, not through the dependency list: the durable target
+  // is restored once per bucket entry, so a later change of the live selection
+  // must not re-run restoration and clobber it.
+  const explicitTerminalRunIdRef = useRef(explicitTerminalRunId);
+  explicitTerminalRunIdRef.current = explicitTerminalRunId;
 
   useEffect(() => {
     const generation = ++restoreGenerationRef.current;
@@ -48,12 +60,29 @@ export function useStudioWorkspaceRestoration({
     rememberPendingTerminalRef.current = false;
     restoreRequestRef.current = null;
     if (!bucket || owner !== "studio") return;
+    // Entering the workspace already focused on one conversation is the live
+    // instruction; restoring the remembered surface over it is what made
+    // selecting a conversation take a second click.
+    if (explicitTerminalRunIdRef.current) return;
     const target = readStudioWorkspaceTarget(bucket);
     if (!target) return;
+    if (target.kind === "terminal") {
+      const terminals = useTerminalStore.getState();
+      const sessionId = terminals.sessionByRun[target.agentRunId];
+      const session = sessionId ? terminals.sessions[sessionId] : null;
+      if (session && bucketOfMeta(session) === bucket) {
+        useWorkspaceTabsStore.getState().tabSelected(bucket, sessionId);
+        setActive(bucket, "terminal");
+        return;
+      }
+    }
     // Keep Details visible while durable targets hydrate.
     restoreRequestRef.current = { bucket, generation, target };
     setActive(bucket, "details");
-    if (target.kind === "details") restoreRequestRef.current = null;
+    if (target.kind === "details" || target.kind === "changes") {
+      restoreRequestRef.current = null;
+      setActive(bucket, target.kind);
+    }
   }, [
     bucket,
     owner,

@@ -1,0 +1,169 @@
+fragment GeneratedWorkTrackerWorkItemFields on WorktrackerIssue {
+  id
+  name
+  project_id: projectId
+  sequence_id: sequenceId
+  state_id: stateId
+  state_revision: stateRevision
+  description
+  workspace_tab_order: workspaceTabOrder
+  parent_id: parentId
+  module_id: moduleId
+  is_archived: isArchived
+  created_at: createdAt
+  updated_at: updatedAt
+  rank
+  issue_type_id: issueTypeId
+  project { id slug }
+  state_record: state { id name group color sort_order: sortOrder is_protected: isProtected }
+  issue_type_record: issueType { id name level color sort_order: sortOrder }
+  children { nodes { id is_archived: isArchived } }
+  blocked_by_edges: blockedByEdges { nodes { id to_issue_id: toIssueId } }
+  blocks_edges: blocksEdges { nodes { id from_issue_id: fromIssueId } }
+}
+
+query WorkTrackerWorkItems($projectId: String!) {
+  work_items: worktrackerIssue(
+    filters: { projectId: { eq: $projectId }, type: { eq: "task" } }
+  ) {
+    nodes { ...GeneratedWorkTrackerWorkItemFields }
+  }
+}
+
+query WorkTrackerModuleOpen($moduleId: String!) {
+  module: worktrackerIssue(
+    filters: { id: { eq: $moduleId }, type: { eq: "module" } }
+  ) {
+    nodes {
+      id
+      name
+      project_id: projectId
+      sequence_id: sequenceId
+      is_archived: isArchived
+      issue_type: issueTypeId
+      rank
+      project { id slug }
+    }
+  }
+  work_items: worktrackerIssue(
+    filters: {
+      moduleId: { eq: $moduleId }
+      type: { eq: "task" }
+      isArchived: { eq: false }
+    }
+    orderBy: { rank: ASC, sequenceId: ASC }
+  ) {
+    nodes {
+      ...GeneratedWorkTrackerWorkItemFields @nonreactive
+      id
+      name
+      project_id: projectId
+      sequence_id: sequenceId
+      parent_id: parentId
+      module_id: moduleId
+      is_archived: isArchived
+      rank
+      state_id: stateId
+      issue_type_id: issueTypeId
+      project { id slug }
+    }
+  }
+}
+
+query WorkTrackerWorkItem($id: String!) {
+  work_item: worktrackerIssue(filters: { id: { eq: $id }, type: { eq: "task" } }) {
+    nodes { ...GeneratedWorkTrackerWorkItemFields }
+  }
+}
+
+query WorkTrackerWorkItemByKey($projectSlug: String!, $sequenceId: Int!) {
+  work_item: worktrackerIssue(
+    filters: { sequenceId: { eq: $sequenceId }, type: { eq: "task" } }
+    having: { project: { slug: { eq: $projectSlug } } }
+  ) {
+    nodes { ...GeneratedWorkTrackerWorkItemFields }
+  }
+}
+
+query WorkTrackerAttachments($issueId: String!) {
+  attachments: worktrackerAttachment(filters: { issueId: { eq: $issueId } }) {
+    nodes {
+      id
+      issue_id: issueId
+      file
+      filename
+      mime_type: mimeType
+      size
+      created_at: createdAt
+    }
+  }
+}
+
+mutation CreateWorkTrackerWorkItem($projectId: String!, $name: String!, $issueTypeId: String!, $description: String, $stateId: String, $parentId: String) {
+  create_work_item(project_id: $projectId, name: $name, issue_type_id: $issueTypeId, description: $description, state_id: $stateId, parent_id: $parentId) {
+    ...GeneratedWorkTrackerWorkItemFields
+  }
+}
+
+mutation UpdateWorkTrackerWorkItem($id: String!, $name: String, $description: String, $issueTypeId: String, $stateId: String, $parentId: String, $blockedByIds: [String!], $isArchived: Boolean) {
+  update_work_item(id: $id, name: $name, description: $description, issue_type_id: $issueTypeId, state_id: $stateId, parent_id: $parentId, blocked_by_ids: $blockedByIds, is_archived: $isArchived) {
+    ...GeneratedWorkTrackerWorkItemFields
+  }
+}
+
+mutation UpdateWorkTrackerWorkItemDetails($id: String!, $name: String, $description: String, $issueTypeId: String) {
+  update_work_item(id: $id, name: $name, description: $description, issue_type_id: $issueTypeId) {
+    ...GeneratedWorkTrackerWorkItemFields
+  }
+}
+
+mutation ArchiveWorkTrackerWorkItem($id: String!, $isArchived: Boolean!) {
+  update_work_item(id: $id, is_archived: $isArchived) {
+    ...GeneratedWorkTrackerWorkItemFields
+  }
+}
+
+mutation UpdateWorkTrackerWorkspaceTabOrder($id: String!, $workspaceTabOrder: Json!) {
+  update_work_item(id: $id, workspace_tab_order: $workspaceTabOrder) {
+    ...GeneratedWorkTrackerWorkItemFields
+  }
+}
+
+mutation TransitionWorkTrackerWorkItem($id: String!, $targetStateId: String!) {
+  update_work_item(id: $id, state_id: $targetStateId) {
+    ...GeneratedWorkTrackerWorkItemFields
+  }
+}
+
+mutation ReparentWorkTrackerWorkItem($id: String!, $parentId: String) {
+  update_work_item(id: $id, parent_id: $parentId) {
+    ...GeneratedWorkTrackerWorkItemFields
+  }
+}
+
+mutation SetWorkTrackerBlockers($id: String!, $blockedByIds: [String!]!) {
+  update_work_item(id: $id, blocked_by_ids: $blockedByIds) {
+    ...GeneratedWorkTrackerWorkItemFields
+  }
+}
+
+mutation ReorderWorkTrackerWorkItem($id: String!, $beforeId: String, $afterId: String, $initialOrderIds: [String!]) {
+  reorder_work_item(id: $id, before_id: $beforeId, after_id: $afterId, initial_order_ids: $initialOrderIds) {
+    ...GeneratedWorkTrackerWorkItemFields
+  }
+}
+
+mutation DeleteWorkTrackerWorkItem($id: String!) {
+  delete_work_item(id: $id)
+}
+
+mutation RunWorkTrackerWorkItemNow($idOrKey: String!, $requestIdentity: String!) {
+  run_now(id_or_key: $idOrKey, request_identity: $requestIdentity) {
+    target_id
+    code
+    detail
+    remedy
+    committed_state { id name }
+    run { target_id agent agent_run_id }
+  }
+}

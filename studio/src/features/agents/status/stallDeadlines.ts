@@ -1,4 +1,8 @@
-import { useAgentStatusStore } from "./store";
+import {
+  markStalledAgentRuns,
+  readAgentStatusHolding,
+  subscribeAgentStatusHolding,
+} from "./apolloHolding";
 import { stallDeadlineAt } from "./runPresentation";
 import type { AgentStatusData } from "./types";
 
@@ -40,17 +44,17 @@ function reschedule(data: AgentStatusData): void {
   if (due === null) return;
   timer = setTimeout(() => {
     timer = null;
-    // Nothing about the run changed — only the clock. Advancing the epoch
-    // republishes the holding so every reader reprojects from the same facts.
-    useAgentStatusStore.getState().advanceStallEpoch();
+    markStalledAgentRuns();
   }, due - now);
 }
 
 /** Begin coordinating deadlines for the status holding. Idempotent. */
 export function startStallDeadlines(): void {
   if (unsubscribe) return;
-  unsubscribe = useAgentStatusStore.subscribe(reschedule);
-  reschedule(useAgentStatusStore.getState());
+  unsubscribe = subscribeAgentStatusHolding(() => {
+    reschedule(readAgentStatusHolding());
+  });
+  reschedule(readAgentStatusHolding());
 }
 
 /** Stop coordinating and drop any pending deadline. */

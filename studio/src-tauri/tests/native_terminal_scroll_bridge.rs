@@ -3,17 +3,15 @@
 //! tmux server.
 
 use crate::common::isolated_tmux::{IsolatedTmux, TmuxEnvironmentOverride, RUN_ID, TMUX_ENV_LOCK};
-use muxed_studio_lib::native_terminal_scroll::{
-    ScrollGestureSink, MAX_NATIVE_SCROLL_LINES, SCROLL_DIRECTION_DOWN, SCROLL_DIRECTION_UP,
-};
-use muxed_studio_lib::native_terminal_worker::{
-    run_native_worker, NativeViewerCommand, NativeWorkerExit,
-};
-use muxed_studio_lib::terminal_runtime::{TerminalAttachment, TerminalCommandAttachment};
 use std::io::Read;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
+use ticketry_desktop::{run_native_worker, NativeViewerCommand, NativeWorkerExit};
+use ticketry_desktop::{
+    ScrollGestureSink, MAX_NATIVE_SCROLL_LINES, SCROLL_DIRECTION_DOWN, SCROLL_DIRECTION_UP,
+};
+use ticketry_terminal::{TerminalAttachment, TerminalCommandAttachment};
 
 mod common;
 
@@ -198,11 +196,7 @@ fn await_positive_pane_value(server: &IsolatedTmux, format: &str) {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         let value = server.pane_value(format);
-        if value
-            .parse::<usize>()
-            .expect("numeric tmux pane value")
-            > 0
-        {
+        if value.parse::<usize>().expect("numeric tmux pane value") > 0 {
             return;
         }
         assert!(

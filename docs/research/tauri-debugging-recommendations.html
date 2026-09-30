@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ticketry debugging and observability recommendations</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --page: #f4f1e8;
+      --panel: #fffdf7;
+      --ink: #20231f;
+      --muted: #61675f;
+      --line: #d7d2c5;
+      --accent: #176b5b;
+      --accent-soft: #dcece7;
+      --code: #ece8dc;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page: #171a18;
+        --panel: #202421;
+        --ink: #eef1eb;
+        --muted: #afb7ae;
+        --line: #3c443e;
+        --accent: #76d2bc;
+        --accent-soft: #263f38;
+        --code: #2b302c;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: min(960px, calc(100% - 32px)); margin: 48px auto 80px; }
+    header, section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: clamp(22px, 4vw, 40px);
+      margin-bottom: 18px;
+    }
+    h1, h2 { line-height: 1.2; letter-spacing: -0.025em; }
+    h1 { font-size: clamp(2rem, 5vw, 3.5rem); margin: 0 0 14px; max-width: 16ch; }
+    h2 { margin: 0 0 18px; font-size: 1.45rem; }
+    p { max-width: 75ch; }
+    .lede { color: var(--muted); font-size: 1.15rem; margin-bottom: 0; }
+    .verdict {
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+      padding: 14px 18px;
+      border-radius: 8px;
+      font-weight: 650;
+    }
+    a { color: var(--accent); text-underline-offset: 3px; }
+    code { background: var(--code); border-radius: 4px; padding: 2px 5px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 14px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 0.82rem; letter-spacing: 0.06em; text-transform: uppercase; }
+    tr:last-child td { border-bottom: 0; }
+    ol, ul { padding-left: 1.35rem; }
+    li + li { margin-top: 10px; }
+    .priority { white-space: nowrap; font-weight: 700; color: var(--accent); }
+    .flow { display: grid; gap: 9px; counter-reset: boundary; list-style: none; padding: 0; }
+    .flow li { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; }
+    .flow li::before {
+      counter-increment: boundary;
+      content: counter(boundary);
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 750;
+    }
+    .small { color: var(--muted); font-size: 0.92rem; }
+    @media (max-width: 700px) {
+      table, thead, tbody, tr, th, td { display: block; }
+      thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+      tr { padding: 12px 0; border-bottom: 1px solid var(--line); }
+      td { border: 0; padding: 4px 0; }
+      td::before { content: attr(data-label) ": "; color: var(--muted); font-weight: 650; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Debugging Ticketry across the desktop stack</h1>
+      <p class="lede">A source-backed review of open-source Tauri applications and the current Tauri 2 observability ecosystem. Research completed 1 September 2026.</p>
+    </header>
+
+    <section>
+      <h2>Conclusion</h2>
+      <p class="verdict">Ticketry captures crashes and frontend console output reasonably well. Its main blind spot is the path between SQLite, GraphQL, Apollo's cache, and React rendering.</p>
+      <p>The launch configuration incident illustrates the gap. The row survived in SQLite, but the UI did not show it after restart. Existing logs could not tell us whether the read query omitted it, the GraphQL response contained it, Apollo normalized it incorrectly, or React filtered it.</p>
+    </section>
+
+    <section>
+      <h2>Recommended delivery order</h2>
+      <table>
+        <thead><tr><th>Priority</th><th>Change</th><th>What it answers</th></tr></thead>
+        <tbody>
+          <tr><td class="priority" data-label="Priority">P0</td><td data-label="Change"><a href="https://docs.rs/tracing/latest/tracing/">Rust <code>tracing</code></a> and <a href="https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/">subscriber layers</a>, feeding Ticketry's existing file log</td><td data-label="What it answers">Which operation touched which record, in which profile, how long it took, and where it failed.</td></tr>
+          <tr><td class="priority" data-label="Priority">P0</td><td data-label="Change"><a href="https://v2.tauri.app/develop/debug/">Tauri WebView Inspector</a> plus a debug-only <a href="https://www.apollographql.com/docs/react/development-testing/developer-tooling">Apollo query and cache inspector</a></td><td data-label="What it answers">Did the response reach the WebView, enter Apollo's normalized cache, and reach the watched query?</td></tr>
+          <tr><td class="priority" data-label="Priority">P1</td><td data-label="Change">Dev-only GraphQL operation records with name, duration, redacted variables, result count, and errors</td><td data-label="What it answers">What the client asked for and what shape came back, without logging every response body.</td></tr>
+          <tr><td class="priority" data-label="Priority">P1</td><td data-label="Change"><a href="https://docs.rs/async-graphql/latest/async_graphql/extensions/struct.Tracing.html">async-graphql tracing extension</a></td><td data-label="What it answers">Which resolver ran, how long it took, and where server-side GraphQL work stalled.</td></tr>
+          <tr><td class="priority" data-label="Priority">P1</td><td data-label="Change">A read-only SQLite diagnostic command using the <a href="https://sqlite.org/cli.html">official CLI</a> and <a href="https://sqlite.org/pragma.html#pragma_integrity_check"><code>integrity_check</code></a></td><td data-label="What it answers">Which database profile is active, whether the row exists, and whether schema and storage are sound.</td></tr>
+          <tr><td class="priority" data-label="Priority">P2</td><td data-label="Change">Trial <a href="https://v2.tauri.app/develop/debug/crabnebula-devtools/">CrabNebula DevTools</a> in developer builds</td><td data-label="What it answers">Tauri command and event payloads, responses, spans, assets, and timing in one live view.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>The diagnostic path we want</h2>
+      <ol class="flow">
+        <li><span><strong>SQLite</strong> confirms the active profile and durable row identity.</span></li>
+        <li><span><strong>Rust tracing</strong> records the GraphQL operation and database transaction under one <code>diagnostic_id</code>.</span></li>
+        <li><span><strong>GraphQL tracing</strong> records resolver timing, selected fields, errors, and result count.</span></li>
+        <li><span><strong>WebView inspection</strong> confirms transport delivery and exposes browser exceptions.</span></li>
+        <li><span><strong>Apollo inspection</strong> shows watched-query variables, normalized identities, list membership, and eviction.</span></li>
+        <li><span><strong>React DevTools</strong> confirms whether the component received and rendered the record.</span></li>
+      </ol>
+      <p>Every boundary should carry the same diagnostic ID. Log stable identifiers and metadata, not prompts, tokens, terminal output, authorization headers, or complete GraphQL payloads.</p>
+    </section>
+
+    <section>
+      <h2>What other Tauri applications do</h2>
+      <ul>
+        <li><a href="https://github.com/spacedriveapp/spacedrive/blob/main/AGENTS.md">Spacedrive</a> uses structured Rust tracing, module filters, and durable job IDs.</li>
+        <li><a href="https://github.com/gitbutlerapp/gitbutler/blob/master/crates/gitbutler-tauri/src/main.rs">GitButler</a> persists UI logs, uses a panic hook, provides opt-in debug and performance logs, opens Web Inspector in debug builds, and can archive logs.</li>
+        <li><a href="https://github.com/screenpipe/screenpipe/blob/main/.claude/skills/screenpipe-logs/SKILL.md">Screenpipe</a> documents persistent logs and concrete grep recipes. Its <a href="https://github.com/screenpipe/screenpipe/blob/main/TESTING.md">test guidance</a> uses read-only SQLite checks.</li>
+        <li><a href="https://github.com/refactoringhq/tolaria/blob/main/src-tauri/src/telemetry.rs">Tolaria</a> gates telemetry on user consent, disables default PII, and scrubs paths. Its <a href="https://github.com/refactoringhq/tolaria/blob/main/src/main.tsx">React root</a> reports caught and uncaught render failures.</li>
+        <li><a href="https://github.com/FlowNeuro/Flow-Desktop/blob/main/AGENTS.md">Flow Desktop</a> uses <code>tracing</code> and explicitly prohibits logging authentication, pairing, and encryption material.</li>
+        <li><a href="https://github.com/tw93/Pake/blob/main/docs/advanced-usage_CN.md">Pake</a> relies on Web Inspector during development, illustrating why DevTools are useful but insufficient for post-restart diagnosis.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Tools worth considering</h2>
+      <ul>
+        <li><a href="https://v2.tauri.app/plugin/logging/"><code>tauri-plugin-log</code></a> offers Rust and JavaScript logging, rotation, filtering, WebView forwarding, and custom formats. Ticketry should adopt it only if it can replace or feed the current sink cleanly.</li>
+        <li><a href="https://react.dev/learn/react-developer-tools">React Developer Tools</a>, including its standalone WebView mode, can prove whether component props and state received the record.</li>
+        <li><a href="https://docs.rs/async-graphql/latest/async_graphql/extensions/struct.OpenTelemetry.html">async-graphql OpenTelemetry</a> and <a href="https://opentelemetry.io/docs/languages/rust/">OpenTelemetry Rust</a> are later options if local spans cannot explain cross-process behavior.</li>
+        <li><a href="https://docs.rs/sentry/latest/sentry/">Sentry</a> can collect panic and tracing information, but upload, privacy, and global-logger concerns make it a separate product decision.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Detailed research</h2>
+      <ul>
+        <li><a href="tauri-debugging-practices.md">Debugging and observability in six open-source Tauri applications</a></li>
+        <li><a href="tauri2-observability-tool-matrix-2026-09-01.md">Tauri 2 observability tool matrix</a></li>
+      </ul>
+      <p class="small">The reports use primary sources from project repositories, official Tauri documentation, upstream tool documentation, and official API references.</p>
+    </section>
+  </main>
+</body>
+</html>

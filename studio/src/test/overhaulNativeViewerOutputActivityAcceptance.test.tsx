@@ -6,6 +6,11 @@ import { useModalStore } from "../app/modal/modalStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useClientStore } from "../state/clientStore";
+import {
+  grantsEveryLease,
+  installDesktopGraphQlRuntime,
+} from "./desktopGraphQlRuntime";
+import { documentOperationName } from "../graphql-foundation/typedDocument";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -48,6 +53,7 @@ describe("native viewer output activity acceptance", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime();
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       x: 0,
@@ -97,26 +103,14 @@ describe("native viewer output activity acceptance", () => {
     });
   });
 
-  it("[overhaul-88] reports native terminal output through the shared activity operation once on attachment and never polls afterwards", async () => {
+  it("[overhaul-169] reports native terminal output through the shared activity operation once on attachment and never polls afterwards", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    vi.stubEnv("VITE_WT_API_KEY", "native-terminal-secret");
-    const requests: Array<{ url: string; body: Record<string, string> }> = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        requests.push({
-          url: String(input),
-          body: JSON.parse(String(init?.body)) as Record<string, string>,
-        });
-        return new Response("{}", {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }),
-    );
+    const host = vi.fn();
+    vi.stubGlobal("fetch", host);
+    const operations = installDesktopGraphQlRuntime();
     const reports = () =>
-      requests.filter((request) =>
-        request.url.endsWith("/api/terminals/viewers/output"),
+      operations.filter((operation) =>
+        operation.operationName === "ObserveTerminalOutput",
       );
 
     const view = render(
@@ -126,7 +120,10 @@ describe("native viewer output activity acceptance", () => {
     // The native renderer owns its bytes, so Studio reports only the shared
     // observation and lets the backend decide whether output changed.
     await waitFor(() => expect(reports().length).toBeGreaterThan(0));
-    expect(reports()[0].body).toEqual({ agent_run_id: "run-1" });
+    expect(reports()[0].variables).toEqual({ agentRunId: "run-1" });
+    // The observation is a Rust mutation; the retired host route is not a
+    // fallback the viewer may reach for.
+    expect(host).not.toHaveBeenCalled();
 
     // An attached viewer produces no further reports: Studio never sees the
     // native bytes, so a repeat would be an unconditional heartbeat — an
@@ -147,7 +144,7 @@ describe("native viewer output activity acceptance", () => {
     view.unmount();
     await waitFor(() =>
       expect(
-        requests.some((request) => request.url.endsWith("/lease/release")),
+        operations.some((operation) => operation.operationName === "DeleteViewerLease"),
       ).toBe(true),
     );
     await vi.advanceTimersByTimeAsync(30_000);
@@ -155,18 +152,12 @@ describe("native viewer output activity acceptance", () => {
   });
 
   it("keeps native rendering intact when activity reporting fails", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        if (String(input).endsWith("/api/terminals/viewers/output")) {
-          throw new Error("backend unavailable");
-        }
-        return new Response("{}", {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }),
-    );
+    installDesktopGraphQlRuntime(async (document, variables) => {
+      if (documentOperationName(document) === "ObserveTerminalOutput") {
+        throw new Error("backend unavailable");
+      }
+      return grantsEveryLease(document, variables);
+    });
     const ready = vi.fn();
 
     const view = render(

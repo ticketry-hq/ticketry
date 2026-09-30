@@ -1,22 +1,25 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
-import { useAgentStatusStore } from "../features/agents/status";
+import { useAgentStatusStore } from "../features/agents/status/testStore";
 import {
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
 import { useStudioStore } from "../features/projects/store";
-import { seedConfig } from "../features/studio/stores/configStore";
-import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
+import {
+  installDesktopGraphQlRuntime,
+  terminalSessionReadExecutor,
+} from "./desktopGraphQlRuntime";
+import {
+  findDormantItem,
+  queryDormantItem,
+} from "./dormantTabsFixture";
 
 const terminalApi = vi.hoisted(() => ({
   getDocuments: vi.fn(),
-  getTerminals: vi.fn(),
-  listResumableTerminals: vi.fn(),
   resumeTerminal: vi.fn(),
   terminateTerminal: vi.fn(),
 }));
@@ -25,6 +28,18 @@ vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../features/agents/api/agentApi")>()),
   ...terminalApi,
 }));
+
+// Terminal session reads moved to the Rust Terminal Session graph, so the seam
+// a test controls is the read transport, not a host API module.
+const terminalReads = vi.hoisted(() => {
+  const resumable = vi.fn();
+  return {
+    readTaskTerminalSessions: vi.fn(),
+    readScratchTerminalSessions: vi.fn(),
+    readTaskResumableTerminalSessions: resumable,
+    readScratchResumableTerminalSessions: resumable,
+  };
+});
 
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
@@ -86,7 +101,7 @@ function mountLiveTerminal({ keyboard = false }: { keyboard?: boolean } = {}) {
   });
 
   render(
-    <QueryClientProvider client={queryClient}>
+    <>
       {keyboard && <KeymapHarness />}
       <SelectedTicketContent
         bucket="story-1"
@@ -95,16 +110,15 @@ function mountLiveTerminal({ keyboard = false }: { keyboard?: boolean } = {}) {
         owner="studio"
         details={<div>Issue details</div>}
       />
-    </QueryClientProvider>,
+    </>,
   );
 }
 
 describe("overhaul acceptance — terminal close synchronization", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    installDesktopGraphQlRuntime(terminalSessionReadExecutor(terminalReads));
     localStorage.clear();
-    queryClient.clear();
-    seedConfig({ features: { sidebar: true, projects: true } });
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
       selectedModuleId: "module-1",
@@ -123,12 +137,13 @@ describe("overhaul acceptance — terminal close synchronization", () => {
       automationByTask: {},
     });
     terminalApi.getDocuments.mockResolvedValue({ documents: [] });
-    terminalApi.getTerminals.mockResolvedValue([]);
-    terminalApi.listResumableTerminals.mockResolvedValue([]);
+    terminalReads.readTaskTerminalSessions.mockResolvedValue([]);
+    terminalReads.readScratchTerminalSessions.mockResolvedValue([]);
+    terminalReads.readTaskResumableTerminalSessions.mockResolvedValue([]);
   });
 
   it("refreshes resumable sessions through the shared keyboard close path", async () => {
-    terminalApi.listResumableTerminals
+    terminalReads.readTaskResumableTerminalSessions
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{
         agent_run_id: "run-old",
@@ -146,7 +161,7 @@ describe("overhaul acceptance — terminal close synchronization", () => {
     });
     mountLiveTerminal({ keyboard: true });
     await waitFor(() => {
-      expect(terminalApi.listResumableTerminals).toHaveBeenCalledTimes(1);
+      expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(1);
     });
 
     act(() => {
@@ -157,9 +172,7 @@ describe("overhaul acceptance — terminal close synchronization", () => {
       }));
     });
 
-    expect(await screen.findByRole("button", {
-      name: "Resume codex terminal",
-    })).toBeInTheDocument();
+    expect(await findDormantItem("Resume codex terminal")).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "codex terminal" }))
       .not.toBeInTheDocument();
     expect(screen.getByText("Issue details")).toBeInTheDocument();
@@ -169,7 +182,7 @@ describe("overhaul acceptance — terminal close synchronization", () => {
     terminalApi.terminateTerminal.mockRejectedValue(new Error("refused"));
     mountLiveTerminal();
     await waitFor(() => {
-      expect(terminalApi.listResumableTerminals).toHaveBeenCalledTimes(1);
+      expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(1);
     });
 
     fireEvent.click(screen.getByRole("button", {
@@ -186,8 +199,37 @@ describe("overhaul acceptance — terminal close synchronization", () => {
     });
     expect(screen.getByRole("tab", { name: "codex terminal" }))
       .toBeInTheDocument();
-    expect(terminalApi.listResumableTerminals).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("button", { name: "Resume codex terminal" }))
+    expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(1);
+    expect(queryDormantItem("Resume codex terminal"))
       .not.toBeInTheDocument();
+  });
+
+  it("keeps a successful close successful when the resumable refresh fails", async () => {
+    terminalReads.readTaskResumableTerminalSessions
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error("holdings unavailable"));
+    terminalApi.terminateTerminal.mockResolvedValue({
+      agent_run_id: "run-old",
+      terminated: true,
+    });
+    mountLiveTerminal();
+    await waitFor(() => {
+      expect(terminalReads.readTaskResumableTerminalSessions).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Close codex terminal",
+    }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("tab", { name: "codex terminal" }))
+        .not.toBeInTheDocument();
+      expect(useClientStore.getState().toasts).toContainEqual(
+        expect.objectContaining({
+          kind: "error",
+          message: "Terminal closed, but resumable sessions could not be refreshed: holdings unavailable",
+        }),
+      );
+    });
   });
 });

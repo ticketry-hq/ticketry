@@ -1,19 +1,23 @@
 import type { ReactNode } from "react";
-import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, vi } from "vitest";
 import type { WorkspaceLauncherContext } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 
 const terminalApi = vi.hoisted(() => ({
   createTerminalRun: vi.fn(),
   getDocuments: vi.fn(),
-  getTerminals: vi.fn(),
-  listResumableTerminals: vi.fn(),
 }));
 
 const terminalTransport = vi.hoisted(() => ({ attach: vi.fn() }));
 
 const providerApi = vi.hoisted(() => ({
+  getProviderCatalog: vi.fn(),
   getLaunchProviderCapabilities: vi.fn(),
+  prefetchProviderCatalog: vi.fn(),
+}));
+
+const shellApi = vi.hoisted(() => ({
+  createModuleShell: vi.fn(),
+  listModuleShells: vi.fn(),
 }));
 
 vi.doMock("../features/agents/api/agentApi", async (importOriginal) => ({
@@ -25,10 +29,51 @@ vi.doMock("../features/agents/terminal/internal/terminalClientRuntime", () => ({
   terminalClientTransport: terminalTransport,
 }));
 
-vi.doMock("../shared/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../shared/api/client")>()),
+vi.doMock("../features/terminal-panel/api/moduleShellApi", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("../features/terminal-panel/api/moduleShellApi")
+  >()),
+  ...shellApi,
+}));
+
+vi.doMock("./legacyApiFixture", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./legacyApiFixture")>()),
   ...providerApi,
 }));
+
+vi.doMock("../features/workflows/providerQueries", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../features/workflows/providerQueries")>();
+  const React = await import("react");
+  return {
+    ...actual,
+    setProviderCapabilities: (capabilities: unknown[]) => {
+      actual.setProviderCapabilities(capabilities as never);
+      providerApi.getLaunchProviderCapabilities.mockResolvedValue(capabilities);
+    },
+    loadProviderCapabilities: providerApi.getLaunchProviderCapabilities,
+    prefetchProviderCatalog: providerApi.prefetchProviderCatalog,
+    loadProviderCatalog: async () => (await providerApi.getProviderCatalog()).value,
+    useProviderCapabilitiesQuery: () => {
+      const initial = actual.getProviderCapabilitiesSnapshot();
+      const [result, setResult] = React.useState<{
+        data?: unknown[];
+        isLoading: boolean;
+        isError: boolean;
+      }>(initial
+        ? { data: initial, isLoading: false, isError: false }
+        : { isLoading: true, isError: false });
+      React.useEffect(() => {
+        let active = true;
+        providerApi.getLaunchProviderCapabilities().then(
+          (data: unknown[]) => active && setResult({ data, isLoading: false, isError: false }),
+          () => active && setResult({ isLoading: false, isError: true }),
+        );
+        return () => { active = false; };
+      }, []);
+      return result;
+    },
+  };
+});
 
 vi.doMock("xterm", () => ({
   Terminal: class {
@@ -65,12 +110,28 @@ const { SelectedTicketContent } = await import(
 const { ModalHost } = await import("../app/modal/ModalHost");
 const { useModalStore } = await import("../app/modal/modalStore");
 const { useTerminalStore } = await import("../features/agents/terminal");
-const { seedConfig } = await import("../features/studio/stores/configStore");
 const { setProviderCapabilities } = await import(
   "../features/workflows/providerQueries"
 );
-const { queryClient } = await import("../shared/query/queryClient");
 const { useClientStore } = await import("../state/clientStore");
+const { useStudioStore } = await import("../features/projects/store");
+const { TerminalPanel } = await import("../features/terminal-panel/TerminalPanel");
+const { useModuleShellStore } = await import(
+  "../features/terminal-panel/moduleShellStore"
+);
+const { useTerminalPanelStore } = await import(
+  "../features/terminal-panel/panelStore"
+);
+const { studioApolloClient } = await import("../shared/apollo/client");
+
+/**
+ * Drop the cached provider catalog so the next launch surface mounts cold —
+ * the state the placeholder branches and the catalog warm are about.
+ */
+function clearProviderHolding(): void {
+  studioApolloClient().cache.evict({ id: "ROOT_QUERY", fieldName: "provider_catalog" });
+  studioApolloClient().cache.gc();
+}
 
 class TestResizeObserver {
   observe() {}
@@ -80,26 +141,40 @@ class TestResizeObserver {
 const defaultCapabilities = [
   {
     agent: "codex",
-    models: [],
+    accepts_model: true,
+    accepts_any_model: false,
+    model_aliases: [],
+    model_prefixes: [],
+    reasoning_levels: ["low", "medium", "high", "xhigh"],
   },
 ];
 
 beforeEach(() => {
   vi.resetAllMocks();
+  localStorage.setItem("ticketry:terminal-renderer", "xterm");
   setProviderCapabilities(defaultCapabilities);
   providerApi.getLaunchProviderCapabilities.mockResolvedValue(defaultCapabilities);
-  seedConfig({ features: { sidebar: true, projects: true } });
+  providerApi.getProviderCatalog.mockResolvedValue({
+    value: {
+      activated_providers: ["codex"],
+      global_default: null,
+    },
+  });
   useClientStore.setState({
     workspaces: {},
     activeByTask: {},
     sidebarVisible: true,
   });
   useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
+  useModuleShellStore.setState({ byModule: {} });
+  useTerminalPanelStore.setState({ openModules: {}, focusSignal: 0 });
+  useModalStore.setState({ modalStack: [] });
+  useStudioStore.setState({ selectedProjectId: null });
   terminalApi.getDocuments.mockResolvedValue({ documents: [] });
-  terminalApi.getTerminals.mockResolvedValue([]);
-  terminalApi.listResumableTerminals.mockResolvedValue([]);
   terminalApi.createTerminalRun.mockResolvedValue({ agent_run_id: "run-570" });
-  terminalTransport.attach.mockImplementation((_params, onEvent) => {
+  shellApi.createModuleShell.mockResolvedValue("run-shell-570");
+  shellApi.listModuleShells.mockResolvedValue([]);
+  terminalTransport.attach.mockImplementation((params, onEvent) => {
     const handle = {
       input: vi.fn(),
       resize: vi.fn(),
@@ -112,8 +187,8 @@ beforeEach(() => {
     queueMicrotask(() =>
       onEvent({
         type: "ready",
-        sessionId: "terminal-570",
-        agentRunId: "run-570",
+        sessionId: params.agentRunId.replace(/^run/, "terminal"),
+        agentRunId: params.agentRunId,
       }),
     );
     return handle;
@@ -139,7 +214,7 @@ function workspaceView({
   children,
 }: WorkspaceViewOptions) {
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       {children}
       <SelectedTicketContent
         bucket={bucket}
@@ -149,25 +224,32 @@ function workspaceView({
         details={<div>Task details</div>}
         launchContext={launchContext}
       />
-    </QueryClientProvider>
+      <ModalHost />
+    </>
   );
 }
 
 const providerCapability = (agent: string) => ({
   agent,
-  models: [],
+  accepts_model: true,
+  accepts_any_model: false,
+  model_aliases: [],
+  model_prefixes: [],
+  reasoning_levels: [],
 });
 
 export {
+  clearProviderHolding,
   providerApi,
   providerCapability,
-  queryClient,
+  shellApi,
   setProviderCapabilities,
-  ModalHost,
   terminalApi,
   terminalTransport,
+  TerminalPanel,
+  useClientStore,
+  useStudioStore,
   useTerminalStore,
-  useModalStore,
   workspaceView,
 };
 export type { WorkspaceLauncherContext, WorkspaceViewOptions };

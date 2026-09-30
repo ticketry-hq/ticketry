@@ -10,7 +10,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import type { RunRecord } from "./types";
-import { useAgentStatusStore } from "./store";
+import { useAgentStatusStore } from "./testStore";
 
 const SCOPE = { project_id: "project-1", task_id: null };
 
@@ -95,8 +95,8 @@ describe("reconcileScope healing", () => {
   });
 });
 
-describe("reconcileScope absence marking", () => {
-  it("marks a strictly older unlisted run as exited", () => {
+describe("snapshot replacement", () => {
+  it("removes a run omitted from the authoritative project snapshot", () => {
     const store = useAgentStatusStore.getState();
     store.upsertRun(run({ state: "working" }));
 
@@ -104,29 +104,6 @@ describe("reconcileScope absence marking", () => {
       .getState()
       .reconcileScope(SCOPE, [], "2026-08-10T12:00:00+00:00");
 
-    expect(useAgentStatusStore.getState().runs["run-1"].state).toBe("exited");
-  });
-
-  it("never declares an unlisted run exited on an equal stamp", () => {
-    const at = "2026-08-10T12:00:00+00:00";
-    const store = useAgentStatusStore.getState();
-    store.upsertRun(run({ state: "starting", updated_at: at }));
-
-    useAgentStatusStore.getState().reconcileScope(SCOPE, [], at);
-
-    expect(useAgentStatusStore.getState().runs["run-1"].state).toBe("starting");
-  });
-
-  it("never declares a run spawned after the snapshot stamp exited", () => {
-    const store = useAgentStatusStore.getState();
-    store.upsertRun(
-      run({ state: "starting", updated_at: "2026-08-10T12:00:00.500000+00:00" }),
-    );
-
-    useAgentStatusStore
-      .getState()
-      .reconcileScope(SCOPE, [], "2026-08-10T12:00:00+00:00");
-
-    expect(useAgentStatusStore.getState().runs["run-1"].state).toBe("starting");
+    expect(useAgentStatusStore.getState().runs["run-1"]).toBeUndefined();
   });
 });

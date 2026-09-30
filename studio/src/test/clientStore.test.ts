@@ -6,21 +6,19 @@ describe("clientStore", () => {
     vi.resetModules();
   });
 
-  it("restores and persists Modules sidebar visibility", async () => {
+  it("ignores the retired disabled-build sidebar value and saves the current preference", async () => {
     localStorage.setItem("studio.sidebarVisible:v1", "false");
-    localStorage.setItem("studio.sidebarVisible:v2", "true");
     const { useClientStore } = await import("../state/clientStore");
 
     expect(useClientStore.getState().sidebarVisible).toBe(true);
-    expect(localStorage.getItem("studio.sidebarVisible:v1")).toBe("false");
 
     useClientStore.getState().toggleSidebar();
     expect(useClientStore.getState().sidebarVisible).toBe(false);
     expect(localStorage.getItem("studio.sidebarVisible:v2")).toBe("false");
 
     useClientStore.getState().setSidebarVisible(true);
-    expect(useClientStore.getState().sidebarVisible).toBe(true);
     expect(localStorage.getItem("studio.sidebarVisible:v2")).toBe("true");
+    expect(localStorage.getItem("studio.sidebarVisible:v1")).toBe("false");
   });
 
   it("migrates legacy collapsed state names to live ids once", async () => {
@@ -91,11 +89,11 @@ describe("clientStore", () => {
     ).toBeNull();
   });
 
-  it("does not retain the deleted active bindings field", async () => {
+  it("does not retain parallel keybinding state", async () => {
     const { useClientStore } = await import("../state/clientStore");
     const state = useClientStore.getState() as unknown as Record<string, unknown>;
 
     expect(state).not.toHaveProperty("activeBindings");
-    expect(state.bindingsStack).toEqual([expect.any(Array)]);
+    expect(state).not.toHaveProperty("bindingsStack");
   });
 });

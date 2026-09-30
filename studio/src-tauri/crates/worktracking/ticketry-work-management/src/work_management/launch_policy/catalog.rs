@@ -1,0 +1,283 @@
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+
+use super::rows::BindingRow;
+use super::LaunchPolicyError;
+use ticketry_entities::{agent_model, agent_model_reasoning_level, provider, reasoning_level};
+use ticketry_provider::{provider_contract, Provider};
+use ticketry_settings::{read_global_launch_default, GlobalLaunchDefault};
+
+pub(super) struct CatalogReader<'a> {
+    database: &'a DatabaseConnection,
+}
+
+pub(super) struct ProviderSelection {
+    pub(super) provider: String,
+    pub(super) profile: Option<String>,
+    pub(super) model: Option<String>,
+    pub(super) reasoning: Option<String>,
+    pub(super) supports_unattended: bool,
+}
+
+impl<'a> CatalogReader<'a> {
+    pub(super) fn new(database: &'a DatabaseConnection) -> Self {
+        Self { database }
+    }
+
+    pub(super) async fn resolve(
+        &self,
+        binding: &BindingRow,
+        provider_override: Option<&str>,
+    ) -> Result<ProviderSelection, LaunchPolicyError> {
+        let configured_model = match binding.model_id.as_deref() {
+            Some(model_id) => Some(self.model_by_id(model_id).await?),
+            None => None,
+        };
+        if binding.reasoning_id.is_some() && configured_model.is_none() {
+            return Err(rejected(
+                "model_required",
+                "Choose a catalog model before configuring reasoning.",
+            ));
+        }
+
+        let configured_provider = binding
+            .profile
+            .as_ref()
+            .map(|_| Provider::Codex.slug())
+            .or_else(|| {
+                configured_model
+                    .as_ref()
+                    .map(|model| model.provider_slug.as_str())
+            });
+        let mut provider = provider_override.or(configured_provider).map(str::to_owned);
+        let provider_changed = provider_override.is_some()
+            && configured_provider.is_some()
+            && provider_override != configured_provider;
+        let mut model = (!provider_changed).then_some(configured_model).flatten();
+        let mut reasoning_id = (!provider_changed)
+            .then(|| binding.reasoning_id.clone())
+            .flatten();
+        // A profile is a Codex-only option, so an override to another
+        // agent/provider drops it along with the model and reasoning it owns.
+        let mut profile = (!provider_changed)
+            .then(|| binding.profile.clone())
+            .flatten();
+
+        // A profile owns its own model and reasoning. Inheriting either from
+        // the global default hands the planner a profile-plus-model
+        // combination it rejects, so the default only fills a selection that
+        // resolved without a profile.
+        if let Some(default) = self.global_default().await? {
+            if provider.is_none() {
+                provider = Some(default.provider.clone());
+                profile = default.profile;
+                if profile.is_none() {
+                    model = match default.model {
+                        Some(name) => Some(self.model_by_name(&default.provider, &name).await?),
+                        None => None,
+                    };
+                    reasoning_id = match default.reasoning {
+                        Some(name) => Some(self.reasoning_by_name(&name).await?.id),
+                        None => None,
+                    };
+                }
+            } else if provider.as_deref() == Some(default.provider.as_str()) && profile.is_none() {
+                if model.is_none() {
+                    model = match default.model {
+                        Some(name) => Some(self.model_by_name(&default.provider, &name).await?),
+                        None => None,
+                    };
+                }
+                if reasoning_id.is_none() {
+                    reasoning_id = match default.reasoning {
+                        Some(name) => Some(self.reasoning_by_name(&name).await?.id),
+                        None => None,
+                    };
+                }
+            }
+        }
+
+        let provider = match provider {
+            Some(provider) => provider,
+            None if !self.has_activated_provider().await? => {
+                return Err(rejected(
+                    "no_activated_providers",
+                    "No activated providers are available. Activate one in Settings > Model configuration.",
+                ));
+            }
+            None => {
+                return Err(rejected(
+                    "agent_not_configured",
+                    "This launch binding has no resolved agent/provider.",
+                ));
+            }
+        };
+        let provider_row = self.provider(&provider).await?;
+        require_activated(&provider_row)?;
+        if let Some(selected) = &model {
+            if selected.provider_slug != provider {
+                return Err(rejected(
+                    "unsupported_model",
+                    format!(
+                        "Model '{}' is not in the catalog for agent/provider '{}'.",
+                        selected.name, provider
+                    ),
+                ));
+            }
+        }
+        let reasoning = match reasoning_id {
+            Some(reasoning_id) => {
+                let model = model.as_ref().ok_or_else(|| {
+                    rejected(
+                        "model_required",
+                        "Choose a catalog model before configuring reasoning.",
+                    )
+                })?;
+                self.compatible_reasoning(&model.id, &reasoning_id).await?
+            }
+            None => None,
+        };
+        let supports_unattended = Provider::from_slug(&provider)
+            .is_some_and(|provider| provider_contract(provider).metadata().supports_unattended);
+
+        Ok(ProviderSelection {
+            provider,
+            profile,
+            model: model.map(|value| value.name),
+            reasoning,
+            supports_unattended,
+        })
+    }
+
+    async fn provider(&self, slug: &str) -> Result<provider::Model, LaunchPolicyError> {
+        provider::Entity::find()
+            .filter(provider::Column::Slug.eq(slug))
+            .one(self.database)
+            .await?
+            .ok_or_else(|| {
+                rejected(
+                    "unknown_agent",
+                    format!("Agent/provider '{slug}' is not supported."),
+                )
+            })
+    }
+
+    async fn has_activated_provider(&self) -> Result<bool, LaunchPolicyError> {
+        Ok(provider::Entity::find()
+            .filter(provider::Column::Activated.eq(true))
+            .one(self.database)
+            .await?
+            .is_some())
+    }
+
+    async fn model_by_id(&self, id: &str) -> Result<ModelRow, LaunchPolicyError> {
+        let row = agent_model::Entity::find_by_id(id)
+            .find_also_related(provider::Entity)
+            .one(self.database)
+            .await?;
+        model_row(row)
+            .ok_or_else(|| rejected("unsupported_model", "Model is not in the agent catalog."))
+    }
+
+    async fn model_by_name(
+        &self,
+        provider: &str,
+        name: &str,
+    ) -> Result<ModelRow, LaunchPolicyError> {
+        let provider_row = provider::Entity::find()
+            .filter(provider::Column::Slug.eq(provider))
+            .one(self.database)
+            .await?;
+        let row = match provider_row {
+            Some(provider_row) => agent_model::Entity::find()
+                .filter(agent_model::Column::ProviderId.eq(provider_row.id))
+                .filter(agent_model::Column::Name.eq(name))
+                .one(self.database)
+                .await?
+                .map(|model| ModelRow {
+                    id: model.id,
+                    name: model.name,
+                    provider_slug: provider_row.slug,
+                }),
+            None => None,
+        };
+        row.ok_or_else(|| {
+            rejected(
+                "unsupported_model",
+                format!("Model '{name}' is not in the catalog for agent/provider '{provider}'."),
+            )
+        })
+    }
+
+    async fn reasoning_by_name(
+        &self,
+        name: &str,
+    ) -> Result<reasoning_level::Model, LaunchPolicyError> {
+        reasoning_level::Entity::find()
+            .filter(reasoning_level::Column::Name.eq(name))
+            .one(self.database)
+            .await?
+            .ok_or_else(|| rejected("unsupported_reasoning", "Reasoning is not in the catalog."))
+    }
+
+    async fn compatible_reasoning(
+        &self,
+        model_id: &str,
+        reasoning_id: &str,
+    ) -> Result<Option<String>, LaunchPolicyError> {
+        let compatible = agent_model_reasoning_level::Entity::find()
+            .filter(agent_model_reasoning_level::Column::AgentModelId.eq(model_id))
+            .filter(agent_model_reasoning_level::Column::ReasoningLevelId.eq(reasoning_id))
+            .one(self.database)
+            .await?
+            .is_some();
+        let row = if compatible {
+            reasoning_level::Entity::find_by_id(reasoning_id)
+                .one(self.database)
+                .await?
+        } else {
+            None
+        };
+        row.map(|value| value.name)
+            .ok_or_else(|| {
+                rejected(
+                    "unsupported_reasoning",
+                    "Reasoning is not permitted for the selected model.",
+                )
+            })
+            .map(Some)
+    }
+
+    async fn global_default(&self) -> Result<Option<GlobalLaunchDefault>, LaunchPolicyError> {
+        Ok(read_global_launch_default(self.database).await?)
+    }
+}
+
+fn require_activated(provider: &provider::Model) -> Result<(), LaunchPolicyError> {
+    if provider.activated {
+        return Ok(());
+    }
+    Err(rejected(
+        "provider_not_activated",
+        format!("Agent/provider '{}' is not activated.", provider.slug),
+    ))
+}
+
+fn rejected(code: &'static str, message: impl Into<String>) -> LaunchPolicyError {
+    LaunchPolicyError::rejected(code, message)
+}
+
+struct ModelRow {
+    id: String,
+    name: String,
+    provider_slug: String,
+}
+
+fn model_row(row: Option<(agent_model::Model, Option<provider::Model>)>) -> Option<ModelRow> {
+    let (model, provider) = row?;
+    let provider = provider?;
+    Some(ModelRow {
+        id: model.id,
+        name: model.name,
+        provider_slug: provider.slug,
+    })
+}

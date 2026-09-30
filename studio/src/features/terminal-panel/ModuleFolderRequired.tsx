@@ -15,7 +15,8 @@ import {
   ModuleFolderSelection,
   useModuleFolderSelection,
 } from "../agents/terminal/ModuleFolderSelection";
-import { setModuleFolder, useModuleLinks } from "../module-links";
+import { moduleFolderSaveError, setModuleFolder } from "../module-links";
+import { studioRuntime, type StudioRuntime } from "../../runtime";
 
 const REFUSAL_MESSAGE: Record<string, string> = {
   module_folder_unset: "This module has no folder yet.",
@@ -23,19 +24,21 @@ const REFUSAL_MESSAGE: Record<string, string> = {
     "This module's folder is not a complete filesystem path.",
   module_folder_missing: "This module's folder no longer exists.",
   module_folder_not_a_directory: "This module's folder is not a directory.",
+  no_profile_selected: "No profile is selected, so no folder is configured.",
 };
 
 export function ModuleFolderRequired({
   moduleId,
   reason,
   onLinked,
+  runtime = studioRuntime(),
 }: {
   moduleId: string;
   reason: string;
   onLinked: () => void;
+  runtime?: StudioRuntime;
 }) {
-  const moduleLinks = useModuleLinks();
-  const selection = useModuleFolderSelection({ moduleLinks });
+  const selection = useModuleFolderSelection();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const path = selection.value.trim();
@@ -45,10 +48,10 @@ export function ModuleFolderRequired({
     setBusy(true);
     setError(null);
     try {
-      await setModuleFolder(moduleId, path);
+      if (!(await setModuleFolder(moduleId, path, runtime))) return;
       onLinked();
-    } catch {
-      setError("Could not save the module folder. Retry to continue.");
+    } catch (cause) {
+      setError(moduleFolderSaveError(cause, "Could not save the module folder. Retry to continue."));
     } finally {
       setBusy(false);
     }
@@ -66,6 +69,7 @@ export function ModuleFolderRequired({
       </p>
       <ModuleFolderSelection
         selection={selection}
+        disabled={busy}
         ariaLabel="Module folder for the terminal panel"
         placeholder="Local folder"
       />

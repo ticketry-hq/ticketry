@@ -1,11 +1,8 @@
 import React from "react";
 
-type FieldArrangement = "inline" | "stacked";
-
 interface FieldProps {
   label: string;
   children: React.ReactNode;
-  arrangement?: FieldArrangement;
   muted?: boolean;
   saving?: boolean;
 }
@@ -13,19 +10,15 @@ interface FieldProps {
 export default function Field({
   label,
   children,
-  arrangement = "inline",
   muted = false,
   saving = false,
 }: FieldProps) {
   return (
     <div
       data-testid="details-field"
-      data-arrangement={arrangement}
-      className={`${
-        arrangement === "inline"
-          ? "flex items-center justify-between gap-3 py-2"
-          : "py-2.5"
-      } ${muted ? "text-text-muted" : ""}`}
+      className={`inline-flex min-w-0 items-center gap-2 ${
+        muted ? "text-text-muted" : ""
+      }`}
     >
       <span
         data-testid="field-label"
@@ -39,9 +32,9 @@ export default function Field({
         data-testid="field-value"
         aria-busy={saving || undefined}
         aria-disabled={saving || undefined}
-        className={`${
-          arrangement === "inline" ? "min-w-0 text-right" : "mt-1.5 min-w-0 w-full"
-        } transition-opacity ${saving ? "pointer-events-none opacity-50" : ""}`}
+        className={`min-w-0 transition-opacity ${
+          saving ? "pointer-events-none opacity-50" : ""
+        }`}
       >
         {children}
       </div>

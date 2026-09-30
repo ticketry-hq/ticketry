@@ -2,25 +2,30 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-function testFiles(directory: string): string[] {
+function sourceFiles(directory: string, pattern: RegExp): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) return testFiles(path);
-    return /\.test\.tsx?$/.test(entry.name) ? [path] : [];
+    if (entry.isDirectory()) {
+      return entry.name === "target" ? [] : sourceFiles(path, pattern);
+    }
+    return pattern.test(entry.name) ? [path] : [];
   });
 }
 
+// A few cases are behaviors of the Rust crates rather than the Studio UI, so
+// their marker lives with the Rust test that exercises them. The gate counts
+// both places, which is what keeps one marker per case honest.
+function markedFiles(): string[] {
+  return [
+    ...sourceFiles(join(process.cwd(), "src", "test"), /\.test\.tsx?$/),
+    ...sourceFiles(join(process.cwd(), "src-tauri", "crates"), /\.rs$/),
+  ];
+}
+
 describe("overhaul acceptance gate", () => {
-  it("keeps the acceptance matrix and executable markers in parity", () => {
-    const matrixIds = Array.from(
-      readFileSync(
-        join(process.cwd(), "docs", "overhaul-acceptance.md"),
-        "utf8",
-      ).matchAll(/^\|\s*(\d+)\s*\|/gm),
-      (match) => match[1].padStart(2, "0"),
-    );
+  it("keeps one executable acceptance case for each formerly manual behavior", () => {
     const counts = new Map<string, number>();
-    for (const file of testFiles(join(process.cwd(), "src", "test"))) {
+    for (const file of markedFiles()) {
       const source = readFileSync(file, "utf8");
       // Two digits or more: the matrix passed one hundred cases, and a
       // two-digit-only pattern would silently fold `overhaul-100` into `10`.
@@ -29,12 +34,13 @@ describe("overhaul acceptance gate", () => {
       }
     }
 
-    expect(
-      Array.from(counts)
-        .filter(([, count]) => count > 1)
-        .map(([id]) => id),
-    ).toEqual([]);
-    expect(Array.from(counts.keys()).sort((a, b) => Number(a) - Number(b)))
-      .toEqual(matrixIds);
+    expect(Object.fromEntries(counts)).toEqual(
+      Object.fromEntries(
+        Array.from({ length: 397 }, (_, index) => [
+          String(index + 1).padStart(2, "0"),
+          1,
+        ]),
+      ),
+    );
   });
 });

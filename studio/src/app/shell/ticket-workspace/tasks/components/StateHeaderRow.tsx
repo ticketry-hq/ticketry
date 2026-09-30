@@ -22,9 +22,15 @@ interface StateHeaderRowProps {
   // header without defeating React.memo.
   onToggle: (stateId: string) => void;
   onConfigure?: (stateId: string) => void;
+  onConfigureSection?: () => void;
   stateId?: string | null;
   dropTargetProps?: DropTargetProps;
   showDropSeam?: boolean;
+  statusAdornment?: React.ReactNode;
+  /** A non-state section (Conversations): its own collapse key, no stage icon. */
+  sectionId?: string;
+  /** Buttons after the label; kept outside the collapse toggle. */
+  sectionActions?: React.ReactNode;
 }
 
 const STAGE_ICON_BY_NAME: Readonly<
@@ -52,11 +58,16 @@ export const StateHeaderRow = React.memo(function StateHeaderRow({
   isCollapsed,
   onToggle,
   onConfigure,
+  onConfigureSection,
   stateId,
   dropTargetProps,
   showDropSeam = false,
+  statusAdornment,
+  sectionId,
+  sectionActions,
 }: StateHeaderRowProps) {
   const StageIcon = stageIconForName(stateName);
+  const collapseKey = stateId ?? sectionId;
 
   return (
     <li
@@ -75,29 +86,42 @@ export const StateHeaderRow = React.memo(function StateHeaderRow({
         aria-expanded={!isCollapsed}
         aria-label={isCollapsed ? `Expand ${stateName}` : `Collapse ${stateName}`}
         onClick={() => {
-          if (stateId) onToggle(stateId);
+          if (collapseKey) onToggle(collapseKey);
         }}
         className="flex min-w-0 flex-1 cursor-pointer items-center text-left"
       >
         <span className="mr-1 inline-block w-4 shrink-0 text-center text-text-muted">
           {isCollapsed ? "▸" : "▾"}
         </span>
-        <span
-          data-stage-icon={stateName}
-          aria-hidden="true"
-          className="mr-1 inline-flex w-4 shrink-0 items-center justify-center"
-          style={{ color: stateColor }}
-        >
-          <StageIcon />
-        </span>
-        <span className="font-bold">{stateName}</span>
+        {sectionId ? (
+          <span className="font-mono text-xs font-bold tracking-wider text-text-secondary uppercase">
+            {stateName}
+          </span>
+        ) : (
+          <>
+            <span
+              data-stage-icon={stateName}
+              aria-hidden="true"
+              className="mr-1 inline-flex w-4 shrink-0 items-center justify-center"
+              style={{ color: stateColor }}
+            >
+              <StageIcon />
+            </span>
+            <span className="font-bold">{stateName}</span>
+          </>
+        )}
         <span className="ml-2 text-text-muted">{count}</span>
+        {statusAdornment ? (
+          <span className="ml-auto pl-2">{statusAdornment}</span>
+        ) : null}
       </button>
-      {stateId && onConfigure ? (
+      {sectionActions}
+      {(stateId && onConfigure) || onConfigureSection ? (
         <button
           type="button"
-          aria-label={`Configure ${stateName} state`}
-          onClick={() => onConfigure(stateId)}
+          aria-label={stateId ? `Configure ${stateName} state` : `Configure ${stateName}`}
+          title={stateId ? `Configure ${stateName} state` : `${stateName} settings`}
+          onClick={() => stateId ? onConfigure?.(stateId) : onConfigureSection?.()}
           className="ml-1 inline-flex shrink-0 items-center justify-center p-1 text-text-muted opacity-50 group-hover:opacity-100 hover:text-text-primary hover:opacity-100 focus-visible:opacity-100"
         >
           <IconSettings />

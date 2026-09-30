@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createBrowserRuntime, initializeStudioRuntime } from "../../../../runtime";
+import { installDesktopGraphQlRuntime } from "../../../../test/desktopGraphQlRuntime";
 import {
   desktopOutputActivity,
   reportNativeViewerAttached,
@@ -21,16 +23,30 @@ afterEach(() => {
 });
 
 describe("native terminal output reports", () => {
-  it("reports the observation on the authenticated terminal surface", async () => {
-    vi.stubEnv("VITE_WT_API_KEY", "desktop-viewer-secret");
+  it("submits the identity to the Rust observation mutation", async () => {
+    const operations = installDesktopGraphQlRuntime();
 
     await desktopOutputActivity.report("run-1");
 
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/terminals/viewers/output");
-    expect(JSON.parse(init.body as string)).toEqual({ agent_run_id: "run-1" });
-    expect(new Headers(init.headers).get("x-api-key")).toBe(
-      "desktop-viewer-secret",
+    // The `/api/terminals/viewers/output` route this used to post to belonged
+    // to the retired Python terminal authority. Rust captures the pane and
+    // decides whether output advanced, so the client submits one identity and
+    // reaches no host route at all.
+    expect(operations).toEqual([
+      { operationName: "ObserveTerminalOutput", variables: { agentRunId: "run-1" } },
+    ]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("uses the browser GraphQL adapter when no desktop stream is available", async () => {
+    initializeStudioRuntime(createBrowserRuntime({ environment: {} }));
+
+    await expect(desktopOutputActivity.report("run-1")).rejects.toThrow(
+      "The GraphQL foundation response has no data.",
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/graphql",
+      expect.objectContaining({ method: "POST" }),
     );
   });
 

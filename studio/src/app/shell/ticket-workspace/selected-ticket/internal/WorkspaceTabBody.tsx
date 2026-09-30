@@ -10,18 +10,28 @@ import type {
   DesignDoc,
   TabKind,
 } from "../../../../../features/agents/types";
-import {
-  useModalOcclusionActive,
-  type ForegroundOwner,
-} from "../../../../../features/agents/terminal";
+import type { ForegroundOwner } from "../../../../../features/agents/terminal";
 import {
   useClientStore,
   type EditViewZone,
 } from "../../../../../state/clientStore";
+import { KeyChordHint } from "../../../../../shared/ui/KeyChordHint";
 import { formatChordSymbols } from "../../../../navigation/chordLabel";
 import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../../../../navigation/three-zone/threeZoneNavigation";
 import { LazySelectedTicketTerminal } from "../terminals/selectedTicketTerminalLoader";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
+import {
+  isScratchBucket,
+  isTerminalInputElement,
+} from "../../../../../features/agents/terminal";
+import { ModuleVersionControl, TaskWorktreeChanges } from "../../../../../features/agents/worktrees";
+import {
+  openModuleChangesWorkspace,
+  openTaskChangesWorkspace,
+  useChangesCheckoutSelection,
+} from "./openChangesWorkspace";
+import { DetailsSurfaceActiveContext } from "./detailsSurfaceContext";
+import { useModalStore } from "../../../../../app/modal/modalStore";
 
 const WorkspaceDocument = lazy(async () => ({
   default: (await import("../documents/WorkspaceDocument")).WorkspaceDocument,
@@ -31,7 +41,9 @@ export function WorkspaceTabBody({
   bodyRef,
   detailsSurfaceRef,
   bucket,
+  moduleId = null,
   owner,
+  workspaceActive = true,
   details,
   activeKind,
   activeDocument,
@@ -54,7 +66,10 @@ export function WorkspaceTabBody({
   bodyRef: RefObject<HTMLDivElement>;
   detailsSurfaceRef: RefObject<HTMLDivElement>;
   bucket: string;
+  moduleId?: string | null;
   owner: ForegroundOwner;
+  /** False while another main workspace is presented over this retained host. */
+  workspaceActive?: boolean;
   details: ReactNode;
   activeKind: TabKind;
   activeDocument: DesignDoc | null;
@@ -74,16 +89,10 @@ export function WorkspaceTabBody({
   onEngageTab: (tab: TaskWorkspaceTabIdentity) => void;
   onSetEditViewZone: (zone: "active-tab-body") => void;
 }) {
-  // State configuration is a sibling WebView overlay over this workspace.
-  // Deactivate the Story viewer at its host boundary as well as through the
-  // window-level native occlusion gate while the workspace remains mounted.
-  const stateConfigurationOpen = useClientStore(
-    (state) => state.workspaceSelection.kind === "state-configuration",
-  );
+  const pushModal = useModalStore((state) => state.pushModal);
   const [pendingNativeHides, setPendingNativeHides] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const modalOcclusionActive = useModalOcclusionActive();
   const handleNativeVisibilityPendingChange = useCallback(
     (runId: string, pending: boolean) => {
       setPendingNativeHides((current) => {
@@ -100,6 +109,18 @@ export function WorkspaceTabBody({
   const terminalEngaged = bodyEngaged && activeKind === "terminal";
   const terminalRingBox =
     activeKind === "terminal" ? "top-0 bottom-0 -left-2 -right-2" : "inset-0";
+  const selectedChangesTaskId = useChangesCheckoutSelection(
+    (state) => moduleId ? state.taskIdByModule[moduleId] : undefined,
+  );
+  const changesTaskId = selectedChangesTaskId === undefined
+    ? isScratchBucket(bucket) ? null : bucket
+    : selectedChangesTaskId;
+  const openModuleChanges = useCallback(() => {
+    if (moduleId) openModuleChangesWorkspace(moduleId);
+  }, [moduleId]);
+  const openTaskChanges = useCallback((taskId: string) => {
+    if (moduleId) openTaskChangesWorkspace(moduleId, taskId);
+  }, [moduleId]);
 
   return (
     <div
@@ -124,8 +145,7 @@ export function WorkspaceTabBody({
           ? (event) => {
               if (
                 !useClientStore.getState().editViewBodyEngaged &&
-                event.target instanceof HTMLElement &&
-                event.target.closest(".xterm")
+                isTerminalInputElement(event.target)
               ) {
                 bodyRef.current?.focus({ preventScroll: true });
               }
@@ -148,7 +168,39 @@ export function WorkspaceTabBody({
             : "hidden"
         }
       >
-        {details}
+        <DetailsSurfaceActiveContext.Provider value={activeKind === "details"}>
+          {details}
+        </DetailsSurfaceActiveContext.Provider>
+      </div>
+      <div
+        tabIndex={-1}
+        data-testid="workspace-changes-surface"
+        className={
+          activeKind === "changes"
+            ? "absolute inset-0"
+            : "hidden"
+        }
+      >
+        {changesTaskId === null && moduleId ? (
+          <ModuleVersionControl
+            moduleId={moduleId}
+            active={activeKind === "changes"}
+            onOpenModule={openModuleChanges}
+            onOpenTask={openTaskChanges}
+          />
+        ) : (
+          <TaskWorktreeChanges
+            taskId={changesTaskId ?? bucket}
+            moduleId={moduleId}
+            active={activeKind === "changes"}
+            onOpenModule={openModuleChanges}
+            onOpenTask={openTaskChanges}
+            onResolveConflicts={(request) => pushModal({
+              type: "agent-picker",
+              payload: { mode: "instant", ...request },
+            })}
+          />
+        )}
       </div>
       {/* One iframe per open document, kept mounted so switching docs
           or tabs never reloads them; visibility toggles per active doc. */}
@@ -191,9 +243,7 @@ export function WorkspaceTabBody({
               bucket={bucket}
               owner={owner}
               active={
-                terminalIds.length > 0 &&
-                activeKind === "terminal" &&
-                !stateConfigurationOpen
+                workspaceActive && terminalIds.length > 0 && activeKind === "terminal"
               }
               focusSignal={
                 requestedTerminalId === activeTerminalId
@@ -223,18 +273,20 @@ export function WorkspaceTabBody({
             data-testid="terminal-mode-tag"
             className="pointer-events-none absolute left-0 top-5 z-50 flex items-center gap-2 border border-l-0 border-lifecycle-success/40 bg-pane-bg/90 px-3 py-1.5 text-sm shadow-sm"
           >
-            <span className="font-bold text-lifecycle-success">
-              {formatChordSymbols(EDIT_VIEW_BODY_DISENGAGE_CHORD)}
-            </span>
-            <span className="text-text-muted">— Disengage Body</span>
+            <KeyChordHint
+              chord={formatChordSymbols(EDIT_VIEW_BODY_DISENGAGE_CHORD)}
+              label="Disengage Body"
+              tone="engaged"
+            />
           </div>
         )}
       </div>
-      {pendingNativeHides.size > 0 && !modalOcclusionActive ? (
+      {pendingNativeHides.size > 0 ? (
         <div
           aria-hidden="true"
           data-testid="native-viewer-transition-shield"
           className="absolute inset-0 z-[60] bg-pane-panel"
+          data-native-terminal-overlay
         />
       ) : null}
       {showZoneChrome && editViewZone === "active-tab-body" && !bodyEngaged && (

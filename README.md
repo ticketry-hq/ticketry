@@ -123,6 +123,9 @@ module refresh.
 
 ## Validation
 
+For Codex Cloud setup, see [the checked-in installer, start skill, and Linux
+reproduction instructions](scripts/codex-cloud/README.md).
+
 ```bash
 npm run caller:check
 npm run typecheck

@@ -89,6 +89,19 @@ export default function RichMarkdownEditor({
           onTrustedInput?.();
         }
       }}
+      onKeyDownCapture={(event) => {
+        if (!compact || event.key !== "Tab" || event.altKey || event.ctrlKey || event.metaKey) return;
+        const editable = shellRef.current?.querySelector<HTMLElement>(
+          ".mdxeditor-root-contenteditable [contenteditable='true']",
+        );
+        if (event.target !== editable) return;
+        const anchor = window.getSelection()?.anchorNode;
+        const anchorElement = anchor instanceof Element ? anchor : anchor?.parentElement;
+        if (anchor && editable.contains(anchor) && anchorElement?.closest("li")) return;
+        // listsPlugin consumes Tab for every Lexical selection, even prose.
+        // Let the browser move focus while lists retain their indentation key.
+        event.stopPropagation();
+      }}
     >
       <MDXEditor
         className="dark-theme"

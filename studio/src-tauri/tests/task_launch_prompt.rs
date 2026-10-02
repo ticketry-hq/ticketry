@@ -143,12 +143,7 @@ async fn a_replacement_launch_names_the_previous_state_handoff_note() {
     assert!(
         prompt
             .lines()
-            .filter(|line| {
-                *line
-                    == format!(
-                        "Handoff note: {DESIGN_DIR}/ideas-handoff.md — read it before starting."
-                    )
-            })
+            .filter(|line| { *line == format!("Handoff note: {DESIGN_DIR}/ideas-handoff.md") })
             .count()
             == 1,
         "expected exactly one handoff-note line, got: {prompt}"

@@ -44,7 +44,14 @@ impl ScriptedAppServer {
     /// it does not know.
     fn rejecting_unknown_threads() -> Self {
         Self::new(
-            "printf '{\"id\":%s,\"error\":{\"code\":-32602,\"message\":\"thread not found\"}}\\n' \
+            "printf '{\"id\":%s,\"error\":{\"code\":-33000,\"message\":\"thread not found\"}}\\n' \
+             \"$request_id\"",
+        )
+    }
+
+    fn missing_rename_method() -> Self {
+        Self::new(
+            "printf '{\"id\":%s,\"error\":{\"code\":-32601,\"message\":\"Method not found\"}}\\n' \
              \"$request_id\"",
         )
     }
@@ -302,6 +309,27 @@ async fn an_unknown_thread_and_a_provider_failure_keep_their_own_codes() {
         "a refusal names no launch material, executable path, or credential: {rendered}"
     );
 
+    runtime.shutdown().await;
+}
+
+#[tokio::test]
+async fn an_unsupported_rename_method_reports_an_app_server_error() {
+    let directory = tempfile::tempdir().unwrap();
+    prepare_command_database(&directory).await;
+    let ownership = DataDirectoryGuard::acquire(directory.path()).unwrap();
+    let server = ScriptedAppServer::missing_rename_method();
+    let (runtime, _client) = listener(&directory, &ownership, &server).await;
+    let mut caller = authorized(&runtime, allowed_provider_operations()).await;
+
+    let refusal = caller
+        .structured(
+            1,
+            "rename_codex_thread",
+            json!({"thread_id": "thread-active", "name": "Ship it"}),
+        )
+        .await;
+
+    assert_eq!(refusal["error"], json!("codex_app_server_error"));
     runtime.shutdown().await;
 }
 

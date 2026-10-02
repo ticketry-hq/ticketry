@@ -53,6 +53,8 @@ typedef enum {
   MUXED_GHOSTTY_CHORD_ZOOM_IN = 14,
   MUXED_GHOSTTY_CHORD_ZOOM_OUT = 15,
   MUXED_GHOSTTY_CHORD_ZOOM_RESET = 16,
+  // Close the active workspace tab (Cmd+W).
+  MUXED_GHOSTTY_CHORD_CLOSE_TAB = 17,
 } muxed_ghostty_chord_e;
 
 // Reported when the hosted view recognises a Studio chord instead of

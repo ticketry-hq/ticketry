@@ -3,6 +3,7 @@
 mod claim;
 mod error;
 mod graphql_scope;
+mod legacy_stage_skills;
 mod service;
 mod types;
 

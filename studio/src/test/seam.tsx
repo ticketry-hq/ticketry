@@ -39,6 +39,7 @@ import { WorkTrackerProjectOpenDocument } from "../features/projects/generated/p
 
 export interface HttpFixture {
   tree(moduleId: string, tree: ModuleTree): void;
+  readonly items: ReadonlyMap<string, WorkItem>;
   workItems(items: WorkItem[]): void;
   /** Another client's write: patch the server row and bump its revision. */
   revise(id: string, patch: Partial<WorkItem>): void;
@@ -307,6 +308,23 @@ class BoundaryFixture implements StudioFixture {
       };
     });
     return release;
+  }
+
+  /** Run now converts a Story to the project's Implementation type. */
+  private implementationType(): IssueType {
+    const existing = [...this.issueTypes.values()].find(
+      (type) => type.name === "Implementation",
+    );
+    if (existing) return existing;
+    const seeded: IssueType = {
+      id: "implementation",
+      name: "Implementation",
+      level: "task",
+      color: null,
+      sort_order: 2,
+    };
+    this.issueTypes.set(seeded.id, seeded);
+    return seeded;
   }
 
   setRunNowTransitionEnabled(enabled: boolean): void {
@@ -722,10 +740,21 @@ class BoundaryFixture implements StudioFixture {
         const body = failure.body && typeof failure.body === "object"
           ? failure.body as Record<string, unknown>
           : {};
+        const committedState = body.committed_state as { id: string } | null | undefined;
+        const committedType = body.committed_issue_type as { id: string } | null | undefined;
+        const committed = this.items.get(id);
+        if (committed && committedState && committedType) {
+          this.items.set(id, {
+            ...committed,
+            state: committedState.id,
+            issue_type: committedType.id,
+          });
+        }
         return {
           run_now: {
             target_id: body.target_id ?? id,
             committed_state: body.committed_state ?? null,
+            committed_issue_type: body.committed_issue_type ?? null,
             run: null,
             detail: body.detail ?? "Run Now could not be started.",
             code: body.code ?? "run_now_unavailable",
@@ -742,6 +771,7 @@ class BoundaryFixture implements StudioFixture {
           run_now: {
             target_id: id,
             committed_state: null,
+            committed_issue_type: null,
             run: null,
             detail: "The work item was not found.",
             code: "task_not_found",
@@ -749,11 +779,17 @@ class BoundaryFixture implements StudioFixture {
           },
         } as TResult;
       }
-      this.items.set(current.id, { ...current, state: implement.id });
+      const implementation = this.implementationType();
+      this.items.set(current.id, {
+        ...current,
+        state: implement.id,
+        issue_type: implementation.id,
+      });
       return {
         run_now: {
           target_id: id,
           committed_state: { id: implement.id, name: implement.name },
+          committed_issue_type: { id: implementation.id, name: implementation.name },
           run: {
             target_id: id,
             agent: "codex",
@@ -1063,6 +1099,7 @@ export function workItem(overrides: WorkItemOverrides = {}): FixtureWorkItem {
     description: "",
     parent_id: "module-1",
     sub_issues_count: 0,
+    has_children: false,
     key: "MEML-1",
     is_archived: false,
     created_at: "2026-08-06T12:00:00Z",

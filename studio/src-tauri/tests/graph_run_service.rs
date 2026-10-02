@@ -589,6 +589,57 @@ async fn serial_advancement_treats_satisfaction_and_termination_as_symmetric_fac
 }
 
 #[tokio::test]
+async fn automatic_continuation_recovers_stage_skills_for_legacy_policy_snapshot() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    seed(&database, harness.data_directory()).await;
+    database
+        .execute_unprepared(&format!(
+            "UPDATE worktracker_issue SET is_archived=1 WHERE id IN ('{BLOCKED}','{READY}'); \
+             UPDATE worktracker_launchbinding SET stage_skills='[\"tdd\"]'"
+        ))
+        .await
+        .unwrap();
+    let service = service(&database);
+    let first = service
+        .create_or_press(GraphRunRequest {
+            root_id: TASK_ID.to_owned(),
+            access: GraphAccess::project(PROJECT_ID),
+            mode: Some(ExecutionMode::Serial),
+            provider_override: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(task_ids(&first), [CHILD_A]);
+    let claim = claim_tuple(&database, CHILD_A).await;
+
+    database
+        .execute_unprepared(&format!(
+            "UPDATE graph_runs SET launch_configuration=json_remove(launch_configuration,'$.stage_skills') \
+             WHERE root_id='{}'; \
+             UPDATE worktracker_issue SET state_id='{REVIEW}' WHERE id='{CHILD_A}'; \
+             UPDATE agent_runs SET ended_at='ended' WHERE id='{}'; \
+             UPDATE agent_terminal_sessions SET terminated_at='ended' WHERE agent_run_id='{}'",
+            compact(TASK_ID), claim.1, claim.1
+        ))
+        .await
+        .unwrap();
+
+    let continued = service.advance(TASK_ID).await.unwrap();
+    assert_eq!(
+        continued
+            .launched
+            .iter()
+            .map(|child| child.task_id.as_str())
+            .collect::<Vec<_>>(),
+        [CHILD_B]
+    );
+    assert!(launch_prompt(&database, CHILD_B).await.contains(
+        "Stage skills:\nUse these skills for this stage: [\"tdd\"]"
+    ));
+}
+
+#[tokio::test]
 async fn durable_external_blocker_event_advances_only_its_relevant_armed_root() {
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;

@@ -52,12 +52,12 @@ pub use provider_catalog::{
 };
 pub use provider_catalog_migrations::VERSION as PROVIDER_CATALOG_MIGRATIONS_VERSION;
 pub use provider_catalog_migrations::{
-    install_codex_5_6, install_codex_6_astra, install_codex_6_sol_luna, install_codex_astra,
-    install_codex_glm_5_3_flash, install_codex_spark, CODEX_5_6_LEDGER, CODEX_5_6_MIGRATION_ID,
-    CODEX_6_ASTRA_LEDGER, CODEX_6_ASTRA_MIGRATION_ID, CODEX_6_SOL_LUNA_LEDGER,
-    CODEX_6_SOL_LUNA_MIGRATION_ID, CODEX_ASTRA_LEDGER, CODEX_ASTRA_MIGRATION_ID,
-    CODEX_GLM_5_3_FLASH_LEDGER, CODEX_GLM_5_3_FLASH_MIGRATION_ID, CODEX_SPARK_LEDGER,
-    CODEX_SPARK_MIGRATION_ID,
+    install_codex_5_6, install_codex_6_1_sol, install_codex_6_astra, install_codex_6_sol_luna,
+    install_codex_astra, install_codex_glm_5_3_flash, install_codex_spark, CODEX_5_6_LEDGER,
+    CODEX_5_6_MIGRATION_ID, CODEX_6_1_SOL_LEDGER, CODEX_6_1_SOL_MIGRATION_ID, CODEX_6_ASTRA_LEDGER,
+    CODEX_6_ASTRA_MIGRATION_ID, CODEX_6_SOL_LUNA_LEDGER, CODEX_6_SOL_LUNA_MIGRATION_ID,
+    CODEX_ASTRA_LEDGER, CODEX_ASTRA_MIGRATION_ID, CODEX_GLM_5_3_FLASH_LEDGER,
+    CODEX_GLM_5_3_FLASH_MIGRATION_ID, CODEX_SPARK_LEDGER, CODEX_SPARK_MIGRATION_ID,
 };
 pub use provider_catalog_provisioning::provision as provision_provider_catalog;
 pub use readiness::{

@@ -192,6 +192,34 @@ async function openChanges() {
 }
 
 describe("overhaul acceptance - divergent local merge recovery", () => {
+  it("[overhaul-398] reports a merge blocker without offering conflict recovery", async () => {
+    let recoveryReads = 0;
+    mountMergeRecovery(async (operation) => {
+      if (operation === "WorktreeMergePreview") return { worktree_merge_preview: preview() };
+      if (operation === "WorktreeMergeRecovery") {
+        recoveryReads += 1;
+        return { worktree_merge_recovery: null };
+      }
+      if (operation === "WorktreeMerge") {
+        throw new FoundationGraphQlError(
+          "unknown",
+          "The source checkout must remain clean.",
+          { code: "worktree_merge_dirty" },
+        );
+      }
+    });
+
+    await openChanges();
+    fireEvent.click(await screen.findByRole("button", { name: "Merge into main" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The source checkout must remain clean.",
+    );
+    await waitFor(() => expect(recoveryReads).toBeGreaterThan(1));
+    expect(screen.queryByRole("region", { name: "Merge conflict recovery" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Merge was aborted outside Ticketry.")).not.toBeInTheDocument();
+  });
+
   it("[overhaul-316] reports a completed divergent merge and converges affected Changes reads", async () => {
     const reads: string[] = [];
     let merged = false;

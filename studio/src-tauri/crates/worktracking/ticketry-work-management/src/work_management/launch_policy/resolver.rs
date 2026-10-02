@@ -26,9 +26,29 @@ impl LaunchPolicyResolver {
         &self,
         request: LaunchPolicyRequest,
     ) -> Result<LaunchPolicyDecision, LaunchPolicyError> {
+        self.resolve_traced(request, None).await
+    }
+
+    /// Resolves the launch the task will have once it is `issue_type_id`.
+    ///
+    /// Run Now converts a Story before launching it, so it must select and
+    /// validate the destination type's binding rather than the current one.
+    pub async fn resolve_as_issue_type(
+        &self,
+        request: LaunchPolicyRequest,
+        issue_type_id: &str,
+    ) -> Result<LaunchPolicyDecision, LaunchPolicyError> {
+        self.resolve_traced(request, Some(issue_type_id)).await
+    }
+
+    async fn resolve_traced(
+        &self,
+        request: LaunchPolicyRequest,
+        issue_type_id: Option<&str>,
+    ) -> Result<LaunchPolicyDecision, LaunchPolicyError> {
         let scope = request.caller_scope;
         let task_id = request.task_id.clone();
-        let outcome = self.resolve_inner(request).await;
+        let outcome = self.resolve_inner(request, issue_type_id).await;
         if let Err(error) = &outcome {
             ticketry_diagnostics::requested_by(scope.into(), async {
                 if let Some(attempt) = ticketry_diagnostics::current() {
@@ -48,9 +68,15 @@ impl LaunchPolicyResolver {
     async fn resolve_inner(
         &self,
         request: LaunchPolicyRequest,
+        issue_type_id: Option<&str>,
     ) -> Result<LaunchPolicyDecision, LaunchPolicyError> {
         let policy = PolicyReader::new(&self.database);
-        let task = policy.task(&request.task_id).await?;
+        let mut task = policy.task(&request.task_id).await?;
+        if let Some(issue_type_id) = issue_type_id {
+            let kind = policy.task_type(&task.project_id, issue_type_id).await?;
+            task.issue_type_id = kind.id;
+            task.workflow_revision = kind.workflow_revision;
+        }
         let state_id = request
             .destination_state_id
             .as_deref()

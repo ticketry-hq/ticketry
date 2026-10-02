@@ -254,13 +254,13 @@ describe("overhaul acceptance — subtree execution", () => {
     expect(runSerially).toHaveAttribute("title", "Run subtree serially");
     const statusRow = screen.getByTestId("status-row");
     const statusButtons = within(statusRow).getAllByRole("button");
+    expect(statusButtons.indexOf(runItem)).toBeLessThan(
+      statusButtons.indexOf(runSubtree),
+    );
     expect(statusButtons.indexOf(runSubtree)).toBeLessThan(
       statusButtons.indexOf(runSerially),
     );
     expect(statusButtons.indexOf(runSerially)).toBeLessThan(
-      statusButtons.indexOf(runItem),
-    );
-    expect(statusButtons.indexOf(runItem)).toBeLessThan(
       statusButtons.indexOf(
         within(statusRow).getByRole("button", { name: "Issue actions" }),
       ),

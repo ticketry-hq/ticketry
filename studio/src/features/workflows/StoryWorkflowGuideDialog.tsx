@@ -138,7 +138,7 @@ export function StoryWorkflowGuideDialog({
         <h3 id="story-guide-controls" className="text-base font-semibold">Launch controls</h3>
         <p>Availability depends on the selected Story and its configuration. This guide does not start work.</p>
         <ul className="list-disc space-y-2 pl-5">
-          <li><strong>Run now</strong> preflights an eligible Story, then moves it to Implement and launches an agent. This skips the usual planning stages and may be unavailable or fail checks.</li>
+          <li><strong>Run now</strong> preflights an eligible Story, then converts it to Implementation in Implement and launches an agent with Implementation settings. This skips the usual planning stages and may be unavailable or fail checks.</li>
           <li><strong>Run item</strong> starts a new task-scoped agent run with the current stage&apos;s configured instructions and launch policy. It does not itself choose a new stage; an agent may later make permitted transitions. <strong>Run subtree</strong> is a separate action for a Story and its descendants.</li>
           <li><strong>+ Agent</strong> opens a chooser without launching. Choosing a provider starts an agent session. Choosing <strong>Terminal</strong> opens a shell in the module context, not a coding agent.</li>
         </ul>

@@ -45,12 +45,19 @@ impl CodexAppServerError {
     }
 
     /// Classify a JSON-RPC error reply. Codex owns the wording, so an unknown
-    /// thread is recognised by the phrases its app-server uses rather than by a
-    /// reserved code.
-    pub(crate) fn provider(message: impl Into<String>) -> Self {
+    /// thread is recognised by the phrases its app-server uses. Reserved
+    /// JSON-RPC error codes (-32768..=-32000) never identify an unknown thread.
+    pub(crate) fn provider(code: Option<i64>, message: impl Into<String>) -> Self {
         let message = message.into();
         let lowercase = message.to_lowercase();
-        let unknown_thread = ["not found", "no such thread", "unknown thread"]
+        let protocol_failure = code.is_some_and(|code| (-32768..=-32000).contains(&code));
+        let unknown_thread = !protocol_failure
+            && [
+                "thread not found",
+                "session not found for thread",
+                "no such thread",
+                "unknown thread",
+            ]
             .iter()
             .any(|phrase| lowercase.contains(phrase));
         Self::of(

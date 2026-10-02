@@ -42,8 +42,8 @@ while IFS= read -r request; do
     continue
   fi
   if [ "$mode" = failing ]; then
-    printf '{"id":%s,"error":{"code":-32602,"message":"%s"}}\n' \
-      "$request_id" "$(cat "$home/message")"
+    printf '{"id":%s,"error":{"code":%s,"message":"%s"}}\n' \
+      "$request_id" "$(cat "$home/code")" "$(cat "$home/message")"
     continue
   fi
   case "$request" in
@@ -104,7 +104,12 @@ done
         }
 
         fn failing_with(message: &str) -> Self {
+            Self::failing_with_code(-33000, message)
+        }
+
+        fn failing_with_code(code: i64, message: &str) -> Self {
             let server = Self::running("failing");
+            server.write("code", &code.to_string());
             server.write("message", message);
             server
         }
@@ -360,6 +365,69 @@ done
 
         assert!(error.is_unknown_thread());
         assert!(!error.is_unavailable());
+    }
+
+    #[tokio::test]
+    async fn classifies_a_missing_thread_session_as_an_unknown_thread() {
+        let server = ScriptedAppServer::failing_with("Session not found for thread_id: missing");
+        let client = CodexAppServerClient::start(&server.executable)
+            .await
+            .expect("start resident app-server");
+
+        let error = client
+            .set_thread_title("missing-thread", "New title")
+            .await
+            .expect_err("an unknown thread session reports an error");
+
+        assert!(error.is_unknown_thread());
+    }
+
+    #[tokio::test]
+    async fn does_not_classify_method_not_found_as_an_unknown_thread() {
+        let server = ScriptedAppServer::failing_with_code(-32601, "Method not found");
+        let client = CodexAppServerClient::start(&server.executable)
+            .await
+            .expect("start resident app-server");
+
+        let error = client
+            .set_thread_title("019e9428-9788-7df0-84cd-755e1b776245", "New title")
+            .await
+            .expect_err("an unsupported method reports an error");
+
+        assert!(!error.is_unknown_thread());
+        assert!(!error.is_unavailable());
+    }
+
+    #[tokio::test]
+    async fn does_not_classify_a_reserved_error_code_as_an_unknown_thread() {
+        for code in [-32602, -32601, -32000] {
+            let server = ScriptedAppServer::failing_with_code(code, "thread not found");
+            let client = CodexAppServerClient::start(&server.executable)
+                .await
+                .expect("start resident app-server");
+
+            let error = client
+                .set_thread_title("missing-thread", "New title")
+                .await
+                .expect_err("a reserved JSON-RPC error reports a provider failure");
+
+            assert!(!error.is_unknown_thread(), "reserved code {code}");
+        }
+    }
+
+    #[tokio::test]
+    async fn does_not_classify_an_unrelated_not_found_message_as_an_unknown_thread() {
+        let server = ScriptedAppServer::failing_with("rollout file not found");
+        let client = CodexAppServerClient::start(&server.executable)
+            .await
+            .expect("start resident app-server");
+
+        let error = client
+            .set_thread_title("019e9428-9788-7df0-84cd-755e1b776245", "New title")
+            .await
+            .expect_err("a missing rollout reports an error");
+
+        assert!(!error.is_unknown_thread());
     }
 
     #[tokio::test]

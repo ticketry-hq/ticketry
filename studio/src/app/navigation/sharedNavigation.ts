@@ -7,6 +7,7 @@ import {
 } from "../../features/studio/modals/PlanFeature";
 import {
   bucketFor,
+  useTerminalStore,
   useWorkspaceTabsStore,
 } from "../../features/agents/terminal/appNavigation";
 import { TEMP_TASK_ID } from "../../features/agents/types";
@@ -23,6 +24,7 @@ import {
 import { getVisibleModulesSnapshot } from "../../features/module-tabs";
 import { useStudioStore } from "../../features/projects";
 import { useClientStore } from "../../state/clientStore";
+import { useChangesWorkspace } from "../../features/agents/worktrees";
 import { openConversationComposer } from "../../features/conversations";
 import {
   startNormalRunForSelectedItem,
@@ -195,8 +197,26 @@ function closeActiveWorkspaceTab(ctx: NavigationContext): void {
   }
   if (active !== "terminal") return;
 
+  if (closeActiveWorkspaceTerminal()) ctx.event.preventDefault();
+}
+
+/** Closes the selected terminal, optionally only for a reported native run. */
+export function closeActiveWorkspaceTerminal(expectedRunId?: string): boolean {
+  if (useChangesWorkspace.getState().active) return false;
+  const ui = useClientStore.getState();
+  const taskId = ui.selectedTaskId;
+  if (!taskId) return false;
+  const bucket = bucketFor(
+    taskId === TEMP_TASK_ID ? null : taskId,
+    ui.selectedModuleId,
+  );
+  if (ui.workspaces[bucket]?.active !== "terminal") return false;
   const sessionId = useWorkspaceTabsStore.getState().activeByTask[bucket];
-  if (!sessionId) return;
+  if (!sessionId) return false;
+  if (
+    expectedRunId &&
+    useTerminalStore.getState().sessions[sessionId]?.agentRunId !== expectedRunId
+  ) return false;
   void closeTerminalTab(sessionId, bucket);
-  ctx.event.preventDefault();
+  return true;
 }

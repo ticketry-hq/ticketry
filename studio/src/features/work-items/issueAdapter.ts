@@ -17,6 +17,7 @@ export function workItemFromIssue(item: GeneratedWorkTrackerWorkItemFieldsFragme
     sub_issues_count: item.children.nodes.filter((child) =>
       !("is_archived" in child) || !child.is_archived
     ).length,
+    has_children: item.children.nodes.length > 0,
     key: `${item.project?.slug ?? ""}-${item.sequence_id}`,
     is_archived: item.is_archived,
     created_at: publicWorktrackerTimestamp(item.created_at),

@@ -22,6 +22,18 @@ fn tool(
     Tool::new(name, description, schema(properties, required))
 }
 
+fn closed_tool(
+    name: &'static str,
+    description: &'static str,
+    properties: Value,
+    required: &[&str],
+) -> Tool {
+    let mut tool = tool(name, description, properties, required);
+    Arc::make_mut(&mut tool.input_schema)
+        .insert("additionalProperties".to_owned(), Value::Bool(false));
+    tool
+}
+
 fn nullable_string() -> Value {
     json!({"anyOf": [{"type": "string"}, {"type": "null"}], "default": null})
 }
@@ -33,7 +45,7 @@ fn nullable_strings() -> Value {
 pub fn tools() -> Vec<Tool> {
     vec![
         tool("mcp_ping", "Verify MCP transport and tool execution without touching a backend.", json!({}), &[]),
-        tool("terminate_current_run", "Terminate only the Studio run bound to this MCP request. This stops the run without changing or archiving its ticket. Do not call it to escape a blocker: decide the blocker yourself when you reasonably can, otherwise present the user options to unblock and wait; never move the ticket to Review or Cancelled just to stop. A committed handoff keeps the run alive and returns \"continued_by_handoff\" so its queued destination prompt can run.", json!({}), &[]),
+        tool("terminate_current_run", "Terminate only the Studio run bound to this MCP request. This stops the run without changing or archiving its ticket. A committed handoff keeps the run alive and returns \"continued_by_handoff\" so its queued destination prompt can run.", json!({}), &[]),
         tool("add_issue_type_workflow_transition", "Add one transition to a type's workflow at the supplied revision.", json!({
             "type_id": {"type": "string"}, "from_state_id": {"type": "string"}, "to_state_id": {"type": "string"},
             "workflow_revision": {"type": "integer"}, "agent_allowed": {"type": "boolean", "default": true},
@@ -101,13 +113,13 @@ pub fn tools() -> Vec<Tool> {
         tool("remove_issue_type_workflow_transition", "Remove one transition from a type's workflow at the supplied revision.", json!({
             "type_id": {"type": "string"}, "from_state_id": {"type": "string"}, "to_state_id": {"type": "string"}, "workflow_revision": {"type": "integer"}
         }), &["type_id", "from_state_id", "to_state_id", "workflow_revision"]),
-        tool("rename_codex_thread", "Rename a Codex conversation by its Codex thread id.\n\nCodex owns thread names in its own on-disk state, so this writes through\nthe one resident ``codex app-server`` Ticketry already reads titles from.\nBoth arguments are trimmed and must be non-blank; whitespace inside the\nname is preserved and no Ticketry id or length rule applies.\n\nReturns ``{\"ok\": true, \"thread_id\", \"name\"}``. Failures return a\nstructured ``{\"ok\": false, \"error\": ..., \"detail\": ...}`` result:\n``invalid_input``, ``codex_thread_not_found``,\n``codex_app_server_unavailable``, or ``codex_app_server_error``.\n\nIt never starts, resumes, or forks a thread, and touches no Ticketry row.", json!({
+        closed_tool("rename_codex_thread", "Rename a Codex conversation by its Codex thread id.\n\nCodex owns thread names in its own on-disk state, so this writes through\nthe one resident ``codex app-server`` Ticketry already reads titles from.\nBoth arguments are trimmed and must be non-blank; whitespace inside the\nname is preserved and no Ticketry id or length rule applies.\n\nReturns ``{\"ok\": true, \"thread_id\", \"name\"}``. Failures return a\nstructured ``{\"ok\": false, \"error\": ..., \"detail\": ...}`` result:\n``invalid_input``, ``codex_thread_not_found``,\n``codex_app_server_unavailable``, or ``codex_app_server_error``.\n\nIt never starts, resumes, or forks a thread, and touches no Ticketry row.", json!({
             "thread_id": {"type": "string"}, "name": {"type": "string"}
         }), &["thread_id", "name"]),
         tool("reparent_tasks", "Reparent existing work items under a parent work item.\n\nBoth parent_task_id and each entry in task_ids may be a UUID or a\nworktracker key (e.g. \"VEEVI-68\"). If module_id is omitted, the\nreparented tasks inherit the parent's module. Returns a dict with keys:\nparent_task_id, reparented, skipped, failed.", json!({
             "project_id": {"type": "string"}, "parent_task_id": {"type": "string"}, "task_ids": {"type": "array", "items": {"type": "string"}}, "module_id": nullable_string()
         }), &["project_id", "parent_task_id", "task_ids"]),
-        tool("run_now", "Move an eligible Story to Implement and launch its agent as one action.\n\n``id_or_key`` accepts a work-item UUID or key. Rust owns refusal, destination-policy preflight, workflow move, and task-scoped launch ordering. Refusals are returned as structured results; a committed destination is present only when the move occurred.", json!({
+        tool("run_now", "Convert an eligible childless Story to an Implementation task in Implement and launch its agent with the Implementation launch settings, as one action.\n\n``id_or_key`` accepts a work-item UUID or key. The work item keeps its identity, key, content, and relationships. Rust owns refusal, destination-policy preflight, the guarded conversion, and task-scoped launch ordering. Refusals are returned as structured results; ``committed_state`` and ``committed_issue_type`` are present only when the conversion committed.", json!({
             "id_or_key": {"type": "string"}
         }), &["id_or_key"]),
         tool("set_issue_type_workflow_auto_start", "Toggle auto-start; enabling requires a valid launch binding.", json!({
@@ -211,6 +223,24 @@ mod tests {
         assert_eq!(
             add_task_tags.input_schema["properties"]["tags"],
             json!({"type": "array", "items": {"type": "string"}})
+        );
+        let rename_codex_thread = tools
+            .iter()
+            .find(|tool| tool.name == "rename_codex_thread")
+            .expect("rename_codex_thread tool");
+        assert_eq!(
+            rename_codex_thread.input_schema.as_ref(),
+            json!({
+                "type": "object",
+                "properties": {
+                    "thread_id": {"type": "string"},
+                    "name": {"type": "string"}
+                },
+                "required": ["thread_id", "name"],
+                "additionalProperties": false
+            })
+            .as_object()
+            .unwrap()
         );
         let create_task = tools
             .iter()

@@ -77,6 +77,7 @@ mod tests {
     const GRAVE_KEY: u16 = 0x32;
     const ESCAPE_KEY: u16 = 0x35;
     const E_KEY: u16 = 0x0E;
+    const W_KEY: u16 = 0x0D;
     const NUMBER_KEYS: [u16; 10] = [0x12, 0x13, 0x14, 0x15, 0x17, 0x16, 0x1A, 0x1C, 0x19, 0x1D];
 
     fn studio_chord(modifier_flags: u64, key_code: u16) -> Option<StudioChord> {
@@ -120,6 +121,19 @@ mod tests {
         assert_eq!(studio_chord(OPTION, E_KEY), None);
         assert_eq!(studio_chord(COMMAND | SHIFT, E_KEY), None);
         assert_eq!(studio_chord(COMMAND | CONTROL, E_KEY), None);
+    }
+
+    #[test]
+    fn exact_command_w_reports_close_tab_without_taking_other_w_keys() {
+        assert_eq!(studio_chord(COMMAND, W_KEY), Some(StudioChord::CloseTab));
+        assert_eq!(
+            studio_chord(COMMAND | CAPS_LOCK, W_KEY),
+            Some(StudioChord::CloseTab)
+        );
+        assert_eq!(studio_chord(0, W_KEY), None);
+        assert_eq!(studio_chord(COMMAND | SHIFT, W_KEY), None);
+        assert_eq!(studio_chord(COMMAND | CONTROL, W_KEY), None);
+        assert_eq!(studio_chord(COMMAND | OPTION, W_KEY), None);
     }
 
     #[test]

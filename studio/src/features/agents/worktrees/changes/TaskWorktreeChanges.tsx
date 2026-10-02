@@ -49,7 +49,12 @@ export function TaskWorktreeChanges({
     skip: !active,
     fetchPolicy: "cache-and-network",
   });
-  const changes = query.data?.worktree_changes;
+  // On a failed refetch Apollo can retain an older observable result. Read
+  // the cache so a successful PR patch and post-commit state remain visible.
+  const changes = (query.error ? studioApolloClient().readQuery({
+    query: WorktreeChangesDocument,
+    variables: { taskId },
+  }) : query.data)?.worktree_changes;
   const [lastCommit, setLastCommit] = useState<{
     subject: string;
     messageSource: string;
@@ -69,17 +74,19 @@ export function TaskWorktreeChanges({
     action: () => Promise<{ url: string }>,
   ): Promise<{ url: string }> => {
     const created = await action();
-    if (!changes) return created;
-    studioApolloClient().writeQuery({
+    studioApolloClient().cache.updateQuery({
       query: WorktreeChangesDocument,
       variables: { taskId },
-      data: {
+    }, (current) => {
+      if (!current?.worktree_changes) return current;
+      return {
+        ...current,
         worktree_changes: {
-          ...changes,
+          ...current.worktree_changes,
           pull_request_url: created.url,
           pull_request_creation_eligible: false,
           pull_request: {
-            ...changes.pull_request,
+            ...current.worktree_changes.pull_request,
             url: created.url,
             state: "unavailable",
             target_branch: null,
@@ -92,7 +99,7 @@ export function TaskWorktreeChanges({
             reason: "Refresh pull-request status before another lifecycle action.",
           },
         },
-      },
+      };
     });
     await query.refetch().catch(() => undefined);
     return created;

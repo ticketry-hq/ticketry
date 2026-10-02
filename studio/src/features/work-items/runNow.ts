@@ -101,6 +101,7 @@ export function isRunNowEligible(
   const implement = namedState(states, "Implement");
   return (
     issueType?.name === "Story" &&
+    !item.has_children &&
     item.state === ideas?.id &&
     transitions?.some(
       (transition) =>
@@ -110,11 +111,17 @@ export function isRunNowEligible(
   );
 }
 
-function reconcileCommittedState(
+interface CommittedConversion {
+  readonly committed_state: { id: string; name: string } | null;
+  readonly committed_issue_type: { id: string; name: string } | null;
+}
+
+/** Adopt the server-committed type and state on the item's one normalized row. */
+function reconcileCommittedConversion(
   item: WorkItem,
-  committedState: { id: string; name: string } | null,
+  { committed_state: state, committed_issue_type: issueType }: CommittedConversion,
 ): void {
-  if (!committedState) return;
+  if (!state) return;
   const client = studioApolloClient();
   const cacheId = client.cache.identify({
     __typename: "WorktrackerIssue",
@@ -124,30 +131,52 @@ function reconcileCommittedState(
   client.cache.modify({
     id: cacheId,
     fields: {
-      stateId: () => compactWorktrackerId(committedState.id),
+      stateId: () => compactWorktrackerId(state.id),
       state: (_current, { toReference }) => toReference({
         __typename: "WorktrackerState",
-        id: compactWorktrackerId(committedState.id),
+        id: compactWorktrackerId(state.id),
+      }),
+      ...(issueType && {
+        issueTypeId: () => compactWorktrackerId(issueType.id),
+        issueType: (_current, { toReference }) => toReference({
+          __typename: "WorktrackerIssuetype",
+          id: compactWorktrackerId(issueType.id),
+        }),
       }),
     },
   });
 }
 
-function committedStateFromError(error: unknown): { id: string; name: string } | null {
-  return error instanceof RunNowRefusalError ? error.body.committed_state : null;
+function committedConversionFromError(error: unknown): CommittedConversion {
+  return error instanceof RunNowRefusalError
+    ? error.body
+    : { committed_state: null, committed_issue_type: null };
+}
+
+function conversionSummary({
+  committed_state: state,
+  committed_issue_type: issueType,
+}: CommittedConversion): string {
+  return state && issueType ? `${issueType.name} in ${state.name}` : "";
 }
 
 function refusalMessage(error: unknown): string {
   if (error instanceof RunNowRefusalError) {
     const { code, detail, remedy } = error.body;
     if (code === "binding_not_configured") {
-      return "Configure an Implement launch binding before trying again.";
+      return "Configure the Implementation launch binding for Implement before trying again.";
+    }
+    if (code === "implementation_not_configured") {
+      return "Add an Implementation issue type whose workflow includes Implement before trying again.";
     }
     if (code === "module_id_required") {
       return "Place this Story in a module before trying again.";
     }
     if (code === "run_now_not_eligible") {
       return "This Story is no longer eligible to Run now. Refresh its workflow and try again.";
+    }
+    if (code === "story_has_subtasks") {
+      return "This Story has subtasks, so it cannot Run now.";
     }
     if (code === "no_activated_providers") return launchFailureMessage(error);
     if (remedy) return `${detail} Next action: ${remedy}`;
@@ -193,13 +222,18 @@ export function startRunNow(item: WorkItem, moduleId: string | null): boolean {
   void runWorkItemNow(item.id).then((response) => {
     runTabWatch.acknowledge();
     runTabWatch.cancel();
-    reconcileCommittedState(item, response.committed_state);
+    reconcileCommittedConversion(item, response);
     activateAcknowledgedTaskRunTab(tabTarget, response.run);
-    toast.success("Run now started.");
+    toast.success(`Converted to ${conversionSummary(response)}. Run now started.`);
   }).catch((error: unknown) => {
     runTabWatch.cancel();
-    reconcileCommittedState(item, committedStateFromError(error));
-    toast.error(`Run now could not be started: ${refusalMessage(error)}`);
+    const committed = committedConversionFromError(error);
+    reconcileCommittedConversion(item, committed);
+    const converted = conversionSummary(committed);
+    toast.error(
+      `Run now could not be started: ${refusalMessage(error)}`
+        + (converted ? ` It is now ${converted}.` : ""),
+    );
   }).finally(() => setPending(item.id, false));
   return true;
 }

@@ -1563,9 +1563,16 @@ export type RepositoryCommandResult = {
   unpushed_count: Scalars['Int']['output'];
 };
 
+export type RunNowIssueTypePayload = {
+  __typename?: 'RunNowIssueTypePayload';
+  id: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+};
+
 export type RunNowPayload = {
   __typename?: 'RunNowPayload';
   code: Scalars['String']['output'];
+  committed_issue_type?: Maybe<RunNowIssueTypePayload>;
   committed_state?: Maybe<RunNowStatePayload>;
   detail: Scalars['String']['output'];
   remedy?: Maybe<Scalars['String']['output']>;

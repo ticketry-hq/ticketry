@@ -6,10 +6,10 @@
 use sea_orm::{DatabaseConnection, DbErr};
 
 use ticketry_settings::{
-    install_codex_5_6, install_codex_6_astra, install_codex_6_sol_luna, install_codex_astra,
-    install_codex_glm_5_3_flash, install_codex_spark, CODEX_5_6_MIGRATION_ID,
-    CODEX_6_ASTRA_MIGRATION_ID, CODEX_6_SOL_LUNA_MIGRATION_ID, CODEX_ASTRA_MIGRATION_ID,
-    CODEX_GLM_5_3_FLASH_MIGRATION_ID, CODEX_SPARK_MIGRATION_ID,
+    install_codex_5_6, install_codex_6_1_sol, install_codex_6_astra, install_codex_6_sol_luna,
+    install_codex_astra, install_codex_glm_5_3_flash, install_codex_spark, CODEX_5_6_MIGRATION_ID,
+    CODEX_6_1_SOL_MIGRATION_ID, CODEX_6_ASTRA_MIGRATION_ID, CODEX_6_SOL_LUNA_MIGRATION_ID,
+    CODEX_ASTRA_MIGRATION_ID, CODEX_GLM_5_3_FLASH_MIGRATION_ID, CODEX_SPARK_MIGRATION_ID,
 };
 use ticketry_work_management::{
     launch_binding_entry_skill_migration, launch_binding_profile_migration,
@@ -36,6 +36,7 @@ pub const ORDERED_MIGRATION_IDS: &[&str] = &[
     launch_binding_stage_skills_migration::MIGRATION_ID,
     tag_migration::MIGRATION_ID,
     CODEX_6_SOL_LUNA_MIGRATION_ID,
+    CODEX_6_1_SOL_MIGRATION_ID,
 ];
 
 pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
@@ -89,7 +90,10 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
         .map_err(|error| step_error("0060", error))?;
     install_codex_6_sol_luna(database)
         .await
-        .map_err(|error| step_error("0061", error))
+        .map_err(|error| step_error("0061", error))?;
+    install_codex_6_1_sol(database)
+        .await
+        .map_err(|error| step_error("0062", error))
 }
 
 fn step_error(step: &str, error: DbErr) -> DbErr {

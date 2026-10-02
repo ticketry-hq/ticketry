@@ -38,6 +38,7 @@ function task(id = "task-1"): WorkItem {
     description: "",
     parent_id: "module-1",
     sub_issues_count: 0,
+    has_children: false,
     key: "TEST-1",
     is_archived: false,
     created_at: "2026-09-16T00:00:00Z",

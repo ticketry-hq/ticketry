@@ -1,6 +1,7 @@
 //! Ordered data migrations for the provider catalog.
 
 mod codex_5_6;
+mod codex_6_1_sol;
 mod codex_6_astra;
 mod codex_6_sol_luna;
 mod codex_glm_5_3_flash;
@@ -9,6 +10,7 @@ mod ledger;
 
 use sea_orm::{DatabaseConnection, DbErr, TransactionTrait};
 
+pub use codex_6_1_sol::{install_codex_6_1_sol, CODEX_6_1_SOL_LEDGER, CODEX_6_1_SOL_MIGRATION_ID};
 pub use codex_6_sol_luna::{
     install_codex_6_sol_luna, CODEX_6_SOL_LUNA_LEDGER, CODEX_6_SOL_LUNA_MIGRATION_ID,
 };

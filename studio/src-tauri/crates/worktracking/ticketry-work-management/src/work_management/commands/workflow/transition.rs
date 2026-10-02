@@ -38,7 +38,13 @@ pub struct TransitionExpectation {
 
 #[derive(Debug, Clone)]
 pub enum TransitionCausation {
-    RunNow { launch_policy_decision_id: String },
+    /// Run Now also converts the Story to the preflight destination type,
+    /// pinned at the workflow revision its launch policy was resolved from.
+    RunNow {
+        launch_policy_decision_id: String,
+        destination_issue_type_id: String,
+        destination_workflow_revision: i32,
+    },
 }
 
 pub async fn transition(
@@ -102,11 +108,13 @@ pub async fn transition_with_expectation(
             "workflow_revision": kind.workflow_revision,
         }),
     );
+    let mut converted_type_id = None;
     if let Some(expected) = &expectation {
         let source_id = database_uuid(&expected.source_state_id, "source_state_id")?;
         if current.state_id.as_deref() != Some(source_id.as_str())
             || current.state_revision != expected.work_item_revision
             || kind.workflow_revision != expected.workflow_revision
+            || kind.name != "Story"
         {
             return Err(CommandError::StaleRevision(
                 "The Work Item or its workflow changed after preflight.".to_owned(),
@@ -120,12 +128,29 @@ pub async fn transition_with_expectation(
         match &expected.causation {
             TransitionCausation::RunNow {
                 launch_policy_decision_id,
+                ..
             } if launch_policy_decision_id.trim().is_empty() => {
                 return Err(CommandError::validation(
                     "Run Now causation requires a launch policy decision.",
                 ));
             }
-            TransitionCausation::RunNow { .. } => {}
+            TransitionCausation::RunNow {
+                destination_issue_type_id,
+                destination_workflow_revision,
+                ..
+            } => {
+                super::refuse_run_now_with_subtasks(&transaction, &id).await?;
+                converted_type_id = Some(
+                    super::run_now_conversion::claim_destination_type(
+                        &transaction,
+                        &current.project_id,
+                        destination_issue_type_id,
+                        *destination_workflow_revision,
+                        &target_id,
+                    )
+                    .await?,
+                );
+            }
         }
     }
     let from = match &current.state_id {
@@ -251,6 +276,9 @@ pub async fn transition_with_expectation(
     identity.is_archived = new_cancelled;
     let mut active: issue::ActiveModel = current.clone().into();
     active.state_id = Set(Some(target.id.clone()));
+    if let Some(issue_type_id) = converted_type_id {
+        active.issue_type_id = Set(issue_type_id);
+    }
     active.rank = Set(rank.clone());
     active.state_revision = Set(revision);
     active.is_archived = Set(new_cancelled);
@@ -296,6 +324,7 @@ pub async fn transition_with_expectation(
             .and_then(|expectation| match &expectation.causation {
                 TransitionCausation::RunNow {
                     launch_policy_decision_id,
+                    ..
                 } => Some(launch_policy_decision_id.as_str()),
             });
     transition_occurrences::append(

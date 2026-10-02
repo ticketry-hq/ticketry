@@ -19,6 +19,13 @@ pub struct RunNowState {
     pub name: String,
 }
 
+/// The issue type the Run Now target has after conversion.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RunNowIssueType {
+    pub id: String,
+    pub name: String,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RunNowRun {
     pub target_id: String,
@@ -33,6 +40,7 @@ pub struct RunNowSuccess {
     pub detail: String,
     pub remedy: Option<String>,
     pub committed_state: RunNowState,
+    pub committed_issue_type: RunNowIssueType,
     pub run: RunNowRun,
 }
 
@@ -43,5 +51,6 @@ pub struct RunNowRefusal {
     pub detail: String,
     pub remedy: Option<String>,
     pub committed_state: Option<RunNowState>,
+    pub committed_issue_type: Option<RunNowIssueType>,
     pub run: Option<RunNowRun>,
 }

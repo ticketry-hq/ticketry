@@ -15,9 +15,15 @@ mod github;
 mod graphql;
 mod lifecycle;
 mod merge;
+mod merge_executor;
+mod merge_git;
 mod merge_identity;
+mod merge_inspection;
 mod merge_preparation;
 mod merge_preview;
+mod merge_probe;
+mod merge_recovery;
+mod merge_result;
 mod message_generation;
 mod module_baseline;
 mod module_service;
@@ -31,11 +37,11 @@ mod view;
 pub use command_result::RepositoryCommandResult;
 pub use error::WorktreeChangesError;
 pub use file_diff::FileDiffView;
-pub use merge::{WorktreeMergePath, WorktreeMergeResult};
 pub use merge_preparation::{
     LaunchedAgent, MergePreparationError, MergePreparationLauncher, MergePreparationResult,
     MergePreparationService,
 };
+pub use merge_result::{WorktreeMergePath, WorktreeMergeResult};
 pub use pull_request_state::PullRequestStatusView;
 pub use service::WorktreeChangesService;
 pub use view::{

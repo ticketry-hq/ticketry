@@ -98,6 +98,23 @@ describe("overhaul acceptance - stacked Changes actions", () => {
     expect(calls).toEqual([]);
   });
 
+  it("identifies the PR step when a stacked rejection has no Error message", async () => {
+    mountStudio({
+      http: toolbarFixture(),
+      children: <ToolbarHarness commands={commands({
+        stackKind: "task",
+        pullRequestCreationEligible: true,
+        onCreatePullRequest: async () => { throw null; },
+      })} />,
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Commit, push & create PR/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(
+      "Pull-request creation failed. Commit and push succeeded. Retry Create PR.",
+    ));
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
   it("[overhaul-352] opens on Cancel, cancels with Escape, and restores the action opener", () => {
     mountStudio({ http: toolbarFixture(), children: <ToolbarHarness commands={commands()} /> });
 

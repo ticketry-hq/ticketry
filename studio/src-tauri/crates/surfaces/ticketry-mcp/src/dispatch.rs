@@ -212,6 +212,7 @@ async fn dispatch_checked(
                 return Ok(DispatchOutput::direct(json!({
                     "target_id": id_or_key,
                     "committed_state": null,
+                    "committed_issue_type": null,
                     "run": null,
                     "detail": "Run Now is unavailable.",
                     "code": "run_now_unavailable",

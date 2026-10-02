@@ -51,7 +51,7 @@ const sharedChildWorktree = {
 };
 
 describe("overhaul acceptance — selected-task Details worktree", () => {
-  it("[overhaul-165] gives Details a small side inset with compact properties and one toolbar worktree control", async () => {
+  it("[overhaul-165] keeps Details compact with breadcrumbs above the ordered toolbar", async () => {
     const http = fixture();
     const worktreeRequests: Record<string, unknown>[] = [];
     http.tree("module-1", {
@@ -65,6 +65,10 @@ describe("overhaul acceptance — selected-task Details worktree", () => {
         name: "Restore worktree controls",
         parent_id: "module-1",
         sequence_id: 1118,
+      }),
+      workItem({
+        id: "implement-state-catalog",
+        state: { id: "implement", name: "Implement", group: "started", color: null },
       }),
     ]);
 
@@ -90,6 +94,30 @@ describe("overhaul acceptance — selected-task Details worktree", () => {
     // The worktree control sits in the toolbar with the run actions.
     const actions = within(details).getByTestId("details-actions");
     const worktreeBlock = await within(actions).findByTestId("worktree-block");
+    const runNow = await within(actions).findByRole("button", { name: "Run now" });
+    const run = within(actions).getByRole("button", { name: "Run item" });
+    const status = within(within(actions).getByTestId("state-picker"))
+      .getByRole("button");
+    const toolbarButtons = within(actions).getAllByRole("button");
+    expect(toolbarButtons.indexOf(status)).toBeLessThan(toolbarButtons.indexOf(run));
+    expect(toolbarButtons.indexOf(run)).toBeLessThan(toolbarButtons.indexOf(runNow));
+    expect(toolbarButtons.indexOf(runNow)).toBeLessThan(
+      toolbarButtons.indexOf(within(worktreeBlock).getByRole("button", { name: "+ Worktree" })),
+    );
+    expect(toolbarButtons.indexOf(within(worktreeBlock).getByRole("button", { name: "+ Worktree" })))
+      .toBeLessThan(toolbarButtons.indexOf(
+        within(within(actions).getByTestId("issue-type-picker")).getByRole("button"),
+      ));
+    expect(toolbarButtons.indexOf(
+      within(within(actions).getByTestId("issue-type-picker")).getByRole("button"),
+    )).toBeLessThan(toolbarButtons.indexOf(
+      within(actions).getByRole("button", { name: "Story workflow guide" }),
+    ));
+    const statusRow = within(details).getByTestId("status-row");
+    const breadcrumb = within(details).getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(statusRow).queryByRole("navigation", { name: "Breadcrumb" }))
+      .toBeNull();
+    expect(breadcrumb.parentElement?.nextElementSibling).toBe(statusRow);
     expect(within(details).getAllByTestId("worktree-block")).toHaveLength(1);
     expect(within(document).queryByTestId("worktree-block")).toBeNull();
     expect(within(details).queryByText("Primary checkout")).toBeNull();

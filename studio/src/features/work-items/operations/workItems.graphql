@@ -164,6 +164,7 @@ mutation RunWorkTrackerWorkItemNow($idOrKey: String!, $requestIdentity: String!)
     detail
     remedy
     committed_state { id name }
+    committed_issue_type { id name }
     run { target_id agent agent_run_id }
   }
 }

@@ -315,7 +315,7 @@ async fn fixture() -> DatabaseConnection {
                 ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,
                 lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
                 scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT,
-                initial_prompt TEXT, launch_reasoning TEXT,
+                initial_prompt TEXT, launch_reasoning TEXT, attention_reason TEXT,
                 launch_unattended BOOLEAN NOT NULL DEFAULT 0
             );
             CREATE TABLE agent_terminal_sessions (
@@ -579,6 +579,7 @@ async fn insert_run(
         launch_model: Set(None),
         launch_reasoning: Set(None),
         launch_unattended: Set(false),
+        attention_reason: Set(None),
     }
     .insert(database)
     .await

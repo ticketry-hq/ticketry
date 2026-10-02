@@ -180,6 +180,7 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
   },
   { context: "capture", actionId: "workspace-tab-next", chord: chord("ArrowRight", { meta: true }) },
   { context: "capture", actionId: "workspace-tab-previous", chord: chord("ArrowLeft", { meta: true }) },
+  { context: "capture", actionId: "close-tab", chord: chord("w", { meta: true }), configurable: false },
   ...Array.from({ length: 10 }, (_, index): BindingDefinition => {
     const position = index + 1;
     return {

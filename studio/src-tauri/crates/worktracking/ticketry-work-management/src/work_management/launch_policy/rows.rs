@@ -44,6 +44,19 @@ impl<'a> PolicyReader<'a> {
         })
     }
 
+    pub(super) async fn task_type(
+        &self,
+        project_id: &str,
+        issue_type_id: &str,
+    ) -> Result<issue_type::Model, LaunchPolicyError> {
+        issue_type::Entity::find_by_id(compact_uuid(issue_type_id))
+            .filter(issue_type::Column::ProjectId.eq(compact_uuid(project_id)))
+            .filter(issue_type::Column::Level.eq("task"))
+            .one(self.database)
+            .await?
+            .ok_or_else(|| LaunchPolicyError::rejected("task_not_found", "Task type not found."))
+    }
+
     pub(super) async fn binding(
         &self,
         issue_type_id: &str,

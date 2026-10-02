@@ -29,6 +29,7 @@ pub(crate) fn set_production_mutations_open(open: bool) {
 }
 
 use super::claim::{serial_frontier_pending, CampaignClaim, ClaimGeneration, ClaimSelection};
+use super::legacy_stage_skills;
 use super::{
     DeletedGraphRunResult, GraphRunAdvanceResult, GraphRunRequest, GraphRunResult,
     GraphRunServiceError, GraphRunServiceErrorCode, LaunchedChild, ResetGraphRunResult,
@@ -76,8 +77,9 @@ struct StoredGraphRunPolicy {
     model: Option<String>,
     reasoning: Option<String>,
     required_skills: Vec<String>,
+    /// Absent in snapshots written before stage skills; see `legacy_stage_skills`.
     #[serde(default)]
-    stage_skills: Vec<String>,
+    stage_skills: Option<Vec<String>>,
     module_id: String,
     #[serde(default)]
     module_link_path: Option<String>,
@@ -371,6 +373,10 @@ impl GraphRunService {
                 format!("Stored Graph Run launch policy is invalid: {error}"),
             )
         })?;
+        let stage_skills = match policy.stage_skills.clone() {
+            Some(stage_skills) => stage_skills,
+            None => legacy_stage_skills::recover(&self.database, &policy.policy_identity).await?,
+        };
         let access = GraphAccess::project(&graph.project_id);
         let facts = scheduling_facts(&self.database, &root_id, &access, None).await?;
         let frontier_pending = if mode == ExecutionMode::Serial {
@@ -407,7 +413,7 @@ impl GraphRunService {
                     local_module_folder: policy.module_link_path.as_deref().unwrap_or_default(),
                     state_name: None,
                     workflow_prompt: &policy.prompt,
-                    stage_skills: &policy.stage_skills,
+                    stage_skills: &stage_skills,
                     additional_user_input: None,
                     design_directory: None,
                     design_directory_root: None,

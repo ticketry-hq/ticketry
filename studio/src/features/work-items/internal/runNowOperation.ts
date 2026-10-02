@@ -6,6 +6,7 @@ export interface RunNowPayload {
   readonly detail: string;
   readonly remedy: string | null;
   readonly committed_state: { readonly id: string; readonly name: string } | null;
+  readonly committed_issue_type: { readonly id: string; readonly name: string } | null;
   readonly run: {
     readonly target_id: string;
     readonly agent: string;

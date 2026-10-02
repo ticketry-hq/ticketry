@@ -147,7 +147,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 162 | A retained native viewer releases once when the WebView lifecycle ends, including listener-cleanup failure. |
 | 163 | Apollo is Studio's only server-state client. |
 | 164 | Module tickets with blocker edges render from the WorkTracker read contract. |
-| 165 | Details fills the pane width without a centered width cap, with a small matching side inset on the toolbar and document, compact section spacing, and one compact worktree control in the toolbar beside the run actions. |
+| 165 | Details fills the pane width with compact spacing, breadcrumbs above the toolbar, and status, Run, Run now, worktree, type, and guide controls in order. |
 | 166 | Worktree confirmation and mutation errors do not leak across task selection. |
 | 167 | Apollo is Studio's only application-state owner; client-only UI state lives in the same cache as server records. |
 | 168 | A module drag rejected because its cached neighbors are stale refreshes the authoritative order, recomputes the same gesture, and completes without asking the person to retry. |
@@ -174,7 +174,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 189 | Module Changes distinguishes an unavailable module checkout. |
 | 190 | Task Commit and Push remain independent, and Push excludes dirty work. |
 | 191 | Module Push is offered for a clean ahead branch while Commit requires dirty work. |
-| 192 | Task Create PR pushes committed work first, then becomes Open PR. |
+| 192 | Task Create PR preserves clean post-commit state and Open PR when the final status refresh fails. |
 | 193 | A rejected task Create PR remains retryable. |
 | 194 | Task Create PR requires committed work. |
 | 195 | A module-checkout pull request targets the default branch without changing a Work Item. |
@@ -388,6 +388,17 @@ named gate before the full Studio suite, typecheck, and build.
 | 395 | An Instant run's trust action reattaches the persisted run after the terminal store is cleared. |
 | 396 | A desktop Run item refusal returned as the bare `no_activated_providers` code shows provider activation guidance and does not open a terminal. |
 | 397 | A rejected current-worktree list shows its alert inside the checkout switcher, which still opens and switches to the module checkout. |
+| 398 | A merge precondition blocker reports the original error without offering conflict recovery for a merge that never began. |
+| 399 | An unverified worktree origin leaves the merge destination empty and requires an explicit local branch choice before showing an eligible preview. |
+| 400 | Stories with children hide Run now and ignore R; a stale subtasks refusal explains why launch failed. |
+| 401 | Run now from the button or R converts the same Story to Implementation in Implement, and Details and the Stories list show the new type and state without a reload, including after a committed late-launch failure. |
+| 402 | Cmd+W closes the selected agent run from an engaged native terminal or a typing WebView terminal, while a stale native viewer cannot close another run. |
+| 403 | Tab from prose in the compact rich description remains available for browser focus traversal. |
+| 404 | Tab within a compact rich description list still indents the list item. |
+| 405 | A stacked task action that commits and pushes but fails PR creation shows the provider error and retries Create PR without another commit. |
+| 406 | Conversation and work-item selection, module switches, and project switches exit Conversation configuration; conversation selection opens that run's exact terminal session. |
+
+| 407 | Model configuration offers GPT-6.1 Sol for Codex with low through ultra reasoning and keeps the saved launch default on reopening. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

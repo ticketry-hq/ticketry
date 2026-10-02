@@ -500,6 +500,8 @@ ticketry-settings|AppSetting
 ticketry-settings|AppSettingRepository
 ticketry-settings|CODEX_5_6_LEDGER
 ticketry-settings|CODEX_5_6_MIGRATION_ID
+ticketry-settings|CODEX_6_1_SOL_LEDGER
+ticketry-settings|CODEX_6_1_SOL_MIGRATION_ID
 ticketry-settings|CODEX_6_ASTRA_LEDGER
 ticketry-settings|CODEX_6_ASTRA_MIGRATION_ID
 ticketry-settings|CODEX_6_SOL_LUNA_LEDGER
@@ -536,6 +538,7 @@ ticketry-settings|Slice2Readiness
 ticketry-settings|SourceClassification
 ticketry-settings|adopt
 ticketry-settings|install_codex_5_6
+ticketry-settings|install_codex_6_1_sol
 ticketry-settings|install_codex_6_astra
 ticketry-settings|install_codex_6_sol_luna
 ticketry-settings|install_codex_astra

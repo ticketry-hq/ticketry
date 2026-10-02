@@ -14,8 +14,6 @@ interface WorkflowStatePickerProps {
   permittedStateIds: ReadonlySet<string>;
   saving: boolean;
   onStateChange: (state: TrackState) => void;
-  /** Present when the item's type has a workflow guide (Stories). */
-  onOpenGuide?: () => void;
 }
 
 /** The item's workflow states in order, excluding off-track cancellation. */
@@ -51,7 +49,6 @@ export function WorkflowStatePicker({
   permittedStateIds,
   saving,
   onStateChange,
-  onOpenGuide,
 }: WorkflowStatePickerProps) {
   const selected = stateById([...states], task.state);
   const track = workflowTrack(states, workflow);
@@ -68,7 +65,7 @@ export function WorkflowStatePicker({
     close();
   };
 
-  const picker = (
+  return (
     <Popover
       data-testid="state-picker"
       trigger={({ onClick, disabled }) => (
@@ -132,25 +129,5 @@ export function WorkflowStatePicker({
         </PopoverContent>
       )}
     </Popover>
-  );
-  if (!onOpenGuide) return picker;
-
-  return (
-    <span className="inline-flex items-center gap-1">
-      {picker}
-      <button
-        type="button"
-        aria-label="Story workflow guide"
-        title="Story workflow guide"
-        data-story-workflow-guide-toolbar
-        onClick={(event) => {
-          event.currentTarget.focus();
-          onOpenGuide();
-        }}
-        className="inline-flex h-7 flex-none items-center whitespace-nowrap border border-pane-border px-2 text-sm text-text-muted hover:border-text-muted hover:text-text-primary"
-      >
-        Story workflow guide
-      </button>
-    </span>
   );
 }

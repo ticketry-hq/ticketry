@@ -11,6 +11,7 @@ mod candidate_paths;
 mod consulted;
 mod diagnostics;
 mod probe;
+mod probe_output;
 mod supported_tools;
 
 use std::env;
@@ -102,5 +103,7 @@ impl DiscoveryService {
     }
 }
 
+#[cfg(test)]
+mod probe_output_tests;
 #[cfg(test)]
 mod tests;

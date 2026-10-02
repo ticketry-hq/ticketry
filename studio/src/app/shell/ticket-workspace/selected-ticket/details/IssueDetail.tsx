@@ -42,6 +42,7 @@ import IssueProperties from "./IssueProperties";
 import { IssueToolbar } from "./IssueToolbar";
 import IssueTypePicker from "./fields/IssueTypePicker";
 import { WorkflowStatePicker } from "./WorkflowStatePicker";
+import { StoryWorkflowGuideAction } from "./StoryWorkflowGuideAction";
 import IssueActionsMenu from "./IssueActionsMenu";
 import { NormalRunAction, SubtreeRunAction } from "./NormalRunAction";
 import { SerialRunAction } from "./SerialRunAction";
@@ -257,6 +258,24 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
       <IssueToolbar
         actions={
           <>
+            <WorkflowStatePicker
+              task={task}
+              states={states}
+              workflow={projectWorkflows[task.issue_type]}
+              permittedStateIds={permittedStateIds}
+              saving={Boolean(saving.state_id)}
+              onStateChange={(state) =>
+                setState.mutate(
+                  { id: task.id, state },
+                  { onError: reportMutationError },
+                )
+              }
+            />
+            <NormalRunAction
+              key={`normal-run-${task.id}`}
+              task={task}
+              moduleId={epic?.id ?? selectedModuleId ?? null}
+            />
             <RunNowAction
               item={task}
               moduleId={epic?.id ?? null}
@@ -279,11 +298,6 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
               runStateLoading={persistedSubtreeRun.loading}
               refreshRunState={persistedSubtreeRun.refresh}
             />
-            <NormalRunAction
-              key={`normal-run-${task.id}`}
-              task={task}
-              moduleId={epic?.id ?? selectedModuleId ?? null}
-            />
             <WorktreeBlock
               taskId={task.id}
               parentId={task.parent_id}
@@ -305,24 +319,9 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
                 )
               }
             />
-            <WorkflowStatePicker
-              task={task}
-              states={states}
-              workflow={projectWorkflows[task.issue_type]}
-              permittedStateIds={permittedStateIds}
-              saving={Boolean(saving.state_id)}
-              onStateChange={(state) =>
-                setState.mutate(
-                  { id: task.id, state },
-                  { onError: reportMutationError },
-                )
-              }
-              onOpenGuide={
-                issueTypes.find((type) => type.id === task.issue_type)?.name === "Story"
-                  ? () => openStoryWorkflowGuide(task.id)
-                  : undefined
-              }
-            />
+            {issueTypes.find((type) => type.id === task.issue_type)?.name === "Story" && (
+              <StoryWorkflowGuideAction onOpen={() => openStoryWorkflowGuide(task.id)} />
+            )}
           </>
         }
         location={

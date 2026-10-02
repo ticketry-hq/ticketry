@@ -791,12 +791,18 @@ type RepositoryCommandResult {
 	uncommitted_work_excluded: Boolean!
 }
 
+type RunNowIssueTypePayload {
+	id: String!
+	name: String!
+}
+
 type RunNowPayload {
 	target_id: String!
 	code: String!
 	detail: String!
 	remedy: String
 	committed_state: RunNowStatePayload
+	committed_issue_type: RunNowIssueTypePayload
 	run: RunNowRunPayload
 }
 

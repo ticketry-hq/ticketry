@@ -15,9 +15,11 @@ import {
   useTerminalStore,
   type SessionMeta,
 } from "../features/agents/terminal";
+import { modalOcclusionActive } from "../features/agents/terminal/internal/modalOcclusion";
 import { registerTerminalFocus } from "../features/agents/terminal/internal/terminalRegistry";
 import { TEMP_TASK_ID } from "../features/agents/types";
 import { seedModuleLinks } from "../features/module-links";
+import { setStatesSorted } from "../features/projects";
 import { useStudioStore } from "../features/projects/store";
 import { StudioApolloProvider } from "../shared/apollo/StudioApolloProvider";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
@@ -27,7 +29,8 @@ import {
   installDesktopGraphQlRuntime,
   terminalSessionReadExecutor,
 } from "./desktopGraphQlRuntime";
-import { seedModuleOpenFixture } from "./projectOpenFixture";
+import { projectOpenFixture, seedModuleOpenFixture } from "./projectOpenFixture";
+import { workItem } from "./seam";
 
 function ConversationKeymapHarness() {
   useGlobalKeymap([{ kind: "scratch", moduleId: "module-1" }]);
@@ -42,6 +45,11 @@ vi.mock(
       <div data-testid="selected-conversation-terminal" tabIndex={0} />
     ),
   }),
+);
+
+vi.mock(
+  "../app/shell/ticket-workspace/selected-ticket/details/SelectedTicketDetails",
+  () => ({ SelectedTicketDetails: () => <div>Selected work item details</div> }),
 );
 
 const emptyTerminalReads = {
@@ -457,6 +465,120 @@ describe("overhaul acceptance — Conversations", () => {
     })).toBeNull());
     await waitFor(() => expect(restoredFocus).toHaveBeenCalledTimes(2));
     releaseFocus();
+  });
+
+  it("[overhaul-406] exits Conversation configuration through workspace navigation", async () => {
+    const terminalExecutor = terminalSessionReadExecutor(emptyTerminalReads);
+    const otherProject = projectOpenFixture({
+      id: "project-2",
+      name: "Other project",
+      slug: "OTHER",
+      description: "",
+    }, []);
+    installDesktopGraphQlRuntime(async (document, variables) => {
+      const operation = documentOperationName(document);
+      if (operation === "WorkTrackerProjectOpen") {
+        return otherProject.data as never;
+      }
+      if (operation === "InstantRunTickets") {
+        return {
+          tickets: [
+            {
+              __typename: "InstantRunTicket",
+              agent_run_id: "instant-run-2",
+              title: "Tighten the launch prompt",
+              started_at: "2026-08-30T11:00:00Z",
+            },
+            {
+              __typename: "InstantRunTicket",
+              agent_run_id: "instant-run-1",
+              title: "Itemize temporary chats",
+              started_at: "2026-08-30T10:00:00Z",
+            },
+          ],
+        } as never;
+      }
+      if (
+        operation === "WorkTrackerModuleOpen" &&
+        (variables as { moduleId?: string }).moduleId === "module-2"
+      ) {
+        return {
+          module: { __typename: "WorktrackerIssueConnection", nodes: [] },
+          work_items: { __typename: "WorktrackerIssueConnection", nodes: [] },
+        } as never;
+      }
+      return terminalExecutor(document, variables);
+    });
+    seedModuleOpenFixture("module-1", [workItem({
+      id: "story-1",
+      name: "Navigation target",
+    })]);
+    setStatesSorted("project-1", [{
+      id: "state-1",
+      name: "Ideas",
+      group: "backlog",
+      color: null,
+      sort_order: 0,
+      is_protected: false,
+    }]);
+
+    render(
+      <StudioApolloProvider>
+        <TasksPane />
+        <SelectedTicket />
+      </StudioApolloProvider>,
+    );
+
+    const configure = await screen.findByRole("button", {
+      name: "Configure Conversations",
+    });
+    const openConfiguration = async () => {
+      fireEvent.click(configure);
+      await screen.findByRole("region", { name: "Conversation configuration" });
+      expect(modalOcclusionActive()).toBe(true);
+    };
+    const expectConfigurationClosed = async () => {
+      await waitFor(() => expect(screen.queryByRole("region", {
+        name: "Conversation configuration",
+      })).toBeNull());
+      expect(useClientStore.getState().workspaceSelection).toEqual({ kind: "task" });
+      expect(modalOcclusionActive()).toBe(false);
+    };
+
+    await openConfiguration();
+    const conversation = screen.getByRole("treeitem", {
+      name: /Tighten the launch prompt/,
+    });
+    fireEvent.click(conversation);
+    await expectConfigurationClosed();
+    const bucket = scratchBucketId("module-1");
+    expect(conversation).toHaveAttribute("aria-selected", "true");
+    expect(useClientStore.getState().selectedTaskId).toBe(TEMP_TASK_ID);
+    expect(useClientStore.getState().activeByTask[bucket]).toBe("session-2");
+    expect(useClientStore.getState().workspaces[bucket]?.active).toBe("terminal");
+
+    await openConfiguration();
+    fireEvent.click(screen.getByRole("treeitem", { name: /Navigation target/ }));
+    await expectConfigurationClosed();
+    expect(useClientStore.getState().selectedTaskId).toBe("story-1");
+
+    seedModuleLinks([
+      { id: "link-1", moduleId: "module-1", path: "/repos/ticketry" },
+      { id: "link-2", moduleId: "module-2", path: "/repos/other" },
+    ]);
+    seedModuleOpenFixture("module-2", []);
+    await openConfiguration();
+    await act(async () => useClientStore.getState().selectModule("module-2"));
+    await expectConfigurationClosed();
+    expect(useClientStore.getState().selectedModuleId).toBe("module-2");
+
+    await act(async () => useClientStore.getState().selectModule("module-1"));
+    await openConfiguration();
+    await act(async () => useStudioStore.getState().selectProject("project-2"));
+    await expectConfigurationClosed();
+    expect(useStudioStore.getState().selectedProjectId).toBe("project-2");
+    expect(useClientStore.getState().selectedModuleId).toBeNull();
+    expect(useClientStore.getState().selectedTaskId).toBeNull();
   });
 
   it("[overhaul-367] explains a zero-provider conversation refusal without opening a tab", async () => {

@@ -196,9 +196,9 @@ export function WorktreeMergePreview({
         <dt className="text-text-muted">Source</dt>
         <dd className="break-all text-text-primary">{preview.source_branch}</dd>
         <dt className="text-text-muted">Destination</dt>
-        <dd className="break-all text-text-primary">{preview.destination_branch ?? "Origin unavailable"}</dd>
+        <dd className="break-all text-text-primary">{preview.requires_destination_selection ? "Origin unavailable" : preview.destination_branch ?? "Origin unavailable"}</dd>
         <dt className="text-text-muted">Checkout</dt>
-        <dd className="break-all text-text-primary">{preview.destination_checkout ?? "Unavailable"}</dd>
+        <dd className="break-all text-text-primary">{preview.requires_destination_selection ? "Unavailable" : preview.destination_checkout ?? "Unavailable"}</dd>
       </dl>
 
       {recovery ? (
@@ -313,7 +313,7 @@ export function WorktreeMergePreview({
           key={taskId}
           destinations={preview.destinations}
           sourceBranch={preview.source_branch}
-          value={destinationBranch ?? preview.destination_branch ?? null}
+          value={preview.requires_destination_selection ? null : destinationBranch ?? preview.destination_branch ?? null}
           disabled={busy !== null || query.loading}
           onSelect={(branch) => {
             setError(null);

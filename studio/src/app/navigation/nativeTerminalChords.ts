@@ -18,6 +18,7 @@ import { toggleTerminalPanel } from "../../features/terminal-panel";
 import {
   isModulePosition,
   modulePositionActionId,
+  closeActiveWorkspaceTerminal,
   routeModulePositionNavigation,
   type ModulePosition,
 } from "./sharedNavigation";
@@ -31,6 +32,7 @@ export const NATIVE_TERMINAL_CHORD_EVENT = "native-terminal-chord";
 export type NativeTerminalChord =
   | "panel-toggle"
   | "settings"
+  | "close-tab"
   | "body-disengage"
   | "zoom-in"
   | "zoom-out"
@@ -59,6 +61,19 @@ function modulePositionFromChord(
 
 function runChord(payload: NativeTerminalChordEvent["payload"]): void {
   const chord = payload?.chord;
+  if (chord === "close-tab") {
+    if (
+      useModalStore.getState().modalStack.length === 0 &&
+      payload?.handle && payload.runId &&
+      isNativeTerminalKeyboardOwner({
+        handle: payload.handle,
+        runId: payload.runId,
+      })
+    ) {
+      closeActiveWorkspaceTerminal(payload.runId);
+    }
+    return;
+  }
   if (chord === "zoom-in" || chord === "zoom-out" || chord === "zoom-reset") {
     if (
       payload?.handle && payload.runId &&

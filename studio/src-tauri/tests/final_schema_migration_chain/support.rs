@@ -197,7 +197,7 @@ pub async fn assert_final(database: &DatabaseConnection) {
              JOIN worktracker_provider provider ON provider.id=model.provider_id
              LEFT JOIN worktracker_agentmodelreasoninglevel link ON link.agent_model_id=model.id
              LEFT JOIN worktracker_reasoninglevel reasoning ON reasoning.id=link.reasoning_level_id
-             WHERE provider.slug='codex' AND (model.name LIKE 'gpt-5.6-%' OR model.name LIKE 'gpt-6-%' OR model.name='gpt-5.3-codex-spark' OR model.name='glm-5.3-flash')
+             WHERE provider.slug='codex' AND (model.name LIKE 'gpt-5.6-%' OR model.name LIKE 'gpt-6-%' OR model.name='gpt-6.1-sol' OR model.name='gpt-5.3-codex-spark' OR model.name='glm-5.3-flash')
              ORDER BY model.name,reasoning.name"
                 .to_owned(),
         ))
@@ -230,7 +230,7 @@ pub async fn assert_final(database: &DatabaseConnection) {
             BTreeSet::from(["none", "low", "medium", "high", "xhigh", "max"])
         );
     }
-    for model in ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra"] {
+    for model in ["gpt-6.1-sol", "gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra"] {
         assert_eq!(
             matrix[model]
                 .iter()
@@ -324,6 +324,10 @@ pub async fn assert_final(database: &DatabaseConnection) {
         (
             provider_catalog_migrations::CODEX_GLM_5_3_FLASH_LEDGER,
             provider_catalog_migrations::CODEX_GLM_5_3_FLASH_MIGRATION_ID,
+        ),
+        (
+            provider_catalog_migrations::CODEX_6_1_SOL_LEDGER,
+            provider_catalog_migrations::CODEX_6_1_SOL_MIGRATION_ID,
         ),
         (
             provider_catalog_migrations::CODEX_6_SOL_LUNA_LEDGER,

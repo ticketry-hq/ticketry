@@ -1,3 +1,4 @@
+import { OWNER_ID, TASK_ID, activeCleanWorktree, cumulativeChanges } from "./taskWorktreeChangesFixtures";
 import { isValidElement } from "react";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -36,9 +37,6 @@ vi.mock("../app/shell/layout/useStudioPanelLayout", () => ({
   }),
 }));
 
-const OWNER_ID = "task-worktree-owner";
-const TASK_ID = "child-with-committed-work";
-
 function mountStudio(options: Parameters<typeof mountStudioSeam>[0]) {
   return mountStudioSeam({
     ...options,
@@ -51,81 +49,6 @@ function mountStudio(options: Parameters<typeof mountStudioSeam>[0]) {
     ),
   });
 }
-
-const activeCleanWorktree = {
-  __typename: "WorktreeStatusView",
-  kind: "worktree",
-  task_id: TASK_ID,
-  top_level_task_id: OWNER_ID,
-  is_shared: true,
-  branch: "wt/CODING-1321-task-worktree-changes",
-  base_branch: "main",
-  path: "/worktrees/CODING-1321-task-worktree-changes",
-  state: "active",
-  clean: true,
-  dirty: false,
-  ahead: 1,
-  behind: 0,
-  conflict: false,
-  checkout_present: true,
-  ephemeral: false,
-  reason: null,
-};
-
-const cumulativeChanges = {
-  __typename: "WorktreeChangesView",
-  task_id: TASK_ID,
-  top_level_task_id: OWNER_ID,
-  is_shared: true,
-  base_commit: "0123456789abcdef0123456789abcdef01234567",
-  committed_count: 1,
-  pull_request_url: null,
-  pull_request_creation_eligible: true,
-  work_item_done: false,
-  closure_failure: null,
-  cleanup: {
-    __typename: "WorktreeCleanupStatusView",
-    eligible: false,
-    blocker: "pull_request_absent",
-    reason: "No pull request is mapped to this worktree.",
-  },
-  pull_request: {
-    __typename: "PullRequestStatusView",
-    url: null,
-    state: "none",
-    target_branch: null,
-    head_commit: null,
-    integrated: false,
-    post_merge_work: false,
-    replacement_eligible: false,
-    follow_up_eligible: false,
-    merge_preparation_eligible: false,
-    reason: null as string | null,
-  },
-  clean: true,
-  dirty: false,
-  unpushed_count: 1,
-  truncated: false,
-  files: [
-    ["src/added.ts", "added", null],
-    ["src/untracked.ts", "untracked", null],
-    ["src/modified.ts", "modified", null],
-    ["src/deleted.ts", "deleted", null],
-    ["src/renamed.ts", "renamed", "src/old-name.ts"],
-    ["src/copied.ts", "copied", "src/original.ts"],
-    ["src/conflicted.ts", "conflicted", null],
-  ].map(([path, status, previousPath]) => ({
-    __typename: "ChangedFile",
-    path,
-    status,
-    previous_path: previousPath,
-    binary: false,
-    insertions: 1,
-    deletions: 1,
-  })),
-  insertions: 7,
-  deletions: 7,
-};
 
 describe("overhaul acceptance - task worktree Changes", () => {
   it("[overhaul-184] keeps cumulative committed work in a labeled, accessible Changes tab", async () => {
@@ -645,102 +568,6 @@ describe("overhaul acceptance - task worktree Changes", () => {
       taskId: TASK_ID,
       operationId: expect.any(String),
     });
-  });
-
-  it("[overhaul-192] creates a task pull request, pushes committed work first, and replaces Create PR with Open PR", async () => {
-    const http = fixture();
-    const commands: Array<{ operation: string; variables: unknown }> = [];
-    let changes = {
-      ...cumulativeChanges,
-      clean: false,
-      dirty: true,
-      unpushed_count: 2,
-      committed_count: 3,
-      pull_request_url: null as string | null,
-      pull_request_creation_eligible: true,
-    };
-    http.tree("module-1", { rootIds: [TASK_ID], children: { [TASK_ID]: [] }, order: [TASK_ID] });
-    http.workItems([workItem({ id: TASK_ID, parent_id: "module-1", sequence_id: 1324 })]);
-
-    mountStudio({
-      http,
-      selectedTaskId: TASK_ID,
-      children: (
-        <SelectedTicketContent
-          bucket={TASK_ID}
-          projectId="project-1"
-          moduleId="module-1"
-          owner="studio"
-          details={<div>Issue details</div>}
-        />
-      ),
-      graphQlExecute: async (document, variables) => {
-        const operation = documentOperationName(document);
-        if (operation === "WorktreeStatus") {
-          return { worktree_status: { ...activeCleanWorktree, clean: false, dirty: true } } as never;
-        }
-        if (operation === "WorktreeChanges") {
-          return { worktree_changes: changes } as never;
-        }
-        if (operation === "WorktreeCommitPush") {
-          commands.push({ operation, variables });
-          return {
-            worktree_commit_push: {
-              operation_id: (variables as { operationId: string }).operationId,
-              subject: "Committed task work",
-              message_source: "generated",
-              head_commit: "abcdef0123456789abcdef0123456789abcdef01",
-              dirty: false,
-              unpushed_count: 0,
-              uncommitted_work_excluded: false,
-            },
-          } as never;
-        }
-        if (operation === "WorktreeCreatePullRequest") {
-          commands.push({ operation, variables });
-          changes = {
-            ...changes,
-            unpushed_count: 0,
-            pull_request_url: "https://github.com/ticketry-hq/ticketry/pull/1324",
-            pull_request_creation_eligible: false,
-          };
-          return {
-            worktree_pull_request_create: {
-              operation_id: (variables as { operationId: string }).operationId,
-              url: changes.pull_request_url,
-              title: "Merge 2 commits from wt/CODING-1324-create-pr",
-              body: "Merging `wt/CODING-1324-create-pr` into `main`.",
-              message_source: "claude",
-              branch: "wt/CODING-1324-create-pr",
-              base_branch: "main",
-              pushed: true,
-              uncommitted_work_excluded: true,
-            },
-          } as never;
-        }
-        return http.executeGraphQl(document, variables);
-      },
-    });
-
-    const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
-    fireEvent.click(await within(tabs).findByRole("tab", { name: "Changes" }));
-    await openBranchInspector();
-    fireEvent.click(await screen.findByRole("button", { name: /^Commit, push & create PR/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
-
-    const open = await screen.findByRole("link", { name: "Open PR" });
-    expect(open).toHaveAttribute(
-      "href",
-      "https://github.com/ticketry-hq/ticketry/pull/1324",
-    );
-    expect(screen.queryByRole("button", { name: "Create PR" })).toBeNull();
-    expect(commands.map(({ operation }) => operation)).toEqual([
-      "WorktreeCommitPush",
-      "WorktreeCreatePullRequest",
-    ]);
-    expect(commands.every(({ variables }) => (
-      variables as { taskId: string }
-    ).taskId === TASK_ID)).toBe(true);
   });
 
   it("[overhaul-193] keeps task Create PR retryable when GitHub rejects the request", async () => {
@@ -1289,6 +1116,77 @@ describe("overhaul acceptance - task worktree Changes", () => {
     expect(picker).toHaveValue("main");
     expect(selectedPreview).toHaveTextContent("/repos/ticketry");
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("[overhaul-399] requires an explicit local destination when the recorded origin is unverified", async () => {
+    const http = fixture();
+    const previews: Array<{ taskId: string; destinationBranch?: string | null }> = [];
+    http.tree("module-1", { rootIds: [TASK_ID], children: { [TASK_ID]: [] }, order: [TASK_ID] });
+    http.workItems([workItem({ id: TASK_ID, parent_id: "module-1", sequence_id: 2296 })]);
+
+    mountStudio({
+      http,
+      selectedTaskId: TASK_ID,
+      children: (
+        <SelectedTicketContent
+          bucket={TASK_ID}
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      ),
+      graphQlExecute: async (document, variables) => {
+        const operation = documentOperationName(document);
+        if (operation === "WorktreeStatus") return { worktree_status: activeCleanWorktree } as never;
+        if (operation === "WorktreeChanges") return { worktree_changes: cumulativeChanges } as never;
+        if (operation === "WorktreeMergePreview") {
+          const input = variables as { taskId: string; destinationBranch?: string | null };
+          previews.push(input);
+          const selected = input.destinationBranch === "main";
+          return { worktree_merge_preview: {
+            __typename: "WorktreeMergePreviewView",
+            source_branch: "wt/CODING-2296-origin-unverified",
+            source_commit: "1111111111111111111111111111111111111111",
+            // Even if an older server echoes these fields, the UI must not present them as a choice.
+            destination_branch: selected ? "main" : "stale/origin",
+            destination_commit: selected ? "2222222222222222222222222222222222222222" : null,
+            destination_checkout: selected ? "/repos/ticketry" : "/repos/stale-origin",
+            destination_checkout_identity: selected ? "main-checkout" : null,
+            confirmation_token: selected ? "main-confirmation" : null,
+            ready: selected,
+            blocker: selected ? null : "destination_selection_required",
+            reason: selected ? null : "The recorded origin cannot be verified. Choose a local branch to merge into.",
+            requires_destination_selection: !selected,
+            destinations: [
+              { __typename: "WorktreeMergeDestinationView", branch: "main", checkout: "/repos/ticketry" },
+              { __typename: "WorktreeMergeDestinationView", branch: "stale/origin", checkout: "/repos/stale-origin" },
+            ],
+          } } as never;
+        }
+        return http.executeGraphQl(document, variables);
+      },
+    });
+
+    const tabs = await screen.findByRole("tablist", { name: "Workspace tabs" });
+    fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    await openBranchInspector();
+
+    const preview = await screen.findByRole("region", { name: "Local merge preview" });
+    const picker = within(preview).getByRole("combobox", { name: "Local merge destination" });
+    expect(previews).toEqual([{ taskId: TASK_ID, destinationBranch: null }]);
+    expect(picker).toHaveValue("");
+    expect(within(preview).getByText("Destination").nextElementSibling).toHaveTextContent("Origin unavailable");
+    expect(within(preview).getByText("Checkout").nextElementSibling).toHaveTextContent("Unavailable");
+    expect(within(preview).getByText("The recorded origin cannot be verified. Choose a local branch to merge into.")).toHaveAttribute("role", "alert");
+    expect(within(preview).queryByRole("button", { name: /Merge into/ })).not.toBeInTheDocument();
+
+    fireEvent.click(picker);
+    fireEvent.click(within(preview).getByRole("option", { name: /main/ }));
+    await waitFor(() => expect(previews.at(-1)).toEqual({ taskId: TASK_ID, destinationBranch: "main" }));
+    expect(await within(preview).findByText("Ready to merge locally")).toBeVisible();
+    expect(picker).toHaveValue("main");
+    expect(within(preview).getByRole("button", { name: "Merge into main" })).toBeEnabled();
   });
 
   it("[overhaul-315] binds, runs, and refreshes a confirmed local fast-forward", async () => {

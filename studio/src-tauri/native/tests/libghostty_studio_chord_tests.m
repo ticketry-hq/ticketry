@@ -41,6 +41,22 @@ int main(void) {
               MUXED_GHOSTTY_CHORD_NONE,
           "Cmd+Option+Escape was treated as body disengage");
 
+  require(muxed_ghostty_studio_chord(command, 0x0D) == 17,
+          "exact Cmd+W did not report close tab");
+  require(muxed_ghostty_studio_chord(command | caps_lock, 0x0D) == 17,
+          "Caps Lock changed the Cmd+W mapping");
+  require(muxed_ghostty_studio_chord(0, 0x0D) == MUXED_GHOSTTY_CHORD_NONE,
+          "bare W was taken from the terminal");
+  require(muxed_ghostty_studio_chord(command | shift, 0x0D) ==
+              MUXED_GHOSTTY_CHORD_NONE,
+          "Cmd+Shift+W was treated as close tab");
+  require(muxed_ghostty_studio_chord(command | control, 0x0D) ==
+              MUXED_GHOSTTY_CHORD_NONE,
+          "Cmd+Ctrl+W was treated as close tab");
+  require(muxed_ghostty_studio_chord(command | option, 0x0D) ==
+              MUXED_GHOSTTY_CHORD_NONE,
+          "Cmd+Option+W was treated as close tab");
+
   require(muxed_ghostty_studio_chord(control, 0x32) ==
               MUXED_GHOSTTY_CHORD_PANEL_TOGGLE,
           "the panel toggle mapping changed");

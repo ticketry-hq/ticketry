@@ -9,15 +9,20 @@ use ticketry_work_management::commands::{
     workflow::{
         self, TransitionCausation, TransitionExpectation, TransitionOrigin, TransitionWorkItem,
     },
-    CommandError,
 };
 use ticketry_work_management::launch_policy::{
-    self, CallerScope, LaunchPolicyError, LaunchPolicyRequest, LaunchPolicyResolver,
+    self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 use ticketry_work_management::read_queries;
 
 use super::launcher::{RunNowLauncher, TerminalRunNowLauncher};
-use super::{RunNowCaller, RunNowRefusal, RunNowRequest, RunNowState, RunNowSuccess};
+use super::refusals::{
+    identity_conflict, implementation_not_configured, launch_failure, not_eligible,
+    policy_refusal, refusal, storage_refusal, transition_refusal,
+};
+use super::{
+    RunNowCaller, RunNowIssueType, RunNowRefusal, RunNowRequest, RunNowState, RunNowSuccess,
+};
 
 #[derive(Clone)]
 pub struct RunNowService {
@@ -148,6 +153,9 @@ impl RunNowService {
         if current.is_archived || kind.name != "Story" || source.name != "Ideas" {
             return Err(not_eligible(&projected.id));
         }
+        workflow::refuse_run_now_with_subtasks(&self.database, &target_id)
+            .await
+            .map_err(|error| transition_refusal(&projected.id, error))?;
         let destination = state::Entity::find()
             .filter(state::Column::ProjectId.eq(&current.project_id))
             .filter(state::Column::Name.eq("Implement"))
@@ -159,7 +167,7 @@ impl RunNowService {
                     projected.id.clone(),
                     "binding_not_configured",
                     "The project has no Implement destination for Run Now.",
-                    Some("Configure the Story workflow and its Implement launch binding."),
+                    Some("Configure the Story workflow and the Implementation Implement binding."),
                     None,
                 )
             })?;
@@ -171,6 +179,11 @@ impl RunNowService {
             .await
             .map_err(|error| storage_refusal(&projected.id, error.to_string()))?
             .ok_or_else(|| not_eligible(&projected.id))?;
+        let conversion =
+            workflow::run_now_destination_type(&self.database, &current.project_id, &destination.id)
+                .await
+                .map_err(|error| storage_refusal(&projected.id, error.to_string()))?
+                .ok_or_else(|| implementation_not_configured(&projected.id))?;
         let origin = match &request.caller {
             RunNowCaller::Human => TransitionOrigin::Human,
             RunNowCaller::Agent { .. } => TransitionOrigin::Agent,
@@ -188,16 +201,21 @@ impl RunNowService {
         let decision = match recorded {
             Some(decision) => decision,
             None => {
+                // The launch runs as the converted Implementation task, so its
+                // binding, not the Story's, selects and validates the agent.
                 let decision = self
                     .policy
-                    .resolve(LaunchPolicyRequest {
-                        task_id: target_id.clone(),
-                        destination_state_id: Some(destination.id.clone()),
-                        provider_override: None,
-                        caller_scope: CallerScope::RunNow,
-                        idempotency_key: request.request_identity.clone(),
-                        handoff: false,
-                    })
+                    .resolve_as_issue_type(
+                        LaunchPolicyRequest {
+                            task_id: target_id.clone(),
+                            destination_state_id: Some(destination.id.clone()),
+                            provider_override: None,
+                            caller_scope: CallerScope::RunNow,
+                            idempotency_key: request.request_identity.clone(),
+                            handoff: false,
+                        },
+                        &conversion.id,
+                    )
                     .await
                     .map_err(|error| policy_refusal(&projected.id, error))?;
                 launch_policy::record(&self.database, &decision)
@@ -207,6 +225,7 @@ impl RunNowService {
         };
         if compact(&decision.task_id) != target_id
             || compact(&decision.state_id) != compact(&destination.id)
+            || compact(&decision.issue_type_id) != compact(&conversion.id)
         {
             return Err(identity_conflict(projected.id));
         }
@@ -225,6 +244,8 @@ impl RunNowService {
                 request_identity: request.request_identity,
                 causation: TransitionCausation::RunNow {
                     launch_policy_decision_id: decision.decision_id.clone(),
+                    destination_issue_type_id: conversion.id,
+                    destination_workflow_revision: decision.policy_version,
                 },
             }),
             self.facts.as_ref(),
@@ -257,6 +278,21 @@ impl RunNowService {
             .map(|row| row.is_some())
     }
 
+    async fn committed_issue_type(
+        &self,
+        target_id: &str,
+        decision: &launch_policy::LaunchPolicyDecision,
+    ) -> Result<RunNowIssueType, RunNowRefusal> {
+        let kind = issue_type::Entity::find_by_id(compact(&decision.issue_type_id))
+            .one(&self.database)
+            .await
+            .map_err(|error| storage_refusal(target_id, error.to_string()))?;
+        Ok(RunNowIssueType {
+            id: canonical(&decision.issue_type_id),
+            name: kind.map_or_else(|| "Implementation".to_owned(), |kind| kind.name),
+        })
+    }
+
     async fn launch_committed(
         &self,
         target_id: String,
@@ -269,13 +305,13 @@ impl RunNowService {
                 .clone()
                 .unwrap_or_else(|| "Implement".to_owned()),
         };
+        let converted = self.committed_issue_type(&target_id, decision).await?;
         let run = self.launcher.launch(decision).await.map_err(|code| {
-            refusal(
+            launch_failure(
                 target_id.clone(),
-                normalize_launch_code(&code),
-                "The workflow move committed, but terminal launch did not settle.",
-                Some("Retry launch reconciliation for this committed Story."),
-                Some(committed.clone()),
+                &code,
+                committed.clone(),
+                converted.clone(),
             )
         })?;
         launch_policy::mark_delivered(&self.database, &decision.decision_id)
@@ -284,9 +320,11 @@ impl RunNowService {
         Ok(RunNowSuccess {
             target_id,
             code: "run_now_started".to_owned(),
-            detail: "The Story moved to Implement and its task agent started.".to_owned(),
+            detail: "The Story became an Implementation task in Implement and its agent started."
+                .to_owned(),
             remedy: None,
             committed_state: committed,
+            committed_issue_type: converted,
             run,
         })
     }
@@ -304,105 +342,4 @@ fn canonical(value: &str) -> String {
     uuid::Uuid::parse_str(value)
         .map(|id| id.to_string())
         .unwrap_or_else(|_| value.to_owned())
-}
-
-fn not_eligible(target: &str) -> RunNowRefusal {
-    refusal(
-        target.to_owned(),
-        "run_now_not_eligible",
-        "Run Now requires an unarchived Story in Ideas with an Implement edge.",
-        Some("Refresh the Story and its workflow before trying again."),
-        None,
-    )
-}
-
-fn identity_conflict(target_id: String) -> RunNowRefusal {
-    refusal(
-        target_id,
-        "request_identity_conflict",
-        "This Run Now request identity is already bound to another target or destination.",
-        Some("Start the distinct action with a new request identity."),
-        None,
-    )
-}
-
-fn policy_refusal(target: &str, error: LaunchPolicyError) -> RunNowRefusal {
-    let code = match error.code() {
-        "module_not_found" => "module_id_required",
-        value => value,
-    };
-    refusal(
-        target.to_owned(),
-        code,
-        error.to_string(),
-        policy_remedy(code),
-        None,
-    )
-}
-
-fn policy_remedy(code: &str) -> Option<&'static str> {
-    match code {
-        "module_id_required" => Some("Place the Story under an active module."),
-        "binding_not_configured" | "prompt_not_configured" => {
-            Some("Configure the Story's Implement launch binding.")
-        }
-        "module_folder_unusable" => Some("Configure an existing writable module folder."),
-        "no_activated_providers"
-        | "provider_not_activated"
-        | "unknown_agent"
-        | "agent_not_configured" => Some("Activate and select a supported provider."),
-        "unsupported_model" | "model_required" | "unsupported_reasoning" => {
-            Some("Choose a supported model and reasoning level.")
-        }
-        "invalid_required_skills" => Some("Fix the binding's required skills."),
-        _ => None,
-    }
-}
-
-fn transition_refusal(target: &str, error: CommandError) -> RunNowRefusal {
-    let code = match error.code() {
-        "human_only_transition" => "human_only_transition",
-        _ => "transition_rejected",
-    };
-    refusal(
-        target.to_owned(),
-        code,
-        error.to_string(),
-        Some("Refresh the Story and retry only if it is still eligible."),
-        None,
-    )
-}
-
-fn storage_refusal(target: &str, detail: String) -> RunNowRefusal {
-    refusal(
-        target.to_owned(),
-        "run_now_unavailable",
-        detail,
-        Some("Retry when WorkTracker storage is available."),
-        None,
-    )
-}
-
-fn normalize_launch_code(code: &str) -> &str {
-    match code {
-        "module_folder_unusable" => "module_folder_unusable",
-        _ => "launch_unavailable",
-    }
-}
-
-fn refusal(
-    target_id: String,
-    code: impl Into<String>,
-    detail: impl Into<String>,
-    remedy: Option<&str>,
-    committed_state: Option<RunNowState>,
-) -> RunNowRefusal {
-    RunNowRefusal {
-        target_id,
-        code: code.into(),
-        detail: detail.into(),
-        remedy: remedy.map(str::to_owned),
-        committed_state,
-        run: None,
-    }
 }

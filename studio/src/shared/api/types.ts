@@ -111,6 +111,8 @@ export interface WorkItem {
   readonly description: string;
   readonly parent_id: string | null;
   readonly sub_issues_count: number;
+  /** Any direct child, including archived and completed ones. */
+  readonly has_children: boolean;
   readonly key: string;
   readonly is_archived: boolean;
   readonly created_at: string;

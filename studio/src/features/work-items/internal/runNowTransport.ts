@@ -8,12 +8,14 @@ import {
 export interface RunNowResponse {
   target_id: string;
   committed_state: { id: string; name: string };
+  committed_issue_type: { id: string; name: string };
   run: { target_id: string; agent: string; agent_run_id: string };
 }
 
 export interface RunNowRefusal {
   target_id: string;
   committed_state: { id: string; name: string } | null;
+  committed_issue_type: { id: string; name: string } | null;
   run: null;
   detail: string;
   code: string;
@@ -34,6 +36,7 @@ function refusal(payload: RunNowPayload): RunNowRefusalError {
   const body: RunNowRefusal = {
     target_id: payload.target_id,
     committed_state: payload.committed_state,
+    committed_issue_type: payload.committed_issue_type,
     run: null,
     detail: payload.detail,
     code: payload.code,
@@ -58,10 +61,13 @@ export function runWorkItemNow(issueId: string): Promise<RunNowResponse> {
         response = await execute(RunWorkTrackerWorkItemNowDocument, variables);
       }
       const payload = response.run_now;
-      if (!payload.run || !payload.committed_state) throw refusal(payload);
+      if (!payload.run || !payload.committed_state || !payload.committed_issue_type) {
+        throw refusal(payload);
+      }
       return {
         target_id: payload.target_id,
         committed_state: payload.committed_state,
+        committed_issue_type: payload.committed_issue_type,
         run: payload.run,
       };
     },

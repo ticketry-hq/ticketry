@@ -471,6 +471,7 @@ async fn a_first_launch_exposes_the_shipping_provider_catalog() {
             "gpt-6-astra",
             "gpt-6-luna",
             "gpt-6-sol",
+            "gpt-6.1-sol",
             "gemini-3.1-pro-preview",
         ]
     );

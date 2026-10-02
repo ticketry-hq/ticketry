@@ -108,7 +108,15 @@ export function useChangesActions(commands: ChangesCommands): ChangesActionsCont
       && Boolean(commands.onCreatePullRequest);
     await run("stack", async () => {
       await commands.onStack?.();
-      if (publishes) await commands.onCreatePullRequest?.();
+      if (publishes) {
+        try {
+          await commands.onCreatePullRequest?.();
+        } catch (cause) {
+          throw cause instanceof Error
+            ? cause
+            : new Error("Pull-request creation failed. Commit and push succeeded. Retry Create PR.");
+        }
+      }
     }, "Commit and push failed.", publishes
       ? "Committed, pushed, and created a pull request."
       : "Committed and pushed.");

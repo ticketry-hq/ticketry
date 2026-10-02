@@ -3,6 +3,7 @@
 static const uint16_t kMuxedEscapeKeyCode = 0x35;
 static const uint16_t kMuxedGraveKeyCode = 0x32;
 static const uint16_t kMuxedEKeyCode = 0x0E;
+static const uint16_t kMuxedWKeyCode = 0x0D;
 
 // Hardware positions for 1 through 9, followed by 0, on a Mac keyboard.
 static const uint16_t kMuxedModulePositionKeyCodes[] = {
@@ -30,6 +31,9 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags,
   }
   if (key_code == kMuxedEKeyCode && chord == NSEventModifierFlagCommand) {
     return MUXED_GHOSTTY_CHORD_SETTINGS;
+  }
+  if (key_code == kMuxedWKeyCode && chord == NSEventModifierFlagCommand) {
+    return MUXED_GHOSTTY_CHORD_CLOSE_TAB;
   }
   if (key_code == kMuxedEscapeKeyCode &&
       chord == NSEventModifierFlagCommand) {

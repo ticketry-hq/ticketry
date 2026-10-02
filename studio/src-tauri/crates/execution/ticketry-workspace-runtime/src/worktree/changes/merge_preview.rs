@@ -80,14 +80,28 @@ impl WorktreeChangesService {
                 )
                 .await?
                 {
+                    let reason = if row.base_branch == "HEAD" || is_oid(&row.base_branch) {
+                        "The task worktree was created from a detached commit with no origin branch. Choose a local branch as the merge destination."
+                    } else if valid_branch(self.status().git(), &repository, &row.base_branch)
+                        .await?
+                        && !status::registry::branch_exists(
+                            self.status().git(),
+                            &repository,
+                            &row.base_branch,
+                        )
+                        .await?
+                    {
+                        "The recorded origin branch no longer exists locally. Choose a local branch as the merge destination."
+                    } else {
+                        "The recorded origin cannot be verified against the task worktree's starting commit. Choose a local branch as the merge destination."
+                    };
                     return Ok(blocked(
                         row.branch,
-                        Some(row.base_branch.clone()),
-                        destinations.iter().find(|candidate| candidate.branch == row.base_branch)
-                            .and_then(|candidate| candidate.checkout.clone()),
+                        None,
+                        None,
                         "destination_selection_required",
-                        "The recorded origin branch cannot be verified. Restore that branch and refresh merge eligibility.",
-                        false,
+                        reason,
+                        true,
                         destinations,
                     ));
                 }

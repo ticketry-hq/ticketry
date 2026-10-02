@@ -80,6 +80,13 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
       if (isLaunchMenuTarget(event.target)) return;
       if (isChangesEntryActivation(event)) return;
 
+      // Cmd+W must reach the selected run while its terminal owns typing.
+      if (actionId === "close-tab") {
+        routeSharedNavigation(event, taskRowsRef.current, actionId);
+        if (event.defaultPrevented) event.stopImmediatePropagation();
+        return;
+      }
+
       // Ahead of body engagement: the panel toggle must reverse itself from any
       // focus position, including an agent terminal in typing mode (#667).
       if (routeTerminalPanelToggle(event, actionId)) return;

@@ -158,6 +158,7 @@ describe("desktop terminal transport acceptance", () => {
             detail: "Run Now started.",
             remedy: null,
             committed_state: { id: "implement", name: "Implement" },
+            committed_issue_type: { id: "implementation", name: "Implementation" },
             run: {
               target_id: "task-1",
               agent: "codex",
@@ -222,6 +223,7 @@ describe("desktop terminal transport acceptance", () => {
     await expect(runWorkItemNow("task-1")).resolves.toMatchObject({
       target_id: "task-1",
       committed_state: { id: "implement", name: "Implement" },
+      committed_issue_type: { id: "implementation", name: "Implementation" },
       run: { agent_run_id: "run-now" },
     });
     await createTerminalSession({

@@ -374,7 +374,7 @@ impl Connection {
             if let Some(error) = response.get("error") {
                 let error: RpcError = serde_json::from_value(error.clone())
                     .map_err(|error| CodexAppServerError::protocol(error.to_string()))?;
-                return Err(CodexAppServerError::provider(error.message));
+                return Err(CodexAppServerError::provider(error.code, error.message));
             }
             return response
                 .get("result")
@@ -386,6 +386,7 @@ impl Connection {
 
 #[derive(Deserialize)]
 struct RpcError {
+    code: Option<i64>,
     message: String,
 }
 

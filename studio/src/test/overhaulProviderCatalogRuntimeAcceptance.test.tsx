@@ -63,6 +63,20 @@ function payload(activated: readonly string[]) {
         name: "gpt-6-astra",
         reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [{ __typename: "WorktrackerAgentmodelreasoninglevel", id: 4, reasoning_level_id: "r-high" }] },
       },
+      {
+        __typename: "WorktrackerAgentmodel",
+        id: "m-gpt-6-1-sol",
+        provider: "p-codex",
+        name: "gpt-6.1-sol",
+        reasoning_levels: {
+          __typename: "WorktrackerAgentmodelreasoninglevelConnection",
+          nodes: ["low", "medium", "high", "xhigh", "max", "ultra"].map((name, index) => ({
+            __typename: "WorktrackerAgentmodelreasoninglevel",
+            id: 10 + index,
+            reasoning_level_id: `r-${name}`,
+          })),
+        },
+      },
       ...["gpt-6-sol", "gpt-6-luna"].map((name, index) => ({
         __typename: "WorktrackerAgentmodel",
         id: `m-gpt-6-${index}`,
@@ -85,7 +99,9 @@ function payload(activated: readonly string[]) {
         reasoning_levels: { __typename: "WorktrackerAgentmodelreasoninglevelConnection", nodes: [{ __typename: "WorktrackerAgentmodelreasoninglevel", id: 3, reasoning_level_id: "r-high" }] },
       },
     ],
-    reasoning_levels: [{ __typename: "WorktrackerReasoninglevel", id: "r-high", name: "high" }],
+    reasoning_levels: ["none", "low", "medium", "high", "xhigh", "max", "ultra"].map((name) => ({
+      __typename: "WorktrackerReasoninglevel", id: `r-${name}`, name,
+    })),
     codex_profiles: [],
     global_default: {
       __typename: "GlobalLaunchDefault",
@@ -240,5 +256,52 @@ describe("provider catalogue desktop runtime acceptance", () => {
     }
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(graphqlExecute).toHaveBeenCalledTimes(2));
+  });
+
+  it("[overhaul-407] selects GPT-6.1 Sol with Codex reasoning and keeps the saved default on reopening", async () => {
+    let saved = false;
+    const catalog = () => ({
+      ...payload(["claude", "codex"]),
+      ...(saved ? { global_default: {
+        __typename: "GlobalLaunchDefault",
+        provider: "codex", profile: null, model: "gpt-6.1-sol", reasoning: "ultra",
+      } } : {}),
+    });
+    const graphqlExecute = vi.fn(async (encoded: string) => {
+      const request = JSON.parse(encoded);
+      if (request.operationName === "LoadProviderCatalog") {
+        return JSON.stringify({ data: { provider_catalog: catalog() } });
+      }
+      expect(request.operationName).toBe("UpdateProviderCatalog");
+      expect(request.variables).toMatchObject({
+        defaultProvider: "codex", defaultModel: "gpt-6.1-sol", defaultReasoning: "ultra",
+      });
+      saved = true;
+      return JSON.stringify({ data: { update_provider_catalog: catalog() } });
+    });
+    initializeStudioRuntime(await createDesktopRuntime({
+      invoke: vi.fn().mockResolvedValue(startup),
+      createGraphQlProxy: () => ({
+        graphql_execute: graphqlExecute,
+        graphql_subscribe: vi.fn(), graphql_unsubscribe: vi.fn(),
+      }),
+    }));
+
+    const panel = createRef<ModelConfigurationPanelHandle>();
+    const view = render(<><ModelConfigurationPanel ref={panel} /><button onClick={() => panel.current?.save()}>Save</button></>);
+    const region = await screen.findByRole("region", { name: "Model configuration" });
+    fireEvent.change(within(region).getByLabelText("Model"), { target: { value: "gpt-6.1-sol" } });
+    expect(within(region).getByLabelText("Model")).toHaveValue("gpt-6.1-sol");
+    const reasoning = within(region).getByRole("combobox", { name: "Reasoning" });
+    expect(within(reasoning).getAllByRole("option").map((option) => option.getAttribute("value")))
+      .toEqual(["", "low", "medium", "high", "xhigh", "max", "ultra"]);
+    fireEvent.change(reasoning, { target: { value: "ultra" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(saved).toBe(true));
+    view.unmount();
+    render(<ModelConfigurationPanel />);
+    const reopened = await screen.findByRole("region", { name: "Model configuration" });
+    expect(within(reopened).getByLabelText("Model")).toHaveValue("gpt-6.1-sol");
+    expect(within(reopened).getByRole("combobox", { name: "Reasoning" })).toHaveValue("ultra");
   });
 });

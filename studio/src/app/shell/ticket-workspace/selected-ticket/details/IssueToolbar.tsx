@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
 interface IssueToolbarProps {
-  /** Run, worktree, type and workflow controls, leading the row. */
+  /** Workflow, run, worktree and type controls, leading the row. */
   actions: ReactNode;
-  /** Location and identity (the breadcrumb), trailing the row. */
+  /** Location and identity, above the action row. */
   location: ReactNode;
   menu: ReactNode;
 }
@@ -12,6 +12,9 @@ interface IssueToolbarProps {
 export function IssueToolbar({ actions, location, menu }: IssueToolbarProps) {
   return (
     <div className="issue-toolbar flex-none border-b border-pane-border bg-pane-panel">
+      <div className="flex min-w-0 items-center px-4 pt-2">
+        {location}
+      </div>
       <div
         className="flex flex-wrap items-center gap-2 px-4 py-2"
         data-testid="status-row"
@@ -23,7 +26,6 @@ export function IssueToolbar({ actions, location, menu }: IssueToolbarProps) {
           {actions}
         </div>
         <div className="ml-auto flex min-w-0 items-center gap-2">
-          {location}
           {menu}
         </div>
       </div>

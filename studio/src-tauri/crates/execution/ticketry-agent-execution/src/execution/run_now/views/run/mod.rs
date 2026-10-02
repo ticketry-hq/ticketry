@@ -13,12 +13,18 @@ use seaography::{
 };
 
 use crate::execution::run_now::{
-    RunNowCaller, RunNowRefusal, RunNowRequest, RunNowRun, RunNowService, RunNowState,
-    RunNowSuccess,
+    RunNowCaller, RunNowIssueType, RunNowRefusal, RunNowRequest, RunNowRun, RunNowService,
+    RunNowState, RunNowSuccess,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq, CustomOutputType)]
 pub struct RunNowStatePayload {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, CustomOutputType)]
+pub struct RunNowIssueTypePayload {
     pub id: String,
     pub name: String,
 }
@@ -37,11 +43,21 @@ pub struct RunNowPayload {
     pub detail: String,
     pub remedy: Option<String>,
     pub committed_state: Option<RunNowStatePayload>,
+    pub committed_issue_type: Option<RunNowIssueTypePayload>,
     pub run: Option<RunNowRunPayload>,
 }
 
 impl From<RunNowState> for RunNowStatePayload {
     fn from(value: RunNowState) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+        }
+    }
+}
+
+impl From<RunNowIssueType> for RunNowIssueTypePayload {
+    fn from(value: RunNowIssueType) -> Self {
         Self {
             id: value.id,
             name: value.name,
@@ -67,6 +83,7 @@ impl From<RunNowSuccess> for RunNowPayload {
             detail: value.detail,
             remedy: value.remedy,
             committed_state: Some(value.committed_state.into()),
+            committed_issue_type: Some(value.committed_issue_type.into()),
             run: Some(value.run.into()),
         }
     }
@@ -80,6 +97,7 @@ impl From<RunNowRefusal> for RunNowPayload {
             detail: value.detail,
             remedy: value.remedy,
             committed_state: value.committed_state.map(Into::into),
+            committed_issue_type: value.committed_issue_type.map(Into::into),
             run: value.run.map(Into::into),
         }
     }
@@ -110,6 +128,7 @@ impl RunNowView {
 
 pub(super) fn register(builder: &mut seaography::Builder) {
     builder.register_custom_output::<RunNowStatePayload>();
+    builder.register_custom_output::<RunNowIssueTypePayload>();
     builder.register_custom_output::<RunNowRunPayload>();
     builder.register_custom_output::<RunNowPayload>();
     builder.register_custom_mutation::<RunNowView>();
@@ -127,7 +146,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn refusal_keeps_remedy_and_committed_state_without_a_run() {
+    fn refusal_keeps_remedy_and_committed_result_without_a_run() {
         let payload = RunNowPayload::from(RunNowRefusal {
             target_id: "task-1".into(),
             code: "launch_unavailable".into(),
@@ -137,9 +156,14 @@ mod tests {
                 id: "implement".into(),
                 name: "Implement".into(),
             }),
+            committed_issue_type: Some(RunNowIssueType {
+                id: "implementation".into(),
+                name: "Implementation".into(),
+            }),
             run: None,
         });
         assert_eq!(payload.committed_state.unwrap().name, "Implement");
+        assert_eq!(payload.committed_issue_type.unwrap().name, "Implementation");
         assert_eq!(payload.remedy.as_deref(), Some("Wait for recovery."));
         assert!(payload.run.is_none());
     }

@@ -82,6 +82,42 @@ republish the environment for future tasks. Published preparation and task
 state are distinct; repository refresh preserves caches but does not rerun
 installation/startup. [Environment lifecycle](https://learn.chatgpt.com/docs/environments/cloud-environments)
 
+## Run implementation tasks
+
+Tasks are submitted with the Codex CLI. The environment fixes the repository
+(`ticketry-hq/ticketry`), setup, variables, and secrets; each task supplies the
+branch and prompt. The environment ID is shown in the `codex cloud` browser
+and in **Settings > Codex Cloud > Environments**; `codex cloud list --json`
+does not report it.
+
+```bash
+# 1. Submit. The branch must already be pushed; the task starts from GitHub.
+codex cloud exec --env <ENV_ID> --branch <branch> --attempts 2 \
+  "Implement CODING-XXXX: … Validate with bash scripts/codex-cloud/check.sh frontend"
+
+# 2. Poll until the task is ready. Use the URL or task ID printed by exec.
+codex cloud status <TASK_ID>
+codex cloud list --json
+
+# 3. Review, then apply one attempt into the work item's worktree (uncommitted).
+codex cloud diff <TASK_ID>
+codex cloud apply <TASK_ID> --attempt 1
+
+# 4. Commit and push from that worktree as usual.
+```
+
+Known limits:
+
+- Submission is fire-and-poll. Cloud tasks send no hooks or callbacks, and
+  `ticketry-hook`/`mcp.sock` are unreachable from the cloud. The Codex
+  app-server exposes no cloud-task methods; its "environments" are
+  self-hosted exec-servers, not Codex Cloud environments.
+- Model, reasoning effort, and speed are chosen by Codex Cloud. Neither the
+  environment nor `codex cloud exec` sets them.
+- A task never commits to the chosen branch. It produces a diff: apply it
+  locally as above, or use **Create PR** in the ChatGPT UI to open a pull
+  request from a new branch.
+
 ## Reproduce on Linux locally
 
 The Dockerfile calls the same installer. Docker must have a running Linux

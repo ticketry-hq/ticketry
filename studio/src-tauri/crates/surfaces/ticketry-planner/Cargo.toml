@@ -1,0 +1,23 @@
+[package]
+name = "ticketry-planner"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+axum.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri-graphql.workspace = true
+tokio = { workspace = true, features = ["io-util"] }
+uuid.workspace = true
+
+[dev-dependencies]
+async-graphql.workspace = true
+reqwest.workspace = true
+sea-orm.workspace = true
+tempfile.workspace = true
+ticketry-data-directory.workspace = true
+ticketry-entities.workspace = true
+ticketry-settings.workspace = true
+ticketry-graphql-schema.workspace = true

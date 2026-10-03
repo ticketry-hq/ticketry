@@ -175,3 +175,26 @@ async fn refuses_unknown_owned_schema_before_installing_the_ledger() {
         .expect("decode count");
     assert_eq!(ledger, 0);
 }
+
+#[tokio::test]
+async fn reopens_after_sprint_migration_with_all_planning_tables_owned() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.db");
+    django_fixture(&path).await;
+    normalize_fixture_counters(&path).await;
+    adopt(directory.path())
+        .await
+        .expect("adopt the pre-sprint database");
+    let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
+        .await
+        .unwrap();
+    ticketry_work_management::sprint_migration::install(&database)
+        .await
+        .unwrap();
+    database.close().await.unwrap();
+    let upgraded = adopt(directory.path())
+        .await
+        .expect("reopen sprint-owned database");
+    assert_eq!(upgraded.source, SourceClassification::RustOwned);
+    assert!(upgraded.restoration_verified);
+}

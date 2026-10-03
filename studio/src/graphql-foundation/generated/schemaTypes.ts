@@ -664,12 +664,14 @@ export type Mutation = {
   clear_module_link: Scalars['Boolean']['output'];
   create_issue_type_transition: WorktrackerIssuetypetransition;
   create_project: WorktrackerProject;
+  create_sprint_goal: WorktrackerSprintGoal;
   create_state: WorktrackerState;
   create_viewer_lease: AgentRunViewerLeases;
   create_work_item: WorktrackerIssue;
   delete_issue_type: Scalars['Boolean']['output'];
   delete_issue_type_transition: Scalars['Boolean']['output'];
   delete_project: Scalars['Boolean']['output'];
+  delete_sprint_goal: Scalars['Boolean']['output'];
   delete_state: Scalars['Boolean']['output'];
   delete_viewer_lease?: Maybe<AgentRunViewerLeases>;
   delete_work_item: Scalars['Boolean']['output'];
@@ -704,11 +706,15 @@ export type Mutation = {
   update_module_presentation: WorktrackerModulepresentation;
   update_project: WorktrackerProject;
   update_provider_catalog: ProviderCatalog;
+  update_sprint: WorktrackerSprint;
+  update_sprint_goal: WorktrackerSprintGoal;
+  update_sprint_suggestion: WorktrackerSprintSuggestion;
   update_state: WorktrackerState;
   update_viewer_lease: AgentRunViewerLeases;
   update_work_item: WorktrackerIssue;
   upsert_issue_type_launch_binding: WorktrackerLaunchbinding;
   worktrackerIssuetypeCreateOne: WorktrackerIssuetypeBasic;
+  worktrackerSprintCreateOne: WorktrackerSprintBasic;
   worktree_cleanup: WorktreeDiscardResult;
   worktree_commit: RepositoryCommandResult;
   worktree_commit_push: RepositoryCommandResult;
@@ -752,6 +758,12 @@ export type MutationCreate_ProjectArgs = {
 };
 
 
+export type MutationCreate_Sprint_GoalArgs = {
+  sprint_id: Scalars['String']['input'];
+  text: Scalars['String']['input'];
+};
+
+
 export type MutationCreate_StateArgs = {
   color?: InputMaybe<Scalars['String']['input']>;
   group: Scalars['String']['input'];
@@ -792,6 +804,11 @@ export type MutationDelete_Issue_Type_TransitionArgs = {
 
 
 export type MutationDelete_ProjectArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type MutationDelete_Sprint_GoalArgs = {
   id: Scalars['String']['input'];
 };
 
@@ -1032,6 +1049,28 @@ export type MutationUpdate_Provider_CatalogArgs = {
 };
 
 
+export type MutationUpdate_SprintArgs = {
+  carryover_sprint_id?: InputMaybe<Scalars['String']['input']>;
+  id: Scalars['String']['input'];
+  name?: InputMaybe<Scalars['String']['input']>;
+  status?: InputMaybe<Scalars['String']['input']>;
+  suggestion_run_id?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type MutationUpdate_Sprint_GoalArgs = {
+  id: Scalars['String']['input'];
+  text: Scalars['String']['input'];
+};
+
+
+export type MutationUpdate_Sprint_SuggestionArgs = {
+  id: Scalars['String']['input'];
+  proposed_name?: InputMaybe<Scalars['String']['input']>;
+  status: Scalars['String']['input'];
+};
+
+
 export type MutationUpdate_StateArgs = {
   color?: InputMaybe<Scalars['String']['input']>;
   group?: InputMaybe<Scalars['String']['input']>;
@@ -1056,6 +1095,7 @@ export type MutationUpdate_Work_ItemArgs = {
   issue_type_id?: InputMaybe<Scalars['String']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
   parent_id?: InputMaybe<Scalars['String']['input']>;
+  sprint_id?: InputMaybe<Scalars['String']['input']>;
   state_id?: InputMaybe<Scalars['String']['input']>;
   tag_names?: InputMaybe<Array<Scalars['String']['input']>>;
   workspace_tab_order?: InputMaybe<Scalars['Json']['input']>;
@@ -1079,6 +1119,11 @@ export type MutationUpsert_Issue_Type_Launch_BindingArgs = {
 
 export type MutationWorktrackerIssuetypeCreateOneArgs = {
   data: WorktrackerIssuetypeInsertInput;
+};
+
+
+export type MutationWorktrackerSprintCreateOneArgs = {
+  data: WorktrackerSprintInsertInput;
 };
 
 
@@ -1269,6 +1314,9 @@ export type Query = {
   worktrackerProject: WorktrackerProjectConnection;
   worktrackerProvider: WorktrackerProviderConnection;
   worktrackerReasoninglevel: WorktrackerReasoninglevelConnection;
+  worktrackerSprint: WorktrackerSprintConnection;
+  worktrackerSprintGoal: WorktrackerSprintGoalConnection;
+  worktrackerSprintSuggestion: WorktrackerSprintSuggestionConnection;
   worktrackerState: WorktrackerStateConnection;
   worktrackerTransitionoccurrence: WorktrackerTransitionoccurrenceConnection;
   worktree_changes: WorktreeChangesView;
@@ -1498,6 +1546,30 @@ export type QueryWorktrackerReasoninglevelArgs = {
   filters?: InputMaybe<WorktrackerReasoninglevelFilterInput>;
   having?: InputMaybe<WorktrackerReasoninglevelHavingInput>;
   orderBy?: InputMaybe<WorktrackerReasoninglevelOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type QueryWorktrackerSprintArgs = {
+  filters?: InputMaybe<WorktrackerSprintFilterInput>;
+  having?: InputMaybe<WorktrackerSprintHavingInput>;
+  orderBy?: InputMaybe<WorktrackerSprintOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type QueryWorktrackerSprintGoalArgs = {
+  filters?: InputMaybe<WorktrackerSprintGoalFilterInput>;
+  having?: InputMaybe<WorktrackerSprintGoalHavingInput>;
+  orderBy?: InputMaybe<WorktrackerSprintGoalOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type QueryWorktrackerSprintSuggestionArgs = {
+  filters?: InputMaybe<WorktrackerSprintSuggestionFilterInput>;
+  having?: InputMaybe<WorktrackerSprintSuggestionHavingInput>;
+  orderBy?: InputMaybe<WorktrackerSprintSuggestionOrderInput>;
   pagination?: InputMaybe<PaginationInput>;
 };
 
@@ -1960,6 +2032,8 @@ export type WorktrackerIssue = {
   projectId: Scalars['String']['output'];
   rank: Scalars['String']['output'];
   sequenceId: Scalars['Int']['output'];
+  sprint?: Maybe<WorktrackerSprint>;
+  sprintId?: Maybe<Scalars['String']['output']>;
   state?: Maybe<WorktrackerState>;
   stateId?: Maybe<Scalars['String']['output']>;
   stateRevision: Scalars['Int']['output'];
@@ -2096,6 +2170,7 @@ export type WorktrackerIssueFilterInput = {
   projectId?: InputMaybe<StringFilterInput>;
   rank?: InputMaybe<StringFilterInput>;
   sequenceId?: InputMaybe<IntegerFilterInput>;
+  sprintId?: InputMaybe<StringFilterInput>;
   stateId?: InputMaybe<StringFilterInput>;
   stateRevision?: InputMaybe<IntegerFilterInput>;
   type?: InputMaybe<StringFilterInput>;
@@ -2116,6 +2191,7 @@ export type WorktrackerIssueHavingInput = {
   parent?: InputMaybe<WorktrackerIssueFilterInput>;
   presentation?: InputMaybe<WorktrackerModulepresentationFilterInput>;
   project?: InputMaybe<WorktrackerProjectFilterInput>;
+  sprint?: InputMaybe<WorktrackerSprintFilterInput>;
   state?: InputMaybe<WorktrackerStateFilterInput>;
 };
 
@@ -2174,6 +2250,7 @@ export type WorktrackerIssueOrderInput = {
   projectId?: InputMaybe<OrderByEnum>;
   rank?: InputMaybe<OrderByEnum>;
   sequenceId?: InputMaybe<OrderByEnum>;
+  sprintId?: InputMaybe<OrderByEnum>;
   stateId?: InputMaybe<OrderByEnum>;
   stateRevision?: InputMaybe<OrderByEnum>;
   type?: InputMaybe<OrderByEnum>;
@@ -2534,6 +2611,7 @@ export type WorktrackerProject = {
   onboardingRequired: Scalars['Boolean']['output'];
   seqCounter: Scalars['Int']['output'];
   slug: Scalars['String']['output'];
+  sprints: WorktrackerSprintConnection;
   state: WorktrackerStateConnection;
   stateRevision: Scalars['Int']['output'];
   updatedAt: Scalars['String']['output'];
@@ -2557,6 +2635,13 @@ export type WorktrackerProjectIssueTypeArgs = {
 export type WorktrackerProjectLabelArgs = {
   filters?: InputMaybe<WorktrackerLabelFilterInput>;
   orderBy?: InputMaybe<WorktrackerLabelOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type WorktrackerProjectSprintsArgs = {
+  filters?: InputMaybe<WorktrackerSprintFilterInput>;
+  orderBy?: InputMaybe<WorktrackerSprintOrderInput>;
   pagination?: InputMaybe<PaginationInput>;
 };
 
@@ -2600,6 +2685,7 @@ export type WorktrackerProjectHavingInput = {
   issue?: InputMaybe<WorktrackerIssueFilterInput>;
   issueType?: InputMaybe<WorktrackerIssuetypeFilterInput>;
   label?: InputMaybe<WorktrackerLabelFilterInput>;
+  sprints?: InputMaybe<WorktrackerSprintFilterInput>;
   state?: InputMaybe<WorktrackerStateFilterInput>;
 };
 
@@ -2718,6 +2804,224 @@ export type WorktrackerReasoninglevelHavingInput = {
 export type WorktrackerReasoninglevelOrderInput = {
   id?: InputMaybe<OrderByEnum>;
   name?: InputMaybe<OrderByEnum>;
+};
+
+export type WorktrackerSprint = {
+  __typename?: 'WorktrackerSprint';
+  createdAt: Scalars['String']['output'];
+  goals: WorktrackerSprintGoalConnection;
+  goalsRevisedAt?: Maybe<Scalars['String']['output']>;
+  id: Scalars['String']['output'];
+  issues: WorktrackerIssueConnection;
+  name: Scalars['String']['output'];
+  project?: Maybe<WorktrackerProject>;
+  projectId: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+  suggestionRun?: Maybe<AgentRuns>;
+  suggestionRunId?: Maybe<Scalars['String']['output']>;
+  suggestions: WorktrackerSprintSuggestionConnection;
+  updatedAt: Scalars['String']['output'];
+};
+
+
+export type WorktrackerSprintGoalsArgs = {
+  filters?: InputMaybe<WorktrackerSprintGoalFilterInput>;
+  orderBy?: InputMaybe<WorktrackerSprintGoalOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type WorktrackerSprintIssuesArgs = {
+  filters?: InputMaybe<WorktrackerIssueFilterInput>;
+  orderBy?: InputMaybe<WorktrackerIssueOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type WorktrackerSprintSuggestionsArgs = {
+  filters?: InputMaybe<WorktrackerSprintSuggestionFilterInput>;
+  orderBy?: InputMaybe<WorktrackerSprintSuggestionOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+export type WorktrackerSprintBasic = {
+  __typename?: 'WorktrackerSprintBasic';
+  createdAt: Scalars['String']['output'];
+  goalsRevisedAt?: Maybe<Scalars['String']['output']>;
+  id: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  projectId: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+  suggestionRunId?: Maybe<Scalars['String']['output']>;
+  updatedAt: Scalars['String']['output'];
+};
+
+export type WorktrackerSprintConnection = {
+  __typename?: 'WorktrackerSprintConnection';
+  edges: Array<WorktrackerSprintEdge>;
+  nodes: Array<WorktrackerSprint>;
+  pageInfo: PageInfo;
+  paginationInfo?: Maybe<PaginationInfo>;
+};
+
+export type WorktrackerSprintEdge = {
+  __typename?: 'WorktrackerSprintEdge';
+  cursor: Scalars['String']['output'];
+  node: WorktrackerSprint;
+};
+
+export type WorktrackerSprintFilterInput = {
+  and?: InputMaybe<Array<WorktrackerSprintFilterInput>>;
+  createdAt?: InputMaybe<TextFilterInput>;
+  goalsRevisedAt?: InputMaybe<TextFilterInput>;
+  id?: InputMaybe<StringFilterInput>;
+  name?: InputMaybe<StringFilterInput>;
+  not?: InputMaybe<WorktrackerSprintFilterInput>;
+  or?: InputMaybe<Array<WorktrackerSprintFilterInput>>;
+  projectId?: InputMaybe<StringFilterInput>;
+  status?: InputMaybe<StringFilterInput>;
+  suggestionRunId?: InputMaybe<StringFilterInput>;
+  updatedAt?: InputMaybe<TextFilterInput>;
+};
+
+export type WorktrackerSprintGoal = {
+  __typename?: 'WorktrackerSprintGoal';
+  createdAt: Scalars['String']['output'];
+  id: Scalars['String']['output'];
+  position: Scalars['Int']['output'];
+  sprint?: Maybe<WorktrackerSprint>;
+  sprintId: Scalars['String']['output'];
+  text: Scalars['String']['output'];
+  updatedAt: Scalars['String']['output'];
+};
+
+export type WorktrackerSprintGoalConnection = {
+  __typename?: 'WorktrackerSprintGoalConnection';
+  edges: Array<WorktrackerSprintGoalEdge>;
+  nodes: Array<WorktrackerSprintGoal>;
+  pageInfo: PageInfo;
+  paginationInfo?: Maybe<PaginationInfo>;
+};
+
+export type WorktrackerSprintGoalEdge = {
+  __typename?: 'WorktrackerSprintGoalEdge';
+  cursor: Scalars['String']['output'];
+  node: WorktrackerSprintGoal;
+};
+
+export type WorktrackerSprintGoalFilterInput = {
+  and?: InputMaybe<Array<WorktrackerSprintGoalFilterInput>>;
+  createdAt?: InputMaybe<TextFilterInput>;
+  id?: InputMaybe<StringFilterInput>;
+  not?: InputMaybe<WorktrackerSprintGoalFilterInput>;
+  or?: InputMaybe<Array<WorktrackerSprintGoalFilterInput>>;
+  position?: InputMaybe<IntegerFilterInput>;
+  sprintId?: InputMaybe<StringFilterInput>;
+  text?: InputMaybe<StringFilterInput>;
+  updatedAt?: InputMaybe<TextFilterInput>;
+};
+
+export type WorktrackerSprintGoalHavingInput = {
+  sprint?: InputMaybe<WorktrackerSprintFilterInput>;
+};
+
+export type WorktrackerSprintGoalOrderInput = {
+  createdAt?: InputMaybe<OrderByEnum>;
+  id?: InputMaybe<OrderByEnum>;
+  position?: InputMaybe<OrderByEnum>;
+  sprintId?: InputMaybe<OrderByEnum>;
+  text?: InputMaybe<OrderByEnum>;
+  updatedAt?: InputMaybe<OrderByEnum>;
+};
+
+export type WorktrackerSprintHavingInput = {
+  goals?: InputMaybe<WorktrackerSprintGoalFilterInput>;
+  issues?: InputMaybe<WorktrackerIssueFilterInput>;
+  project?: InputMaybe<WorktrackerProjectFilterInput>;
+  suggestionRun?: InputMaybe<AgentRunsFilterInput>;
+  suggestions?: InputMaybe<WorktrackerSprintSuggestionFilterInput>;
+};
+
+export type WorktrackerSprintInsertInput = {
+  name: Scalars['String']['input'];
+  projectId: Scalars['String']['input'];
+};
+
+export type WorktrackerSprintOrderInput = {
+  createdAt?: InputMaybe<OrderByEnum>;
+  goalsRevisedAt?: InputMaybe<OrderByEnum>;
+  id?: InputMaybe<OrderByEnum>;
+  name?: InputMaybe<OrderByEnum>;
+  projectId?: InputMaybe<OrderByEnum>;
+  status?: InputMaybe<OrderByEnum>;
+  suggestionRunId?: InputMaybe<OrderByEnum>;
+  updatedAt?: InputMaybe<OrderByEnum>;
+};
+
+export type WorktrackerSprintSuggestion = {
+  __typename?: 'WorktrackerSprintSuggestion';
+  createdAt: Scalars['String']['output'];
+  goal?: Maybe<WorktrackerSprintGoal>;
+  goalId: Scalars['String']['output'];
+  id: Scalars['String']['output'];
+  issue?: Maybe<WorktrackerIssue>;
+  issueId?: Maybe<Scalars['String']['output']>;
+  proposedEpicId?: Maybe<Scalars['String']['output']>;
+  proposedName?: Maybe<Scalars['String']['output']>;
+  reason: Scalars['String']['output'];
+  runId: Scalars['String']['output'];
+  sprint?: Maybe<WorktrackerSprint>;
+  sprintId: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+};
+
+export type WorktrackerSprintSuggestionConnection = {
+  __typename?: 'WorktrackerSprintSuggestionConnection';
+  edges: Array<WorktrackerSprintSuggestionEdge>;
+  nodes: Array<WorktrackerSprintSuggestion>;
+  pageInfo: PageInfo;
+  paginationInfo?: Maybe<PaginationInfo>;
+};
+
+export type WorktrackerSprintSuggestionEdge = {
+  __typename?: 'WorktrackerSprintSuggestionEdge';
+  cursor: Scalars['String']['output'];
+  node: WorktrackerSprintSuggestion;
+};
+
+export type WorktrackerSprintSuggestionFilterInput = {
+  and?: InputMaybe<Array<WorktrackerSprintSuggestionFilterInput>>;
+  createdAt?: InputMaybe<TextFilterInput>;
+  goalId?: InputMaybe<StringFilterInput>;
+  id?: InputMaybe<StringFilterInput>;
+  issueId?: InputMaybe<StringFilterInput>;
+  not?: InputMaybe<WorktrackerSprintSuggestionFilterInput>;
+  or?: InputMaybe<Array<WorktrackerSprintSuggestionFilterInput>>;
+  proposedEpicId?: InputMaybe<StringFilterInput>;
+  proposedName?: InputMaybe<StringFilterInput>;
+  reason?: InputMaybe<StringFilterInput>;
+  runId?: InputMaybe<StringFilterInput>;
+  sprintId?: InputMaybe<StringFilterInput>;
+  status?: InputMaybe<StringFilterInput>;
+};
+
+export type WorktrackerSprintSuggestionHavingInput = {
+  goal?: InputMaybe<WorktrackerSprintGoalFilterInput>;
+  issue?: InputMaybe<WorktrackerIssueFilterInput>;
+  sprint?: InputMaybe<WorktrackerSprintFilterInput>;
+};
+
+export type WorktrackerSprintSuggestionOrderInput = {
+  createdAt?: InputMaybe<OrderByEnum>;
+  goalId?: InputMaybe<OrderByEnum>;
+  id?: InputMaybe<OrderByEnum>;
+  issueId?: InputMaybe<OrderByEnum>;
+  proposedEpicId?: InputMaybe<OrderByEnum>;
+  proposedName?: InputMaybe<OrderByEnum>;
+  reason?: InputMaybe<OrderByEnum>;
+  runId?: InputMaybe<OrderByEnum>;
+  sprintId?: InputMaybe<OrderByEnum>;
+  status?: InputMaybe<OrderByEnum>;
 };
 
 export type WorktrackerState = {

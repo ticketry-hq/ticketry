@@ -44,6 +44,7 @@ ticketry-entities.workspace = true
 ticketry-graphql-schema.workspace = true
 ticketry-launch.workspace = true
 ticketry-mcp.workspace = true
+ticketry-planner.workspace = true
 ticketry-provider.workspace = true
 ticketry-runs.workspace = true
 ticketry-settings.workspace = true

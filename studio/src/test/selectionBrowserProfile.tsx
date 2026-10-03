@@ -58,6 +58,7 @@ const workItems = ids.map((id, index) => ({
   workspace_tab_order: [],
   parent_id: "module-1",
   module_id: "module-1",
+  sprint_id: null,
   is_archived: false,
   created_at: "2026-08-06T12:00:00Z",
   updated_at: "2026-08-06T12:00:00Z",

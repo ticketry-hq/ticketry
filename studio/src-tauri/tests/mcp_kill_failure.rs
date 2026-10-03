@@ -84,6 +84,9 @@ async fn a_failed_replacement_kill_reports_previous_agent_not_ended() {
     ticketry_work_management::module_presentation_migration::install(&database)
         .await
         .unwrap();
+    ticketry_work_management::sprint_migration::install(&database)
+        .await
+        .unwrap();
     ticketry_work_management::ModuleLinkStore::new(database.clone())
         .set(MODULE, &directory.path().display().to_string())
         .await

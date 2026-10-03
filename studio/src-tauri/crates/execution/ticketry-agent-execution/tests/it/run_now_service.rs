@@ -334,7 +334,7 @@ const DONE: &str = "40000000000000000000000000000002";
 async fn insert_child(database: &DatabaseConnection, parent: &str, state: &str, archived: bool) {
     database
         .execute_unprepared(&format!(
-            "INSERT INTO worktracker_issue VALUES \
+            "INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, workspace_tab_order, created_at, updated_at) VALUES \
              ('{CHILD}', '{PROJECT}', 'task', '{STORY}', '{parent}', '{MODULE}', '{state}', 4, \
               'Subtask', 10, {archived}, 'O', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
             archived = u8::from(archived),
@@ -412,7 +412,7 @@ async fn any_direct_child_refuses_run_now_without_touching_the_story_or_child() 
 #[tokio::test]
 async fn a_child_committed_after_preflight_is_refused_inside_the_guarded_transition() {
     let created = format!(
-        "INSERT INTO worktracker_issue VALUES \
+        "INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, workspace_tab_order, created_at, updated_at) VALUES \
          ('{CHILD}', '{PROJECT}', 'task', '{STORY}', '{TASK}', '{MODULE}', '{IDEAS}', 4, \
           'Late subtask', 10, 0, 'O', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);"
     );

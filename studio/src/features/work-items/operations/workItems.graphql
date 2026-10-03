@@ -9,6 +9,7 @@ fragment GeneratedWorkTrackerWorkItemFields on WorktrackerIssue {
   workspace_tab_order: workspaceTabOrder
   parent_id: parentId
   module_id: moduleId
+  sprint_id: sprintId
   is_archived: isArchived
   created_at: createdAt
   updated_at: updatedAt

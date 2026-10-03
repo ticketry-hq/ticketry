@@ -53,8 +53,7 @@ async fn run_now_converts_the_same_item_and_launches_with_implementation_setting
         .database
         .execute_unprepared(&format!(
             "UPDATE worktracker_issue SET description = 'Keep this context' WHERE id = '{TASK}';
-             INSERT INTO worktracker_issue VALUES
-                 ('{BLOCKER}', '{PROJECT}', 'task', '{STORY}', '{MODULE}', '{MODULE}', '{IDEAS}',
+             INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, workspace_tab_order, created_at, updated_at) VALUES ('{BLOCKER}', '{PROJECT}', 'task', '{STORY}', '{MODULE}', '{MODULE}', '{IDEAS}',
                   4, 'Blocker', 11, 0, 'P', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
              INSERT INTO worktracker_issue_blocked_by (from_issue_id, to_issue_id)
                  VALUES ('{TASK}', '{BLOCKER}');

@@ -11,7 +11,7 @@ use seaography::{
 use ticketry_entities::{
     agent_model, agent_model_reasoning_level, attachment, issue, issue_blocker, issue_label,
     issue_type, issue_type_transition, label, launch_binding, module_presentation, project,
-    provider, reasoning_level, state,
+    provider, reasoning_level, sprint, sprint_goal, sprint_suggestion, state,
 };
 
 static AUDIT_CONTEXT: LazyLock<BuilderContext> = LazyLock::new(BuilderContext::default);
@@ -27,6 +27,9 @@ async fn generated_crud_schema() -> Schema {
     let mut builder = ticketry_terminal::register_persistence_graphql(builder);
     seaography::register_entity!(builder, project);
     seaography::register_entity!(builder, state);
+    seaography::register_entity!(builder, sprint);
+    seaography::register_entity!(builder, sprint_goal);
+    seaography::register_entity!(builder, sprint_suggestion);
     seaography::register_entity!(builder, issue_type);
     seaography::register_entity!(builder, issue);
     seaography::register_entity!(builder, label);
@@ -54,6 +57,9 @@ async fn audit_schema_blindly_enables_every_generated_worktracker_bundle() {
     for entity in [
         "worktrackerProject",
         "worktrackerState",
+        "worktrackerSprint",
+        "worktrackerSprintGoal",
+        "worktrackerSprintSuggestion",
         "worktrackerIssuetype",
         "worktrackerIssue",
         "worktrackerLabel",

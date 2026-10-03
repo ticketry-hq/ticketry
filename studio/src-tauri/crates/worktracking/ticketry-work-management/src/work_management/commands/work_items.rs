@@ -1,7 +1,7 @@
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection,
-    EntityTrait, ExprTrait, JoinType, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
-    TransactionTrait,
+    DatabaseTransaction, EntityTrait, ExprTrait, JoinType, QueryFilter, QueryOrder, QuerySelect,
+    RelationTrait, Set, TransactionTrait,
 };
 
 use super::identifiers::{database_uuid, new_database_uuid, uuid_spellings};
@@ -38,17 +38,42 @@ pub async fn create(
     input: CreateWorkItem,
     facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
+    let transaction = database.begin().await?;
+    let id = create_in(&transaction, input, facts).await?;
+    transaction.commit().await?;
+    if let Some(facts) = facts {
+        facts.wake();
+    }
+    Ok(id)
+}
+
+pub(crate) async fn create_in(
+    transaction: &DatabaseTransaction,
+    input: CreateWorkItem,
+    facts: Option<&WorkFactRecorder>,
+) -> Result<String, CommandError> {
     let project_id = database_uuid(&input.project_id, "project_id")?;
     let issue_type_id = database_uuid(&input.issue_type_id, "issue_type_id")?;
     let name = valid_name(&input.name)?;
-    let selected_type = resolve_create_type(database, &project_id, &issue_type_id).await?;
+    // Reserve the SQLite writer before validation reads to avoid upgrading a
+    // stale read snapshot when another creator commits between reads and writes.
+    project::Entity::update_many()
+        .col_expr(
+            project::Column::StateRevision,
+            Expr::col(project::Column::StateRevision),
+        )
+        .filter(project::Column::Id.eq(&project_id))
+        .exec(transaction)
+        .await?;
+    let selected_type = resolve_create_type(transaction, &project_id, &issue_type_id).await?;
     let item_type = selected_type.level.clone();
     let (state_id, parent_id, module_id) = match item_type.as_str() {
         "task" => {
             let state_id =
-                resolve_birth_state(database, &project_id, &selected_type, input.state_id).await?;
+                resolve_birth_state(transaction, &project_id, &selected_type, input.state_id)
+                    .await?;
             let (parent_id, module_id) =
-                resolve_parent(database, &project_id, input.parent_id).await?;
+                resolve_parent(transaction, &project_id, input.parent_id).await?;
             (state_id, parent_id, module_id)
         }
         "module" => {
@@ -69,10 +94,7 @@ pub async fn create(
         _ => unreachable!("resolve_create_type accepts only task and module levels"),
     };
 
-    let transaction = database.begin().await?;
-    // This is deliberately the transaction's first statement. SQLite obtains
-    // its writer reservation here, and the single UPDATE atomically allocates
-    // both counters before the insert can become visible.
+    // Allocate both counters atomically before the insert can become visible.
     let counters = project::Entity::update_many()
         .col_expr(
             project::Column::SeqCounter,
@@ -84,7 +106,7 @@ pub async fn create(
         )
         .col_expr(project::Column::UpdatedAt, Expr::current_timestamp())
         .filter(project::Column::Id.eq(&project_id))
-        .exec_with_returning(&transaction)
+        .exec_with_returning(transaction)
         .await?
         .into_iter()
         .next()
@@ -92,7 +114,7 @@ pub async fn create(
     let sequence_id = counters.seq_counter;
     let state_revision = counters.state_revision;
     let presentation_rank =
-        if item_type == "module" && uses_manual_module_order(&transaction, &project_id).await? {
+        if item_type == "module" && uses_manual_module_order(transaction, &project_id).await? {
             let last = module_presentation::Entity::find()
                 .join(
                     JoinType::InnerJoin,
@@ -104,7 +126,7 @@ pub async fn create(
                 .filter(module_presentation::Column::Rank.ne(""))
                 .order_by_desc(module_presentation::Column::Rank)
                 .order_by_desc(module_presentation::Column::ModuleId)
-                .one(&transaction)
+                .one(transaction)
                 .await?;
             Some(
                 fractional_rank::between(last.as_ref().map(|row| row.rank.as_str()), None)
@@ -116,7 +138,7 @@ pub async fn create(
     let rank = if item_type == "module" {
         String::new()
     } else {
-        arrival_rank::for_work_item(&transaction, &project_id, state_id.as_deref()).await?
+        arrival_rank::for_work_item(transaction, &project_id, state_id.as_deref()).await?
     };
     let id = new_database_uuid();
     let now = super::timestamp::now();
@@ -128,6 +150,7 @@ pub async fn create(
         issue_type_id: Set(issue_type_id),
         parent_id: Set(parent_id.clone()),
         module_id: Set(module_id.clone()),
+        sprint_id: sea_orm::ActiveValue::NotSet,
         state_id: Set(state_id.clone()),
         state_revision: Set(state_revision),
         name: Set(name),
@@ -139,7 +162,7 @@ pub async fn create(
         created_at: Set(now),
         updated_at: Set(now),
     }
-    .insert(&transaction)
+    .insert(transaction)
     .await?;
     if let Some(rank) = presentation_rank {
         module_presentation::ActiveModel {
@@ -147,12 +170,12 @@ pub async fn create(
             rank: Set(rank),
             tab_hidden: Set(false),
         }
-        .insert(&transaction)
+        .insert(transaction)
         .await?;
     }
     record_work_item(
         facts,
-        &transaction,
+        transaction,
         WorkItemFact {
             project_id: &project_id,
             work_item_id: &id,
@@ -166,10 +189,6 @@ pub async fn create(
         },
     )
     .await?;
-    transaction.commit().await?;
-    if let Some(facts) = facts {
-        facts.wake();
-    }
     Ok(id)
 }
 
@@ -427,8 +446,8 @@ async fn resolve_type(
     Ok(selected)
 }
 
-async fn resolve_create_type(
-    database: &DatabaseConnection,
+async fn resolve_create_type<C: ConnectionTrait>(
+    database: &C,
     project_id: &str,
     id: &str,
 ) -> Result<issue_type::Model, CommandError> {
@@ -446,8 +465,8 @@ async fn resolve_create_type(
     Ok(selected)
 }
 
-async fn resolve_birth_state(
-    database: &DatabaseConnection,
+async fn resolve_birth_state<C: ConnectionTrait>(
+    database: &C,
     project_id: &str,
     selected_type: &issue_type::Model,
     requested: Option<String>,
@@ -495,8 +514,8 @@ async fn resolve_birth_state(
         .map(|row| row.id))
 }
 
-async fn resolve_parent(
-    database: &DatabaseConnection,
+async fn resolve_parent<C: ConnectionTrait>(
+    database: &C,
     project_id: &str,
     parent: Option<String>,
 ) -> Result<(Option<String>, Option<String>), CommandError> {

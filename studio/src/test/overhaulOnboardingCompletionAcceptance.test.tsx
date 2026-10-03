@@ -214,6 +214,7 @@ class DurableOnboardingBoundary {
       workspace_tab_order: [],
       parent_id: MODULE_ID,
       module_id: MODULE_ID,
+      sprint_id: null,
       is_archived: false,
       created_at: CREATED_AT,
       updated_at: CREATED_AT,

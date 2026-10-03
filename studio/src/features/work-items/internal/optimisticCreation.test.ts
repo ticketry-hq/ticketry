@@ -91,6 +91,7 @@ function issue(id: string, rank: string, stateId: string, isArchived = false) {
     workspace_tab_order: [],
     parent_id: membership.moduleId,
     module_id: membership.moduleId,
+    sprint_id: null,
     is_archived: isArchived,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",

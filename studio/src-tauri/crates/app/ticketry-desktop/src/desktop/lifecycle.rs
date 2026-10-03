@@ -89,6 +89,7 @@ pub(crate) fn detach_transient_viewers_for_page_load(application: &tauri::AppHan
 }
 
 fn shutdown_running_services(application: &tauri::AppHandle, state: &DesktopServiceState) {
+    crate::desktop::planner_runtime::stop_planner_service(state);
     // Live document discovery is the first thing to stop: a watcher settling
     // into a store that is about to close would write for a workspace nobody
     // is looking at any more.

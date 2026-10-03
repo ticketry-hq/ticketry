@@ -121,6 +121,9 @@ async fn a_rejected_preparation_leaves_the_live_agent_alone() {
     ticketry_work_management::module_presentation_migration::install(&database)
         .await
         .unwrap();
+    ticketry_work_management::sprint_migration::install(&database)
+        .await
+        .unwrap();
     // The adopted worktrees row predates the pull-request column the entity
     // contract expects.
     database

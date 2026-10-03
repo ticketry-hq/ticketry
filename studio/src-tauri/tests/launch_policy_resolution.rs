@@ -58,7 +58,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
                 updated_at datetime NOT NULL
             );
             CREATE TABLE worktracker_issue (
-                id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
+                sprint_id char(32) NULL, id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
                 type varchar(10) NOT NULL, issue_type_id char(32) NOT NULL,
                 parent_id char(32), module_id char(32), state_id char(32),
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
@@ -131,8 +131,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
             INSERT INTO worktracker_issuetype VALUES
                 ('{TYPE}', '{PROJECT}', 'Implementation', 'task', '', 0, '{STATE}', 17, 0,
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-            INSERT INTO worktracker_issue VALUES
-                ('{MODULE}', '{PROJECT}', 'module', '{TYPE}', NULL, NULL, NULL, 0,
+            INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, workspace_tab_order, created_at, updated_at) VALUES ('{MODULE}', '{PROJECT}', 'module', '{TYPE}', NULL, NULL, NULL, 0,
                  'Module', 1, 0, 'M', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{TASK}', '{PROJECT}', 'task', '{TYPE}', '{MODULE}', '{MODULE}', '{STATE}', 0,
                  'Task', 2, 0, 'N', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

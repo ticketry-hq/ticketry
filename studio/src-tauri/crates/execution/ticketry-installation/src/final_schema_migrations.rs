@@ -14,7 +14,7 @@ use ticketry_settings::{
 use ticketry_work_management::{
     launch_binding_entry_skill_migration, launch_binding_profile_migration,
     launch_binding_stage_skills_migration, module_presentation_migration,
-    project_onboarding_migration, tag_migration, workflow_color_migration,
+    project_onboarding_migration, sprint_migration, tag_migration, workflow_color_migration,
     workflow_handoff_migration, workspace_tab_order_migration,
 };
 
@@ -37,6 +37,7 @@ pub const ORDERED_MIGRATION_IDS: &[&str] = &[
     tag_migration::MIGRATION_ID,
     CODEX_6_SOL_LUNA_MIGRATION_ID,
     CODEX_6_1_SOL_MIGRATION_ID,
+    sprint_migration::MIGRATION_ID,
 ];
 
 pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
@@ -93,7 +94,10 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
         .map_err(|error| step_error("0061", error))?;
     install_codex_6_1_sol(database)
         .await
-        .map_err(|error| step_error("0062", error))
+        .map_err(|error| step_error("0062", error))?;
+    sprint_migration::install(database)
+        .await
+        .map_err(|error| step_error("0063", error))
 }
 
 fn step_error(step: &str, error: DbErr) -> DbErr {

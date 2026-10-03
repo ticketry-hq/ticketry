@@ -52,7 +52,7 @@ async fn prepare_projects(directory: &Path) {
                 onboarding_required bool NOT NULL
             );
             CREATE TABLE worktracker_issue (
-                id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
+                sprint_id char(32) NULL, id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
                 type varchar(10) NOT NULL, issue_type_id char(32) NOT NULL,
                 parent_id char(32), module_id char(32), state_id char(32),
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
@@ -98,8 +98,7 @@ async fn prepare_projects(directory: &Path) {
                  'Authorized', 'AUTH', '', 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
                 ('20000000000000000000000000000000',
                  'Foreign', 'OTHER', '', 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
-            INSERT INTO worktracker_issue VALUES
-                ('30000000000000000000000000000000',
+            INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, workspace_tab_order, created_at, updated_at) VALUES ('30000000000000000000000000000000',
                  '10000000000000000000000000000000', 'task',
                  '40000000000000000000000000000000', NULL, NULL, NULL, 0,
                  'Authorized caller', 1, 0, 'A', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

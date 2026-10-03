@@ -16,7 +16,7 @@ async fn fixture() -> DatabaseConnection {
         .execute_unprepared(&format!(
             r#"
             CREATE TABLE worktracker_issue (
-                id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
+                sprint_id char(32) NULL, id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
                 type text NOT NULL, issue_type_id char(32) NOT NULL,
                 parent_id char(32), module_id char(32), state_id char(32),
                 state_revision bigint NOT NULL, name text NOT NULL,
@@ -30,7 +30,7 @@ async fn fixture() -> DatabaseConnection {
                 module_id char(32) PRIMARY KEY REFERENCES worktracker_issue(id) ON DELETE CASCADE,
                 rank text NOT NULL DEFAULT '', tab_hidden bool NOT NULL DEFAULT 0
             );
-            INSERT INTO worktracker_issue VALUES (
+            INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, workspace_tab_order, created_at, updated_at) VALUES (
                 '{MODULE}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL, NULL,
                 0, 'Module', 1, 0, 'legacy-rank', '', '[]',
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP

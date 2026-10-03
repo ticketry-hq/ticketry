@@ -14,6 +14,12 @@ const SANCTIONED_MUTATIONS = [
   // Work management — restricted model CRUD.
   "create_work_item",
   "update_work_item",
+  "update_sprint_suggestion",
+  "create_sprint_goal",
+  "update_sprint_goal",
+  "delete_sprint_goal",
+  "update_sprint",
+  "worktrackerSprintCreateOne",
   "delete_work_item",
   "create_project",
   "update_project",
@@ -47,14 +53,19 @@ const SANCTIONED_MUTATIONS = [
   "clear_module_link",
   "worktree_create",
   "worktree_commit",
+  "worktree_commit_push",
   "worktree_push",
   "worktree_cleanup",
   "worktree_discard",
+  "worktree_merge",
+  "worktree_merge_abort",
+  "worktree_merge_finish",
   "worktree_pull_request_create",
   "worktree_pull_request_replace",
   "worktree_pull_request_follow_up",
   "worktree_pull_request_merge_prepare",
   "module_checkout_commit",
+  "module_checkout_commit_push",
   "module_checkout_push",
   "module_checkout_pull_request_create",
   // Execution, terminals, and agent runs.
@@ -169,6 +180,8 @@ test.describe("public GraphQL mutation surface", () => {
       "workflow_revision",
     ],
     update_module_presentation: ["module_id", "tab_hidden"],
+    update_sprint_goal: ["id", "text"],
+    update_sprint_suggestion: ["id", "proposed_name", "status"],
   };
 
   test("allowlists every other identity-scoped update input", async ({
@@ -206,7 +219,9 @@ test.describe("public GraphQL mutation surface", () => {
       "issue_type_id",
       "name",
       "parent_id",
+      "sprint_id",
       "state_id",
+      "tag_names",
       "workspace_tab_order",
     ]);
     for (const field of PROTECTED_WORK_ITEM_FIELDS) {

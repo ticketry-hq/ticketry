@@ -38,6 +38,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:desktop": "node scripts/desktop-agent-acceptance.mjs",
+    "test:planner:desktop": "node scripts/desktop-planner-acceptance.mjs",
     "test:e2e:overhaul": "playwright test e2e/overhaul.spec.ts",
     "test:overhaul": "vitest run src/test/overhaul*Acceptance.test.tsx src/test/studioRenameBehaviour.test.tsx",
     "test:watch": "vitest",

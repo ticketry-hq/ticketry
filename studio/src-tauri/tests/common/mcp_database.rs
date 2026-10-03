@@ -34,7 +34,7 @@ pub async fn prepare_command_database(directory: &tempfile::TempDir) {
                 updated_at datetime NOT NULL
             );
             CREATE TABLE worktracker_issue (
-                id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
+                sprint_id char(32) NULL, id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
                 type varchar(10) NOT NULL, issue_type_id char(32) NOT NULL,
                 parent_id char(32), module_id char(32), state_id char(32),
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
@@ -171,8 +171,7 @@ pub async fn prepare_command_database(directory: &tempfile::TempDir) {
                 ('30000000000000000000000000000003', '10000000000000000000000000000000',
                  'Module', 'module', '', 2, NULL, 0, 0,
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-            INSERT INTO worktracker_issue VALUES
-                ('20000000000000000000000000000001', '10000000000000000000000000000000',
+            INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, workspace_tab_order, created_at, updated_at) VALUES ('20000000000000000000000000000001', '10000000000000000000000000000000',
                  'module', '30000000000000000000000000000003', NULL, NULL, NULL, 0,
                  'Module', 0, 0, 'M', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('30000000000000000000000000000000', '10000000000000000000000000000000',
@@ -230,5 +229,8 @@ pub async fn prepare_command_database(directory: &tempfile::TempDir) {
     ticketry_work_management::module_presentation_migration::install(&database)
         .await
         .expect("install final module-presentation shape");
+    ticketry_work_management::sprint_migration::install(&database)
+        .await
+        .expect("install sprint planning shape");
     database.close().await.expect("close MCP command fixture");
 }

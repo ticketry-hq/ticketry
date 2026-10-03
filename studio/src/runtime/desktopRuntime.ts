@@ -1,3 +1,4 @@
+import { parsePlannerEndpoint } from "./plannerEndpoint";
 import type {
   RuntimeStartupConfiguration,
   CrashCollectionOutcome,
@@ -255,6 +256,9 @@ function validateConfiguration(value: unknown): RuntimeStartupConfiguration {
 
   return Object.freeze({
     runtimeInstance: configuration.runtimeInstance as string | undefined,
+    ...(configuration.plannerEndpoint === undefined ? {} : {
+      plannerEndpoint: parsePlannerEndpoint(configuration.plannerEndpoint),
+    }),
     serviceHealth: Object.freeze({
       state: state as RuntimeStartupConfiguration["serviceHealth"]["state"],
       service: serviceHealth.service as string | null,
@@ -392,6 +396,9 @@ export async function createDesktopRuntime({
     retryServices: async () => {
       await invoke<void>("desktop_retry_services");
     },
+    plannerEndpoint: async () => validateConfiguration(
+      await invoke<unknown>("desktop_runtime_configuration"),
+    ).plannerEndpoint ?? null,
     startup: () => startup,
     subscribeServiceHealth: (listener: ServiceHealthListener) => {
       listener(startup.serviceHealth);

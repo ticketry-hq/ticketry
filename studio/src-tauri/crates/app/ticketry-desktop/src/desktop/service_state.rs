@@ -13,6 +13,7 @@ pub const HEALTH_EVENT: &str = "desktop-service-health";
 pub const USER_NOTICE_EVENT: &str = "desktop-user-notice";
 
 pub struct DesktopServiceState {
+    pub planner_runtime: Mutex<Option<ticketry_planner::PlannerService>>,
     pub mcp_runtime: Mutex<Option<ticketry_mcp::McpRuntime>>,
     pub terminal_runtime:
         Mutex<Option<std::sync::Arc<ticketry_terminal::TerminalLifecycleRuntime>>>,
@@ -32,6 +33,7 @@ pub struct DesktopServiceState {
 impl DesktopServiceState {
     pub fn new() -> Self {
         Self {
+            planner_runtime: Mutex::new(None),
             mcp_runtime: Mutex::new(None),
             terminal_runtime: Mutex::new(None),
             hook_spool_runtime: Mutex::new(None),
@@ -90,6 +92,17 @@ impl DesktopServiceState {
             .lock()
             .expect("user notice lock poisoned")
             .clone();
+        configuration.planner_endpoint = if configuration.service_health.state
+            == super::service_health::ServiceHealthState::Ready
+        {
+            self.planner_runtime
+                .lock()
+                .expect("planner runtime lock poisoned")
+                .as_ref()
+                .map(|runtime| runtime.endpoint().clone())
+        } else {
+            None
+        };
         Ok(configuration)
     }
 }

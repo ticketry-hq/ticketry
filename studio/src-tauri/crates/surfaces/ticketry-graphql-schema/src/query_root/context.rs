@@ -64,6 +64,31 @@ pub(super) fn builder_context() -> BuilderContext {
             entities::issue::Column::ParentId,
             entities::issue::Column::ModuleId,
             entities::issue::Column::StateId,
+            entities::issue::Column::SprintId,
+        ],
+    );
+    add_uuid_columns::<entities::sprint::Entity>(
+        &mut context,
+        [
+            entities::sprint::Column::Id,
+            entities::sprint::Column::ProjectId,
+        ],
+    );
+    add_uuid_columns::<entities::sprint_goal::Entity>(
+        &mut context,
+        [
+            entities::sprint_goal::Column::Id,
+            entities::sprint_goal::Column::SprintId,
+        ],
+    );
+    add_uuid_columns::<entities::sprint_suggestion::Entity>(
+        &mut context,
+        [
+            entities::sprint_suggestion::Column::Id,
+            entities::sprint_suggestion::Column::SprintId,
+            entities::sprint_suggestion::Column::GoalId,
+            entities::sprint_suggestion::Column::IssueId,
+            entities::sprint_suggestion::Column::ProposedEpicId,
         ],
     );
     add_uuid_columns::<entities::module_presentation::Entity>(

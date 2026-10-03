@@ -7,6 +7,7 @@ mod archive;
 mod blockers;
 mod details;
 mod reparent;
+mod sprint;
 mod tab_order;
 mod tags;
 mod transition;
@@ -37,6 +38,7 @@ impl UpdateWorkItemMutation {
         issue_type_id: Option<String>,
         state_id: GraphqlPatchStringNullAsUnset,
         parent_id: GraphqlPatchString,
+        sprint_id: GraphqlPatchString,
         blocked_by_ids: GraphqlPatchStringListNullAsUnset,
         tag_names: GraphqlPatchStringListNullAsUnset,
         is_archived: GraphqlPatchBoolNullAsUnset,
@@ -50,6 +52,7 @@ impl UpdateWorkItemMutation {
             issue_type_id,
             state_id: state_id.0,
             parent_id: parent_id.0,
+            sprint_id: sprint_id.0,
             blocked_by_ids: blocked_by_ids.0.map(|ids| ids.0),
             tag_names: tag_names.0.map(|names| names.0),
             is_archived: is_archived.0,
@@ -75,6 +78,7 @@ impl UpdateWorkItemMutation {
             UpdatePath::Reparent => {
                 reparent::apply(database, input.id, input.parent_id, facts).await
             }
+            UpdatePath::Sprint => sprint::apply(database, input.id, input.sprint_id, facts).await,
             UpdatePath::Blockers => blockers::apply(database, input.id, input.blocked_by_ids).await,
             UpdatePath::Tags => tags::apply(database, input.id, input.tag_names, facts).await,
             UpdatePath::Archive => {
@@ -96,6 +100,7 @@ struct UpdateInput {
     issue_type_id: Option<String>,
     state_id: PatchValue<String>,
     parent_id: PatchValue<String>,
+    sprint_id: PatchValue<String>,
     blocked_by_ids: PatchValue<Vec<String>>,
     tag_names: PatchValue<Vec<String>>,
     is_archived: PatchValue<bool>,
@@ -107,6 +112,7 @@ enum UpdatePath {
     Details,
     Transition,
     Reparent,
+    Sprint,
     Blockers,
     Tags,
     Archive,
@@ -119,6 +125,7 @@ impl UpdateInput {
             self.name.is_some() || self.description.is_some() || self.issue_type_id.is_some();
         let domain_patch_count = usize::from(!self.state_id.is_unset())
             + usize::from(!self.parent_id.is_unset())
+            + usize::from(!self.sprint_id.is_unset())
             + usize::from(!self.blocked_by_ids.is_unset())
             + usize::from(!self.tag_names.is_unset())
             + usize::from(!self.is_archived.is_unset())
@@ -133,6 +140,8 @@ impl UpdateInput {
             Ok(UpdatePath::Transition)
         } else if !self.parent_id.is_unset() {
             Ok(UpdatePath::Reparent)
+        } else if !self.sprint_id.is_unset() {
+            Ok(UpdatePath::Sprint)
         } else if !self.blocked_by_ids.is_unset() {
             Ok(UpdatePath::Blockers)
         } else if !self.tag_names.is_unset() {
@@ -164,6 +173,7 @@ mod tests {
             issue_type_id: None,
             state_id: PatchValue::Unset,
             parent_id: PatchValue::Unset,
+            sprint_id: PatchValue::Unset,
             blocked_by_ids: PatchValue::Unset,
             tag_names: PatchValue::Unset,
             is_archived: PatchValue::Unset,
@@ -200,6 +210,28 @@ mod tests {
         let mut tab_order = empty_input();
         tab_order.workspace_tab_order = PatchValue::Value(serde_json::json!([]));
         assert_eq!(tab_order.path().unwrap(), UpdatePath::TabOrder);
+    }
+
+    #[test]
+    fn selects_sprint_update_for_membership_and_backlog() {
+        for patch in [PatchValue::Null, PatchValue::Value("sprint".to_owned())] {
+            let mut input = empty_input();
+            input.sprint_id = patch;
+            assert_eq!(input.path().unwrap(), UpdatePath::Sprint);
+        }
+    }
+
+    #[test]
+    fn rejects_sprint_mixed_with_other_update_domains() {
+        let mut state_and_sprint = empty_input();
+        state_and_sprint.sprint_id = PatchValue::Value("sprint".to_owned());
+        state_and_sprint.state_id = PatchValue::Value("state".to_owned());
+        assert!(state_and_sprint.path().is_err());
+
+        let mut details_and_sprint = empty_input();
+        details_and_sprint.sprint_id = PatchValue::Null;
+        details_and_sprint.name = Some("Renamed".to_owned());
+        assert!(details_and_sprint.path().is_err());
     }
 
     #[test]

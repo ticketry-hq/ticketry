@@ -28,6 +28,7 @@ function issue(
     workspace_tab_order: [],
     parent_id: "module",
     module_id: "module",
+    sprint_id: null,
     is_archived: false,
     created_at: "2026-08-31T00:00:00",
     updated_at: "2026-08-31T00:00:00",

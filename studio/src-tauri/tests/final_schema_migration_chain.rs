@@ -298,6 +298,29 @@ async fn fresh_production_entry_reaches_the_final_leaf() {
     install_final_schema_migrations(database)
         .await
         .expect("repeat the production chain");
+    assert_eq!(
+        ticketry_installation::ORDERED_MIGRATION_IDS.last(),
+        Some(&"0063_sprints")
+    );
+    for table in [
+        "worktracker_sprint",
+        "worktracker_sprint_goal",
+        "worktracker_sprint_suggestion",
+    ] {
+        assert!(table_exists(database, table).await, "missing {table}");
+    }
+    let leaf = database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT migration_id FROM ticketry_sprint_migration".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        leaf.try_get::<String>("", "migration_id").unwrap(),
+        "0063_sprints"
+    );
     assert!(!table_exists(database, "worktracker_workspace").await);
     assert!(table_exists(database, "worktracker_modulepresentation").await);
     assert!(table_exists(database, "module_links").await);
@@ -408,5 +431,66 @@ async fn every_step_rolls_back_an_injected_failure_and_then_resumes() {
             .await
             .unwrap_or_else(|error| panic!("step {step} did not resume: {error}"));
         assert_final(&database).await;
+    }
+}
+
+#[tokio::test]
+async fn sprint_schema_keeps_existing_issues_in_backlog_and_enforces_planning_indexes() {
+    let (_directory, database) = fixture().await;
+    install_final_schema_migrations(&database).await.unwrap();
+    let assigned = database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT COUNT(*) AS count FROM worktracker_issue WHERE sprint_id IS NOT NULL"
+                .to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(assigned.try_get::<i64>("", "count").unwrap(), 0);
+    for (id, status) in [("s1", "active"), ("s2", "planned")] {
+        database
+            .execute_unprepared(&format!(
+                "INSERT INTO worktracker_sprint
+            (id, project_id, name, status, created_at, updated_at)
+            VALUES ('{id}', '{}', 'Sprint', '{status}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                "00000000000000000000000000001001"
+            ))
+            .await
+            .unwrap();
+    }
+    assert!(database
+        .execute_unprepared("UPDATE worktracker_sprint SET status='active' WHERE id='s2'")
+        .await
+        .is_err());
+    database
+        .execute_unprepared(
+            "INSERT INTO worktracker_sprint_goal (id,sprint_id,position,text,created_at,updated_at)
+        VALUES ('g1','s1',1,'Ship',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
+        )
+        .await
+        .unwrap();
+    assert!(database
+        .execute_unprepared(
+            "INSERT INTO worktracker_sprint_goal (id,sprint_id,position,text,created_at,updated_at)
+        VALUES ('g2','s1',1,'Duplicate',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"
+        )
+        .await
+        .is_err());
+    let columns = database
+        .query_all_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "PRAGMA table_info(worktracker_sprint)".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| row.try_get::<String>("", "name").unwrap())
+        .collect::<Vec<_>>();
+    for excluded in ["goal", "start_date", "end_date"] {
+        assert!(!columns.iter().any(|name| name == excluded));
+    }
+    for required in ["suggestion_run_id", "goals_revised_at"] {
+        assert!(columns.iter().any(|name| name == required));
     }
 }

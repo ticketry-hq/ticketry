@@ -1,3 +1,4 @@
+import type { PlannerEndpoint } from "./plannerEndpoint";
 import type { UserNotice } from "./userNotice";
 import type { TypedDocumentNode } from "../graphql-foundation/typedDocument";
 import type { CreateGraphQlTransportProxy } from "./graphQlTransport";
@@ -49,6 +50,7 @@ export type SettingsRoutes<TResult> = WorkTrackerReadRoutes<TResult>;
 
 export interface RuntimeStartupConfiguration {
   readonly runtimeInstance?: string;
+  readonly plannerEndpoint?: PlannerEndpoint | null;
   readonly serviceHealth: ServiceHealth;
   readonly initialNotices: readonly UserNotice[];
 }
@@ -180,6 +182,8 @@ export interface StudioRuntime {
   ): Promise<DirectoryTrustResult>;
   pickFolder(): Promise<string | null>;
   retryServices(): Promise<void>;
+  /** Re-read the current listener after background startup or a service failure. */
+  plannerEndpoint?(): Promise<PlannerEndpoint | null>;
   startup(): RuntimeStartupConfiguration;
   subscribeServiceHealth(listener: ServiceHealthListener): () => void;
   subscribeUserNotices(listener: UserNoticeListener): () => void;

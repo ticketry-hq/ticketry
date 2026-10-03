@@ -6,6 +6,7 @@ use std::env;
 pub const SMOKE_EXIT_AFTER_STARTUP: &str = "MUXED_DESKTOP_SMOKE_EXIT_AFTER_STARTUP";
 pub const ACCEPTANCE_EXIT_AFTER_STARTUP: &str = "MUXED_DESKTOP_ACCEPTANCE_EXIT_AFTER_STARTUP";
 pub const DEVELOPMENT_LOG_PATH_ENV: &str = "MUXED_DEVELOPMENT_LOG_PATH";
+pub const PLANNER_PORT_ENV: &str = "TICKETRY_PLANNER_PORT";
 pub const STARTUP_TRACE_ID_ENV: &str = "MUXED_STARTUP_TRACE_ID";
 #[cfg(debug_assertions)]
 pub const DEVELOPMENT_FORCE_PANIC_ABORT_ENV: &str = "MUXED_DEVELOPMENT_FORCE_PANIC_ABORT";
@@ -44,5 +45,15 @@ mod tests {
                 || smoke_startup_exit_requested()
                 || env::var(ACCEPTANCE_EXIT_AFTER_STARTUP).as_deref() == Ok("1")
         );
+    }
+}
+
+pub(crate) fn planner_port() -> Result<u16, String> {
+    match env::var(PLANNER_PORT_ENV) {
+        Ok(port) => port
+            .parse::<u16>()
+            .map_err(|_| "TICKETRY_PLANNER_PORT must be a port between 0 and 65535".to_owned()),
+        Err(env::VarError::NotPresent) => Ok(0),
+        Err(_) => Err("TICKETRY_PLANNER_PORT must contain a valid port".to_owned()),
     }
 }

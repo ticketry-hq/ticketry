@@ -11,6 +11,7 @@ pub struct RuntimeStartupConfiguration {
     pub runtime_instance: String,
     pub service_health: ServiceHealth,
     pub initial_notices: Vec<UserNotice>,
+    pub planner_endpoint: Option<ticketry_planner::PlannerEndpoint>,
 }
 
 pub fn development_runtime_configuration() -> Result<RuntimeStartupConfiguration, String> {
@@ -22,6 +23,7 @@ pub fn rust_runtime_configuration() -> RuntimeStartupConfiguration {
         runtime_instance: ticketry_diagnostics::runtime_instance().to_owned(),
         service_health: ServiceHealth::ready(),
         initial_notices: Vec::new(),
+        planner_endpoint: None,
     }
 }
 
@@ -30,6 +32,7 @@ pub fn failed_runtime_configuration(health: ServiceHealth) -> RuntimeStartupConf
         runtime_instance: ticketry_diagnostics::runtime_instance().to_owned(),
         service_health: health,
         initial_notices: Vec::new(),
+        planner_endpoint: None,
     }
 }
 

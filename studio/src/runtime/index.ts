@@ -1,6 +1,8 @@
 import { createBrowserRuntime } from "./browserRuntime";
 import type { RuntimeStartupConfiguration, StudioRuntime } from "./contract";
 
+export type { PlannerEndpoint } from "./plannerEndpoint";
+
 export type {
   AppUpdateCheckErrorCode,
   AppUpdateCheckResult,

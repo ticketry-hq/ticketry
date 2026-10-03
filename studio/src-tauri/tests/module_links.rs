@@ -61,7 +61,7 @@ async fn installation() -> (tempfile::TempDir, DatabaseConnection) {
                 updated_at datetime NOT NULL
             );
             CREATE TABLE worktracker_issue (
-                id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
+                sprint_id char(32) NULL, id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
                 type varchar(10) NOT NULL, issue_type_id char(32) NOT NULL,
                 parent_id char(32), module_id char(32), state_id char(32),
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
@@ -78,8 +78,7 @@ async fn installation() -> (tempfile::TempDir, DatabaseConnection) {
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{TASK_TYPE}', '{PROJECT}', 'Task', 'task', '', 1, NULL, 1, 0,
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-            INSERT INTO worktracker_issue VALUES
-                ('{STUDIO}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL, NULL,
+            INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, workspace_tab_order, created_at, updated_at) VALUES ('{STUDIO}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL, NULL,
                  1, 'Studio', 1, 0, 'a', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
                 ('{SERVICE}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL, NULL,
                  1, 'Service', 2, 0, 'b', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),

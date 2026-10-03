@@ -142,3 +142,4 @@ export {
   CreateModuleShellDocument,
   ModuleShellSessionsDocument,
 } from "./generated/terminalSessions.documents";
+export { TEMP_TASK_ID } from "../types";

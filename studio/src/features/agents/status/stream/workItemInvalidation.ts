@@ -14,6 +14,7 @@
  */
 import { compactWorktrackerId } from "../../../../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../../../../shared/apollo/client";
+import { convergePlanningCollections } from "../../../planning-graph";
 import { loadModules } from "../../../projects";
 import {
   GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
@@ -40,6 +41,7 @@ export function createWorkItemInvalidator(
   const pending = new Set<string>();
   const removed = new Set<string>();
   const moduleProjects = new Set<string>();
+  const planningProjects = new Set<string>();
   const taskModules = new Set<string>();
   let unknownTaskMembershipChanged = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -52,10 +54,12 @@ export function createWorkItemInvalidator(
     const ids = [...pending];
     const evicted = [...removed];
     const projects = [...moduleProjects];
+    const planning = [...planningProjects];
     const modules = [...taskModules];
     pending.clear();
     removed.clear();
     moduleProjects.clear();
+    planningProjects.clear();
     taskModules.clear();
     const refreshUnknownTaskMembership = unknownTaskMembershipChanged;
     unknownTaskMembershipChanged = false;
@@ -74,6 +78,9 @@ export function createWorkItemInvalidator(
         variables: { id: compactWorktrackerId(id) },
         fetchPolicy: "network-only",
       }).catch(() => {});
+    }
+    if (planning.length) {
+      void convergePlanningCollections(client, planning).catch(() => {});
     }
     for (const projectId of projects) {
       void loadModules(projectId, { queryDeduplication: false }).catch(() => {});
@@ -114,6 +121,10 @@ export function createWorkItemInvalidator(
       } else if (fact.itemKind !== "module" && !convergedLocally) {
         pending.add(fact.workItemId);
       }
+      // Local writes adopt canonical rows, not the filtered planning collections.
+      if (fact.projectId && (fact.itemKind === "module" || fact.membershipChanged || fact.removed)) {
+        planningProjects.add(fact.projectId);
+      }
       if (fact.itemKind === "module" && fact.projectId) {
         moduleProjects.add(fact.projectId);
       } else if (!convergedLocally && (fact.membershipChanged || fact.removed)) {
@@ -128,6 +139,7 @@ export function createWorkItemInvalidator(
       pending.clear();
       removed.clear();
       moduleProjects.clear();
+      planningProjects.clear();
       taskModules.clear();
       unknownTaskMembershipChanged = false;
       if (timer) {

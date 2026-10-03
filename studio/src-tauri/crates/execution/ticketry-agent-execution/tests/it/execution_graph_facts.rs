@@ -286,7 +286,7 @@ async fn fixture() -> DatabaseConnection {
                 is_protected BOOLEAN NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL
             );
             CREATE TABLE worktracker_issue (
-                id TEXT PRIMARY KEY, project_id TEXT NOT NULL, type TEXT NOT NULL,
+                sprint_id char(32) NULL, id TEXT PRIMARY KEY, project_id TEXT NOT NULL, type TEXT NOT NULL,
                 issue_type_id TEXT NOT NULL, parent_id TEXT, module_id TEXT, state_id TEXT,
                 state_revision INTEGER NOT NULL, name TEXT NOT NULL, sequence_id INTEGER NOT NULL,
                 is_archived BOOLEAN NOT NULL, rank TEXT NOT NULL, description TEXT NOT NULL,
@@ -482,6 +482,7 @@ async fn insert_issue(
     is_archived: bool,
 ) {
     issue::ActiveModel {
+        sprint_id: sea_orm::ActiveValue::NotSet,
         id: Set(id.to_owned()),
         project_id: Set(PROJECT.to_owned()),
         r#type: Set(kind.to_owned()),

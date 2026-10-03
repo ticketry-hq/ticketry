@@ -91,6 +91,7 @@ export function seedModuleOpenFixture(moduleId: string, items: FixtureWorkItem[]
           workspace_tab_order: [],
           parent_id: item.parent_id ? compactWorktrackerId(item.parent_id) : null,
           module_id: compactWorktrackerId(moduleId),
+          sprint_id: null,
           is_archived: item.is_archived,
           created_at: item.created_at,
           updated_at: item.updated_at,

@@ -7252,6 +7252,7 @@ dependencies = [
  "ticketry-graphql-schema",
  "ticketry-launch",
  "ticketry-mcp",
+ "ticketry-planner",
  "ticketry-provider",
  "ticketry-runs",
  "ticketry-settings",
@@ -7448,6 +7449,26 @@ dependencies = [
  "ticketry-work-management",
  "tokio",
  "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "ticketry-planner"
+version = "0.0.0"
+dependencies = [
+ "async-graphql",
+ "axum",
+ "reqwest",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "tauri-graphql",
+ "tempfile",
+ "ticketry-data-directory",
+ "ticketry-entities",
+ "ticketry-graphql-schema",
+ "ticketry-settings",
+ "tokio",
  "uuid",
 ]
 

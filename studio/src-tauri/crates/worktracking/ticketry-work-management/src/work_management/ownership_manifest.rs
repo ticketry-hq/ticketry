@@ -272,6 +272,47 @@ const SHARED_TABLES: &[(&str, &[&str])] = &[
     ),
 ];
 
+// Sprint planning ownership applies after the 0063 ledger is installed.
+pub const SPRINT: (&str, &[&str]) = (
+    "worktracker_sprint",
+    &[
+        "id",
+        "project_id",
+        "name",
+        "status",
+        "suggestion_run_id",
+        "goals_revised_at",
+        "created_at",
+        "updated_at",
+    ],
+);
+pub const SPRINT_GOAL: (&str, &[&str]) = (
+    "worktracker_sprint_goal",
+    &[
+        "id",
+        "sprint_id",
+        "position",
+        "text",
+        "created_at",
+        "updated_at",
+    ],
+);
+pub const SPRINT_SUGGESTION: (&str, &[&str]) = (
+    "worktracker_sprint_suggestion",
+    &[
+        "id",
+        "sprint_id",
+        "goal_id",
+        "issue_id",
+        "proposed_name",
+        "proposed_epic_id",
+        "reason",
+        "status",
+        "run_id",
+        "created_at",
+    ],
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;

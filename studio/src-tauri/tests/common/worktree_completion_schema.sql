@@ -17,7 +17,7 @@ CREATE TABLE worktracker_issuetype (
     created_at datetime NOT NULL, updated_at datetime NOT NULL
 );
 CREATE TABLE worktracker_issue (
-    id char(32) PRIMARY KEY, project_id char(32) NOT NULL, type varchar(10) NOT NULL,
+    sprint_id char(32) NULL, id char(32) PRIMARY KEY, project_id char(32) NOT NULL, type varchar(10) NOT NULL,
     issue_type_id char(32) NOT NULL, parent_id char(32), module_id char(32),
     state_id char(32), state_revision bigint NOT NULL, name varchar(512) NOT NULL,
     sequence_id integer NOT NULL, is_archived bool NOT NULL, rank varchar(64) NOT NULL,
@@ -64,8 +64,7 @@ INSERT INTO worktracker_issuetype VALUES
      CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('$MODULE_TYPE', '$PROJECT', 'Module', 'module', '', 1, NULL, 1, 0,
      CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-INSERT INTO worktracker_issue VALUES
-    ('$MODULE', '$PROJECT', 'module', '$MODULE_TYPE', NULL, NULL, '$BACKLOG', 1,
+INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, workspace_tab_order, created_at, updated_at) VALUES ('$MODULE', '$PROJECT', 'module', '$MODULE_TYPE', NULL, NULL, '$BACKLOG', 1,
      'Ticketry', 880, 0, 'y', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('$WORK_ITEM', '$PROJECT', 'task', '$TASK_TYPE', '$MODULE', '$MODULE', '$BACKLOG', 1,
      'Parent story', 881, 0, 'z', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

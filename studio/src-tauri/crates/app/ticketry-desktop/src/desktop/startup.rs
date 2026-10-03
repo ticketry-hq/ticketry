@@ -169,6 +169,7 @@ fn start_services(
         state.publish(application, health);
     } else if owns_data_directory {
         if let Err(message) = launch_rust_runtime(application, graphql_api) {
+            crate::desktop::planner_runtime::stop_planner_service(&state);
             eprintln!("Ticketry desktop services failed to initialize: {message}");
             if automated_startup_exit_requested() {
                 return Err(message.into());

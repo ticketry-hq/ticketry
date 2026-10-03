@@ -6,13 +6,19 @@ use super::commands;
 
 pub fn apply_generated_input_policy(context: &mut seaography::BuilderContext) {
     super::issue_type::apply_generated_input_policy(context);
+    super::sprint::apply_generated_input_policy(context);
+    super::sprint_goal::apply_generated_input_policy(context);
+    super::sprint_suggestion::apply_generated_input_policy(context);
 }
 
 pub fn register_model_mutations(builder: seaography::Builder) -> seaography::Builder {
     let builder = super::issue_type::register_generated_mutations(builder);
     let builder = super::module_presentation::register_mutations(builder);
     let builder = super::project::register_mutations(builder);
-    super::state::register_mutations(builder)
+    let builder = super::state::register_mutations(builder);
+    let builder = super::sprint::register_mutations(builder);
+    let builder = super::sprint_goal::register_mutations(builder);
+    super::sprint_suggestion::register_mutations(builder)
 }
 
 pub use patch_input::{

@@ -24,7 +24,7 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             onboarding_required bool NOT NULL
         );
         CREATE TABLE worktracker_issue (
-            id char(32) PRIMARY KEY, project_id char(32) NOT NULL, type varchar(10) NOT NULL,
+            sprint_id char(32) NULL, id char(32) PRIMARY KEY, project_id char(32) NOT NULL, type varchar(10) NOT NULL,
             issue_type_id char(32) NOT NULL, parent_id char(32), module_id char(32), state_id char(32),
             state_revision bigint NOT NULL, name varchar(512) NOT NULL, sequence_id integer NOT NULL,
             is_archived bool NOT NULL, rank varchar(64) NOT NULL, description text NOT NULL,
@@ -80,8 +80,7 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
         INSERT INTO worktracker_project VALUES
             ('10000000000000000000000000000000',
              'Memory Lane', 'MEM', '', 20, 0, 0, '2026-08-12 00:00:00', '2026-08-12 00:00:00', 0);
-        INSERT INTO worktracker_issue VALUES
-            ('20000000000000000000000000000001','10000000000000000000000000000000','module','30000000000000000000000000000000',NULL,NULL,NULL,0,'Older',1,0,'z','','[]','2026-08-12 00:00:01','2026-08-12 00:00:01'),
+        INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, workspace_tab_order, created_at, updated_at) VALUES ('20000000000000000000000000000001','10000000000000000000000000000000','module','30000000000000000000000000000000',NULL,NULL,NULL,0,'Older',1,0,'z','','[]','2026-08-12 00:00:01','2026-08-12 00:00:01'),
             ('20000000000000000000000000000002','10000000000000000000000000000000','module','30000000000000000000000000000000',NULL,NULL,NULL,0,'Newer',2,0,'A','','[]','2026-08-12 00:00:02','2026-08-12 00:00:02'),
             ('20000000000000000000000000000003','10000000000000000000000000000000','module','30000000000000000000000000000000',NULL,NULL,NULL,0,'Archived',3,1,'B','','[]','2026-08-12 00:00:03','2026-08-12 00:00:03'),
             ('40000000000000000000000000000001','10000000000000000000000000000000','task','30000000000000000000000000000001','20000000000000000000000000000002','20000000000000000000000000000002',NULL,4,'Root',10,0,'V','root','[]','2026-08-12 00:00:10','2026-08-12 00:00:10'),

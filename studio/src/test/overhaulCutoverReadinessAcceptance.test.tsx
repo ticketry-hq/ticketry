@@ -92,6 +92,7 @@ describe("cutover readiness", () => {
       ["PostflightFailed", "Ticketry could not verify the updated installation"],
       ["restore the verified recovery snapshot", "This installation needs recovery"],
       ["local service unavailable", "Ticketry services could not start"],
+      ["Ticketry planner could not bind 127.0.0.1:43210: address already in use", "Ticketry services could not start"],
     ] as const;
 
     for (const [message, heading] of cases) {

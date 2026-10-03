@@ -177,7 +177,7 @@ mod tests {
                     updated_at TEXT NOT NULL
                 );
                 CREATE TABLE worktracker_issue (
-                    id TEXT PRIMARY KEY,
+                    sprint_id char(32) NULL, id TEXT PRIMARY KEY,
                     project_id TEXT NOT NULL,
                     type TEXT NOT NULL,
                     issue_type_id TEXT NOT NULL,
@@ -219,8 +219,7 @@ mod tests {
                     ('22000000000000000000000000000000', '20000000000000000000000000000000',
                      'Story', 'task', '', 0, NULL, 0, 0,
                      '2026-09-21 00:00:00', '2026-09-21 00:00:00');
-                INSERT INTO worktracker_issue VALUES
-                    ('11111111111111111111111111111111', '10000000000000000000000000000000',
+                INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, workspace_tab_order, created_at, updated_at) VALUES ('11111111111111111111111111111111', '10000000000000000000000000000000',
                      'task', '11000000000000000000000000000000', NULL, NULL, NULL, 0,
                      'First', 1, 0, 'a', '', '[]',
                      '2026-09-21 00:00:00', '2026-09-21 00:00:00'),

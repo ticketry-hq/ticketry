@@ -22,6 +22,8 @@ pub struct Model {
     pub issues: HasMany<super::issue::Entity>,
     #[sea_orm(has_many)]
     pub labels: HasMany<super::label::Entity>,
+    #[sea_orm(has_many, relation_enum = "Sprints")]
+    pub sprints: HasMany<super::sprint::Entity>,
 }
 
 impl ActiveModelBehavior for ActiveModel {}

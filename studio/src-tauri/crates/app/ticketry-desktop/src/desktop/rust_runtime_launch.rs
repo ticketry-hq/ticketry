@@ -35,6 +35,8 @@ pub fn launch_rust_runtime(
     let launch_runtime = application.state::<DesktopLaunchRuntime>();
     let composed = launch_runtime.composed_runtime()?.clone();
     let database = composed.commands().clone();
+    crate::desktop::planner_runtime::start_planner_service(application, graphql_api)?;
+    startup_trace.record("planner-listener-started");
     let spool_directory = ticketry_runs::ensure_hook_spool_directory(&data_directory)?;
 
     let terminal_launch = ticketry_terminal::TerminalLaunchService::new(

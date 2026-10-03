@@ -22,6 +22,7 @@ function issue(order: readonly WorkspaceTabIdentity[]) {
     workspace_tab_order: order,
     parent_id: null,
     module_id: "33333333333333333333333333333333",
+    sprint_id: null,
     is_archived: false,
     created_at: "2026-08-29T00:00:00Z",
     updated_at: "2026-08-29T00:00:00Z",

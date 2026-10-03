@@ -136,8 +136,8 @@ fn library_roots(manifest_dir: &Path) -> Vec<(String, PathBuf)> {
     roots.sort_by(|left, right| left.0.cmp(&right.0));
     assert_eq!(
         roots.len(),
-        21,
-        "public API audit must scan the root and 20 crates"
+        22,
+        "public API audit must scan the root and 21 crates"
     );
     roots
 }

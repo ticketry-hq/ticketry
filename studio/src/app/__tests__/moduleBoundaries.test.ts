@@ -7,6 +7,8 @@ const PRODUCT_ROOTS = [
   "features/agents",
   "features/studio",
   "features/projects",
+  "features/sprints",
+  "features/planning-graph",
   "features/settings",
   "features/work-items",
   "features/workflows",
@@ -50,6 +52,10 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/studio/modals/StatusUpdate",
   "state/clientStore",
   "features/projects",
+  "features/sprints",
+  "features/sprints/index",
+  "features/planning-graph",
+  "features/planning-graph/index",
   "features/settings",
   "features/settings/changeLedger",
   "features/settings/generated/providerCatalog.documents",
@@ -189,6 +195,11 @@ describe("module boundaries", () => {
 
   it("cross-product imports use an explicit public entrypoint", () => {
     const violations: string[] = [];
+    const sprintAgentEntrypoints = new Set([
+      "features/agents/api/agentApi",
+      "features/agents/status",
+      "features/agents/terminal",
+    ]);
     for (const file of walk(SRC)) {
       const importer = relative(SRC, file).replace(/\\/g, "/");
       if (importer.startsWith("test/") || importer.includes("/__tests__/") || importer.includes(".test.")) continue;
@@ -199,7 +210,10 @@ describe("module boundaries", () => {
           .replace(/\.(?:ts|tsx)$/, "");
         const targetRoot = productRoot(target);
         if (!targetRoot || targetRoot === importerRoot) continue;
-        if (!PUBLIC_ENTRYPOINTS.has(target)) {
+        if (importerRoot === "features/sprints" && targetRoot === "features/agents"
+          && !sprintAgentEntrypoints.has(target)) {
+          violations.push(`${importer} imports unapproved agent entrypoint ${target}`);
+        } else if (!PUBLIC_ENTRYPOINTS.has(target)) {
           violations.push(`${importer} imports private module ${target}`);
         }
       }

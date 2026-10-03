@@ -1,0 +1,17 @@
+mutation CreateSprint($data: WorktrackerSprintInsertInput!) {
+  worktrackerSprintCreateOne(data: $data) {
+    id
+    name
+    status
+    createdAt
+  }
+}
+
+mutation UpdateSprint($id: String!, $status: String!, $carryoverSprintId: String) {
+  update_sprint(id: $id, status: $status, carryover_sprint_id: $carryoverSprintId) {
+    id
+    name
+    status
+    createdAt
+  }
+}

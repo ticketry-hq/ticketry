@@ -417,6 +417,7 @@ async fn effective_owned_tables(
     let workflow_handoff_installed =
         table_exists(database, super::workflow_handoff_migration::LEDGER_TABLE).await?;
     let tags_installed = table_exists(database, super::tag_migration::LEDGER_TABLE).await?;
+    let sprints_installed = table_exists(database, super::sprint_migration::LEDGER_TABLE).await?;
     let mut tables = owned_tables(generation)
         .into_iter()
         .map(|(table, columns)| {
@@ -436,6 +437,9 @@ async fn effective_owned_tables(
             if table == "worktracker_issuetypetransition" && workflow_handoff_installed {
                 columns.push("handoff");
             }
+            if table == "worktracker_issue" && sprints_installed {
+                columns.push("sprint_id");
+            }
             (table, columns)
         })
         .collect::<Vec<_>>();
@@ -443,6 +447,15 @@ async fn effective_owned_tables(
         for (table, columns) in [
             super::ownership_manifest::LABEL,
             super::ownership_manifest::ISSUE_LABEL,
+        ] {
+            tables.push((table, columns.to_vec()));
+        }
+    }
+    if sprints_installed {
+        for (table, columns) in [
+            super::ownership_manifest::SPRINT,
+            super::ownership_manifest::SPRINT_GOAL,
+            super::ownership_manifest::SPRINT_SUGGESTION,
         ] {
             tables.push((table, columns.to_vec()));
         }

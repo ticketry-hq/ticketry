@@ -11,6 +11,8 @@ mod identifiers;
 pub mod reorder;
 mod review_findings;
 pub mod reviewed_defaults;
+pub(crate) mod sprints;
+pub(crate) mod sprint_suggestions;
 pub mod state_configuration;
 pub mod status_facts;
 pub mod tags;

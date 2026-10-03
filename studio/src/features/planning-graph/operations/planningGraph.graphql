@@ -1,0 +1,94 @@
+# Project-wide epics, stories, sprint membership, states and creation types.
+query PlanningGraph($projectId: String!) {
+  project: worktrackerProject(filters: { id: { eq: $projectId } }) {
+    nodes {
+      id
+      name
+      slug
+    }
+  }
+  states: worktrackerState(
+    filters: { projectId: { eq: $projectId } }
+    orderBy: { sortOrder: ASC }
+  ) {
+    nodes {
+      id
+      name
+      group
+      color
+      sortOrder
+    }
+  }
+  issueTypes: worktrackerIssuetype(
+    filters: { projectId: { eq: $projectId } }
+    orderBy: { sortOrder: ASC }
+  ) {
+    nodes {
+      id
+      name
+      level
+    }
+  }
+  sprints: worktrackerSprint(
+    filters: { projectId: { eq: $projectId } }
+    orderBy: { createdAt: ASC }
+  ) {
+    nodes {
+      id
+      name
+      status
+      createdAt
+    }
+  }
+  modules: worktrackerIssue(
+    filters: {
+      projectId: { eq: $projectId }
+      type: { eq: "module" }
+      isArchived: { eq: false }
+    }
+    orderBy: { sequenceId: ASC }
+  ) {
+    nodes {
+      id
+      name
+      sequenceId
+      presentation {
+        nodes {
+          moduleId
+          rank
+          tabHidden
+        }
+      }
+    }
+  }
+  workItems: worktrackerIssue(
+    filters: {
+      projectId: { eq: $projectId }
+      type: { eq: "task" }
+      isArchived: { eq: false }
+    }
+    orderBy: { rank: ASC }
+  ) {
+    nodes {
+      ...PlanningGraphWorkItem
+    }
+  }
+}
+
+# Keep the complete planning row behind the shared issue revision guard.
+fragment PlanningGraphWorkItem on WorktrackerIssue {
+  id
+  name
+  sequenceId
+  rank
+  parentId
+  moduleId
+  stateId
+  stateRevision
+  sprintId
+  updatedAt
+  issueType {
+    id
+    name
+  }
+}

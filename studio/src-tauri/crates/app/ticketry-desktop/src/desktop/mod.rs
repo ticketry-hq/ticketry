@@ -17,6 +17,7 @@ pub(crate) mod launch_runtime;
 pub(crate) mod lifecycle;
 pub(crate) mod mcp_runtime;
 pub(crate) mod packaged_binaries;
+pub(crate) mod planner_runtime;
 pub(crate) mod readiness_publication;
 pub(crate) mod run;
 pub(crate) mod runs_handoff;

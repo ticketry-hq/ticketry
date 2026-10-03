@@ -74,7 +74,7 @@ async fn fixture() -> Fixture {
             PRIMARY KEY (id), CONSTRAINT uq_design_doc_path UNIQUE (root_dir, rel_path)
         );
         CREATE TABLE worktracker_issue (
-            id TEXT PRIMARY KEY, project_id TEXT NOT NULL, type TEXT NOT NULL,
+            sprint_id char(32) NULL, id TEXT PRIMARY KEY, project_id TEXT NOT NULL, type TEXT NOT NULL,
             issue_type_id TEXT NOT NULL DEFAULT '', parent_id TEXT, module_id TEXT,
             state_id TEXT, state_revision INTEGER NOT NULL DEFAULT 0,
             name TEXT NOT NULL DEFAULT '', sequence_id INTEGER NOT NULL DEFAULT 0,

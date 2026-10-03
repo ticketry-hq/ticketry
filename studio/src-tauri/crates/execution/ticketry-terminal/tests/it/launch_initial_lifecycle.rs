@@ -66,6 +66,9 @@ async fn promptless_instant_launch_waits_for_the_first_request() {
     ticketry_work_management::workspace_tab_order_migration::install(&database)
         .await
         .unwrap();
+    ticketry_work_management::sprint_migration::install(&database)
+        .await
+        .unwrap();
     let service = TerminalLaunchService::new(database.clone(), Arc::new(ExistingRuntime))
         .with_authority(Arc::new(PromptlessInstantAuthority));
 

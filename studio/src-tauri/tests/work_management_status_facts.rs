@@ -91,7 +91,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, WorkFactRecorder) 
                 updated_at datetime NOT NULL
             );
             CREATE TABLE worktracker_issue (
-                id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
+                sprint_id char(32) NULL, id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
                 type varchar(10) NOT NULL, issue_type_id char(32) NOT NULL,
                 parent_id char(32), module_id char(32), state_id char(32),
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
@@ -423,8 +423,7 @@ async fn a_descendant_live_worktree_makes_cross_module_reparent_atomic() {
                 created_at varchar(64) NOT NULL, updated_at varchar(64) NOT NULL,
                 pull_request_url text
             );
-            INSERT INTO worktracker_issue VALUES
-                ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module A',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+            INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, created_at, updated_at, workspace_tab_order) VALUES ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module A',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
                 ('20000000000000000000000000000002','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,2,'Module B',2,0,'b','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]');
             "#
         ))

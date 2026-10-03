@@ -400,6 +400,14 @@ named gate before the full Studio suite, typecheck, and build.
 
 | 407 | Model configuration offers GPT-6.1 Sol for Codex with low through ultra reasoning and keeps the saved launch default on reopening. |
 
+| 415 | External archive facts remove assigned Stories and update sprint counts and an open completion preview with one planning request per project batch. |
+| 416 | External creation facts insert assigned Stories into sprint rows, counts and the completion preview. |
+| 417 | External sprint assignments refresh canonical sprint membership even without a collection membership flag. |
+| 418 | Reopening a cached planning view after external creates and archives fetches the current filtered collection. |
+| 419 | Epic changes and deletions update planning groups. |
+| 420 | Planning fact convergence refreshes only the affected project's active planning views. |
+| 421 | External Story deletion removes its row and updates counts and the completion preview without fetching the deleted entity. |
+
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose
 behavior belongs to a Rust crate rather than the Studio UI carries its marker on

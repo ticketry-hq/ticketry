@@ -1,13 +1,10 @@
 use sea_orm::{
-    sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait,
+    sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
     QueryFilter, QueryOrder, Set, TransactionTrait,
 };
 
-use super::arrival_rank;
-use super::identifiers::{database_uuid, new_database_uuid};
-use super::status_facts::{
-    record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemFact,
-};
+use super::identifiers::database_uuid;
+use super::status_facts::WorkFactRecorder;
 use super::{work_items, CommandError};
 use ticketry_entities::{issue, issue_blocker, issue_type, project, state};
 
@@ -96,46 +93,6 @@ pub async fn create_review_finding(
         .order_by_desc(issue::Column::SequenceId)
         .one(&transaction)
         .await?;
-    let state_id = if let Some(start_id) = &implementation.start_state_id {
-        state::Entity::find_by_id(start_id)
-            .filter(state::Column::ProjectId.eq(&project_id))
-            .one(&transaction)
-            .await?
-            .map(|row| row.id)
-            .ok_or_else(|| CommandError::IllegalBirth {
-                message: "The published workflow start state no longer exists.".to_owned(),
-                to_state: None,
-            })?
-            .into()
-    } else {
-        state::Entity::find()
-            .filter(state::Column::ProjectId.eq(&project_id))
-            .filter(state::Column::Group.eq("backlog"))
-            .order_by_asc(state::Column::SortOrder)
-            .order_by_asc(state::Column::CreatedAt)
-            .one(&transaction)
-            .await?
-            .map(|row| row.id)
-    };
-    let counters = project::Entity::update_many()
-        .col_expr(
-            project::Column::SeqCounter,
-            Expr::col(project::Column::SeqCounter).add(1),
-        )
-        .col_expr(
-            project::Column::StateRevision,
-            Expr::col(project::Column::StateRevision).add(1),
-        )
-        .col_expr(project::Column::UpdatedAt, Expr::current_timestamp())
-        .filter(project::Column::Id.eq(&project_id))
-        .exec_with_returning(&transaction)
-        .await?
-        .into_iter()
-        .next()
-        .ok_or_else(|| CommandError::NotFound("Project not found.".to_owned()))?;
-    let sequence_id = counters.seq_counter;
-    let state_revision = counters.state_revision;
-    let rank = arrival_rank::for_work_item(&transaction, &project_id, state_id.as_deref()).await?;
     let mut description = vec![
         format!("Path: {path}"),
         format!("Lines: {}-{}", input.line_start, input.line_end),
@@ -147,28 +104,18 @@ pub async fn create_review_finding(
     {
         description.push(format!("Note: {note}"));
     }
-    let id = new_database_uuid();
-    let now = super::timestamp::now();
-    let occurred_at = stamp(now);
-    issue::ActiveModel {
-        id: Set(id.clone()),
-        project_id: Set(project_id.clone()),
-        r#type: Set("task".to_owned()),
-        issue_type_id: Set(implementation.id),
-        parent_id: Set(Some(parent.id.clone())),
-        module_id: Set(parent.module_id.clone()),
-        state_id: Set(state_id.clone()),
-        state_revision: Set(state_revision),
-        name: Set(name),
-        sequence_id: Set(sequence_id),
-        is_archived: Set(false),
-        rank: Set(rank),
-        description: Set(description.join("\n")),
-        workspace_tab_order: Set(serde_json::json!([])),
-        created_at: Set(now),
-        updated_at: Set(now),
-    }
-    .insert(&transaction)
+    let id = work_items::create_in(
+        &transaction,
+        work_items::CreateWorkItem {
+            project_id,
+            name,
+            issue_type_id: implementation.id,
+            description: Some(description.join("\n")),
+            state_id: None,
+            parent_id: Some(parent.id),
+        },
+        facts,
+    )
     .await?;
     if let Some(predecessor) = predecessor {
         issue_blocker::ActiveModel {
@@ -179,22 +126,6 @@ pub async fn create_review_finding(
         .insert(&transaction)
         .await?;
     }
-    record_work_item(
-        facts,
-        &transaction,
-        WorkItemFact {
-            project_id: &project_id,
-            work_item_id: &id,
-            change: WorkItemChange::Created,
-            revision: state_revision,
-            occurred_at: &occurred_at,
-            parent_id: Some(&parent.id),
-            module_id: parent.module_id.as_deref(),
-            state_id: state_id.as_deref(),
-            is_archived: false,
-        },
-    )
-    .await?;
     transaction.commit().await?;
     if let Some(facts) = facts {
         facts.wake();

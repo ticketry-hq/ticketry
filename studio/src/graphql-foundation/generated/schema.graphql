@@ -615,6 +615,12 @@ type Mutation {
 	update_state(id: String!, name: String, group: String, color: String, sort_order: Int): WorktrackerState!
 	delete_state(state_id: String!): Boolean!
 	reorder_states(project_id: String!, ordered_ids: [String!]!): [WorktrackerState!]!
+	worktrackerSprintCreateOne(data: WorktrackerSprintInsertInput!): WorktrackerSprintBasic!
+	update_sprint(id: String!, name: String, suggestion_run_id: String, status: String, carryover_sprint_id: String): WorktrackerSprint!
+	create_sprint_goal(sprint_id: String!, text: String!): WorktrackerSprintGoal!
+	update_sprint_goal(id: String!, text: String!): WorktrackerSprintGoal!
+	delete_sprint_goal(id: String!): Boolean!
+	update_sprint_suggestion(id: String!, status: String!, proposed_name: String): WorktrackerSprintSuggestion!
 	set_module_link(module_id: String!, link: ModuleLinkPathInput!): ModuleLinks!
 	clear_module_link(module_id: String!): Boolean!
 	worktree_merge(task_id: String!, operation_id: String!, destination_branch: String!, confirmation_token: String!): WorktreeMergeResult!
@@ -639,7 +645,7 @@ type Mutation {
 	delete_issue_type(id: String!, reassign_to: String): Boolean!
 	reorder_module_presentation(module_id: String!, before_id: String, after_id: String, initial_order_ids: [String!]): WorktrackerModulepresentation!
 	create_work_item(project_id: String!, name: String!, issue_type_id: String!, description: String, state_id: String, parent_id: String): WorktrackerIssue!
-	update_work_item(id: String!, name: String, description: String, issue_type_id: String, state_id: String, parent_id: String, blocked_by_ids: [String!], tag_names: [String!], is_archived: Boolean, workspace_tab_order: Json): WorktrackerIssue!
+	update_work_item(id: String!, name: String, description: String, issue_type_id: String, state_id: String, parent_id: String, sprint_id: String, blocked_by_ids: [String!], tag_names: [String!], is_archived: Boolean, workspace_tab_order: Json): WorktrackerIssue!
 	reorder_work_item(id: String!, before_id: String, after_id: String, initial_order_ids: [String!]): WorktrackerIssue!
 	delete_work_item(id: String!): Boolean!
 	create_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, agent_allowed: Boolean!, handoff: Boolean!, workflow_revision: Int!): WorktrackerIssuetypetransition!
@@ -741,6 +747,9 @@ type Query {
 	migrationProbes(filters: MigrationProbesFilterInput, having: MigrationProbesHavingInput, orderBy: MigrationProbesOrderInput, pagination: PaginationInput): MigrationProbesConnection!
 	worktrackerProject(filters: WorktrackerProjectFilterInput, having: WorktrackerProjectHavingInput, orderBy: WorktrackerProjectOrderInput, pagination: PaginationInput): WorktrackerProjectConnection!
 	worktrackerState(filters: WorktrackerStateFilterInput, having: WorktrackerStateHavingInput, orderBy: WorktrackerStateOrderInput, pagination: PaginationInput): WorktrackerStateConnection!
+	worktrackerSprint(filters: WorktrackerSprintFilterInput, having: WorktrackerSprintHavingInput, orderBy: WorktrackerSprintOrderInput, pagination: PaginationInput): WorktrackerSprintConnection!
+	worktrackerSprintGoal(filters: WorktrackerSprintGoalFilterInput, having: WorktrackerSprintGoalHavingInput, orderBy: WorktrackerSprintGoalOrderInput, pagination: PaginationInput): WorktrackerSprintGoalConnection!
+	worktrackerSprintSuggestion(filters: WorktrackerSprintSuggestionFilterInput, having: WorktrackerSprintSuggestionHavingInput, orderBy: WorktrackerSprintSuggestionOrderInput, pagination: PaginationInput): WorktrackerSprintSuggestionConnection!
 	worktrackerIssuetype(filters: WorktrackerIssuetypeFilterInput, having: WorktrackerIssuetypeHavingInput, orderBy: WorktrackerIssuetypeOrderInput, pagination: PaginationInput): WorktrackerIssuetypeConnection!
 	worktrackerIssue(filters: WorktrackerIssueFilterInput, having: WorktrackerIssueHavingInput, orderBy: WorktrackerIssueOrderInput, pagination: PaginationInput): WorktrackerIssueConnection!
 	worktrackerModulepresentation(filters: WorktrackerModulepresentationFilterInput, having: WorktrackerModulepresentationHavingInput, orderBy: WorktrackerModulepresentationOrderInput, pagination: PaginationInput): WorktrackerModulepresentationConnection!
@@ -1127,6 +1136,7 @@ type WorktrackerIssue {
 	parentId: String
 	moduleId: String
 	stateId: String
+	sprintId: String
 	stateRevision: Int!
 	name: String!
 	sequenceId: Int!
@@ -1139,6 +1149,7 @@ type WorktrackerIssue {
 	project: WorktrackerProject
 	issueType: WorktrackerIssuetype
 	state: WorktrackerState
+	sprint: WorktrackerSprint
 	parent: WorktrackerIssue
 	children(filters: WorktrackerIssueFilterInput, orderBy: WorktrackerIssueOrderInput, pagination: PaginationInput): WorktrackerIssueConnection!
 	module: WorktrackerIssue
@@ -1211,6 +1222,7 @@ input WorktrackerIssueFilterInput {
 	parentId: StringFilterInput
 	moduleId: StringFilterInput
 	stateId: StringFilterInput
+	sprintId: StringFilterInput
 	stateRevision: IntegerFilterInput
 	name: StringFilterInput
 	sequenceId: IntegerFilterInput
@@ -1229,6 +1241,7 @@ input WorktrackerIssueHavingInput {
 	project: WorktrackerProjectFilterInput
 	issueType: WorktrackerIssuetypeFilterInput
 	state: WorktrackerStateFilterInput
+	sprint: WorktrackerSprintFilterInput
 	parent: WorktrackerIssueFilterInput
 	children: WorktrackerIssueFilterInput
 	module: WorktrackerIssueFilterInput
@@ -1289,6 +1302,7 @@ input WorktrackerIssueOrderInput {
 	parentId: OrderByEnum
 	moduleId: OrderByEnum
 	stateId: OrderByEnum
+	sprintId: OrderByEnum
 	stateRevision: OrderByEnum
 	name: OrderByEnum
 	sequenceId: OrderByEnum
@@ -1611,6 +1625,7 @@ type WorktrackerProject {
 	issueType(filters: WorktrackerIssuetypeFilterInput, orderBy: WorktrackerIssuetypeOrderInput, pagination: PaginationInput): WorktrackerIssuetypeConnection!
 	issue(filters: WorktrackerIssueFilterInput, orderBy: WorktrackerIssueOrderInput, pagination: PaginationInput): WorktrackerIssueConnection!
 	label(filters: WorktrackerLabelFilterInput, orderBy: WorktrackerLabelOrderInput, pagination: PaginationInput): WorktrackerLabelConnection!
+	sprints(filters: WorktrackerSprintFilterInput, orderBy: WorktrackerSprintOrderInput, pagination: PaginationInput): WorktrackerSprintConnection!
 }
 
 type WorktrackerProjectConnection {
@@ -1645,6 +1660,7 @@ input WorktrackerProjectHavingInput {
 	issueType: WorktrackerIssuetypeFilterInput
 	issue: WorktrackerIssueFilterInput
 	label: WorktrackerLabelFilterInput
+	sprints: WorktrackerSprintFilterInput
 }
 
 input WorktrackerProjectOrderInput {
@@ -1735,6 +1751,193 @@ input WorktrackerReasoninglevelHavingInput {
 input WorktrackerReasoninglevelOrderInput {
 	id: OrderByEnum
 	name: OrderByEnum
+}
+
+type WorktrackerSprint {
+	id: String!
+	projectId: String!
+	name: String!
+	status: String!
+	suggestionRunId: String
+	goalsRevisedAt: String
+	createdAt: String!
+	updatedAt: String!
+	project: WorktrackerProject
+	issues(filters: WorktrackerIssueFilterInput, orderBy: WorktrackerIssueOrderInput, pagination: PaginationInput): WorktrackerIssueConnection!
+	suggestionRun: AgentRuns
+	goals(filters: WorktrackerSprintGoalFilterInput, orderBy: WorktrackerSprintGoalOrderInput, pagination: PaginationInput): WorktrackerSprintGoalConnection!
+	suggestions(filters: WorktrackerSprintSuggestionFilterInput, orderBy: WorktrackerSprintSuggestionOrderInput, pagination: PaginationInput): WorktrackerSprintSuggestionConnection!
+}
+
+type WorktrackerSprintBasic {
+	id: String!
+	projectId: String!
+	name: String!
+	status: String!
+	suggestionRunId: String
+	goalsRevisedAt: String
+	createdAt: String!
+	updatedAt: String!
+}
+
+type WorktrackerSprintConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerSprint!]!
+	edges: [WorktrackerSprintEdge!]!
+}
+
+type WorktrackerSprintEdge {
+	cursor: String!
+	node: WorktrackerSprint!
+}
+
+input WorktrackerSprintFilterInput {
+	id: StringFilterInput
+	projectId: StringFilterInput
+	name: StringFilterInput
+	status: StringFilterInput
+	suggestionRunId: StringFilterInput
+	goalsRevisedAt: TextFilterInput
+	createdAt: TextFilterInput
+	updatedAt: TextFilterInput
+	and: [WorktrackerSprintFilterInput!]
+	or: [WorktrackerSprintFilterInput!]
+	not: WorktrackerSprintFilterInput
+}
+
+type WorktrackerSprintGoal {
+	id: String!
+	sprintId: String!
+	position: Int!
+	text: String!
+	createdAt: String!
+	updatedAt: String!
+	sprint: WorktrackerSprint
+}
+
+type WorktrackerSprintGoalConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerSprintGoal!]!
+	edges: [WorktrackerSprintGoalEdge!]!
+}
+
+type WorktrackerSprintGoalEdge {
+	cursor: String!
+	node: WorktrackerSprintGoal!
+}
+
+input WorktrackerSprintGoalFilterInput {
+	id: StringFilterInput
+	sprintId: StringFilterInput
+	position: IntegerFilterInput
+	text: StringFilterInput
+	createdAt: TextFilterInput
+	updatedAt: TextFilterInput
+	and: [WorktrackerSprintGoalFilterInput!]
+	or: [WorktrackerSprintGoalFilterInput!]
+	not: WorktrackerSprintGoalFilterInput
+}
+
+input WorktrackerSprintGoalHavingInput {
+	sprint: WorktrackerSprintFilterInput
+}
+
+input WorktrackerSprintGoalOrderInput {
+	id: OrderByEnum
+	sprintId: OrderByEnum
+	position: OrderByEnum
+	text: OrderByEnum
+	createdAt: OrderByEnum
+	updatedAt: OrderByEnum
+}
+
+input WorktrackerSprintHavingInput {
+	project: WorktrackerProjectFilterInput
+	issues: WorktrackerIssueFilterInput
+	suggestionRun: AgentRunsFilterInput
+	goals: WorktrackerSprintGoalFilterInput
+	suggestions: WorktrackerSprintSuggestionFilterInput
+}
+
+input WorktrackerSprintInsertInput {
+	projectId: String!
+	name: String!
+}
+
+input WorktrackerSprintOrderInput {
+	id: OrderByEnum
+	projectId: OrderByEnum
+	name: OrderByEnum
+	status: OrderByEnum
+	suggestionRunId: OrderByEnum
+	goalsRevisedAt: OrderByEnum
+	createdAt: OrderByEnum
+	updatedAt: OrderByEnum
+}
+
+type WorktrackerSprintSuggestion {
+	id: String!
+	sprintId: String!
+	goalId: String!
+	issueId: String
+	proposedName: String
+	proposedEpicId: String
+	reason: String!
+	status: String!
+	runId: String!
+	createdAt: String!
+	sprint: WorktrackerSprint
+	goal: WorktrackerSprintGoal
+	issue: WorktrackerIssue
+}
+
+type WorktrackerSprintSuggestionConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerSprintSuggestion!]!
+	edges: [WorktrackerSprintSuggestionEdge!]!
+}
+
+type WorktrackerSprintSuggestionEdge {
+	cursor: String!
+	node: WorktrackerSprintSuggestion!
+}
+
+input WorktrackerSprintSuggestionFilterInput {
+	id: StringFilterInput
+	sprintId: StringFilterInput
+	goalId: StringFilterInput
+	issueId: StringFilterInput
+	proposedName: StringFilterInput
+	proposedEpicId: StringFilterInput
+	reason: StringFilterInput
+	status: StringFilterInput
+	runId: StringFilterInput
+	createdAt: TextFilterInput
+	and: [WorktrackerSprintSuggestionFilterInput!]
+	or: [WorktrackerSprintSuggestionFilterInput!]
+	not: WorktrackerSprintSuggestionFilterInput
+}
+
+input WorktrackerSprintSuggestionHavingInput {
+	sprint: WorktrackerSprintFilterInput
+	goal: WorktrackerSprintGoalFilterInput
+	issue: WorktrackerIssueFilterInput
+}
+
+input WorktrackerSprintSuggestionOrderInput {
+	id: OrderByEnum
+	sprintId: OrderByEnum
+	goalId: OrderByEnum
+	issueId: OrderByEnum
+	proposedName: OrderByEnum
+	proposedEpicId: OrderByEnum
+	reason: OrderByEnum
+	status: OrderByEnum
+	runId: OrderByEnum
+	createdAt: OrderByEnum
 }
 
 type WorktrackerState {

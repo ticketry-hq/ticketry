@@ -79,10 +79,16 @@ const PRODUCT_MUTATIONS = [
   "update_project",
   "update_provider_catalog",
   "update_state",
+  "update_sprint",
   "update_viewer_lease",
   "update_work_item",
+  "update_sprint_suggestion",
+  "create_sprint_goal",
+  "update_sprint_goal",
+  "delete_sprint_goal",
   "upsert_issue_type_launch_binding",
   "worktrackerIssuetypeCreateOne",
+  "worktrackerSprintCreateOne",
   "worktree_create",
   "worktree_discard",
 ];
@@ -90,6 +96,9 @@ const PRODUCT_MUTATIONS = [
 const FOUNDATION_QUERIES = ["migrationProbes"];
 
 const GENERATED_PRODUCT_QUERIES = [
+  "worktrackerSprint",
+  "worktrackerSprintGoal",
+  "worktrackerSprintSuggestion",
   "agentRunViewerLeases",
   "agentRuns",
   "agentTerminalSessions",

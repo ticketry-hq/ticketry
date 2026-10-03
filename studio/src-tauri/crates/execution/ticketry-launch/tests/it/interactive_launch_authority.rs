@@ -94,8 +94,7 @@ async fn worktree_launch_trust_child() {
         .database
         .execute_unprepared(&format!(
             r#"
-        INSERT INTO worktracker_issue VALUES
-            ('{CHILD}', '{PROJECT}', 'task', '{TYPE}', '{TASK}', '{MODULE}', '{STATE}', 0,
+        INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, workspace_tab_order, created_at, updated_at) VALUES ('{CHILD}', '{PROJECT}', 'task', '{TYPE}', '{TASK}', '{MODULE}', '{STATE}', 0,
              'Shared child', 966, 0, 'O', '', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
     "#
         ))

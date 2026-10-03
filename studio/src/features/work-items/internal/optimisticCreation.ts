@@ -69,6 +69,7 @@ export function optimisticCreatedIssue(
       ? publicWorktrackerId(body.parent_id)
       : publicWorktrackerId(membership.moduleId),
     module_id: publicWorktrackerId(membership.moduleId),
+    sprint_id: null,
     is_archived: false,
     created_at: now,
     updated_at: now,

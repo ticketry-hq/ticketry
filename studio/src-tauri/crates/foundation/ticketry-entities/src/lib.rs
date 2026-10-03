@@ -40,7 +40,8 @@ pub use work_management::{
     agent_model, agent_model_reasoning_level, attachment, issue, issue_blocker, issue_label,
     issue_type, issue_type_transition, label, launch_binding, launch_policy_decision,
     launch_policy_rejection, module_presentation, project, provider, reasoning_level,
-    register_entity_modules as register_work_management_entities, state, transition_occurrence,
+    register_entity_modules as register_work_management_entities, sprint, sprint_goal,
+    sprint_suggestion, state, transition_occurrence,
 };
 pub use workspace_runtime::{
     operation, register_entity_modules as register_workspace_runtime_entities, ship_record,

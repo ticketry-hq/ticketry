@@ -118,7 +118,7 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
                 updated_at datetime NOT NULL
             );
             CREATE TABLE worktracker_issue (
-                id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
+                sprint_id char(32) NULL, id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
                 type varchar(10) NOT NULL, issue_type_id char(32) NOT NULL,
                 parent_id char(32), module_id char(32), state_id char(32),
                 state_revision bigint NOT NULL, name varchar(512) NOT NULL,
@@ -201,7 +201,7 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
         .await
         .expect("inspect migrated Issue schema")
         .len();
-    assert_eq!(issue_column_count, 16);
+    assert_eq!(issue_column_count, 17);
     (directory, database)
 }
 
@@ -701,8 +701,7 @@ async fn hierarchy_create_reparent_detach_repairs_deep_module_ancestry_across_re
     database
         .execute_unprepared(&format!(
             r#"
-            INSERT INTO worktracker_issue VALUES
-                ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module A',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+            INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, created_at, updated_at, workspace_tab_order) VALUES ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module A',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
                 ('20000000000000000000000000000002','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,2,'Module B',2,0,'b','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
                 ('50000000000000000000000000000001','{PROJECT}','task','{TASK_TYPE}','20000000000000000000000000000002','20000000000000000000000000000002','{BACKLOG}',3,'Earlier sibling',3,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
                 ('50000000000000000000000000000002','{PROJECT}','task','{TASK_TYPE}','20000000000000000000000000000002','20000000000000000000000000000002','{BACKLOG}',4,'Later sibling',4,0,'c','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]');
@@ -723,7 +722,7 @@ async fn hierarchy_create_reparent_detach_repairs_deep_module_ancestry_across_re
         .unwrap();
     database
         .execute_unprepared(&format!(
-            "INSERT INTO worktracker_issue VALUES ('60000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}','{child}','20000000000000000000000000000001',NULL,5,'Nested module',30,0,'m','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]')"
+            "INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, created_at, updated_at, workspace_tab_order) VALUES ('60000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}','{child}','20000000000000000000000000000001',NULL,5,'Nested module',30,0,'m','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]')"
         ))
         .await
         .unwrap();
@@ -855,8 +854,7 @@ async fn live_worktrees_block_cross_module_reparent_and_detach_atomically() {
             database
                 .execute_unprepared(&format!(
                     r#"
-                    INSERT INTO worktracker_issue VALUES
-                        ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module A',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+                    INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, created_at, updated_at, workspace_tab_order) VALUES ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module A',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
                         ('20000000000000000000000000000002','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,2,'Module B',2,0,'b','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
                         ('50000000000000000000000000000001','{PROJECT}','task','{TASK_TYPE}','20000000000000000000000000000001','20000000000000000000000000000001','{BACKLOG}',3,'Task',3,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]');
                     INSERT INTO worktrees VALUES
@@ -935,8 +933,7 @@ async fn a_live_worktree_allows_same_module_reparenting() {
     database
         .execute_unprepared(&format!(
             r#"
-            INSERT INTO worktracker_issue VALUES
-                ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module A',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+            INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, created_at, updated_at, workspace_tab_order) VALUES ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module A',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
                 ('50000000000000000000000000000001','{PROJECT}','task','{TASK_TYPE}','20000000000000000000000000000001','20000000000000000000000000000001','{BACKLOG}',2,'Parent A',2,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
                 ('50000000000000000000000000000002','{PROJECT}','task','{TASK_TYPE}','20000000000000000000000000000001','20000000000000000000000000000001','{BACKLOG}',3,'Parent B',3,0,'b','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
                 ('50000000000000000000000000000003','{PROJECT}','task','{TASK_TYPE}','50000000000000000000000000000001','20000000000000000000000000000001','{BACKLOG}',4,'Task',4,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
@@ -1006,8 +1003,7 @@ async fn invalid_hierarchy_targets_and_foreign_creation_are_atomic() {
             r#"
             INSERT INTO worktracker_project VALUES
                 ('11000000000000000000000000000000','Foreign','FOREIGN','',1,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,0);
-            INSERT INTO worktracker_issue VALUES
-                ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
+            INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, created_at, updated_at, workspace_tab_order) VALUES ('20000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}',NULL,NULL,NULL,1,'Module',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
                 ('21000000000000000000000000000001','11000000000000000000000000000000','module','{MODULE_TYPE}',NULL,NULL,NULL,0,'Foreign module',1,0,'a','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]'),
                 ('22000000000000000000000000000001','{PROJECT}','task','{TASK_TYPE}',NULL,'ffffffffffffffffffffffffffffffff','{BACKLOG}',0,'Stale module parent',2,0,'b','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'[]');
             "#
@@ -1286,7 +1282,7 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
     for (index, (id, name)) in ids.iter().zip(["A", "B", "C"]).enumerate() {
         database
             .execute_unprepared(&format!(
-                "INSERT INTO worktracker_issue VALUES ('{id}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL, NULL, 0, '{name}', {}, 0, '', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '[]')",
+                "INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, created_at, updated_at, workspace_tab_order) VALUES ('{id}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL, NULL, 0, '{name}', {}, 0, '', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '[]')",
                 index + 1
             ))
             .await
@@ -1612,7 +1608,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
     for (index, (id, name)) in module_ids.iter().zip(["A", "B", "C"]).enumerate() {
         database
             .execute_unprepared(&format!(
-                "INSERT INTO worktracker_issue VALUES ('{id}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL, NULL, 0, '{name}', {}, 0, '', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '[]')",
+                "INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, created_at, updated_at, workspace_tab_order) VALUES ('{id}', '{PROJECT}', 'module', '{MODULE_TYPE}', NULL, NULL, NULL, 0, '{name}', {}, 0, '', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '[]')",
                 index + 1
             ))
             .await
@@ -1660,6 +1656,12 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
         "worktrackerIssuetypeCreateOne",
         "create_work_item",
         "update_work_item",
+        "update_sprint_suggestion",
+        "create_sprint_goal",
+        "update_sprint_goal",
+        "delete_sprint_goal",
+        "update_sprint",
+        "worktrackerSprintCreateOne",
         "reorder_module_presentation",
         "reorder_work_item",
         "delete_work_item",
@@ -2373,8 +2375,7 @@ async fn blocker_replacement_rejects_bad_graphs_atomically_and_survives_restart(
     database.execute_unprepared(&format!(r#"
         INSERT INTO worktracker_project VALUES
             ('11000000000000000000000000000000', 'Other', 'OTH', '', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
-        INSERT INTO worktracker_issue VALUES
-            ('{foreign}', '11000000000000000000000000000000', 'task', '{TASK_TYPE}', NULL, NULL, NULL, 0, 'Foreign', 1, 0, 'A', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '[]')
+        INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, created_at, updated_at, workspace_tab_order) VALUES ('{foreign}', '11000000000000000000000000000000', 'task', '{TASK_TYPE}', NULL, NULL, NULL, 0, 'Foreign', 1, 0, 'A', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '[]')
     "#)).await.unwrap();
     blockers::replace(&database, &a, vec![b.clone()])
         .await

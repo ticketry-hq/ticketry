@@ -35,8 +35,7 @@ async fn seed_foreign_story(directory: &tempfile::TempDir) {
                  '70000000000000000000000000000000',
                  'Story', 'task', '', 0, NULL, 0, 0,
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-            INSERT INTO worktracker_issue VALUES
-                ('70000000000000000000000000000001',
+            INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, workspace_tab_order, created_at, updated_at) VALUES ('70000000000000000000000000000001',
                  '70000000000000000000000000000000', 'task',
                  '70000000000000000000000000000002', NULL, NULL, NULL, 0,
                  'Foreign story', 1, 0, 'A', '', '[]',

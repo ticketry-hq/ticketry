@@ -12,6 +12,7 @@ pub struct Model {
     pub parent_id: Option<String>,
     pub module_id: Option<String>,
     pub state_id: Option<String>,
+    pub sprint_id: Option<String>,
     pub state_revision: i64,
     pub name: String,
     pub sequence_id: i32,
@@ -27,6 +28,8 @@ pub struct Model {
     pub issue_type: BelongsTo<super::issue_type::Entity>,
     #[sea_orm(belongs_to, from = "state_id", to = "id")]
     pub state: BelongsTo<Option<super::state::Entity>>,
+    #[sea_orm(belongs_to, from = "sprint_id", to = "id")]
+    pub sprint: BelongsTo<Option<super::sprint::Entity>>,
     #[sea_orm(
         self_ref,
         relation_enum = "Parent",

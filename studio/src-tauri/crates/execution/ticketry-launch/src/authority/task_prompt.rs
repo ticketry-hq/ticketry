@@ -94,7 +94,7 @@ mod tests {
     use super::previous_state_name;
 
     const ISSUE_TABLE: &str = "CREATE TABLE worktracker_issue (
-            id varchar NOT NULL PRIMARY KEY,
+            sprint_id char(32) NULL, id varchar NOT NULL PRIMARY KEY,
             project_id varchar NOT NULL,
             type varchar NOT NULL,
             issue_type_id varchar NOT NULL,
@@ -140,7 +140,7 @@ mod tests {
         database.execute_unprepared(STATE_TABLE).await.unwrap();
         database
             .execute_unprepared(
-                "INSERT INTO worktracker_issue VALUES (
+                "INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, workspace_tab_order, created_at, updated_at) VALUES (
                     'task', 'project', 'task', 'story', NULL, NULL,
                     'state-implement', 9, 'Tie-break', 1844, 0, 'rank', '', '[]',
                     '2026-09-01 10:00:00', '2026-09-01 10:00:00'

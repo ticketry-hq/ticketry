@@ -38,7 +38,8 @@ pub async fn install(database: &DatabaseConnection) {
                 description text NOT NULL DEFAULT '',
                 workspace_tab_order json NOT NULL DEFAULT '[]',
                 created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
+                updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                sprint_id char(32) NULL
             );
             ",
         )

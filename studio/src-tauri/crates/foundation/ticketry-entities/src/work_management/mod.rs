@@ -16,6 +16,9 @@ pub mod module_presentation;
 pub mod project;
 pub mod provider;
 pub mod reasoning_level;
+pub mod sprint;
+pub mod sprint_goal;
+pub mod sprint_suggestion;
 pub mod state;
 pub mod transition_occurrence;
 
@@ -25,6 +28,9 @@ pub mod transition_occurrence;
 pub fn register_entity_modules(mut builder: seaography::Builder) -> seaography::Builder {
     seaography::register_entity!(builder, project, mutation: false);
     seaography::register_entity!(builder, state, mutation: false);
+    seaography::register_entity!(builder, sprint, mutation: false);
+    seaography::register_entity!(builder, sprint_goal, mutation: false);
+    seaography::register_entity!(builder, sprint_suggestion, mutation: false);
     seaography::register_entity!(builder, issue_type, mutation: false);
     seaography::register_entity!(builder, issue, mutation: false);
     seaography::register_entity!(builder, module_presentation, mutation: false);

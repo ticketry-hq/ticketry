@@ -426,6 +426,7 @@ async fn insert_issue(
     now: chrono::NaiveDateTime,
 ) {
     issue::ActiveModel {
+        sprint_id: sea_orm::ActiveValue::NotSet,
         id: Set(id.to_owned()),
         project_id: Set(project_id.to_owned()),
         r#type: Set(kind.to_owned()),

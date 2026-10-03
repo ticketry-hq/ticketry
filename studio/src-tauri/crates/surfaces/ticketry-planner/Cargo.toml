@@ -14,6 +14,7 @@ uuid.workspace = true
 
 [dev-dependencies]
 async-graphql.workspace = true
+chrono.workspace = true
 reqwest.workspace = true
 sea-orm.workspace = true
 tempfile.workspace = true
@@ -21,3 +22,4 @@ ticketry-data-directory.workspace = true
 ticketry-entities.workspace = true
 ticketry-settings.workspace = true
 ticketry-graphql-schema.workspace = true
+ticketry-work-management.workspace = true

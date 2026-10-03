@@ -1,0 +1,2116 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="lld-source" content="LLD.md">
+  <meta name="lld-source-sha256" content="ab5ad917e150177a39e08e8bcf0ef20d30e4a6e50d9e3c1d58271988076a13b0">
+  <title>LLD 11 · StatusDot, Chip and tones</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --paper: #0e1520;
+      --sheet: #172130;
+      --surface: #202b3b;
+      --rail: #121c29;
+      --group: #263448;
+      --on-accent: #0e1520;
+      --focus: #a7ceff;
+      --ink: #e6edf6;
+      --muted: #a6b5c9;
+      --line: #34445b;
+      --line-strong: #657a96;
+      --navy: #91c4ff;
+      --navy-soft: #203852;
+      --orange: #ffb180;
+      --orange-soft: #422d24;
+      --green: #7bdbb1;
+      --green-soft: #183b32;
+      --red: #ff9eaa;
+      --red-soft: #432731;
+      --violet: #c4b2ff;
+      --violet-soft: #332e4c;
+      --shadow: 0 18px 45px rgba(0, 0, 0, .24);
+      --radius: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(145, 196, 255, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(145, 196, 255, .025) 1px, transparent 1px),
+        var(--paper);
+      background-size: 24px 24px;
+      font-family: var(--sans);
+      line-height: 1.55;
+    }
+
+    button, input { font: inherit; }
+    button:focus-visible, input:focus-visible, a:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .shell { width: min(1480px, calc(100% - 40px)); margin: 0 auto; }
+    .masthead {
+      margin-top: 20px;
+      border: 1px solid var(--line-strong);
+      background: var(--sheet);
+      box-shadow: var(--shadow);
+    }
+    .masthead-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      padding: 30px 34px 28px;
+      border-bottom: 1px solid var(--line);
+    }
+    .crumb {
+      margin: 0 0 12px;
+      color: var(--orange);
+      font: 700 11px/1.2 var(--mono);
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; max-width: 900px; font-size: clamp(32px, 5vw, 64px); line-height: .98; letter-spacing: -.045em; }
+    .summary { max-width: 780px; margin: 18px 0 0; color: var(--muted); font-size: 16px; }
+    .phase-card {
+      min-width: 180px;
+      align-self: stretch;
+      display: grid;
+      align-content: space-between;
+      padding: 18px;
+      background: var(--navy);
+      color: var(--on-accent);
+    }
+    .phase-card span { font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; opacity: .68; }
+    .phase-card strong { font-size: 30px; letter-spacing: -.03em; }
+    .phase-card small { font-family: var(--mono); opacity: .78; }
+    .metrics { display: grid; grid-template-columns: repeat(5, 1fr); }
+    .metric { padding: 15px 20px; border-right: 1px solid var(--line); }
+    .metric:last-child { border-right: 0; }
+    .metric b { display: block; font-size: 24px; line-height: 1; }
+    .metric span { color: var(--muted); font: 700 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+
+    .sticky-nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      gap: 4px;
+      margin: 14px 0 32px;
+      padding: 7px;
+      border: 1px solid var(--line);
+      background: rgba(23, 33, 48, .92);
+      backdrop-filter: blur(14px);
+    }
+    .sticky-nav a { padding: 8px 13px; color: var(--muted); font: 700 11px/1 var(--mono); text-decoration: none; text-transform: uppercase; }
+    .sticky-nav a:hover { color: var(--navy); background: var(--navy-soft); }
+
+    section { margin: 0 0 46px; scroll-margin-top: 72px; }
+    .primary-section { margin-bottom: 56px; }
+    .section-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px; align-items: end; }
+    .workspace-note { max-width: 310px; margin: 0 0 22px; padding: 12px 14px; border-left: 3px solid var(--orange); color: var(--muted); background: var(--sheet); font-size: 12px; }
+    .section-kicker { margin: 0 0 6px; color: var(--orange); font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; }
+    h2 { margin: 0; font-size: clamp(25px, 3vw, 39px); letter-spacing: -.035em; }
+    .lede { max-width: 820px; margin: 10px 0 22px; color: var(--muted); }
+
+    .overview-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 16px; }
+    .card { border: 1px solid var(--line); background: var(--sheet); padding: 22px; }
+    .card h3 { margin: 0 0 12px; font-size: 16px; }
+    .plain-list { margin: 0; padding-left: 18px; }
+    .plain-list li + li { margin-top: 8px; }
+    .boundary { border-left: 4px solid var(--orange); }
+
+    .change-view { border: 1px solid var(--line-strong); background: var(--sheet); box-shadow: var(--shadow); }
+    .change-toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 16px;
+      padding: 15px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .search-wrap { position: relative; }
+    .search-wrap span { position: absolute; left: 12px; top: 9px; color: var(--muted); font-family: var(--mono); }
+    #file-search {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px 0 36px;
+      border: 1px solid var(--line-strong);
+      background: var(--rail);
+      color: var(--ink);
+    }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .filter {
+      border: 1px solid var(--line);
+      background: var(--sheet);
+      color: var(--muted);
+      padding: 7px 10px;
+      cursor: pointer;
+      font: 700 10px/1 var(--mono);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .filter[aria-pressed="true"] { color: var(--on-accent); border-color: var(--navy); background: var(--navy); }
+    .change-workspace { display: grid; grid-template-columns: minmax(330px, .72fr) minmax(0, 1.8fr); height: clamp(620px, 72vh, 820px); }
+    .file-rail { border-right: 1px solid var(--line); background: var(--rail); overflow: auto; }
+    .rail-empty { padding: 30px; color: var(--muted); text-align: center; }
+    .dir-group + .dir-group { border-top: 1px solid var(--line); }
+    .dir-label { position: sticky; top: 0; z-index: 2; padding: 9px 13px; color: var(--muted); background: var(--group); font: 700 10px/1.2 var(--mono); }
+    .file-button {
+      width: 100%;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 11px 13px;
+      border: 0;
+      border-top: 1px solid rgba(52, 68, 91, .7);
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+    }
+    .file-button:hover { background: var(--surface); }
+    .file-button[aria-selected="true"] { background: var(--surface); box-shadow: inset 4px 0 0 var(--orange); }
+    .file-button-copy { min-width: 0; display: grid; gap: 4px; }
+    .file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 12px/1.3 var(--mono); }
+    .file-meta { color: var(--muted); font: 700 9px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+    .action-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+    .action-dot.create { background: var(--green); }
+    .action-dot.modify { background: var(--orange); }
+    .action-dot.delete { background: var(--red); }
+    .action-dot.move { background: var(--violet); }
+    .action-dot.untouched { background: var(--navy); }
+
+    .file-inspector { min-width: 0; padding: 28px; overflow: auto; }
+    .inspector-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .path { margin: 0; overflow-wrap: anywhere; font: 700 clamp(16px, 2vw, 22px)/1.3 var(--mono); }
+    .purpose { margin: 8px 0 0; color: var(--muted); }
+    .action-badge { flex: 0 0 auto; padding: 6px 9px; border: 1px solid currentColor; font: 800 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .action-badge.create { color: var(--green); background: var(--green-soft); }
+    .action-badge.modify { color: var(--orange); background: var(--orange-soft); }
+    .action-badge.delete { color: var(--red); background: var(--red-soft); }
+    .action-badge.move { color: var(--violet); background: var(--violet-soft); }
+    .action-badge.untouched { color: var(--navy); background: var(--navy-soft); }
+    .inspector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+    .info-block { border-top: 3px solid var(--navy); padding: 13px 14px 15px; background: var(--surface); }
+    .info-block.no { border-top-color: var(--red); }
+    .info-block h4 { margin: 0 0 8px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .info-block ul { margin: 0; padding-left: 18px; font-size: 13px; }
+    .info-block li + li { margin-top: 6px; }
+    .symbol-row, .trace-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+    .token { padding: 5px 8px; border: 1px solid var(--line); background: var(--rail); font: 600 11px/1 var(--mono); overflow-wrap: anywhere; }
+    .trace-token { color: var(--navy); border-color: #3d6a99; background: var(--navy-soft); }
+    .dependency-strip { margin-top: 20px; padding: 14px; border: 1px dashed var(--line-strong); }
+    .dependency-strip b { display: block; margin-bottom: 7px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .dependency-strip p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .timeline { display: grid; gap: 9px; counter-reset: step; }
+    .step { counter-increment: step; display: grid; grid-template-columns: 48px 1fr auto; gap: 16px; align-items: start; padding: 17px; border: 1px solid var(--line); background: var(--sheet); }
+    .step::before { content: counter(step, decimal-leading-zero); color: var(--orange); font: 800 18px/1 var(--mono); }
+    .step b { display: block; margin-bottom: 4px; }
+    .step p { margin: 0; color: var(--muted); }
+    .step code { color: var(--navy); font: 700 11px/1.4 var(--mono); }
+    .acceptance { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .acceptance-item { display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 16px; border: 1px solid #2f6b56; background: var(--green-soft); }
+    .acceptance-item strong { color: var(--green); font-family: var(--mono); }
+    .acceptance-item p { margin: 0; }
+    footer { margin: 50px 0 24px; padding: 18px 0; border-top: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; }
+    footer code { color: var(--navy); }
+
+
+    html { background: var(--paper); }
+    a { color: var(--navy); }
+    ::selection { background: var(--navy-soft); color: var(--ink); }
+    input::placeholder { color: var(--muted); opacity: 1; }
+    code { font-family: var(--mono); font-size: .92em; color: var(--navy); }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); background: var(--sheet); margin-bottom: 18px; }
+    .table-wrap h3 { margin: 0; padding: 12px 14px; font-size: 14px; border-bottom: 1px solid var(--line); }
+    table.contract { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.contract th, table.contract td { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    table.contract th { color: var(--muted); font: 700 10px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; background: var(--surface); }
+    table.contract td:first-child { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+    .decision-list li { margin-top: 6px; }
+    .sticky-nav { overflow-x: auto; }
+    .overview-grid > *, .card, .plain-list li, .lede, .summary, .acceptance-item, .acceptance-item p, .step > div { min-width: 0; overflow-wrap: anywhere; }
+    .acceptance { grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+
+    @media (max-width: 880px) {
+      .shell { width: min(100% - 22px, 1480px); }
+      .masthead-top, .overview-grid, .section-heading { grid-template-columns: 1fr; }
+      .masthead-top { gap: 18px; padding: 22px; }
+      h1 { font-size: clamp(30px, 8vw, 42px); }
+      .phase-card { min-height: 0; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; }
+      .phase-card strong { font-size: 22px; }
+      .metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .metric { padding: 12px 10px; }
+      .metric b { font-size: 20px; }
+      .metric span { font-size: 8px; }
+      .metric { border-bottom: 1px solid var(--line); }
+      .change-toolbar { grid-template-columns: 1fr; }
+      .filters { justify-content: flex-start; }
+      .change-workspace { grid-template-columns: 1fr; height: auto; }
+      .file-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: 330px; }
+      .inspector-grid, .acceptance { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 42px 1fr; }
+      .step code { grid-column: 2; }
+    }
+
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body data-template="false">
+  <div class="shell">
+    <header class="masthead" id="overview">
+      <div class="masthead-top">
+        <div>
+          <p class="crumb" id="doc-crumb">Module · Work item · LLD</p>
+          <h1 id="doc-title">File change plan</h1>
+          <p class="summary" id="doc-summary"></p>
+        </div>
+        <div class="phase-card">
+          <span>Design state</span>
+          <strong>LLD</strong>
+          <small id="doc-status">candidate</small>
+        </div>
+      </div>
+      <div class="metrics" id="metrics" aria-label="File change totals"></div>
+    </header>
+
+    <nav class="sticky-nav" aria-label="Document sections">
+      <a href="#file-changes">File changes</a>
+      <a href="#contracts">Contracts</a>
+      <a href="#context">Context</a>
+      <a href="#execution">Build order</a>
+      <a href="#acceptance">Acceptance</a>
+    </nav>
+
+    <main>
+      <section class="primary-section" id="file-changes" aria-labelledby="changes-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Primary implementation plan</p>
+            <h2 id="changes-title">Build the design file by file</h2>
+            <p class="lede">Select a file to see exactly why it changes, what to implement, what must remain stable, and how that file is verified.</p>
+          </div>
+          <p class="workspace-note"><strong>Start here.</strong> Search paths, symbols, or requirement IDs. Use ↑ and ↓ to inspect files without leaving the keyboard.</p>
+        </div>
+        <div class="change-view">
+          <div class="change-toolbar">
+            <label class="search-wrap">
+              <span aria-hidden="true">/</span>
+              <input id="file-search" type="search" placeholder="Find a path, symbol, or requirement" autocomplete="off">
+            </label>
+            <div class="filters" id="filters" aria-label="Filter files by action"></div>
+          </div>
+          <div class="change-workspace">
+            <div class="file-rail" id="file-rail" role="listbox" aria-label="Planned file changes"></div>
+            <article class="file-inspector" id="file-inspector" aria-live="polite"></article>
+          </div>
+        </div>
+      </section>
+
+
+      <section id="contracts" aria-labelledby="contracts-title">
+        <p class="section-kicker">Observable contracts</p>
+        <h2 id="contracts-title">Component APIs, tone maps and decisions</h2>
+        <p class="lede">Prop tables and maps mirrored from LLD.md section 4; decisions from section 10.</p>
+        <div id="contract-tables"></div>
+        <article class="card"><h3>Decisions</h3><ul class="plain-list decision-list" id="decision-list"></ul></article>
+      </section>
+
+      <section id="context" aria-labelledby="scope-title">
+        <p class="section-kicker">Supporting context</p>
+        <h2 id="scope-title">Scope and preserved boundaries</h2>
+        <p class="lede" id="scope-lede"></p>
+        <div class="overview-grid">
+          <article class="card">
+            <h3>In scope</h3>
+            <ul class="plain-list" id="scope-list"></ul>
+          </article>
+          <article class="card boundary">
+            <h3>Preserved boundaries</h3>
+            <ul class="plain-list" id="boundary-list"></ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="execution" aria-labelledby="execution-title">
+        <p class="section-kicker">Dependency order</p>
+        <h2 id="execution-title">Build order</h2>
+        <p class="lede">Each step should leave a locally verifiable result and unblock the next dependency.</p>
+        <div class="timeline" id="timeline"></div>
+      </section>
+
+      <section id="acceptance" aria-labelledby="acceptance-title">
+        <p class="section-kicker">Completion signals</p>
+        <h2 id="acceptance-title">Acceptance</h2>
+        <p class="lede">Every signal traces back to the canonical LLD and names an observable result.</p>
+        <div class="acceptance" id="acceptance-list"></div>
+      </section>
+    </main>
+
+    <footer>LLD.md is authoritative. This HTML is its presentation mirror. Source: <code>LLD.md</code> in this directory.</footer>
+  </div>
+
+  <script>
+    const LLD_DOCUMENT = {
+  "meta": {
+    "crumb": "Studio frontend · Shared UI · Ticket 11 · LLD",
+    "title": "StatusDot, Chip and one status tone map",
+    "summary": "Add shared StatusDot and Chip on existing theme tokens, collapse the worktrees tone maps into one shared tone-to-token map plus one exported pull-request tone map, and move every listed dot, chip, badge, removable chip and count bubble onto them.",
+    "status": "implementation-ready · stamped"
+  },
+  "scope": {
+    "lede": "Change boundary from LLD.md section 2. Visible colour and size changes are deliberate (LLD.md 2.4).",
+    "in": [
+      "Create shared/ui/statusTone.ts, StatusDot.tsx, Chip.tsx with colocated tests",
+      "Migrate all listed state and tone dots; delete private Dot in StatePicker and WorkflowStatePicker",
+      "Delete toneClass, TONE_CLASS/checkoutToneClass/CheckoutTone, InspectorSection tone ternary and BranchInspector pullRequestTone; export PULL_REQUEST_TONE/pullRequestTone from worktrees",
+      "Move bordered chips, lifecycle badges, removable chips and count bubbles onto Chip",
+      "Extract LifecycleChipList for the three lifecycle chip groups"
+    ],
+    "boundaries": [
+      "All data-testid/data-* hooks and accessible names preserved (LLD.md 4.6)",
+      "state-picker first span keeps inline backgroundColor (e2e web-app.spec.ts:2147)",
+      "LifecycleBadge root keeps text-lifecycle-*/text-provider-* tokens its tests read",
+      "ModuleJumpBadge -> ticket 02; FindingsPanel state pill -> ticket 12; CloseButton -> ticket 01 (D-6)",
+      "ConversationRows provider swatch untouched (D-8); no new Tailwind tokens"
+    ]
+  },
+  "files": [
+    {
+      "id": "F1",
+      "path": "studio/src/shared/ui/statusTone.ts",
+      "action": "create",
+      "layer": "shared contract",
+      "purpose": "Single owner of the status tone vocabulary and its literal Tailwind token classes.",
+      "symbols": [
+        "StatusTone",
+        "ProviderTone",
+        "ChipTone",
+        "STATUS_DOT_CLASS",
+        "CHIP_TONE_CLASS"
+      ],
+      "responsibilities": [
+        "StatusTone = active | attention | danger | idle | success | muted",
+        "ProviderTone = claude | codex | gemini | agy (redeclared, no feature import)",
+        "ChipTone = StatusTone | neutral | ProviderTone",
+        "STATUS_DOT_CLASS: Record<StatusTone,string> (bg-lifecycle-* / bg-text-muted)",
+        "CHIP_TONE_CLASS: Record<ChipTone,string> (border-*/70 text-*; muted/neutral on border-pane-border; providers border-provider-*/60 text-provider-*)"
+      ],
+      "nonResponsibilities": [
+        "No React",
+        "No status-to-tone rules (pull-request rules live in worktrees)",
+        "Read only by StatusDot.tsx and Chip.tsx; others import types only"
+      ],
+      "implementation": [
+        "Write every class as a complete literal string (Tailwind scanner)",
+        "Type both records so a new tone fails to compile until mapped"
+      ],
+      "verification": [
+        "npm run typecheck"
+      ],
+      "dependencies": "Lands first (S1).",
+      "tests": [
+        "typecheck"
+      ],
+      "trace": [
+        "D-1",
+        "AC-6"
+      ]
+    },
+    {
+      "id": "F2",
+      "path": "studio/src/shared/ui/StatusDot.tsx",
+      "action": "create",
+      "layer": "shared ui",
+      "purpose": "One-size decorative status square coloured by tone or workflow-state colour.",
+      "symbols": [
+        "StatusDot (default export)",
+        "tone",
+        "color",
+        "title",
+        "className"
+      ],
+      "responsibilities": [
+        "Render one span aria-hidden=true, classes inline-block size-2 shrink-0",
+        "tone default muted -> STATUS_DOT_CLASS[tone]",
+        "truthy color -> inline style.backgroundColor, tone class omitted"
+      ],
+      "nonResponsibilities": [
+        "Never renders text",
+        "className is layout only (mt-1.5, ml-auto)",
+        "No size prop"
+      ],
+      "implementation": [
+        "Implement per LLD 4.2"
+      ],
+      "verification": [
+        "StatusDot.test.tsx"
+      ],
+      "dependencies": "Depends on F1.",
+      "tests": [
+        "StatusDot.test.tsx"
+      ],
+      "trace": [
+        "D-2",
+        "AC-1"
+      ]
+    },
+    {
+      "id": "F3",
+      "path": "studio/src/shared/ui/StatusDot.test.tsx",
+      "action": "create",
+      "layer": "test",
+      "purpose": "Behaviour test for StatusDot.",
+      "symbols": [
+        "StatusDot"
+      ],
+      "responsibilities": [
+        "aria-hidden and no text",
+        "color sets style.backgroundColor",
+        "title forwarded"
+      ],
+      "nonResponsibilities": [
+        "No class-string assertions"
+      ],
+      "implementation": [
+        "vitest + @testing-library/react"
+      ],
+      "verification": [
+        "npx vitest run src/shared/ui"
+      ],
+      "dependencies": "Depends on F2.",
+      "tests": [
+        "self"
+      ],
+      "trace": [
+        "AC-1"
+      ]
+    },
+    {
+      "id": "F4",
+      "path": "studio/src/shared/ui/Chip.tsx",
+      "action": "create",
+      "layer": "shared ui",
+      "purpose": "Bordered mono chip: outline/count variants, md/sm/badge sizes, optional dot, removable and clickable forms.",
+      "symbols": [
+        "Chip (default export)",
+        "variant",
+        "tone",
+        "size",
+        "dotTone",
+        "dotColor",
+        "onClick",
+        "onRemove",
+        "removeLabel",
+        "removeTestId",
+        "disabled"
+      ],
+      "responsibilities": [
+        "Root base inline-flex shrink-0 items-center border font-mono",
+        "md gap-2 px-2 py-1 text-xs font-normal; sm gap-1.5 px-1.5 py-0.5 text-xs font-normal; badge gap-1 px-1 text-[10px] font-bold leading-4 + bg-pane-bg",
+        "count variant border-transparent bg-pane-title text-text-secondary",
+        "onClick -> root button type=button with hover:bg-pane-title and focus outline",
+        "onRemove -> trailing remove button aria-label=removeLabel",
+        "Forward title, aria-label, data-* to root"
+      ],
+      "nonResponsibilities": [
+        "className is layout only",
+        "tone/onClick/onRemove only on outline (typed)",
+        "onClick and onRemove are mutually exclusive (typed)",
+        "Children may contain buttons when root is a span"
+      ],
+      "implementation": [
+        "Implement per LLD 4.3",
+        "Remove control content per D-6: CloseButton size=chip if shared/ui/CloseButton.tsx exists, else IconX size 12"
+      ],
+      "verification": [
+        "Chip.test.tsx"
+      ],
+      "dependencies": "Depends on F1, F2; P-2 selects D-6 branch.",
+      "tests": [
+        "Chip.test.tsx"
+      ],
+      "trace": [
+        "D-5",
+        "D-6",
+        "D-7",
+        "AC-1"
+      ]
+    },
+    {
+      "id": "F5",
+      "path": "studio/src/shared/ui/Chip.test.tsx",
+      "action": "create",
+      "layer": "test",
+      "purpose": "Behaviour test for Chip.",
+      "symbols": [
+        "Chip"
+      ],
+      "responsibilities": [
+        "Removable: button named by removeLabel; click calls onRemove; disabled blocks",
+        "Count variant renders children text",
+        "onClick root has role button with forwarded aria-label and fires",
+        "aria-label and data-testid forwarded on span root",
+        "Dot adds no text"
+      ],
+      "nonResponsibilities": [
+        "No class-string assertions"
+      ],
+      "implementation": [
+        "vitest + @testing-library/react"
+      ],
+      "verification": [
+        "npx vitest run src/shared/ui"
+      ],
+      "dependencies": "Depends on F4.",
+      "tests": [
+        "self"
+      ],
+      "trace": [
+        "AC-1"
+      ]
+    },
+    {
+      "id": "F6",
+      "path": "studio/src/features/agents/worktrees/changes/pullRequestTone.ts",
+      "action": "create",
+      "layer": "feature contract",
+      "purpose": "The worktrees feature's single pull-request-state-to-tone mapping.",
+      "symbols": [
+        "PULL_REQUEST_TONE",
+        "pullRequestTone"
+      ],
+      "responsibilities": [
+        "ready, merged -> success",
+        "merge_conflict, checks_failed, wrong_base -> danger",
+        "checks_pending, mergeability_pending -> active",
+        "approval_required -> attention; closed_unmerged -> muted",
+        "pullRequestTone: null/undefined/none -> muted; key -> value; else (unavailable, unknown) -> attention"
+      ],
+      "nonResponsibilities": [
+        "No class strings",
+        "No summary text (stays in worktreeCheckoutRows)"
+      ],
+      "implementation": [
+        "Implement per LLD 4.4 using type StatusTone from shared/ui/statusTone"
+      ],
+      "verification": [
+        "pullRequestTone.test.ts"
+      ],
+      "dependencies": "Depends on F1.",
+      "tests": [
+        "pullRequestTone.test.ts"
+      ],
+      "trace": [
+        "D-3",
+        "AC-2"
+      ]
+    },
+    {
+      "id": "F7",
+      "path": "studio/src/features/agents/worktrees/changes/pullRequestTone.test.ts",
+      "action": "create",
+      "layer": "test",
+      "purpose": "Table test for pullRequestTone.",
+      "symbols": [
+        "pullRequestTone"
+      ],
+      "responsibilities": [
+        "Each key -> its tone",
+        "null and none -> muted",
+        "unavailable and surprise -> attention"
+      ],
+      "nonResponsibilities": [
+        "Pure function only"
+      ],
+      "implementation": [
+        "vitest"
+      ],
+      "verification": [
+        "npx vitest run src/features/agents/worktrees"
+      ],
+      "dependencies": "Depends on F6.",
+      "tests": [
+        "self"
+      ],
+      "trace": [
+        "AC-2"
+      ]
+    },
+    {
+      "id": "F8",
+      "path": "studio/src/features/agents/worktrees/index.ts",
+      "action": "modify",
+      "layer": "feature api",
+      "purpose": "Export the one status mapping from the worktrees public surface.",
+      "symbols": [
+        "PULL_REQUEST_TONE",
+        "pullRequestTone"
+      ],
+      "responsibilities": [
+        "Add export { PULL_REQUEST_TONE, pullRequestTone } from ./changes/pullRequestTone"
+      ],
+      "nonResponsibilities": [
+        "Other exports unchanged"
+      ],
+      "implementation": [
+        "One export line"
+      ],
+      "verification": [
+        "npm run typecheck"
+      ],
+      "dependencies": "Depends on F6.",
+      "tests": [
+        "typecheck"
+      ],
+      "trace": [
+        "AC-2"
+      ]
+    },
+    {
+      "id": "F9",
+      "path": "studio/src/features/agents/worktrees/changes/worktreeCheckoutRows.ts",
+      "action": "modify",
+      "layer": "feature logic",
+      "purpose": "Drop the duplicate tone type and tone-to-class map; keep summaries.",
+      "symbols": [
+        "CheckoutTone (deleted)",
+        "TONE_CLASS (deleted)",
+        "checkoutToneClass (deleted)",
+        "PULL_REQUEST_SUMMARY",
+        "withCheckoutStatus",
+        "WorktreeCheckoutRow.tone: StatusTone"
+      ],
+      "responsibilities": [
+        "PULL_REQUEST_TONE renamed to private PULL_REQUEST_SUMMARY with the same keys and strings",
+        "withCheckoutStatus returns summary + pullRequestTone(state) when a summary exists"
+      ],
+      "nonResponsibilities": [
+        "Precedence unavailable > pull request > local > clean unchanged",
+        "All summary strings unchanged"
+      ],
+      "implementation": [
+        "Delete lines 11, 22-32; rewrite 34-44 as summaries; use pullRequestTone"
+      ],
+      "verification": [
+        "rg checkoutToneClass|CheckoutTone empty",
+        "switcher acceptance suites"
+      ],
+      "dependencies": "Depends on F6.",
+      "tests": [
+        "overhaulWorktreeSwitcherFailureAcceptance",
+        "overhaulChangesWorkspaceNavigationAcceptance"
+      ],
+      "trace": [
+        "AC-2"
+      ]
+    },
+    {
+      "id": "F10",
+      "path": "studio/src/features/agents/worktrees/changes/WorktreeSwitcher.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Checkout dots render through StatusDot.",
+      "symbols": [
+        "StatusDot"
+      ],
+      "responsibilities": [
+        ":119 StatusDot tone={current.tone}",
+        ":149 StatusDot tone={row.tone} className=mt-1.5"
+      ],
+      "nonResponsibilities": [
+        "Listbox, keyboard and dismissal untouched (ticket 08)",
+        "data-testid changes-worktree-switcher unchanged"
+      ],
+      "implementation": [
+        "Replace checkoutToneClass import and two spans"
+      ],
+      "verification": [
+        "switcher suites"
+      ],
+      "dependencies": "Depends on F2, F9.",
+      "tests": [
+        "overhaulWorktreeSwitcherFailureAcceptance"
+      ],
+      "trace": [
+        "AC-2"
+      ]
+    },
+    {
+      "id": "F11",
+      "path": "studio/src/features/agents/worktrees/changes/ChangesStateChips.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Branch state chips on Chip with shared tones.",
+      "symbols": [
+        "toneClass (deleted)",
+        "Chip",
+        "pullRequestTone"
+      ],
+      "responsibilities": [
+        "Working tree: Chip aria-label=Working tree state dotTone={local.length>0 ? attention : muted}",
+        "Pull request: Chip aria-label=Pull request state title={reason} dotTone={pullRequestTone(state)}"
+      ],
+      "nonResponsibilities": [
+        "Accessible names and text unchanged",
+        "PR dot colours change per LLD 2.4"
+      ],
+      "implementation": [
+        "Delete toneClass; replace both span chips"
+      ],
+      "verification": [
+        "overhaulModuleVersionControlAcceptance:223",
+        "overhaulTaskWorktreeChangesAcceptance:880-885"
+      ],
+      "dependencies": "Depends on F4, F6.",
+      "tests": [
+        "overhaulModuleVersionControlAcceptance",
+        "overhaulTaskWorktreeChangesAcceptance"
+      ],
+      "trace": [
+        "AC-2",
+        "AC-6"
+      ]
+    },
+    {
+      "id": "F12",
+      "path": "studio/src/features/agents/worktrees/changes/InspectorSection.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Section summary chip on Chip; its private tone ternary is deleted.",
+      "symbols": [
+        "InspectorSection",
+        "chipTone: StatusTone",
+        "Chip"
+      ],
+      "responsibilities": [
+        "Render Chip size=sm dotTone={chipTone} className=ml-auto"
+      ],
+      "nonResponsibilities": [
+        "Disclosure and focus behaviour unchanged"
+      ],
+      "implementation": [
+        "Delete dot ternary :31-37; widen chipTone type to StatusTone (default muted)"
+      ],
+      "verification": [
+        "overhaulChangesBranchKeyboardAcceptance"
+      ],
+      "dependencies": "Depends on F4.",
+      "tests": [
+        "overhaulChangesBranchKeyboardAcceptance"
+      ],
+      "trace": [
+        "AC-2"
+      ]
+    },
+    {
+      "id": "F13",
+      "path": "studio/src/features/agents/worktrees/changes/BranchInspector.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Use the shared pull-request tone.",
+      "symbols": [
+        "pullRequestTone (local, deleted)",
+        "pullRequestChip"
+      ],
+      "responsibilities": [
+        "Import pullRequestTone from ./pullRequestTone"
+      ],
+      "nonResponsibilities": [
+        "pullRequestChip labels unchanged"
+      ],
+      "implementation": [
+        "Delete :236-241"
+      ],
+      "verification": [
+        "overhaulChangesBranchKeyboardAcceptance"
+      ],
+      "dependencies": "Depends on F6.",
+      "tests": [
+        "overhaulChangesBranchKeyboardAcceptance"
+      ],
+      "trace": [
+        "AC-2"
+      ]
+    },
+    {
+      "id": "F14",
+      "path": "studio/src/features/agents/worktrees/WorktreeBlock.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Branch dot uses StatusDot; ternary yields tone names.",
+      "symbols": [
+        "tone: StatusTone",
+        "StatusDot"
+      ],
+      "responsibilities": [
+        ":238 ternary -> muted | danger | attention | success",
+        ":333 StatusDot tone={tone}"
+      ],
+      "nonResponsibilities": [
+        "Summary text colours unchanged",
+        "Menus untouched (ticket 07)"
+      ],
+      "implementation": [
+        "Rewrite ternary values; replace span"
+      ],
+      "verification": [
+        "overhaulSelectedTaskWorktreeAcceptance",
+        "overhaulWorktreeCleanupAcceptance"
+      ],
+      "dependencies": "Depends on F2.",
+      "tests": [
+        "overhaulSelectedTaskWorktreeAcceptance"
+      ],
+      "trace": [
+        "AC-2"
+      ]
+    },
+    {
+      "id": "F15",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/fields/StatePicker.tsx",
+      "action": "modify",
+      "layer": "app ui",
+      "purpose": "Delete private Dot; use StatusDot with workflow-state colour.",
+      "symbols": [
+        "Dot (deleted)",
+        "StatusDot"
+      ],
+      "responsibilities": [
+        ":55 trigger icon StatusDot color={stateColor(selected)}",
+        ":80 option StatusDot color={stateColor(s)}"
+      ],
+      "nonResponsibilities": [
+        "StatusDot stays the first span inside state-picker (e2e web-app.spec.ts:2147 reads backgroundColor)"
+      ],
+      "implementation": [
+        "Delete :21-28"
+      ],
+      "verification": [
+        "overhaulTransitionLandingAcceptance",
+        "overhaulRunNowAcceptance"
+      ],
+      "dependencies": "Depends on F2.",
+      "tests": [
+        "overhaulTransitionLandingAcceptance",
+        "e2e web-app.spec.ts:2147"
+      ],
+      "trace": [
+        "AC-3"
+      ]
+    },
+    {
+      "id": "F16",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/WorkflowStatePicker.tsx",
+      "action": "modify",
+      "layer": "app ui",
+      "purpose": "Delete private Dot; use StatusDot at five sites.",
+      "symbols": [
+        "Dot (deleted)",
+        "StatusDot"
+      ],
+      "responsibilities": [
+        "StatusDot color={stateColor(...)} at :76, :94, :103, :114, :123"
+      ],
+      "nonResponsibilities": [
+        "Track, current and off-track logic unchanged"
+      ],
+      "implementation": [
+        "Delete :36-38"
+      ],
+      "verification": [
+        "state-picker suites"
+      ],
+      "dependencies": "Depends on F2.",
+      "tests": [
+        "overhaulRunNowAcceptance",
+        "overhaulSelectedTaskWorktreeAcceptance"
+      ],
+      "trace": [
+        "AC-3"
+      ]
+    },
+    {
+      "id": "F17",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/fields/BlockerPicker.tsx",
+      "action": "modify",
+      "layer": "app ui",
+      "purpose": "Candidate dot via StatusDot.",
+      "symbols": [
+        "taskLeading",
+        "StatusDot"
+      ],
+      "responsibilities": [
+        "taskLeading returns StatusDot color={stateColor(stateById(states, c.state))}"
+      ],
+      "nonResponsibilities": [
+        "Candidate filtering unchanged",
+        "Ticket 12 replaces taskLeading with taskStateColor"
+      ],
+      "implementation": [
+        "Replace span :50-53"
+      ],
+      "verification": [
+        "overhaulTaskWorkspaceIdentifierAcceptance"
+      ],
+      "dependencies": "Depends on F2.",
+      "tests": [
+        "overhaulTaskWorkspaceIdentifierAcceptance"
+      ],
+      "trace": [
+        "AC-6"
+      ]
+    },
+    {
+      "id": "F18",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/ChildIssues.tsx",
+      "action": "modify",
+      "layer": "app ui",
+      "purpose": "Child row dot via StatusDot.",
+      "symbols": [
+        "StatusDot"
+      ],
+      "responsibilities": [
+        ":50-53 StatusDot color={stateColor(stateById(states, c.state))}"
+      ],
+      "nonResponsibilities": [
+        "Row moves onto WorkItemListRow in ticket 12"
+      ],
+      "implementation": [
+        "One-element swap"
+      ],
+      "verification": [
+        "overhaulTaskWorkspaceIdentifierAcceptance"
+      ],
+      "dependencies": "Depends on F2.",
+      "tests": [
+        "overhaulTaskWorkspaceIdentifierAcceptance"
+      ],
+      "trace": [
+        "AC-6"
+      ]
+    },
+    {
+      "id": "F19",
+      "path": "studio/src/features/workflows/IssueTypesSection.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Workflow state square via StatusDot; hex fallback removed.",
+      "symbols": [
+        "StatusDot"
+      ],
+      "responsibilities": [
+        ":293-297 StatusDot color={state.color} (null -> muted tone = #7a8599 token)"
+      ],
+      "nonResponsibilities": [
+        "Workflow editing behaviour unchanged"
+      ],
+      "implementation": [
+        "Replace span; delete #7a8599 literal"
+      ],
+      "verification": [
+        "workflow settings suites"
+      ],
+      "dependencies": "Depends on F2.",
+      "tests": [
+        "overhaulWorkflow* suites"
+      ],
+      "trace": [
+        "AC-6"
+      ]
+    },
+    {
+      "id": "F20",
+      "path": "studio/src/features/app-updates/AppUpdateAvailabilityIndicator.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Update dot via StatusDot.",
+      "symbols": [
+        "StatusDot"
+      ],
+      "responsibilities": [
+        "StatusDot tone=attention title=Update available"
+      ],
+      "nonResponsibilities": [
+        "sr-only description id unchanged",
+        "Size 1.5 -> 2 (LLD 2.4)"
+      ],
+      "implementation": [
+        "Replace span :22-26"
+      ],
+      "verification": [
+        "overhaulAppUpdatesAcceptance"
+      ],
+      "dependencies": "Depends on F2.",
+      "tests": [
+        "overhaulAppUpdatesAcceptance"
+      ],
+      "trace": [
+        "AC-6"
+      ]
+    },
+    {
+      "id": "F21",
+      "path": "studio/src/features/workflows/TransitionDisclosure.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Agent-permission chip via Chip.",
+      "symbols": [
+        "Chip"
+      ],
+      "responsibilities": [
+        ":56-58 Chip size=sm tone=muted with the same text"
+      ],
+      "nonResponsibilities": [
+        "Toggle button untouched (ticket 05)"
+      ],
+      "implementation": [
+        "Replace span"
+      ],
+      "verification": [
+        "overhaulWorkflow* suites"
+      ],
+      "dependencies": "Depends on F4.",
+      "tests": [
+        "overhaulWorkflow* suites"
+      ],
+      "trace": [
+        "AC-6"
+      ]
+    },
+    {
+      "id": "F22",
+      "path": "studio/src/features/agents/terminal/LifecycleBadge.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Lifecycle badge on Chip badge size; local class maps deleted.",
+      "symbols": [
+        "TONE_CLASS (deleted)",
+        "RUNNING_PROVIDER_CLASS (deleted)",
+        "Chip"
+      ],
+      "responsibilities": [
+        "ChipTone = agent when active and isTerminalProvider(agent); muted when neutral; else p.tone",
+        "Chip size=badge tone title={p.title} aria-label={p.title}"
+      ],
+      "nonResponsibilities": [
+        "Glyph, .animate-spin, label, count and null-for-unknown unchanged",
+        "Root still carries text-lifecycle-* / text-provider-* asserted by tests"
+      ],
+      "implementation": [
+        "Delete :14-31; render Chip :68-79"
+      ],
+      "verification": [
+        "test/terminal/LifecycleBadge.test.tsx",
+        "test/terminal/LifecycleBadgeProvider.test.tsx"
+      ],
+      "dependencies": "Depends on F4.",
+      "tests": [
+        "LifecycleBadge.test.tsx",
+        "LifecycleBadgeProvider.test.tsx"
+      ],
+      "trace": [
+        "D-4",
+        "AC-6"
+      ]
+    },
+    {
+      "id": "F23",
+      "path": "studio/src/features/agents/lifecycle/AutomationDeliveryChicklet.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Delivery chicklet on Chip.",
+      "symbols": [
+        "Chip"
+      ],
+      "responsibilities": [
+        "Chip size=badge tone=muted className data-testid=automation-delivery-chicklet data-delivery-mode title"
+      ],
+      "nonResponsibilities": [
+        "Children and sr-only description unchanged"
+      ],
+      "implementation": [
+        "Replace root span :32-42"
+      ],
+      "verification": [
+        "overhaulAutomationDeliveryAcceptance"
+      ],
+      "dependencies": "Depends on F4.",
+      "tests": [
+        "overhaulAutomationDeliveryAcceptance"
+      ],
+      "trace": [
+        "AC-6"
+      ]
+    },
+    {
+      "id": "F24",
+      "path": "studio/src/features/agents/lifecycle/AutomationFailureChicklet.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Failure chicklet on Chip danger tone; off-token reds removed.",
+      "symbols": [
+        "Chip"
+      ],
+      "responsibilities": [
+        "Chip size=badge tone=danger className data-testid=automation-failure-chicklet title",
+        "Retry button classes border-l border-lifecycle-danger/40 pl-1 hover:bg-lifecycle-danger/15 disabled:cursor-wait"
+      ],
+      "nonResponsibilities": [
+        "Retry handler, label, disabled logic unchanged"
+      ],
+      "implementation": [
+        "Replace root :46-70; glyph span drops px-1"
+      ],
+      "verification": [
+        "overhaulStatusStreamConsumerAcceptance:432-465",
+        "rg red-500|red-600 in features/agents empty"
+      ],
+      "dependencies": "Depends on F4.",
+      "tests": [
+        "overhaulStatusStreamConsumerAcceptance"
+      ],
+      "trace": [
+        "AC-6"
+      ]
+    },
+    {
+      "id": "F25",
+      "path": "studio/src/features/agents/lifecycle/ClaudeStartupAttentionAction.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Attention action as clickable Chip.",
+      "symbols": [
+        "Chip onClick"
+      ],
+      "responsibilities": [
+        "Chip size=badge tone=attention aria-label={reason} title={reason} onClick"
+      ],
+      "nonResponsibilities": [
+        "stopPropagation + dispatch unchanged",
+        "Text Open terminal unchanged"
+      ],
+      "implementation": [
+        "Replace button :42-56"
+      ],
+      "verification": [
+        "overhaulClaudeTrustAttentionAcceptance"
+      ],
+      "dependencies": "Depends on F4.",
+      "tests": [
+        "overhaulClaudeTrustAttentionAcceptance"
+      ],
+      "trace": [
+        "AC-6"
+      ]
+    },
+    {
+      "id": "F26",
+      "path": "studio/src/features/agents/status/LifecycleChipList.tsx",
+      "action": "create",
+      "layer": "feature ui",
+      "purpose": "Shared renderer for the three lifecycle chip groups.",
+      "symbols": [
+        "LifecycleChipList",
+        "TaskLifecycleChip"
+      ],
+      "responsibilities": [
+        "Fragment of LifecycleBadge per chip, key state|agent, showLabel=false, alwaysShowCount"
+      ],
+      "nonResponsibilities": [
+        "No wrapper; callers keep wrappers, test ids and data-state"
+      ],
+      "implementation": [
+        "Implement per LLD 4.5"
+      ],
+      "verification": [
+        "callers' suites"
+      ],
+      "dependencies": "Depends on F22.",
+      "tests": [
+        "AgentStateBadge.test.tsx"
+      ],
+      "trace": [
+        "AC-5"
+      ]
+    },
+    {
+      "id": "F27",
+      "path": "studio/src/features/agents/status/ModuleLifecycleChicklets.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Body uses LifecycleChipList.",
+      "symbols": [
+        "LifecycleChipList"
+      ],
+      "responsibilities": [
+        "<LifecycleChipList chips={chips} /> inside existing span"
+      ],
+      "nonResponsibilities": [
+        "Wrapper unchanged"
+      ],
+      "implementation": [
+        "Replace map"
+      ],
+      "verification": [
+        "overhaulModule* suites"
+      ],
+      "dependencies": "Depends on F26.",
+      "tests": [
+        "overhaulModule* suites"
+      ],
+      "trace": [
+        "AC-5"
+      ]
+    },
+    {
+      "id": "F28",
+      "path": "studio/src/features/agents/lifecycle/AgentStateBadge.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Body uses LifecycleChipList.",
+      "symbols": [
+        "LifecycleChipList"
+      ],
+      "responsibilities": [
+        "Map replaced; ClaudeStartupAttentionAction still trails"
+      ],
+      "nonResponsibilities": [
+        "data-testid agent-state-badge and data-state unchanged"
+      ],
+      "implementation": [
+        "Replace map"
+      ],
+      "verification": [
+        "test/AgentStateBadge.test.tsx"
+      ],
+      "dependencies": "Depends on F26.",
+      "tests": [
+        "AgentStateBadge.test.tsx"
+      ],
+      "trace": [
+        "AC-5"
+      ]
+    },
+    {
+      "id": "F29",
+      "path": "studio/src/features/agents/lifecycle/ScratchStateBadge.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Body uses LifecycleChipList.",
+      "symbols": [
+        "LifecycleChipList"
+      ],
+      "responsibilities": [
+        "Map replaced; aggregateLifecycle unchanged"
+      ],
+      "nonResponsibilities": [
+        "data-testid scratch-run-chicklets and data-state unchanged"
+      ],
+      "implementation": [
+        "Replace map"
+      ],
+      "verification": [
+        "overhaulScratchAcceptance"
+      ],
+      "dependencies": "Depends on F26.",
+      "tests": [
+        "overhaulScratchAcceptance"
+      ],
+      "trace": [
+        "AC-5"
+      ]
+    },
+    {
+      "id": "F30",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/BlockerChipView.tsx",
+      "action": "modify",
+      "layer": "app ui",
+      "purpose": "Blocker chip as removable Chip.",
+      "symbols": [
+        "Chip onRemove",
+        "removeTestId"
+      ],
+      "responsibilities": [
+        "Chip size=sm tone={warn ? attention : neutral} data-testid=blocker-chip data-warn title onRemove removeLabel=Remove blocker removeTestId=remove-blocker disabled",
+        "Children: existing select button with identifier and IconAlertTriangle"
+      ],
+      "nonResponsibilities": [
+        "Identifier fallback chip.id.slice(0, 8) unchanged",
+        "Remove control always visible (D-7)"
+      ],
+      "implementation": [
+        "Replace root span and remove button; drop quietChipRemoveClassName import"
+      ],
+      "verification": [
+        "overhaulTaskWorkspaceIdentifierAcceptance (T-404/T-405)",
+        "e2e web-app.spec.ts:1700"
+      ],
+      "dependencies": "Depends on F4.",
+      "tests": [
+        "overhaulTaskWorkspaceIdentifierAcceptance"
+      ],
+      "trace": [
+        "D-7",
+        "AC-1"
+      ]
+    },
+    {
+      "id": "F31",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/fields/QuietChipControls.tsx",
+      "action": "modify",
+      "layer": "app ui",
+      "purpose": "Delete the orphaned quiet remove class.",
+      "symbols": [
+        "quietChipRemoveClassName (deleted)",
+        "GhostChipAdd"
+      ],
+      "responsibilities": [
+        "Only GhostChipAdd remains"
+      ],
+      "nonResponsibilities": [
+        "GhostChipAdd unchanged"
+      ],
+      "implementation": [
+        "Delete export"
+      ],
+      "verification": [
+        "rg quietChipRemoveClassName empty"
+      ],
+      "dependencies": "Depends on F30.",
+      "tests": [
+        "typecheck"
+      ],
+      "trace": [
+        "D-7"
+      ]
+    },
+    {
+      "id": "F32",
+      "path": "studio/src/features/workflows/StageSkillsField.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Skill chips as removable Chip.",
+      "symbols": [
+        "Chip onRemove"
+      ],
+      "responsibilities": [
+        "Chip key={skill} onRemove removeLabel={Remove skill \"<skill>\"} (md size)"
+      ],
+      "nonResponsibilities": [
+        "Draft input and commit logic unchanged"
+      ],
+      "implementation": [
+        "Replace span + inline x button :32-45"
+      ],
+      "verification": [
+        "overhaulWorkflowStageSkillsAcceptance",
+        "overhaulWorkflowStageSkillSerializationAcceptance"
+      ],
+      "dependencies": "Depends on F4.",
+      "tests": [
+        "overhaulWorkflowStageSkillsAcceptance"
+      ],
+      "trace": [
+        "AC-1"
+      ]
+    },
+    {
+      "id": "F33",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/internal/DormantWorkspaceTabs.tsx",
+      "action": "modify",
+      "layer": "app ui",
+      "purpose": "Dormant count bubble as count Chip.",
+      "symbols": [
+        "Chip variant=count"
+      ],
+      "responsibilities": [
+        ":163-165 Chip variant=count size=badge {count}"
+      ],
+      "nonResponsibilities": [
+        "Trigger, menu and caret untouched (tickets 07/08)",
+        "dormant-tabs-trigger unchanged"
+      ],
+      "implementation": [
+        "Replace one span"
+      ],
+      "verification": [
+        "overhaulDormantWorkspaceTabsAcceptance"
+      ],
+      "dependencies": "Depends on F4.",
+      "tests": [
+        "overhaulDormantWorkspaceTabsAcceptance"
+      ],
+      "trace": [
+        "AC-1"
+      ]
+    },
+    {
+      "id": "F34",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/FindingsPanel.tsx",
+      "action": "modify",
+      "layer": "app ui",
+      "purpose": "Queued count as count Chip (state pill is ticket 12).",
+      "symbols": [
+        "Chip variant=count"
+      ],
+      "responsibilities": [
+        ":43-48 Chip variant=count size=sm data-testid=findings-queued-count, same text"
+      ],
+      "nonResponsibilities": [
+        "Rows and state pill untouched here"
+      ],
+      "implementation": [
+        "Replace one span"
+      ],
+      "verification": [
+        "e2e web-app.spec.ts:1580 (1 fix queued)"
+      ],
+      "dependencies": "Depends on F4.",
+      "tests": [
+        "overhaulTaskWorkspaceIdentifierAcceptance"
+      ],
+      "trace": [
+        "AC-1"
+      ]
+    },
+    {
+      "id": "U1",
+      "path": "studio/src/app/shell/ticket-workspace/tasks/components/ConversationRows.tsx",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "Provider identity swatch is not a status.",
+      "symbols": [
+        "providerToneClasses"
+      ],
+      "responsibilities": [
+        "Keeps provider palette separate per tailwind.config.ts"
+      ],
+      "nonResponsibilities": [
+        "Not migrated to StatusDot (D-8)"
+      ],
+      "implementation": [
+        "No change"
+      ],
+      "verification": [
+        "n/a"
+      ],
+      "dependencies": "Boundary.",
+      "tests": [
+        "existing suites"
+      ],
+      "trace": [
+        "D-8"
+      ]
+    },
+    {
+      "id": "U2",
+      "path": "studio/src/features/module-tabs/ModuleJumpBadge.tsx",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "Owned by ticket 02 (KeyBadge).",
+      "symbols": [
+        "ModuleJumpBadge"
+      ],
+      "responsibilities": [
+        "Ticket 02 migrates it"
+      ],
+      "nonResponsibilities": [
+        "Not touched here"
+      ],
+      "implementation": [
+        "No change"
+      ],
+      "verification": [
+        "n/a"
+      ],
+      "dependencies": "Boundary.",
+      "tests": [
+        "overhaulModuleJumpBadgesAcceptance"
+      ],
+      "trace": [
+        "P-3"
+      ]
+    },
+    {
+      "id": "U3",
+      "path": "studio/src/shared/utilities/display.ts",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "stateColor/stateLabel remain the workflow-state source.",
+      "symbols": [
+        "stateColor",
+        "stateLabel"
+      ],
+      "responsibilities": [
+        "Single state colour/label source"
+      ],
+      "nonResponsibilities": [
+        "No change"
+      ],
+      "implementation": [
+        "No change"
+      ],
+      "verification": [
+        "n/a"
+      ],
+      "dependencies": "Boundary.",
+      "tests": [
+        "existing suites"
+      ],
+      "trace": [
+        "INV"
+      ]
+    },
+    {
+      "id": "U4",
+      "path": "studio/tailwind.config.ts",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "No new token needed.",
+      "symbols": [
+        "lifecycle",
+        "text",
+        "pane",
+        "provider"
+      ],
+      "responsibilities": [
+        "All colours map to existing tokens"
+      ],
+      "nonResponsibilities": [
+        "text-[10px] stays an arbitrary size inside Chip"
+      ],
+      "implementation": [
+        "No change"
+      ],
+      "verification": [
+        "npm run build"
+      ],
+      "dependencies": "Boundary.",
+      "tests": [
+        "build"
+      ],
+      "trace": [
+        "AC-6"
+      ]
+    },
+    {
+      "id": "U5",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/fields/PickerTrigger.tsx",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "Still renders icon first, keeping StatusDot as the first span.",
+      "symbols": [
+        "PickerTrigger"
+      ],
+      "responsibilities": [
+        "Icon slot order"
+      ],
+      "nonResponsibilities": [
+        "No change"
+      ],
+      "implementation": [
+        "No change"
+      ],
+      "verification": [
+        "e2e web-app.spec.ts:2147"
+      ],
+      "dependencies": "Boundary.",
+      "tests": [
+        "e2e"
+      ],
+      "trace": [
+        "INV"
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "title": "Tone map · owner shared/ui/statusTone.ts",
+      "headers": [
+        "Key",
+        "STATUS_DOT_CLASS",
+        "CHIP_TONE_CLASS"
+      ],
+      "rows": [
+        [
+          "active",
+          "bg-lifecycle-active",
+          "border-lifecycle-active/70 text-lifecycle-active"
+        ],
+        [
+          "attention",
+          "bg-lifecycle-attention",
+          "border-lifecycle-attention/70 text-lifecycle-attention"
+        ],
+        [
+          "danger",
+          "bg-lifecycle-danger",
+          "border-lifecycle-danger/70 text-lifecycle-danger"
+        ],
+        [
+          "idle",
+          "bg-lifecycle-idle",
+          "border-lifecycle-idle/70 text-lifecycle-idle"
+        ],
+        [
+          "success",
+          "bg-lifecycle-success",
+          "border-lifecycle-success/70 text-lifecycle-success"
+        ],
+        [
+          "muted",
+          "bg-text-muted",
+          "border-pane-border text-text-muted"
+        ],
+        [
+          "neutral",
+          "(not a dot tone)",
+          "border-pane-border text-text-secondary"
+        ],
+        [
+          "claude / codex / gemini / agy",
+          "(not a dot tone)",
+          "border-provider-<p>/60 text-provider-<p> (written as four literals)"
+        ]
+      ]
+    },
+    {
+      "title": "StatusDot props · shared/ui/StatusDot.tsx",
+      "headers": [
+        "Prop",
+        "Type",
+        "Default",
+        "Behaviour"
+      ],
+      "rows": [
+        [
+          "tone",
+          "StatusTone",
+          "muted",
+          "Fill from STATUS_DOT_CLASS"
+        ],
+        [
+          "color",
+          "string | null | undefined",
+          "—",
+          "Truthy -> inline style.backgroundColor; tone class omitted"
+        ],
+        [
+          "title",
+          "string",
+          "—",
+          "Forwarded"
+        ],
+        [
+          "className",
+          "string",
+          "—",
+          "Layout only"
+        ],
+        [
+          "(render)",
+          "span aria-hidden=true",
+          "",
+          "inline-block size-2 shrink-0; never text"
+        ]
+      ]
+    },
+    {
+      "title": "Chip props · shared/ui/Chip.tsx",
+      "headers": [
+        "Prop",
+        "Type",
+        "Default",
+        "Behaviour"
+      ],
+      "rows": [
+        [
+          "children",
+          "ReactNode",
+          "required",
+          "Label"
+        ],
+        [
+          "variant",
+          "outline | count",
+          "outline",
+          "count = border-transparent bg-pane-title text-text-secondary, ignores tone"
+        ],
+        [
+          "tone",
+          "ChipTone",
+          "neutral",
+          "Outline border/text from CHIP_TONE_CLASS"
+        ],
+        [
+          "size",
+          "md | sm | badge",
+          "md",
+          "md gap-2 px-2 py-1 text-xs; sm gap-1.5 px-1.5 py-0.5 text-xs; badge gap-1 px-1 text-[10px] font-bold leading-4 + bg-pane-bg"
+        ],
+        [
+          "dotTone / dotColor",
+          "StatusTone / string | null",
+          "—",
+          "Leading StatusDot; dotColor wins"
+        ],
+        [
+          "onClick",
+          "(event) => void",
+          "—",
+          "Root becomes button type=button; not with onRemove"
+        ],
+        [
+          "onRemove + removeLabel",
+          "() => void + string",
+          "—",
+          "Trailing remove button aria-label=removeLabel"
+        ],
+        [
+          "removeTestId",
+          "string",
+          "—",
+          "data-testid on remove button"
+        ],
+        [
+          "disabled",
+          "boolean",
+          "false",
+          "Disables remove button or clickable root"
+        ],
+        [
+          "title, aria-label, data-*",
+          "string",
+          "—",
+          "Forwarded to root"
+        ],
+        [
+          "className",
+          "string",
+          "—",
+          "Layout only"
+        ]
+      ]
+    },
+    {
+      "title": "Pull-request tone · features/agents/worktrees/changes/pullRequestTone.ts (exported from worktrees index)",
+      "headers": [
+        "State",
+        "Tone"
+      ],
+      "rows": [
+        [
+          "ready, merged",
+          "success"
+        ],
+        [
+          "merge_conflict, checks_failed, wrong_base",
+          "danger"
+        ],
+        [
+          "checks_pending, mergeability_pending",
+          "active"
+        ],
+        [
+          "approval_required",
+          "attention"
+        ],
+        [
+          "closed_unmerged",
+          "muted"
+        ],
+        [
+          "null, undefined, none",
+          "muted (function)"
+        ],
+        [
+          "unavailable, any other",
+          "attention (function)"
+        ]
+      ]
+    },
+    {
+      "title": "Deliberate visible changes (LLD.md 2.4)",
+      "headers": [
+        "Surface",
+        "Before",
+        "After"
+      ],
+      "rows": [
+        [
+          "ChangesStateChips PR dot ready/merged",
+          "muted",
+          "success"
+        ],
+        [
+          "ChangesStateChips PR dot checks/mergeability pending",
+          "danger",
+          "active"
+        ],
+        [
+          "ChangesStateChips PR dot approval_required/unavailable/unknown",
+          "danger",
+          "attention"
+        ],
+        [
+          "ChangesStateChips PR dot closed_unmerged",
+          "danger",
+          "muted"
+        ],
+        [
+          "BranchInspector PR chip pending states",
+          "attention",
+          "active"
+        ],
+        [
+          "BranchInspector PR chip closed_unmerged",
+          "attention",
+          "muted"
+        ],
+        [
+          "LifecycleBadge active without provider hue",
+          "text-text-primary",
+          "text-lifecycle-active"
+        ],
+        [
+          "AutomationFailureChicklet",
+          "red-500/600 + tint",
+          "lifecycle-danger, no tint"
+        ],
+        [
+          "BlockerChipView unresolved",
+          "attention + 10% tint",
+          "attention outline"
+        ],
+        [
+          "BlockerChipView remove",
+          "hover/focus reveal",
+          "always visible"
+        ],
+        [
+          "Dot size",
+          "size-2.5 / size-1.5",
+          "size-2"
+        ],
+        [
+          "AutomationDeliveryChicklet",
+          "font-medium, bg-pane-panel",
+          "font-bold, bg-pane-bg"
+        ],
+        [
+          "StageSkillsField chips",
+          "text-sm, x glyph",
+          "text-xs, IconX"
+        ],
+        [
+          "Dormant count bubble",
+          "text-text-primary",
+          "text-text-secondary, font-bold"
+        ]
+      ]
+    }
+  ],
+  "decisions": [
+    "D-1 Tone-to-token map owned by shared/ui/statusTone.ts; pull-request-to-tone map owned by worktrees/changes/pullRequestTone.ts (shared/ cannot import a feature).",
+    "D-2 One dot size, size-2, square and decorative.",
+    "D-3 PULL_REQUEST_TONE uses the checkout-rows superset; unknown states -> attention.",
+    "D-4 Lifecycle neutral -> muted; non-provider active -> lifecycle-active.",
+    "D-5 Chip tints dropped; only badge size fills (bg-pane-bg).",
+    "D-6 Chip remove control: CloseButton size=chip if shared/ui/CloseButton.tsx exists, else IconX size 12; whichever of 01/11 lands second converts that one site.",
+    "D-7 Remove control always visible; quiet hover reveal retired.",
+    "D-8 ConversationRows provider swatch stays outside StatusDot."
+  ],
+  "execution": [
+    {
+      "title": "S1 · Shared foundation",
+      "detail": "F1-F5: statusTone, StatusDot, Chip and their tests. Preflight P-1 baseline green, P-2 CloseButton check.",
+      "gate": "npx vitest run src/shared/ui"
+    },
+    {
+      "title": "S2 · Worktrees tone collapse",
+      "detail": "F6-F14: pullRequestTone + export; delete toneClass, TONE_CLASS, checkoutToneClass, CheckoutTone, InspectorSection ternary, BranchInspector pullRequestTone.",
+      "gate": "rg checkoutToneClass|CheckoutTone|toneClass( empty; worktree suites"
+    },
+    {
+      "title": "S3 · State and tone dots",
+      "detail": "F15-F20: pickers, blocker picker, child issues, issue types, app update.",
+      "gate": "rg 'function Dot(' empty; state-picker suites"
+    },
+    {
+      "title": "S4 · Lifecycle badges and groups",
+      "detail": "F21-F29: TransitionDisclosure, LifecycleBadge, chicklets, attention action, LifecycleChipList.",
+      "gate": "LifecycleBadge*.test.tsx unchanged; no red-500/600"
+    },
+    {
+      "title": "S5 · Removable and count chips",
+      "detail": "F30-F34: BlockerChipView, QuietChipControls, StageSkillsField, DormantWorkspaceTabs count, FindingsPanel count.",
+      "gate": "rg quietChipRemoveClassName empty"
+    },
+    {
+      "title": "S6 · Full gates",
+      "detail": "S2-S5 are independent after S1; run all gates at the end.",
+      "gate": "typecheck · studio tests · test:overhaul · build"
+    }
+  ],
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "text": "StatusDot.tsx and Chip.tsx exist with tests (remove-button label, count rendering) — S1, F3/F5 pass."
+    },
+    {
+      "id": "AC-2",
+      "text": "Worktrees exports one status mapping (PULL_REQUEST_TONE/pullRequestTone); the other maps are deleted — S2, F7 + rg searches."
+    },
+    {
+      "id": "AC-3",
+      "text": "Private Dot components deleted — S3, rg 'function Dot(' empty."
+    },
+    {
+      "id": "AC-4",
+      "text": "npm run typecheck, studio tests and test:overhaul pass with guarding suites unedited — S6."
+    },
+    {
+      "id": "AC-5",
+      "text": "Three lifecycle chip groups share LifecycleChipList — S4."
+    },
+    {
+      "id": "AC-6",
+      "text": "Statuses use one tone each on theme tokens; no #7a8599 or red-500/600 in migrated files — S2/S4."
+    }
+  ]
+};
+
+    const actionLabels = { all: "All", create: "Create", modify: "Modify", delete: "Delete", move: "Move", untouched: "Untouched" };
+    const state = { action: "all", query: "", selected: null };
+
+    const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+    const directory = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ".";
+    const basename = path => path.slice(path.lastIndexOf("/") + 1);
+    const list = items => `<ul>${(items || []).map(item => `<li>${esc(item)}</li>`).join("")}</ul>`;
+    const tokens = (items, extra = "") => (items || []).map(item => `<span class="token ${extra}">${esc(item)}</span>`).join("");
+
+    function visibleFiles() {
+      const needle = state.query.trim().toLowerCase();
+      return LLD_DOCUMENT.files.filter(file => {
+        const actionMatch = state.action === "all" || file.action === state.action;
+        const haystack = [file.path, file.layer, file.purpose, ...(file.symbols || []), ...(file.responsibilities || []), ...(file.implementation || []), ...(file.verification || []), ...(file.trace || [])].join(" ").toLowerCase();
+        return actionMatch && (!needle || haystack.includes(needle));
+      });
+    }
+
+    function renderHeader() {
+      document.getElementById("doc-crumb").textContent = LLD_DOCUMENT.meta.crumb;
+      document.getElementById("doc-title").textContent = LLD_DOCUMENT.meta.title;
+      document.getElementById("doc-summary").textContent = LLD_DOCUMENT.meta.summary;
+      document.getElementById("doc-status").textContent = LLD_DOCUMENT.meta.status;
+      document.getElementById("scope-lede").textContent = LLD_DOCUMENT.scope.lede;
+      document.getElementById("scope-list").innerHTML = LLD_DOCUMENT.scope.in.map(item => `<li>${esc(item)}</li>`).join("");
+      document.getElementById("boundary-list").innerHTML = LLD_DOCUMENT.scope.boundaries.map(item => `<li>${esc(item)}</li>`).join("");
+      const counts = Object.keys(actionLabels).filter(action => action !== "all").map(action => ({ action, count: LLD_DOCUMENT.files.filter(file => file.action === action).length }));
+      document.getElementById("metrics").innerHTML = counts.map(item => `<div class="metric"><b>${item.count}</b><span>${actionLabels[item.action]}</span></div>`).join("");
+    }
+
+    function renderFilters() {
+      const actions = ["all", ...new Set(LLD_DOCUMENT.files.map(file => file.action))];
+      document.getElementById("filters").innerHTML = actions.map(action => `<button class="filter" type="button" data-action="${action}" aria-pressed="${state.action === action}">${actionLabels[action] || action}</button>`).join("");
+      document.querySelectorAll(".filter").forEach(button => button.addEventListener("click", () => {
+        state.action = button.dataset.action;
+        renderFilters();
+        renderFiles();
+      }));
+    }
+
+    function renderFiles() {
+      const files = visibleFiles();
+      if (!files.some(file => file.id === state.selected)) state.selected = files[0]?.id || null;
+      const groups = Map.groupBy ? Map.groupBy(files, file => directory(file.path)) : files.reduce((map, file) => map.set(directory(file.path), [...(map.get(directory(file.path)) || []), file]), new Map());
+      const rail = document.getElementById("file-rail");
+      rail.innerHTML = files.length ? [...groups.entries()].map(([dir, entries]) => `<div class="dir-group"><div class="dir-label">${esc(dir)}</div>${entries.map(file => `<button class="file-button" type="button" role="option" data-file="${esc(file.id)}" aria-selected="${file.id === state.selected}"><span class="action-dot ${esc(file.action)}" aria-hidden="true"></span><span class="file-button-copy"><span class="file-name">${esc(basename(file.path))}</span><span class="file-meta">${esc(actionLabels[file.action] || file.action)} · ${esc(file.layer)}</span></span></button>`).join("")}</div>`).join("") : `<div class="rail-empty">No files match this view.</div>`;
+      rail.querySelectorAll(".file-button").forEach(button => {
+        button.addEventListener("click", () => selectFile(button.dataset.file));
+        button.addEventListener("keydown", event => navigateFiles(event, button.dataset.file));
+      });
+      renderInspector();
+    }
+
+    function selectFile(id) {
+      state.selected = id;
+      document.querySelectorAll(".file-button").forEach(button => button.setAttribute("aria-selected", String(button.dataset.file === id)));
+      renderInspector();
+      history.replaceState(null, "", `#file:${encodeURIComponent(id)}`);
+    }
+
+    function navigateFiles(event, id) {
+      if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+      event.preventDefault();
+      const files = visibleFiles();
+      const index = files.findIndex(file => file.id === id);
+      const next = event.key === 'ArrowDown' ? Math.min(index + 1, files.length - 1) : Math.max(index - 1, 0);
+      state.selected = files[next]?.id || id;
+      renderFiles();
+      document.querySelector(`[data-file="${CSS.escape(state.selected)}"]`)?.focus();
+    }
+
+    function renderInspector() {
+      const file = LLD_DOCUMENT.files.find(entry => entry.id === state.selected);
+      const inspector = document.getElementById("file-inspector");
+      if (!file) { inspector.innerHTML = `<p class="rail-empty">Choose a file to inspect.</p>`; return; }
+      inspector.innerHTML = `
+        <div class="inspector-head">
+          <div><h3 class="path">${esc(file.path)}</h3><p class="purpose">${esc(file.purpose)}</p></div>
+          <span class="action-badge ${esc(file.action)}">${esc(actionLabels[file.action] || file.action)}</span>
+        </div>
+        <div class="symbol-row" aria-label="Symbols">${tokens(file.symbols)}</div>
+        <div class="inspector-grid">
+          <div class="info-block"><h4>Responsibilities</h4>${list(file.responsibilities)}</div>
+          <div class="info-block no"><h4>Preserved boundary</h4>${list(file.nonResponsibilities)}</div>
+          <div class="info-block"><h4>Implementation</h4>${list(file.implementation)}</div>
+          <div class="info-block"><h4>Verification</h4>${list(file.verification)}</div>
+        </div>
+        <div class="dependency-strip"><b>Dependency position</b><p>${esc(file.dependencies)}</p></div>
+        <div class="trace-row" aria-label="Tests and requirement trace">${tokens(file.tests)}${tokens(file.trace, "trace-token")}</div>`;
+    }
+
+    function renderTimeline() {
+      document.getElementById("timeline").innerHTML = LLD_DOCUMENT.execution.map(step => `<article class="step"><div><b>${esc(step.title)}</b><p>${esc(step.detail)}</p></div><code>${esc(step.gate)}</code></article>`).join("");
+      document.getElementById("acceptance-list").innerHTML = LLD_DOCUMENT.acceptance.map(item => `<article class="acceptance-item"><strong>${esc(item.id)}</strong><p>${esc(item.text)}</p></article>`).join("");
+    }
+
+
+    function renderContracts() {
+      document.getElementById("contract-tables").innerHTML = LLD_DOCUMENT.contracts.map(table => `<div class="table-wrap"><h3>${esc(table.title)}</h3><table class="contract"><thead><tr>${table.headers.map(h => `<th scope="col">${esc(h)}</th>`).join("")}</tr></thead><tbody>${table.rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`).join("");
+      document.getElementById("decision-list").innerHTML = LLD_DOCUMENT.decisions.map(item => `<li>${esc(item)}</li>`).join("");
+    }
+    window.addEventListener("hashchange", () => {
+      const id = decodeURIComponent(location.hash.replace(/^#file:/, ""));
+      if (location.hash.startsWith("#file:") && LLD_DOCUMENT.files.some(file => file.id === id) && id !== state.selected) { state.selected = id; renderFiles(); }
+    });
+
+    document.getElementById("file-search").addEventListener("input", event => { state.query = event.target.value; renderFiles(); });
+    document.addEventListener("keydown", event => {
+      if (event.key === "/" && document.activeElement !== document.getElementById("file-search")) { event.preventDefault(); document.getElementById("file-search").focus(); }
+      if (event.key === "Escape" && document.activeElement === document.getElementById("file-search")) { state.query = ""; document.getElementById("file-search").value = ""; renderFiles(); }
+    });
+
+    const deepLink = decodeURIComponent(location.hash.replace(/^#file:/, ""));
+    state.selected = LLD_DOCUMENT.files.some(file => file.id === deepLink) ? deepLink : LLD_DOCUMENT.files[0]?.id;
+    renderHeader();
+    renderFilters();
+    renderFiles();
+    renderTimeline();
+    renderContracts();
+  </script>
+</body>
+</html>

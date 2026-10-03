@@ -194,7 +194,7 @@ describe("restore-aware module picker acceptance", () => {
     expect(tablist.nextElementSibling).toContainElement(modulePicker);
     expect(tabScroller).toContainElement(tablist);
     expect(tabScroller).toContainElement(modulePicker);
-    expect(within(tablist).getAllByRole("tab").at(-1)).toHaveAccessibleName("Charlie");
+    expect(within(tablist).getAllByRole("tab").filter((tab) => tab.hasAttribute("data-module-id")).at(-1)).toHaveAccessibleName("Charlie");
     expect(tabScroller).toHaveClass("min-w-0", "flex-1", "overflow-x-auto");
 
     fireEvent.click(modulePicker);
@@ -286,7 +286,7 @@ describe("restore-aware module picker acceptance", () => {
       )
     );
     await waitFor(() =>
-      expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      expect(screen.getAllByRole("tab").filter((tab) => tab.hasAttribute("data-module-id")).map((tab) => tab.textContent)).toEqual([
         "Alpha",
         "Bravo",
         "Charlie",

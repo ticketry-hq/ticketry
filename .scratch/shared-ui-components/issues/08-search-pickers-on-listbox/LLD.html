@@ -1,0 +1,930 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="lld-source" content="LLD.md">
+  <meta name="lld-source-sha256" content="4f2e18a3c33f1ff4e40a41587d8a6eb28fb40c67d99a0b8479f2f99624493cf9">
+  <title>LLD 08 · Search pickers</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --surface: #202b3b;
+      --rail: #121c29;
+      --group: #263448;
+      --on-accent: #0e1520;
+      --focus: #a7ceff;
+      --paper: #0e1520;
+      --sheet: #172130;
+      --ink: #e6edf6;
+      --muted: #a6b5c9;
+      --line: #34445b;
+      --line-strong: #657a96;
+      --navy: #91c4ff;
+      --navy-soft: #203852;
+      --orange: #ffb180;
+      --orange-soft: #422d24;
+      --green: #7bdbb1;
+      --green-soft: #183b32;
+      --red: #ff9eaa;
+      --red-soft: #432731;
+      --violet: #c4b2ff;
+      --violet-soft: #332e4c;
+      --shadow: 0 18px 45px rgba(0, 0, 0, .24);
+      --radius: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--paper); }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(145, 196, 255, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(20, 61, 102, .035) 1px, transparent 1px),
+        var(--paper);
+      background-size: 24px 24px;
+      font-family: var(--sans);
+      line-height: 1.55;
+    }
+
+    button, input { font: inherit; }
+    button:focus-visible, input:focus-visible, a:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .shell { width: min(1480px, calc(100% - 40px)); margin: 0 auto; }
+    .masthead {
+      margin-top: 20px;
+      border: 1px solid var(--line-strong);
+      background: var(--sheet);
+      box-shadow: var(--shadow);
+    }
+    .masthead-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      padding: 30px 34px 28px;
+      border-bottom: 1px solid var(--line);
+    }
+    .crumb {
+      margin: 0 0 12px;
+      color: var(--orange);
+      font: 700 11px/1.2 var(--mono);
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; max-width: 900px; font-size: clamp(32px, 5vw, 64px); line-height: .98; letter-spacing: -.045em; }
+    .summary { max-width: 780px; margin: 18px 0 0; color: var(--muted); font-size: 16px; }
+    .phase-card {
+      min-width: 180px;
+      align-self: stretch;
+      display: grid;
+      align-content: space-between;
+      padding: 18px;
+      background: var(--navy);
+      color: var(--on-accent);
+    }
+    .phase-card span { font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; opacity: .68; }
+    .phase-card strong { font-size: 30px; letter-spacing: -.03em; }
+    .phase-card small { font-family: var(--mono); opacity: .78; }
+    .metrics { display: grid; grid-template-columns: repeat(5, 1fr); }
+    .metric { padding: 15px 20px; border-right: 1px solid var(--line); }
+    .metric:last-child { border-right: 0; }
+    .metric b { display: block; font-size: 24px; line-height: 1; }
+    .metric span { color: var(--muted); font: 700 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+
+    .sticky-nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      gap: 4px;
+      margin: 14px 0 32px;
+      padding: 7px;
+      border: 1px solid var(--line);
+      background: rgba(23, 33, 48, .92);
+      backdrop-filter: blur(14px);
+    }
+    .sticky-nav a { padding: 8px 13px; color: var(--muted); font: 700 11px/1 var(--mono); text-decoration: none; text-transform: uppercase; }
+    .sticky-nav a:hover { color: var(--navy); background: var(--navy-soft); }
+
+    section { margin: 0 0 46px; scroll-margin-top: 72px; }
+    .primary-section { margin-bottom: 56px; }
+    .section-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px; align-items: end; }
+    .workspace-note { max-width: 310px; margin: 0 0 22px; padding: 12px 14px; border-left: 3px solid var(--orange); color: var(--muted); background: var(--sheet); font-size: 12px; }
+    .section-kicker { margin: 0 0 6px; color: var(--orange); font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; }
+    h2 { margin: 0; font-size: clamp(25px, 3vw, 39px); letter-spacing: -.035em; }
+    .lede { max-width: 820px; margin: 10px 0 22px; color: var(--muted); }
+
+    .overview-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 16px; }
+    .card { border: 1px solid var(--line); background: var(--sheet); padding: 22px; }
+    .card h3 { margin: 0 0 12px; font-size: 16px; }
+    .plain-list { margin: 0; padding-left: 18px; }
+    .plain-list li + li { margin-top: 8px; }
+    .boundary { border-left: 4px solid var(--orange); }
+
+    .change-view { border: 1px solid var(--line-strong); background: var(--sheet); box-shadow: var(--shadow); }
+    .change-toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 16px;
+      padding: 15px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .search-wrap { position: relative; }
+    .search-wrap span { position: absolute; left: 12px; top: 9px; color: var(--muted); font-family: var(--mono); }
+    #file-search {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px 0 36px;
+      border: 1px solid var(--line-strong);
+      background: var(--rail);
+      color: var(--ink);
+    }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .filter {
+      border: 1px solid var(--line);
+      background: var(--sheet);
+      color: var(--muted);
+      padding: 7px 10px;
+      cursor: pointer;
+      font: 700 10px/1 var(--mono);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .filter[aria-pressed="true"] { color: var(--on-accent); border-color: var(--navy); background: var(--navy); }
+    .change-workspace { display: grid; grid-template-columns: minmax(330px, .72fr) minmax(0, 1.8fr); height: clamp(620px, 72vh, 820px); }
+    .file-rail { border-right: 1px solid var(--line); background: var(--rail); overflow: auto; }
+    .rail-empty { padding: 30px; color: var(--muted); text-align: center; }
+    .dir-group + .dir-group { border-top: 1px solid var(--line); }
+    .dir-label { position: sticky; top: 0; z-index: 2; padding: 9px 13px; color: var(--muted); background: var(--group); font: 700 10px/1.2 var(--mono); }
+    .file-button {
+      width: 100%;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 11px 13px;
+      border: 0;
+      border-top: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+    }
+    .file-button:hover { background: var(--surface); }
+    .file-button[aria-selected="true"] { background: var(--surface); box-shadow: inset 4px 0 0 var(--orange); }
+    .file-button-copy { min-width: 0; display: grid; gap: 4px; }
+    .file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 12px/1.3 var(--mono); }
+    .file-meta { color: var(--muted); font: 700 9px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+    .action-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+    .action-dot.create { background: var(--green); }
+    .action-dot.modify { background: var(--orange); }
+    .action-dot.delete { background: var(--red); }
+    .action-dot.move { background: var(--violet); }
+    .action-dot.untouched { background: var(--navy); }
+
+    .file-inspector { min-width: 0; padding: 28px; overflow: auto; }
+    .inspector-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .path { margin: 0; overflow-wrap: anywhere; font: 700 clamp(16px, 2vw, 22px)/1.3 var(--mono); }
+    .purpose { margin: 8px 0 0; color: var(--muted); }
+    .action-badge { flex: 0 0 auto; padding: 6px 9px; border: 1px solid currentColor; font: 800 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .action-badge.create { color: var(--green); background: var(--green-soft); }
+    .action-badge.modify { color: var(--orange); background: var(--orange-soft); }
+    .action-badge.delete { color: var(--red); background: var(--red-soft); }
+    .action-badge.move { color: var(--violet); background: var(--violet-soft); }
+    .action-badge.untouched { color: var(--navy); background: var(--navy-soft); }
+    .inspector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+    .info-block { border-top: 3px solid var(--navy); padding: 13px 14px 15px; background: var(--surface); }
+    .info-block.no { border-top-color: var(--red); }
+    .info-block h4 { margin: 0 0 8px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .info-block ul { margin: 0; padding-left: 18px; font-size: 13px; }
+    .info-block li + li { margin-top: 6px; }
+    .symbol-row, .trace-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+    .token { padding: 5px 8px; border: 1px solid var(--line); background: var(--rail); overflow-wrap: anywhere; font: 600 11px/1 var(--mono); }
+    .trace-token { color: var(--navy); border-color: #3d5f86; background: var(--navy-soft); }
+    .dependency-strip { margin-top: 20px; padding: 14px; border: 1px dashed var(--line-strong); }
+    .dependency-strip b { display: block; margin-bottom: 7px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .dependency-strip p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .timeline { display: grid; gap: 9px; counter-reset: step; }
+    .step { counter-increment: step; display: grid; grid-template-columns: 48px 1fr auto; gap: 16px; align-items: start; padding: 17px; border: 1px solid var(--line); background: var(--sheet); }
+    .step::before { content: counter(step, decimal-leading-zero); color: var(--orange); font: 800 18px/1 var(--mono); }
+    .step b { display: block; margin-bottom: 4px; }
+    .step p { margin: 0; color: var(--muted); }
+    .step code { color: var(--navy); font: 700 11px/1.4 var(--mono); }
+    .acceptance { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .acceptance-item { display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 16px; border: 1px solid #2f6b56; background: var(--green-soft); }
+    .acceptance-item strong { color: var(--green); font-family: var(--mono); }
+    .acceptance-item p { margin: 0; }
+    footer { margin: 50px 0 24px; padding: 18px 0; border-top: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; }
+    footer code { color: var(--navy); }
+
+
+    a { color: var(--navy); }
+    ::selection { background: var(--navy-soft); color: var(--ink); }
+    input::placeholder { color: var(--muted); opacity: 1; }
+    .info-block, .step { overflow-wrap: anywhere; }
+    .contract-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .contract { min-width: 0; }
+    .sticky-nav { overflow-x: auto; }
+    .sticky-nav a { flex: 0 0 auto; }
+    .contract { border: 1px solid var(--line); background: var(--sheet); }
+    .contract h3 { margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--line); font: 700 13px/1.3 var(--mono); color: var(--navy); }
+    .contract p.note { margin: 0; padding: 10px 16px 0; color: var(--muted); font-size: 13px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 8px 16px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font: 700 10px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    td code, .decision code { font: 600 12px/1.4 var(--mono); color: var(--orange); overflow-wrap: anywhere; }
+    .decisions { display: grid; gap: 8px; }
+    .decision { display: grid; grid-template-columns: 56px 1fr; gap: 12px; padding: 12px 16px; border: 1px solid var(--line); background: var(--sheet); }
+    .decision strong { color: var(--violet); font-family: var(--mono); }
+    .decision p { margin: 0; }
+
+    @media (max-width: 880px) {
+      .shell { width: min(100% - 22px, 1480px); }
+      .masthead-top, .overview-grid, .section-heading { grid-template-columns: 1fr; }
+      .masthead-top { gap: 18px; padding: 22px; }
+      h1 { font-size: clamp(30px, 8vw, 42px); }
+      .phase-card { min-height: 0; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; }
+      .phase-card strong { font-size: 22px; }
+      .metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .metric { padding: 12px 10px; }
+      .metric b { font-size: 20px; }
+      .metric span { font-size: 8px; }
+      .metric { border-bottom: 1px solid var(--line); }
+      .change-toolbar { grid-template-columns: 1fr; }
+      .filters { justify-content: flex-start; }
+      .change-workspace { grid-template-columns: 1fr; height: auto; }
+      .file-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: 330px; }
+      .inspector-grid, .acceptance { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 42px 1fr; }
+      .step code { grid-column: 2; }
+    }
+
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body data-template="false">
+  <div class="shell">
+    <header class="masthead" id="overview">
+      <div class="masthead-top">
+        <div>
+          <p class="crumb" id="doc-crumb">Module · Work item · LLD</p>
+          <h1 id="doc-title">File change plan</h1>
+          <p class="summary" id="doc-summary"></p>
+        </div>
+        <div class="phase-card">
+          <span>Design state</span>
+          <strong>LLD</strong>
+          <small id="doc-status">candidate</small>
+        </div>
+      </div>
+      <div class="metrics" id="metrics" aria-label="File change totals"></div>
+    </header>
+
+    <nav class="sticky-nav" aria-label="Document sections">
+      <a href="#file-changes">File changes</a>
+      <a href="#contracts">Contracts</a>
+      <a href="#context">Context</a>
+      <a href="#execution">Build order</a>
+      <a href="#acceptance">Acceptance</a>
+    </nav>
+
+    <main>
+      <section class="primary-section" id="file-changes" aria-labelledby="changes-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Primary implementation plan</p>
+            <h2 id="changes-title">Build the design file by file</h2>
+            <p class="lede">Select a file to see exactly why it changes, what to implement, what must remain stable, and how that file is verified.</p>
+          </div>
+          <p class="workspace-note"><strong>Start here.</strong> Search paths, symbols, or requirement IDs. Use ↑ and ↓ to inspect files without leaving the keyboard.</p>
+        </div>
+        <div class="change-view">
+          <div class="change-toolbar">
+            <label class="search-wrap">
+              <span aria-hidden="true">/</span>
+              <input id="file-search" type="search" placeholder="Find a path, symbol, or requirement" autocomplete="off">
+            </label>
+            <div class="filters" id="filters" aria-label="Filter files by action"></div>
+          </div>
+          <div class="change-workspace">
+            <div class="file-rail" id="file-rail" role="listbox" aria-label="Planned file changes"></div>
+            <article class="file-inspector" id="file-inspector" aria-live="polite"></article>
+          </div>
+        </div>
+      </section>
+
+
+      <section id="contracts" aria-labelledby="contracts-title">
+        <p class="section-kicker">Fixed interfaces</p>
+        <h2 id="contracts-title">Contracts and decisions</h2>
+        <p class="lede">Public component and hook APIs, ARIA, and the recorded decisions. Exact behavior lives in LLD.md sections 6 and 11.</p>
+        <div class="contract-grid" id="contract-list"></div>
+        <h3 style="margin:22px 0 10px">Decisions</h3>
+        <div class="decisions" id="decision-list"></div>
+      </section>
+
+      <section id="context" aria-labelledby="scope-title">
+        <p class="section-kicker">Supporting context</p>
+        <h2 id="scope-title">Scope and preserved boundaries</h2>
+        <p class="lede" id="scope-lede"></p>
+        <div class="overview-grid">
+          <article class="card">
+            <h3>In scope</h3>
+            <ul class="plain-list" id="scope-list"></ul>
+          </article>
+          <article class="card boundary">
+            <h3>Preserved boundaries</h3>
+            <ul class="plain-list" id="boundary-list"></ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="execution" aria-labelledby="execution-title">
+        <p class="section-kicker">Dependency order</p>
+        <h2 id="execution-title">Build order</h2>
+        <p class="lede">Each step should leave a locally verifiable result and unblock the next dependency.</p>
+        <div class="timeline" id="timeline"></div>
+      </section>
+
+      <section id="acceptance" aria-labelledby="acceptance-title">
+        <p class="section-kicker">Completion signals</p>
+        <h2 id="acceptance-title">Acceptance</h2>
+        <p class="lede">Every signal traces back to the canonical LLD and names an observable result.</p>
+        <div class="acceptance" id="acceptance-list"></div>
+      </section>
+    </main>
+
+    <footer><code>LLD.md</code> is authoritative. This HTML is its presentation mirror. Source: <code>.scratch/shared-ui-components/issues/08-search-pickers-on-listbox/LLD.md</code>.</footer>
+  </div>
+
+  <script>
+    const LLD_DOCUMENT = {
+  "meta": {
+    "crumb": "Studio frontend · Shared UI · Ticket 08 · LLD",
+    "title": "Search pickers on Listbox",
+    "summary": "The module picker, worktree switcher and merge destination picker move onto the ticket 07 Listbox (Popover + PopoverOption + useListNavigation, with PopoverSearch where the search lives in the panel). Their hand-written outside-click, positioning and arrow-key code and the blur dismissal are deleted. No file under shared/ui changes.",
+    "status": "implementation-ready · blocked by 07"
+  },
+  "scope": {
+    "lede": "Three feature files plus one dead-constant deletion. Every behavior is pinned by existing acceptance suites, which must stay green unchanged.",
+    "in": [
+      "ModulePicker → Listbox panel-search mode, dialog panel, portal",
+      "WorktreeSwitcher → Listbox focus mode, region panel, header and footer slots",
+      "MergeDestinationPicker → Listbox trigger-combobox mode, controlled open, emptyLabel",
+      "Delete CHANGES_CHECKOUT_ACTIONS and ChangesCheckoutAction from changesKeyboardNavigation.ts"
+    ],
+    "boundaries": [
+      "No change to shared/ui/* (contract from LLD 07; amend 07 if it falls short)",
+      "WorkItemSearchList and the field pickers are not migrated (follow-up)",
+      "keymapBindings.ts changes.checkout.* stay so Settings keeps listing them (D-3)",
+      "ChangesToolbar is untouched; its listbox and aria-expanded guards keep working",
+      "Merge input styling stays local until ticket 06 TextField",
+      "The ▾ caret stays in caller markup and is not a Button slot (D-5)"
+    ]
+  },
+  "files": [
+    {
+      "id": "module-picker",
+      "path": "studio/src/features/module-tabs/ModulePicker.tsx",
+      "action": "modify",
+      "layer": "feature",
+      "purpose": "Header \"+\" picker: create-or-restore options on Listbox panel-search mode inside a portalled dialog.",
+      "symbols": [
+        "ModulePicker",
+        "eligibleModulePickerChoices",
+        "CREATE_OPTION_ID"
+      ],
+      "responsibilities": [
+        "Options: { id: \"create\", content: \"Create new module\" } then hidden modules, each with ariaLabel \"Restore <name> module tab\"",
+        "Listbox label=\"Module choices\" panel={{ role: \"dialog\", label: \"Module picker\" }} align=\"right\" portal className=\"flex h-full shrink-0\"",
+        "search={{ placement: \"panel\", value: query, onChange: setQuery, label: \"Search modules\", placeholder: \"Search modules\" }}",
+        "onOpenChange(next) clears the query on open; onSelect routes to onCreate or restoreAndSelectModule",
+        "No value prop, so aria-selected follows the active option (the test requires it)",
+        "Trigger button: aria-label \"Open module picker\", spreads ariaProps (aria-haspopup dialog), onClick, onKeyDown, ref, \"+\""
+      ],
+      "nonResponsibilities": [
+        "eligibleModulePickerChoices is unchanged (canonical order, archived excluded)",
+        "useRestoreAndSelectModule is unchanged"
+      ],
+      "implementation": [
+        "Delete activeIndex/dialogPosition state, the four refs, all three effects, togglePicker, closeAndRestoreFocus, handleFocusLeave, handlePickerKeyDown and the three id constants",
+        "Delete the createPortal markup, own input and option buttons (lines 189-256)"
+      ],
+      "verification": [
+        "overhaulModulePickerAcceptance (all cases)",
+        "overhaulModuleJumpBadges / ModuleCreation / ModuleVisibility acceptance"
+      ],
+      "dependencies": "Step 2. Needs 07 Listbox (panel search, panel dialog, portal, align).",
+      "tests": [
+        "overhaulModulePickerAcceptance"
+      ],
+      "trace": [
+        "AC-1",
+        "AC-2",
+        "Story 8"
+      ]
+    },
+    {
+      "id": "switcher",
+      "path": "studio/src/features/agents/worktrees/changes/WorktreeSwitcher.tsx",
+      "action": "modify",
+      "layer": "feature",
+      "purpose": "Changes checkout switcher on Listbox focus mode (real DOM focus on options) in a region panel.",
+      "symbols": [
+        "WorktreeSwitcher"
+      ],
+      "responsibilities": [
+        "Options from rows: id rowId(taskId), ariaLabel \"Open <label> Changes\", content = existing dot, label/branch and summary spans",
+        "Listbox label=\"Current worktree checkouts\" panel={{ role: \"region\", label: \"Worktree checkouts\" }} data-testid=\"changes-worktree-switcher\" triggerRef={triggerRef}",
+        "value = current row id (aria-selected and focus on open)",
+        "header = existing <header>; footer = existing alert, loading, empty and truncation lines",
+        "onSelect: schedule trigger focus in requestAnimationFrame, then onOpenModule or onOpenTask; unknown id ignored",
+        "Trigger keeps aria-label \"Choose checkout\", class, children and caret; spreads ariaProps (aria-haspopup listbox), onClick, onKeyDown"
+      ],
+      "nonResponsibilities": [
+        "ArrowDown on the trigger is not handled (the toolbar's \"Down enters review\" stays)",
+        "The selectedTaskId focus effect (43-46) stays",
+        "useWorktreeCheckouts is unchanged"
+      ],
+      "implementation": [
+        "Delete rootRef, optionRefs, ownsFocusRef, open/activeId state, rowIds, close/show, the mousedown and fallback effects, optionKey, triggerKey, handleBlur",
+        "Remove the resolveCaptureKeymapAction and CHANGES_CHECKOUT_ACTIONS imports; rewrite the header comment"
+      ],
+      "verification": [
+        "overhaulChangesWorkspaceNavigationAcceptance",
+        "overhaulWorktreeSwitcherFailureAcceptance",
+        "overhaulModuleVersionControlAcceptance",
+        "overhaulChangesZoneArrowAcceptance",
+        "changesSurface.ts users"
+      ],
+      "dependencies": "Step 3. Needs 07 Listbox (focus mode, value, header/footer, panel region).",
+      "tests": [
+        "overhaulChangesWorkspaceNavigationAcceptance",
+        "overhaulWorktreeSwitcherFailureAcceptance"
+      ],
+      "trace": [
+        "AC-1",
+        "AC-2",
+        "D-1",
+        "D-4"
+      ]
+    },
+    {
+      "id": "merge",
+      "path": "studio/src/features/agents/worktrees/changes/MergeDestinationPicker.tsx",
+      "action": "modify",
+      "layer": "feature",
+      "purpose": "Local merge destination combobox: its own input is the Listbox trigger (trigger-combobox mode).",
+      "symbols": [
+        "MergeDestinationPicker"
+      ],
+      "responsibilities": [
+        "Options from matches: id branch, content = branch and checkout block spans in a min-w-0 wrapper (textContent unchanged)",
+        "Listbox label=\"Local branches\" className=\"mt-2\" disabled value={value} search={{ placement: \"trigger\", value: search }} emptyLabel=\"No matching branches\"",
+        "Controlled open; onOpenChange clears the search on open; onSelect = prop onSelect",
+        "Trigger: relative span with the input spreading comboboxProps plus aria-label \"Local merge destination\", aria-describedby, disabled, placeholder, value (search while open, else committed), class, onChange (setSearch + setOpen(true)); plus the ▾ span"
+      ],
+      "nonResponsibilities": [
+        "The \"Most recent commits first\" description stays after the Listbox",
+        "Filtering rule (excludes sourceBranch, case-insensitive) is unchanged"
+      ],
+      "implementation": [
+        "Delete openRef, highlighted/activeIndex, show/select, the disabled effect, wrapper onBlur, input onKeyDown/onFocus/onClick, and the ul/li markup with bg-white/10"
+      ],
+      "verification": [
+        "overhaulTaskWorktreeChangesAcceptance cases at 1081-1112 and [overhaul-399]"
+      ],
+      "dependencies": "Step 4. Needs 07 Listbox (trigger combobox, controlled open, emptyLabel, disabled).",
+      "tests": [
+        "overhaulTaskWorktreeChangesAcceptance"
+      ],
+      "trace": [
+        "AC-1",
+        "AC-2",
+        "D-2"
+      ]
+    },
+    {
+      "id": "checkout-actions",
+      "path": "studio/src/features/agents/worktrees/changes/changesKeyboardNavigation.ts",
+      "action": "modify",
+      "layer": "feature",
+      "purpose": "Drop the checkout action set that nothing consumes after the switcher migration.",
+      "symbols": [
+        "CHANGES_CHECKOUT_ACTIONS",
+        "ChangesCheckoutAction",
+        "CHANGES_FILE_ACTIONS"
+      ],
+      "responsibilities": [
+        "Keep CHANGES_FILE_ACTIONS and ChangesFileAction for ChangedFilesList"
+      ],
+      "nonResponsibilities": [
+        "keymapBindings.ts entries are not touched"
+      ],
+      "implementation": [
+        "Delete lines 1-15"
+      ],
+      "verification": [
+        "typecheck; rg CHANGES_CHECKOUT_ACTIONS|ChangesCheckoutAction returns nothing"
+      ],
+      "dependencies": "Step 3, after the switcher migration.",
+      "tests": [
+        "npm run typecheck"
+      ],
+      "trace": [
+        "AC-2",
+        "D-3"
+      ]
+    },
+    {
+      "id": "listbox",
+      "path": "studio/src/shared/ui/Listbox.tsx",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "Contract from LLD 07 section 6.5.2, used as-is (with Popover.tsx, useListNavigation.ts, PopoverSearch.tsx).",
+      "symbols": [
+        "Listbox",
+        "ListboxOption",
+        "ListboxSearch",
+        "ListboxTriggerProps"
+      ],
+      "responsibilities": [
+        "Provides focus mode, panel search, trigger combobox, aria-selected rule, active reset and fallback, slots"
+      ],
+      "nonResponsibilities": [
+        "No change in this ticket; stop and amend 07 if a need is missing (G-1)"
+      ],
+      "implementation": [
+        "No code change"
+      ],
+      "verification": [
+        "shared/ui/Listbox.test.tsx from 07 stays green"
+      ],
+      "dependencies": "Landed by ticket 07.",
+      "tests": [
+        "shared/ui/Listbox.test.tsx"
+      ],
+      "trace": [
+        "G-1"
+      ]
+    },
+    {
+      "id": "toolbar",
+      "path": "studio/src/features/agents/worktrees/changes/ChangesToolbar.tsx",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "Toolbar arrow roving keeps skipping the open switcher via [role=\"listbox\"] and [aria-expanded=\"true\"] guards and defaultPrevented.",
+      "symbols": [
+        "ChangesToolbar"
+      ],
+      "responsibilities": [
+        "ArrowRight/Left roving among toolbar controls; ArrowDown enters the file list"
+      ],
+      "nonResponsibilities": [
+        "No change"
+      ],
+      "implementation": [
+        "No code change"
+      ],
+      "verification": [
+        "overhaulChangesZoneArrowAcceptance"
+      ],
+      "dependencies": "Reads DOM produced by WorktreeSwitcher.",
+      "tests": [
+        "overhaulChangesZoneArrowAcceptance"
+      ],
+      "trace": [
+        "INV"
+      ]
+    },
+    {
+      "id": "keymap-bindings",
+      "path": "studio/src/app/navigation/keymapBindings.ts",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "The fixed changes.checkout.* chords stay; they match the hook's keys and feed the keyboard settings list.",
+      "symbols": [
+        "changes.checkout.previous",
+        "changes.checkout.select",
+        "changes.checkout.cancel"
+      ],
+      "responsibilities": [
+        "Settings still lists the checkout keys"
+      ],
+      "nonResponsibilities": [
+        "No longer resolved by WorktreeSwitcher"
+      ],
+      "implementation": [
+        "No code change"
+      ],
+      "verification": [
+        "overhaulKeybindingSettingsRuntimeAcceptance green"
+      ],
+      "dependencies": "None.",
+      "tests": [
+        "overhaulKeybindingSettingsRuntimeAcceptance"
+      ],
+      "trace": [
+        "D-3"
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "name": "Listbox usage per picker (07 contract, no extensions)",
+      "columns": [
+        "Picker",
+        "Focus mode",
+        "value",
+        "panel",
+        "portal",
+        "Notes"
+      ],
+      "rows": [
+        [
+          "ModulePicker",
+          "panel search",
+          "omitted (follows focus)",
+          "dialog \"Module picker\"",
+          "yes",
+          "align right; query reset on open"
+        ],
+        [
+          "WorktreeSwitcher",
+          "focus (DOM focus)",
+          "current checkout id",
+          "region \"Worktree checkouts\"",
+          "no",
+          "header/footer slots; trigger refocused on select"
+        ],
+        [
+          "MergeDestinationPicker",
+          "trigger combobox",
+          "committed branch",
+          "none",
+          "no",
+          "controlled open; emptyLabel; disabled closes"
+        ]
+      ]
+    },
+    {
+      "name": "Accepted behavior changes",
+      "columns": [
+        "Picker",
+        "Change"
+      ],
+      "rows": [
+        [
+          "ModulePicker",
+          "Up/Down stop at the ends instead of wrapping; Home/End move the caret in the search"
+        ],
+        [
+          "ModulePicker, WorktreeSwitcher",
+          "Shared surface: `w-max min-w-[200px] max-w-[380px] py-1 shadow-2xl`; list cap `max-h-[320px]`"
+        ],
+        [
+          "WorktreeSwitcher",
+          "Selected row uses the shared selected colour and active background instead of the inset accent bar"
+        ],
+        [
+          "MergeDestinationPicker",
+          "Fixed shared panel instead of an input-width absolute list; open makes the committed branch active; null-relatedTarget blur no longer closes (outside pointerdown still does)"
+        ],
+        [
+          "All",
+          "Option text is the shared `text-base`"
+        ]
+      ]
+    },
+    {
+      "name": "Hooks preserved",
+      "columns": [
+        "Hook",
+        "Owner"
+      ],
+      "rows": [
+        [
+          "button \"Open module picker\"; dialog \"Module picker\" (child of body); combobox \"Search modules\"; listbox \"Module choices\"; options \"Create new module\" and \"Restore … module tab\"",
+          "ModulePicker"
+        ],
+        [
+          "button \"Choose checkout\"; `changes-worktree-switcher`; region \"Worktree checkouts\"; listbox \"Current worktree checkouts\"; options \"Open … Changes\"; alert/status lines",
+          "WorktreeSwitcher"
+        ],
+        [
+          "combobox \"Local merge destination\"; listbox \"Local branches\"; \"No matching branches\"",
+          "MergeDestinationPicker"
+        ]
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "D-1",
+      "text": "WorktreeSwitcher uses Listbox focus mode (DOM focus on options), not aria-activedescendant: its tests assert toHaveFocus on options and it has no search."
+    },
+    {
+      "id": "D-2",
+      "text": "MergeDestinationPicker uses trigger-combobox mode with its own input, not a button plus PopoverSearch. Tests require a page combobox showing the committed value while closed, and options inside the Local merge preview region."
+    },
+    {
+      "id": "D-3",
+      "text": "Delete CHANGES_CHECKOUT_ACTIONS and its type (unused after F-2). Keep the changes.checkout.* keymap bindings (fixed keys equal to the hook's; feed Settings)."
+    },
+    {
+      "id": "D-4",
+      "text": "Focus after select is the caller's job: the switcher refocuses its trigger; the module and merge pickers do not."
+    },
+    {
+      "id": "D-5",
+      "text": "The ▾ caret is not a Button slot now; each trigger keeps its own span. Optional Button trailing caret once ticket 05 lands; the merge caret overlays an input, so it stays local."
+    }
+  ],
+  "execution": [
+    {
+      "title": "Confirm preflight",
+      "detail": "07 merged with the full Listbox contract; suites green; no assertion needs an edit.",
+      "gate": "G-1 to G-3"
+    },
+    {
+      "title": "Migrate ModulePicker",
+      "detail": "Panel-search Listbox in a portalled dialog.",
+      "gate": "overhaulModulePickerAcceptance"
+    },
+    {
+      "title": "Migrate WorktreeSwitcher, delete checkout set",
+      "detail": "Focus-mode Listbox in a region; remove CHANGES_CHECKOUT_ACTIONS.",
+      "gate": "switcher suites + typecheck"
+    },
+    {
+      "title": "Migrate MergeDestinationPicker",
+      "detail": "Trigger-combobox Listbox, controlled open.",
+      "gate": "overhaulTaskWorktreeChangesAcceptance"
+    },
+    {
+      "title": "Delete-check",
+      "detail": "The step 5 rg over the three files returns nothing.",
+      "gate": "rg (LLD.md step 5)"
+    },
+    {
+      "title": "Full gate",
+      "detail": "typecheck, studio tests, test:overhaul, build.",
+      "gate": "npm run typecheck && npm run test && npm run test:overhaul && npm run build"
+    }
+  ],
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "text": "All three pickers use Listbox; keyboard, filtering and selection behave as before, except the deltas listed (steps 2-4; 3.3 suites green unchanged)."
+    },
+    {
+      "id": "AC-2",
+      "text": "No hand-rolled outside-click, positioning or arrow-key code remains in the three files (step 5 rg; F-4 rg)."
+    },
+    {
+      "id": "AC-3",
+      "text": "Typecheck, studio tests and test:overhaul pass (step 6)."
+    },
+    {
+      "id": "Story 8/10",
+      "text": "One search field (ModulePicker through Listbox; the merge picker is an inline combobox by D-2); reposition and flip inherited from Popover, plus a manual check."
+    }
+  ]
+};
+
+    const actionLabels = { all: "All", create: "Create", modify: "Modify", delete: "Delete", move: "Move", untouched: "Untouched" };
+    const state = { action: "all", query: "", selected: null };
+
+    const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+    const directory = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ".";
+    const basename = path => path.slice(path.lastIndexOf("/") + 1);
+    const list = items => `<ul>${(items || []).map(item => `<li>${esc(item)}</li>`).join("")}</ul>`;
+    const tokens = (items, extra = "") => (items || []).map(item => `<span class="token ${extra}">${esc(item)}</span>`).join("");
+
+    function visibleFiles() {
+      const needle = state.query.trim().toLowerCase();
+      return LLD_DOCUMENT.files.filter(file => {
+        const actionMatch = state.action === "all" || file.action === state.action;
+        const haystack = [file.path, file.layer, file.purpose, ...(file.symbols || []), ...(file.responsibilities || []), ...(file.implementation || []), ...(file.verification || []), ...(file.trace || [])].join(" ").toLowerCase();
+        return actionMatch && (!needle || haystack.includes(needle));
+      });
+    }
+
+    function renderHeader() {
+      document.getElementById("doc-crumb").textContent = LLD_DOCUMENT.meta.crumb;
+      document.getElementById("doc-title").textContent = LLD_DOCUMENT.meta.title;
+      document.getElementById("doc-summary").textContent = LLD_DOCUMENT.meta.summary;
+      document.getElementById("doc-status").textContent = LLD_DOCUMENT.meta.status;
+      document.getElementById("scope-lede").textContent = LLD_DOCUMENT.scope.lede;
+      document.getElementById("scope-list").innerHTML = LLD_DOCUMENT.scope.in.map(item => `<li>${esc(item)}</li>`).join("");
+      document.getElementById("boundary-list").innerHTML = LLD_DOCUMENT.scope.boundaries.map(item => `<li>${esc(item)}</li>`).join("");
+      const counts = Object.keys(actionLabels).filter(action => action !== "all").map(action => ({ action, count: LLD_DOCUMENT.files.filter(file => file.action === action).length }));
+      document.getElementById("metrics").innerHTML = counts.map(item => `<div class="metric"><b>${item.count}</b><span>${actionLabels[item.action]}</span></div>`).join("");
+    }
+
+    function renderFilters() {
+      const actions = ["all", ...new Set(LLD_DOCUMENT.files.map(file => file.action))];
+      document.getElementById("filters").innerHTML = actions.map(action => `<button class="filter" type="button" data-action="${action}" aria-pressed="${state.action === action}">${actionLabels[action] || action}</button>`).join("");
+      document.querySelectorAll(".filter").forEach(button => button.addEventListener("click", () => {
+        state.action = button.dataset.action;
+        renderFilters();
+        renderFiles();
+      }));
+    }
+
+    function renderFiles() {
+      const files = visibleFiles();
+      if (!files.some(file => file.id === state.selected)) state.selected = files[0]?.id || null;
+      const groups = Map.groupBy ? Map.groupBy(files, file => directory(file.path)) : files.reduce((map, file) => map.set(directory(file.path), [...(map.get(directory(file.path)) || []), file]), new Map());
+      const rail = document.getElementById("file-rail");
+      rail.innerHTML = files.length ? [...groups.entries()].map(([dir, entries]) => `<div class="dir-group"><div class="dir-label">${esc(dir)}</div>${entries.map(file => `<button class="file-button" type="button" role="option" data-file="${esc(file.id)}" aria-selected="${file.id === state.selected}"><span class="action-dot ${esc(file.action)}" aria-hidden="true"></span><span class="file-button-copy"><span class="file-name">${esc(basename(file.path))}</span><span class="file-meta">${esc(actionLabels[file.action] || file.action)} · ${esc(file.layer)}</span></span></button>`).join("")}</div>`).join("") : `<div class="rail-empty">No files match this view.</div>`;
+      rail.querySelectorAll(".file-button").forEach(button => {
+        button.addEventListener("click", () => selectFile(button.dataset.file));
+        button.addEventListener("keydown", event => navigateFiles(event, button.dataset.file));
+      });
+      renderInspector();
+    }
+
+    function selectFile(id) {
+      state.selected = id;
+      document.querySelectorAll(".file-button").forEach(button => button.setAttribute("aria-selected", String(button.dataset.file === id)));
+      renderInspector();
+      history.replaceState(null, "", `#file:${encodeURIComponent(id)}`);
+    }
+
+    function navigateFiles(event, id) {
+      if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+      event.preventDefault();
+      const files = visibleFiles();
+      const index = files.findIndex(file => file.id === id);
+      const next = event.key === 'ArrowDown' ? Math.min(index + 1, files.length - 1) : Math.max(index - 1, 0);
+      state.selected = files[next]?.id || id;
+      renderFiles();
+      document.querySelector(`[data-file="${CSS.escape(state.selected)}"]`)?.focus();
+    }
+
+    function renderInspector() {
+      const file = LLD_DOCUMENT.files.find(entry => entry.id === state.selected);
+      const inspector = document.getElementById("file-inspector");
+      if (!file) { inspector.innerHTML = `<p class="rail-empty">Choose a file to inspect.</p>`; return; }
+      inspector.innerHTML = `
+        <div class="inspector-head">
+          <div><h3 class="path">${esc(file.path)}</h3><p class="purpose">${esc(file.purpose)}</p></div>
+          <span class="action-badge ${esc(file.action)}">${esc(actionLabels[file.action] || file.action)}</span>
+        </div>
+        <div class="symbol-row" aria-label="Symbols">${tokens(file.symbols)}</div>
+        <div class="inspector-grid">
+          <div class="info-block"><h4>Responsibilities</h4>${list(file.responsibilities)}</div>
+          <div class="info-block no"><h4>Preserved boundary</h4>${list(file.nonResponsibilities)}</div>
+          <div class="info-block"><h4>Implementation</h4>${list(file.implementation)}</div>
+          <div class="info-block"><h4>Verification</h4>${list(file.verification)}</div>
+        </div>
+        <div class="dependency-strip"><b>Dependency position</b><p>${esc(file.dependencies)}</p></div>
+        <div class="trace-row" aria-label="Tests and requirement trace">${tokens(file.tests)}${tokens(file.trace, "trace-token")}</div>`;
+    }
+
+    function renderTimeline() {
+      document.getElementById("timeline").innerHTML = LLD_DOCUMENT.execution.map(step => `<article class="step"><div><b>${esc(step.title)}</b><p>${esc(step.detail)}</p></div><code>${esc(step.gate)}</code></article>`).join("");
+      document.getElementById("acceptance-list").innerHTML = LLD_DOCUMENT.acceptance.map(item => `<article class="acceptance-item"><strong>${esc(item.id)}</strong><p>${esc(item.text)}</p></article>`).join("");
+    }
+
+
+    function renderContracts() {
+      const code = text => esc(text).replace(/`([^`]+)`/g, "<code>$1</code>");
+      document.getElementById("contract-list").innerHTML = (LLD_DOCUMENT.contracts || []).map(c => `
+        <article class="contract"><h3>${esc(c.name)}</h3>${c.note ? `<p class="note">${code(c.note)}</p>` : ""}
+          <div class="table-wrap"><table><thead><tr>${c.columns.map(h => `<th scope="col">${esc(h)}</th>`).join("")}</tr></thead>
+          <tbody>${c.rows.map(r => `<tr>${r.map(cell => `<td>${code(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></article>`).join("");
+      document.getElementById("decision-list").innerHTML = (LLD_DOCUMENT.decisions || []).map(d => `<article class="decision"><strong>${esc(d.id)}</strong><p>${code(d.text)}</p></article>`).join("");
+    }
+    window.addEventListener("hashchange", () => {
+      const id = decodeURIComponent(location.hash.replace(/^#file:/, ""));
+      if (LLD_DOCUMENT.files.some(file => file.id === id)) { state.selected = id; renderFiles(); }
+    });
+
+    document.getElementById("file-search").addEventListener("input", event => { state.query = event.target.value; renderFiles(); });
+    document.addEventListener("keydown", event => {
+      if (event.key === "/" && document.activeElement !== document.getElementById("file-search")) { event.preventDefault(); document.getElementById("file-search").focus(); }
+      if (event.key === "Escape" && document.activeElement === document.getElementById("file-search")) { state.query = ""; document.getElementById("file-search").value = ""; renderFiles(); }
+    });
+
+    const deepLink = decodeURIComponent(location.hash.replace(/^#file:/, ""));
+    state.selected = LLD_DOCUMENT.files.some(file => file.id === deepLink) ? deepLink : LLD_DOCUMENT.files[0]?.id;
+    renderHeader();
+    renderFilters();
+    renderFiles();
+    renderTimeline();
+    renderContracts();
+  </script>
+</body>
+</html>

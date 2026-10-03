@@ -119,7 +119,7 @@ function sidebarOrder(): string[] {
 
 function tabStripOrder(): string[] {
   return screen
-    .getAllByRole("tab")
+    .getAllByRole("tab").filter((tab) => tab.hasAttribute("data-module-id"))
     .map((tab) => tab.getAttribute("aria-label") ?? "");
 }
 

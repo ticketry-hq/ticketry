@@ -1,12 +1,14 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, vi, describe, expect, it } from "vitest";
 
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
-import { FooterChangesToggle } from "../app/shell/FooterChangesToggle";
+import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import { ChangesWorkspace } from "../features/agents/worktrees";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { FoundationGraphQlError } from "../shared/apollo/errorLink";
 import { fixture, mountStudio, workItem } from "./seam";
+
+beforeEach(() => { Element.prototype.scrollIntoView = vi.fn(); });
 
 const TASK_ID = "merge-recovery-task";
 const SOURCE_COMMIT = "1111111111111111111111111111111111111111";
@@ -118,7 +120,7 @@ function mountMergeRecovery(
           details={<div>Issue details</div>}
         />
         <ChangesWorkspace />
-        <FooterChangesToggle />
+        <ModuleTabStrip />
       </>
     ),
     graphQlExecute: async (document, variables) => {
@@ -477,7 +479,7 @@ describe("overhaul acceptance - divergent local merge recovery", () => {
     await waitFor(() => {
       expect(screen.getByRole("region", { name: "Merge conflict recovery" })).toHaveFocus();
     });
-    const elsewhere = screen.getByRole("button", { name: "Back to planning workspace" });
+    const elsewhere = screen.getByRole("tab", { name: "Module 1" });
     elsewhere.focus();
     releaseFinish();
     await waitFor(() => expect(screen.getByRole("button", { name: "Merge into main" })).toBeVisible());

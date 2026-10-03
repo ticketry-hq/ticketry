@@ -70,3 +70,11 @@ test("rejects an invalid explicit frontend port", async () => {
     /MUXED_FRONTEND_PORT must be a valid TCP port/,
   );
 });
+
+test("honors MUXED_FRONTEND_PORT and uses that exact WebView origin", async () => {
+  const port = await selectFrontendPort({ requestedPort: "6200", isAvailable: async () => true });
+  assert.equal(port, 6200);
+  const config = buildTauriDevelopmentConfig(port);
+  assert.equal(config.build.devUrl, "http://127.0.0.1:6200");
+  assert.match(config.build.beforeDevCommand, /--port 6200 --strictPort$/);
+});

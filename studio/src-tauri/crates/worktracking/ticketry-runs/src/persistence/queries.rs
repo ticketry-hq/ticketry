@@ -80,6 +80,7 @@ async fn run_holdings_on(
     let rows = agent_run::Entity::find()
         .filter(agent_run::Column::IssueId.is_in(issue_ids))
         .filter(agent_run::Column::Scope.ne("docchat"))
+        .filter(agent_run::Column::Scope.ne("exec"))
         .all(database)
         .await?;
     let terminal_rows = session::Entity::find()

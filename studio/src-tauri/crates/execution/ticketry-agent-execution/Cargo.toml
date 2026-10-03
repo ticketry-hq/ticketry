@@ -10,6 +10,10 @@ async-trait.workspace = true
 chrono.workspace = true
 sea-orm.workspace = true
 seaography.workspace = true
+schemars = "=1.2.1"
+seaolim.workspace = true
+ticketry-settings.workspace = true
+ticketry-provider.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -20,7 +24,8 @@ ticketry-runs.workspace = true
 ticketry-terminal.workspace = true
 ticketry-work-management.workspace = true
 ticketry-workspace-runtime.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["process", "io-util", "fs"] }
+libc.workspace = true
 tokio-util.workspace = true
 uuid.workspace = true
 

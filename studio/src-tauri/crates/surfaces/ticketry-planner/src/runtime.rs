@@ -9,7 +9,7 @@ use std::{
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use tokio::{sync::oneshot, task::JoinHandle};
 
-use crate::{http, PlannerEndpoint};
+use crate::{http, PlannerEndpoint, PlannerFrontendOrigin};
 
 /// One listener owned by one Ticketry process. Start after schema installation;
 /// join shutdown before releasing Ticketry's data-directory ownership.
@@ -24,10 +24,13 @@ pub struct PlannerService {
 impl PlannerService {
     /// Port zero asks the OS for an available port. A nonzero port must bind
     /// exactly or startup fails. Unexpected listener failure reaches the desktop
-    /// health publisher supplied by the owning process.
+    /// health publisher supplied by the owning process. The optional frontend
+    /// origin is resolved by composition; None admits only packaged origins and
+    /// the listener origin.
     pub async fn start(
         api: TransportApiImpl,
         port: u16,
+        frontend_origin: Option<PlannerFrontendOrigin>,
         on_failure: impl Fn(String) + Send + 'static,
     ) -> Result<Self, String> {
         let response = api
@@ -60,7 +63,7 @@ impl PlannerService {
             graphql_url: format!("http://{address}/graphql"),
             bearer_token: uuid::Uuid::new_v4().simple().to_string(),
         };
-        let app = http::router(api, &endpoint, address.to_string());
+        let app = http::router(api, &endpoint, address.to_string(), frontend_origin);
         let (stop, stopped) = oneshot::channel();
         let stopping = Arc::new(AtomicBool::new(false));
         let service_stopping = stopping.clone();

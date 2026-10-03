@@ -1,0 +1,1488 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="lld-source" content="LLD.md">
+  <meta name="lld-source-sha256" content="30fe3811ecd72621ba0524d1e646e84bbaf9e5f7d5364e2484e6e3a7fbd83ce4">
+  <title>DropSeam and CloseButton LLD</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --surface: #202b3b;
+      --rail: #121c29;
+      --group: #263448;
+      --on-accent: #0e1520;
+      --focus: #a7ceff;
+      --paper: #0e1520;
+      --sheet: #172130;
+      --ink: #e6edf6;
+      --muted: #a6b5c9;
+      --line: #34445b;
+      --line-strong: #657a96;
+      --navy: #91c4ff;
+      --navy-soft: #203852;
+      --orange: #ffb180;
+      --orange-soft: #422d24;
+      --green: #7bdbb1;
+      --green-soft: #183b32;
+      --red: #ff9eaa;
+      --red-soft: #432731;
+      --violet: #c4b2ff;
+      --violet-soft: #332e4c;
+      --shadow: 0 18px 45px rgba(0, 0, 0, .24);
+      --radius: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(145, 196, 255, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(20, 61, 102, .035) 1px, transparent 1px),
+        var(--paper);
+      background-size: 24px 24px;
+      font-family: var(--sans);
+      line-height: 1.55;
+    }
+
+    button, input { font: inherit; }
+    button:focus-visible, input:focus-visible, a:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .shell { width: min(1480px, calc(100% - 40px)); margin: 0 auto; }
+    .masthead {
+      margin-top: 20px;
+      border: 1px solid var(--line-strong);
+      background: var(--sheet);
+      box-shadow: var(--shadow);
+    }
+    .masthead-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      padding: 30px 34px 28px;
+      border-bottom: 1px solid var(--line);
+    }
+    .crumb {
+      margin: 0 0 12px;
+      color: var(--orange);
+      font: 700 11px/1.2 var(--mono);
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; max-width: 900px; font-size: clamp(32px, 5vw, 64px); line-height: .98; letter-spacing: -.045em; }
+    .summary { max-width: 780px; margin: 18px 0 0; color: var(--muted); font-size: 16px; }
+    .phase-card {
+      min-width: 180px;
+      align-self: stretch;
+      display: grid;
+      align-content: space-between;
+      padding: 18px;
+      background: var(--navy);
+      color: var(--on-accent);
+    }
+    .phase-card span { font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; opacity: .68; }
+    .phase-card strong { font-size: 30px; letter-spacing: -.03em; }
+    .phase-card small { font-family: var(--mono); opacity: .78; }
+    .metrics { display: grid; grid-template-columns: repeat(5, 1fr); }
+    .metric { padding: 15px 20px; border-right: 1px solid var(--line); }
+    .metric:last-child { border-right: 0; }
+    .metric b { display: block; font-size: 24px; line-height: 1; }
+    .metric span { color: var(--muted); font: 700 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+
+    .sticky-nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      gap: 4px;
+      margin: 14px 0 32px;
+      padding: 7px;
+      border: 1px solid var(--line);
+      background: rgba(23, 33, 48, .92);
+      backdrop-filter: blur(14px);
+    }
+    .sticky-nav a { padding: 8px 13px; color: var(--muted); font: 700 11px/1 var(--mono); text-decoration: none; text-transform: uppercase; }
+    .sticky-nav a:hover { color: var(--navy); background: var(--navy-soft); }
+
+    section { margin: 0 0 46px; scroll-margin-top: 72px; }
+    .primary-section { margin-bottom: 56px; }
+    .section-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px; align-items: end; }
+    .workspace-note { max-width: 310px; margin: 0 0 22px; padding: 12px 14px; border-left: 3px solid var(--orange); color: var(--muted); background: var(--sheet); font-size: 12px; }
+    .section-kicker { margin: 0 0 6px; color: var(--orange); font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; }
+    h2 { margin: 0; font-size: clamp(25px, 3vw, 39px); letter-spacing: -.035em; }
+    .lede { max-width: 820px; margin: 10px 0 22px; color: var(--muted); }
+
+    .overview-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 16px; }
+    .card { border: 1px solid var(--line); background: var(--sheet); padding: 22px; }
+    .card h3 { margin: 0 0 12px; font-size: 16px; }
+    .plain-list { margin: 0; padding-left: 18px; }
+    .plain-list li + li { margin-top: 8px; }
+    .boundary { border-left: 4px solid var(--orange); }
+
+    .change-view { border: 1px solid var(--line-strong); background: var(--sheet); box-shadow: var(--shadow); }
+    .change-toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 16px;
+      padding: 15px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .search-wrap { position: relative; }
+    .search-wrap span { position: absolute; left: 12px; top: 9px; color: var(--muted); font-family: var(--mono); }
+    #file-search {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px 0 36px;
+      border: 1px solid var(--line-strong);
+      background: var(--rail);
+      color: var(--ink);
+    }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .filter {
+      border: 1px solid var(--line);
+      background: var(--sheet);
+      color: var(--muted);
+      padding: 7px 10px;
+      cursor: pointer;
+      font: 700 10px/1 var(--mono);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .filter[aria-pressed="true"] { color: var(--on-accent); border-color: var(--navy); background: var(--navy); }
+    .change-workspace { display: grid; grid-template-columns: minmax(330px, .72fr) minmax(0, 1.8fr); height: clamp(620px, 72vh, 820px); }
+    .file-rail { border-right: 1px solid var(--line); background: var(--rail); overflow: auto; }
+    .rail-empty { padding: 30px; color: var(--muted); text-align: center; }
+    .dir-group + .dir-group { border-top: 1px solid var(--line); }
+    .dir-label { position: sticky; top: 0; z-index: 2; padding: 9px 13px; color: var(--muted); background: var(--group); font: 700 10px/1.2 var(--mono); }
+    .file-button {
+      width: 100%;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 11px 13px;
+      border: 0;
+      border-top: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+    }
+    .file-button:hover { background: var(--surface); }
+    .file-button[aria-selected="true"] { background: var(--surface); box-shadow: inset 4px 0 0 var(--orange); }
+    .file-button-copy { min-width: 0; display: grid; gap: 4px; }
+    .file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 12px/1.3 var(--mono); }
+    .file-meta { color: var(--muted); font: 700 9px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+    .action-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+    .action-dot.create { background: var(--green); }
+    .action-dot.modify { background: var(--orange); }
+    .action-dot.delete { background: var(--red); }
+    .action-dot.move { background: var(--violet); }
+    .action-dot.untouched { background: var(--navy); }
+
+    .file-inspector { min-width: 0; padding: 28px; overflow: auto; }
+    .inspector-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .path { margin: 0; overflow-wrap: anywhere; font: 700 clamp(16px, 2vw, 22px)/1.3 var(--mono); }
+    .purpose { margin: 8px 0 0; color: var(--muted); }
+    .action-badge { flex: 0 0 auto; padding: 6px 9px; border: 1px solid currentColor; font: 800 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .action-badge.create { color: var(--green); background: var(--green-soft); }
+    .action-badge.modify { color: var(--orange); background: var(--orange-soft); }
+    .action-badge.delete { color: var(--red); background: var(--red-soft); }
+    .action-badge.move { color: var(--violet); background: var(--violet-soft); }
+    .action-badge.untouched { color: var(--navy); background: var(--navy-soft); }
+    .inspector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+    .info-block { border-top: 3px solid var(--navy); padding: 13px 14px 15px; background: var(--surface); }
+    .info-block.no { border-top-color: var(--red); }
+    .info-block h4 { margin: 0 0 8px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .info-block ul { margin: 0; padding-left: 18px; font-size: 13px; }
+    .info-block li + li { margin-top: 6px; }
+    .symbol-row, .trace-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+    .token { padding: 5px 8px; border: 1px solid var(--line); background: var(--rail); font: 600 11px/1 var(--mono); }
+    .trace-token { color: var(--navy); border-color: var(--line-strong); background: var(--navy-soft); }
+    .dependency-strip { margin-top: 20px; padding: 14px; border: 1px dashed var(--line-strong); }
+    .dependency-strip b { display: block; margin-bottom: 7px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .dependency-strip p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .timeline { display: grid; gap: 9px; counter-reset: step; }
+    .step { counter-increment: step; display: grid; grid-template-columns: 48px 1fr auto; gap: 16px; align-items: start; padding: 17px; border: 1px solid var(--line); background: var(--sheet); }
+    .step::before { content: counter(step, decimal-leading-zero); color: var(--orange); font: 800 18px/1 var(--mono); }
+    .step b { display: block; margin-bottom: 4px; }
+    .step p { margin: 0; color: var(--muted); }
+    .step code { color: var(--navy); font: 700 11px/1.4 var(--mono); }
+    .acceptance { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .acceptance-item { display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 16px; border: 1px solid var(--line); background: var(--green-soft); }
+    .acceptance-item strong { color: var(--green); font-family: var(--mono); }
+    .acceptance-item p { margin: 0; }
+    footer { margin: 50px 0 24px; padding: 18px 0; border-top: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; }
+    footer code { color: var(--navy); }
+
+
+    html { background: var(--paper); }
+    a { color: var(--navy); }
+    ::selection { background: var(--navy-soft); color: var(--ink); }
+    input::placeholder { color: var(--muted); opacity: 1; }
+    code { font-family: var(--mono); font-size: .92em; color: var(--navy); overflow-wrap: anywhere; }
+    .token, .info-block, .step { overflow-wrap: anywhere; }
+    .masthead-top { padding: 14px 20px 12px; }
+    h1 { font-size: clamp(22px, 2.6vw, 32px); line-height: 1.1; letter-spacing: -.02em; }
+    .summary { margin-top: 8px; font-size: 14px; }
+    .phase-card { padding: 12px 14px; min-width: 150px; }
+    .phase-card strong { font-size: 20px; }
+    .metric { padding: 8px 14px; }
+    .metric b { font-size: 18px; }
+    .sticky-nav { margin: 10px 0 18px; }
+    section { margin-bottom: 36px; }
+    .primary-section { margin-bottom: 40px; }
+    h2 { font-size: clamp(20px, 2.2vw, 28px); }
+    .lede { margin: 6px 0 14px; }
+    .workspace-note { margin-bottom: 14px; }
+    .change-workspace { height: clamp(560px, 74vh, 880px); }
+    .contract-block + .contract-block { margin-top: 22px; }
+    .contract-block h3 { margin: 0 0 4px; font-size: 16px; }
+    .contract-block p { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); background: var(--sheet); }
+    .contract-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .contract-table th, .contract-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .contract-table th { background: var(--group); color: var(--muted); font: 700 10px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .contract-table td:first-child { white-space: nowrap; }
+    .decisions { margin-top: 16px; }
+    @media (max-width: 880px) {
+      .contract-table td:first-child { white-space: normal; }
+      .change-workspace { height: auto; }
+      .sticky-nav { overflow-x: auto; }
+    }
+
+    @media (max-width: 880px) {
+      .shell { width: min(100% - 22px, 1480px); }
+      .masthead-top, .overview-grid, .section-heading { grid-template-columns: 1fr; }
+      .masthead-top { gap: 18px; padding: 22px; }
+      h1 { font-size: clamp(30px, 8vw, 42px); }
+      .phase-card { min-height: 0; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; }
+      .phase-card strong { font-size: 22px; }
+      .metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .metric { padding: 12px 10px; }
+      .metric b { font-size: 20px; }
+      .metric span { font-size: 8px; }
+      .metric { border-bottom: 1px solid var(--line); }
+      .change-toolbar { grid-template-columns: 1fr; }
+      .filters { justify-content: flex-start; }
+      .change-workspace { grid-template-columns: 1fr; height: auto; }
+      .file-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: 330px; }
+      .inspector-grid, .acceptance { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 42px 1fr; }
+      .step code { grid-column: 2; }
+    }
+
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body data-template="false">
+  <div class="shell">
+    <header class="masthead" id="overview">
+      <div class="masthead-top">
+        <div>
+          <p class="crumb" id="doc-crumb">Module · Work item · LLD</p>
+          <h1 id="doc-title">File change plan</h1>
+          <p class="summary" id="doc-summary"></p>
+        </div>
+        <div class="phase-card">
+          <span>Design state</span>
+          <strong>LLD</strong>
+          <small id="doc-status">candidate</small>
+        </div>
+      </div>
+      <div class="metrics" id="metrics" aria-label="File change totals"></div>
+    </header>
+
+    <nav class="sticky-nav" aria-label="Document sections">
+      <a href="#file-changes">File changes</a>
+      <a href="#contracts">Contracts</a>
+      <a href="#context">Context</a>
+      <a href="#execution">Build order</a>
+      <a href="#acceptance">Acceptance</a>
+    </nav>
+
+    <main>
+      <section class="primary-section" id="file-changes" aria-labelledby="changes-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Primary implementation plan</p>
+            <h2 id="changes-title">Build the design file by file</h2>
+            <p class="lede">Select a file to see exactly why it changes, what to implement, what must remain stable, and how that file is verified.</p>
+          </div>
+          <p class="workspace-note"><strong>Start here.</strong> Search paths, symbols, or requirement IDs. Use ↑ and ↓ to inspect files without leaving the keyboard. Press / to search. Each file has a deep link (#file:&lt;id&gt;).</p>
+        </div>
+        <div class="change-view">
+          <div class="change-toolbar">
+            <label class="search-wrap">
+              <span aria-hidden="true">/</span>
+              <input id="file-search" type="search" placeholder="Find a path, symbol, or requirement" autocomplete="off">
+            </label>
+            <div class="filters" id="filters" aria-label="Filter files by action"></div>
+          </div>
+          <div class="change-workspace">
+            <div class="file-rail" id="file-rail" role="listbox" aria-label="Planned file changes"></div>
+            <article class="file-inspector" id="file-inspector" aria-live="polite"></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="contracts" aria-labelledby="contracts-title">
+        <p class="section-kicker">Fixed interfaces</p>
+        <h2 id="contracts-title">Contracts</h2>
+        <p class="lede">Props, rendered classes, keyboard behaviour and caller mappings exactly as fixed in <code>LLD.md</code>.</p>
+        <div id="contract-list"></div>
+      </section>
+
+      <section id="context" aria-labelledby="scope-title">
+        <p class="section-kicker">Supporting context</p>
+        <h2 id="scope-title">Scope and preserved boundaries</h2>
+        <p class="lede" id="scope-lede"></p>
+        <div class="overview-grid">
+          <article class="card">
+            <h3>In scope</h3>
+            <ul class="plain-list" id="scope-list"></ul>
+          </article>
+          <article class="card boundary">
+            <h3>Preserved boundaries</h3>
+            <ul class="plain-list" id="boundary-list"></ul>
+          </article>
+        </div>
+        <article class="card decisions">
+          <h3>Decisions recorded</h3>
+          <ul class="plain-list" id="decision-list"></ul>
+        </article>
+      </section>
+
+      <section id="execution" aria-labelledby="execution-title">
+        <p class="section-kicker">Dependency order</p>
+        <h2 id="execution-title">Build order</h2>
+        <p class="lede">Each step should leave a locally verifiable result and unblock the next dependency.</p>
+        <div class="timeline" id="timeline"></div>
+      </section>
+
+      <section id="acceptance" aria-labelledby="acceptance-title">
+        <p class="section-kicker">Completion signals</p>
+        <h2 id="acceptance-title">Acceptance</h2>
+        <p class="lede">Every signal traces back to the canonical LLD and names an observable result.</p>
+        <div class="acceptance" id="acceptance-list"></div>
+      </section>
+    </main>
+
+    <footer><code>LLD.md</code> is authoritative. This HTML is its presentation mirror.</footer>
+  </div>
+
+  <script>
+    const LLD_DOCUMENT = {
+  "meta": {
+    "pageTitle": "DropSeam and CloseButton LLD",
+    "crumb": "Studio frontend · Shared UI 01 · LLD",
+    "title": "DropSeam and CloseButton",
+    "summary": "Every drag insertion seam renders through one DropSeam and every × close or remove control renders through one CloseButton. Labels, test ids, drag behaviour and close handlers stay the same.",
+    "status": "implementation-ready"
+  },
+  "scope": {
+    "lede": "Two new shared/ui components replace five inline seams and nine inline close buttons. Drag controllers, handlers, accessible names and test hooks do not change.",
+    "in": [
+      "Create `shared/ui/DropSeam.tsx` and `shared/ui/CloseButton.tsx`, each with a colocated behaviour test.",
+      "Seams S1–S5: ModuleTab, WorkspaceTab, ModuleRow, TasksPane, StateHeaderRow.",
+      "Panel closes C1–C4: ModalShell, SettingsFrame, ConversationConfigurationPanel, StateConfigurationPanel.",
+      "Chip closes C5–C9: ModuleTab, WorkspaceTab, ShellTabStrip, StageSkillsField, StateCatalog."
+    ],
+    "boundaries": [
+      "`useAxisDragAndDrop`, `axisPlacement` and every drag/drop prop spread stay unchanged.",
+      "Every `aria-label` string, `data-testid`, `data-drop-intent` and `data-ticket-drop-seam` is kept.",
+      "The `[overhaul-183]` ModuleTab close classes are kept: `h-full w-7`, no `hover:bg-pane-bg`, glyph `size-4` with `group-hover/close:*`.",
+      "Out of scope: TabStrip (02), workspace and shell strips (03), PaneOverlay and the SettingsFrame rebuild (09), Button (05). Oversized SettingsModal, StateConfigurationPanel and TasksPane are only shrunk here."
+    ]
+  },
+  "files": [
+    {
+      "id": "drop-seam",
+      "path": "studio/src/shared/ui/DropSeam.tsx",
+      "action": "create",
+      "layer": "shared ui",
+      "purpose": "The only insertion-seam markup in Studio.",
+      "symbols": [
+        "DropSeam",
+        "DropSeamProps",
+        "DragAxis",
+        "DropIntent"
+      ],
+      "responsibilities": [
+        "Render `null` when `edge` is null; otherwise one `<span aria-hidden=\"true\">` with `data-drop-intent={edge}`, the given `data-testid` and any other forwarded `data-*`.",
+        "Classes `pointer-events-none absolute z-10 bg-focus-accent`. `axis=\"horizontal\"` adds `top-0 bottom-0 w-0.5` and `left-0`/`right-0`; `axis=\"vertical\"` adds `right-0 left-0 h-0.5` and `top-0`/`bottom-0`."
+      ],
+      "nonResponsibilities": [
+        "Does not compute intent or attach drag handlers.",
+        "Does not position its host; the host must be `relative`.",
+        "Takes no `className`, `style` or children."
+      ],
+      "implementation": [
+        "Import `type DragAxis` and `type DropIntent` from `../dragDrop/useAxisDragAndDrop`.",
+        "Named exports only."
+      ],
+      "verification": [
+        "DropSeam.test.tsx",
+        "All seam guards stay green."
+      ],
+      "dependencies": "Lands first. No dependencies.",
+      "tests": [
+        "DropSeam.test.tsx"
+      ],
+      "trace": [
+        "AC-1",
+        "D-1",
+        "D-2"
+      ]
+    },
+    {
+      "id": "drop-seam-test",
+      "path": "studio/src/shared/ui/DropSeam.test.tsx",
+      "action": "create",
+      "layer": "test",
+      "purpose": "Behaviour test for DropSeam.",
+      "symbols": [
+        "DropSeam"
+      ],
+      "responsibilities": [
+        "`edge={null}` renders nothing.",
+        "Each axis × edge combination renders `aria-hidden` and `data-drop-intent` equal to the edge.",
+        "An extra `data-ticket-drop-seam` is forwarded."
+      ],
+      "nonResponsibilities": [
+        "Never asserts class strings."
+      ],
+      "implementation": [
+        "vitest + @testing-library/react `render`/`getByTestId`."
+      ],
+      "verification": [
+        "`vitest run src/shared/ui/DropSeam.test.tsx`"
+      ],
+      "dependencies": "Depends on DropSeam.tsx.",
+      "tests": [
+        "self"
+      ],
+      "trace": [
+        "AC-1"
+      ]
+    },
+    {
+      "id": "close-button",
+      "path": "studio/src/shared/ui/CloseButton.tsx",
+      "action": "create",
+      "layer": "shared ui",
+      "purpose": "The only × close or remove control in Studio.",
+      "symbols": [
+        "CloseButton",
+        "CloseButtonProps",
+        "CloseButtonSize",
+        "CloseButtonTone",
+        "CloseButtonReveal"
+      ],
+      "responsibilities": [
+        "Render `<button type=\"button\" aria-label={label}>` with optional `title`, `disabled`, `data-testid` and `className` (layout only).",
+        "The only element child is `<span aria-hidden=\"true\">×<\/span>`.",
+        "Closed unions: `size` `chip | panel` (required), `tone` `neutral | danger`, `reveal` `always | hover`.",
+        "A neutral chip puts its hover background on the glyph (`group-hover/close:bg-pane-bg`), never on the button."
+      ],
+      "nonResponsibilities": [
+        "Never stops propagation.",
+        "Does not manage focus.",
+        "Does not decide whether it renders."
+      ],
+      "implementation": [
+        "Class tables follow LLD.md §5.2 exactly.",
+        "Focus ring is `focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus-accent`."
+      ],
+      "verification": [
+        "CloseButton.test.tsx",
+        "`[overhaul-183]` stays green unchanged."
+      ],
+      "dependencies": "Lands first. No dependencies.",
+      "tests": [
+        "CloseButton.test.tsx",
+        "overhaulModuleTabCloseAcceptance"
+      ],
+      "trace": [
+        "AC-1",
+        "AC-3",
+        "D-3",
+        "D-4"
+      ]
+    },
+    {
+      "id": "close-button-test",
+      "path": "studio/src/shared/ui/CloseButton.test.tsx",
+      "action": "create",
+      "layer": "test",
+      "purpose": "Behaviour test for CloseButton.",
+      "symbols": [
+        "CloseButton"
+      ],
+      "responsibilities": [
+        "The accessible name comes from `label`; the glyph is `aria-hidden`.",
+        "A click calls `onClick` once; `disabled` blocks the click.",
+        "It does not submit an enclosing form.",
+        "`title` and `data-testid` are forwarded.",
+        "Every size/tone/reveal combination renders one named button."
+      ],
+      "nonResponsibilities": [
+        "Never asserts class strings."
+      ],
+      "implementation": [
+        "Use `fireEvent.click` and `getByRole(\"button\", { name })`."
+      ],
+      "verification": [
+        "`vitest run src/shared/ui/CloseButton.test.tsx`"
+      ],
+      "dependencies": "Depends on CloseButton.tsx.",
+      "tests": [
+        "self"
+      ],
+      "trace": [
+        "AC-1",
+        "AC-3"
+      ]
+    },
+    {
+      "id": "module-row",
+      "path": "studio/src/app/shell/sidebar/modules/ModuleRow.tsx",
+      "action": "modify",
+      "layer": "app shell",
+      "purpose": "S3: the sidebar module seam moves to DropSeam.",
+      "symbols": [
+        "ModuleRow"
+      ],
+      "responsibilities": [
+        "Replace lines 51-60 with `<DropSeam axis=\"vertical\" edge={dropIntent} data-testid=\"module-drop-seam\" />`."
+      ],
+      "nonResponsibilities": [
+        "`li` drag/drop spreads, `relative`, and the selection classes stay unchanged."
+      ],
+      "implementation": [
+        "Import from `../../../../shared/ui/DropSeam`."
+      ],
+      "verification": [
+        "overhaulModuleReorderAcceptance",
+        "overhaulModuleTabReorderAcceptance"
+      ],
+      "dependencies": "Depends on DropSeam.tsx.",
+      "tests": [
+        "overhaulModuleReorderAcceptance",
+        "overhaulModuleTabReorderAcceptance"
+      ],
+      "trace": [
+        "AC-2"
+      ]
+    },
+    {
+      "id": "tasks-pane",
+      "path": "studio/src/app/shell/ticket-workspace/tasks/TasksPane.tsx",
+      "action": "modify",
+      "layer": "app shell",
+      "purpose": "S4: the story block seam moves to DropSeam.",
+      "symbols": [
+        "TasksPane"
+      ],
+      "responsibilities": [
+        "Replace lines 413-422 with `<DropSeam axis=\"vertical\" edge={isTarget ? dragDrop.intent : null} data-testid=\"ticket-drop-seam\" data-ticket-drop-seam=\"true\" />`."
+      ],
+      "nonResponsibilities": [
+        "`isTarget`, `targetProps` and drag-source wiring stay unchanged.",
+        "The file is not split here (465 lines; out of scope)."
+      ],
+      "implementation": [
+        "Import from `../../../../shared/ui/DropSeam`.",
+        "The seam gains `data-drop-intent`; nothing reads it."
+      ],
+      "verification": [
+        "overhaulStoryReorderAcceptance"
+      ],
+      "dependencies": "Depends on DropSeam.tsx.",
+      "tests": [
+        "overhaulStoryReorderAcceptance"
+      ],
+      "trace": [
+        "AC-2",
+        "D-2"
+      ]
+    },
+    {
+      "id": "state-header",
+      "path": "studio/src/app/shell/ticket-workspace/tasks/components/StateHeaderRow.tsx",
+      "action": "modify",
+      "layer": "app shell",
+      "purpose": "S5: the state section seam moves to DropSeam.",
+      "symbols": [
+        "StateHeaderRow"
+      ],
+      "responsibilities": [
+        "Replace lines 77-83 with `<DropSeam axis=\"vertical\" edge={showDropSeam ? \"far\" : null} data-testid=\"ticket-drop-seam\" />`."
+      ],
+      "nonResponsibilities": [
+        "The `showDropSeam` prop and the `React.memo` wrapper stay unchanged."
+      ],
+      "implementation": [
+        "Import from `../../../../../shared/ui/DropSeam`.",
+        "Gains `data-drop-intent=\"far\"`."
+      ],
+      "verification": [
+        "overhaulStoryReorderAcceptance"
+      ],
+      "dependencies": "Depends on DropSeam.tsx.",
+      "tests": [
+        "overhaulStoryReorderAcceptance"
+      ],
+      "trace": [
+        "AC-2"
+      ]
+    },
+    {
+      "id": "module-tab",
+      "path": "studio/src/app/shell/ticket-workspace/ModuleTab.tsx",
+      "action": "modify",
+      "layer": "app shell",
+      "purpose": "S1 and C5: the module tab seam and the hover-revealed Hide close.",
+      "symbols": [
+        "ModuleTab"
+      ],
+      "responsibilities": [
+        "Replace the seam (lines 63-73) with `<DropSeam axis=\"horizontal\" edge={dropIntent} data-testid=\"module-tab-drop-seam\" />`, still the tab's first child.",
+        "Replace the close (lines 78-91) with `CloseButton` `size=\"chip\" reveal=\"hover\" label={\"Hide \" + module.name + \" tab\"} title=\"Hide tab\" className=\"absolute top-0 right-0 h-full w-7\"`."
+      ],
+      "nonResponsibilities": [
+        "Props, `registerRef`, the selected underline literal (02 replaces it), chicklets and jump badge stay unchanged.",
+        "The `group` wrapper stays because `reveal=\"hover\"` needs it."
+      ],
+      "implementation": [
+        "Import both components from `../../../shared/ui/`.",
+        "Visible change: the close is revealed on `group-focus-within`/`focus-visible` instead of `focus`."
+      ],
+      "verification": [
+        "`[overhaul-183]` unchanged",
+        "overhaulModuleTabReorderAcceptance",
+        "overhaulModulePickerAcceptance",
+        "overhaulModuleVisibilityAcceptance"
+      ],
+      "dependencies": "Depends on both components.",
+      "tests": [
+        "overhaulModuleTabCloseAcceptance",
+        "overhaulModuleTabReorderAcceptance",
+        "overhaulModulePickerAcceptance",
+        "overhaulModuleVisibilityAcceptance"
+      ],
+      "trace": [
+        "AC-2",
+        "AC-3",
+        "D-5"
+      ]
+    },
+    {
+      "id": "workspace-tab",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/internal/WorkspaceTab.tsx",
+      "action": "modify",
+      "layer": "app shell",
+      "purpose": "S2 and C6: the workspace tab seam and close.",
+      "symbols": [
+        "WorkspaceTab"
+      ],
+      "responsibilities": [
+        "Replace the seam (lines 78-87) with `<DropSeam axis=\"horizontal\" edge={dropIntent} data-testid=\"workspace-tab-drop-seam\" />`.",
+        "Replace the close (lines 90-102) with ``onClose && <CloseButton size=\"chip\" label={closeLabel ?? `Close ${name}`} onClick={(event) => { event.stopPropagation(); onClose(event); }} />``."
+      ],
+      "nonResponsibilities": [
+        "The `role=\"tab\"` div, `tone`, `highlighted`, `badge` and ref merging stay. 03 rebuilds this file on Tab."
+      ],
+      "implementation": [
+        "Import from `../../../../../shared/ui/`.",
+        "Visible change: loses `opacity-70` and gains the shared chip hover."
+      ],
+      "verification": [
+        "overhaulWorkspaceTabOrderAcceptance",
+        "overhaulTerminalCloseAcceptance",
+        "overhaulTerminalTabIdentityAcceptance"
+      ],
+      "dependencies": "Depends on both components.",
+      "tests": [
+        "overhaulWorkspaceTabOrderAcceptance",
+        "overhaulTerminalCloseAcceptance"
+      ],
+      "trace": [
+        "AC-2",
+        "AC-3",
+        "D-4",
+        "D-5"
+      ]
+    },
+    {
+      "id": "modal-shell",
+      "path": "studio/src/app/modal/ModalShell.tsx",
+      "action": "modify",
+      "layer": "app modal",
+      "purpose": "C1: the dialog close.",
+      "symbols": [
+        "ModalShell"
+      ],
+      "responsibilities": [
+        "Replace lines 131-138 with `<CloseButton size=\"panel\" label=\"Close dialog\" onClick={() => (onClose ?? popModal)()} />`."
+      ],
+      "nonResponsibilities": [
+        "`FOCUSABLE`, `initialFocusRef` and the focus trap stay unchanged."
+      ],
+      "implementation": [
+        "Import from `../../shared/ui/CloseButton`."
+      ],
+      "verification": [
+        "overhaulSettingsAcceptance",
+        "overhaulModalOcclusionConvergenceAcceptance",
+        "overhaulNativeWebViewSiblingAcceptance",
+        "overhaulZeroProviderPlanningAcceptance"
+      ],
+      "dependencies": "Depends on CloseButton.tsx.",
+      "tests": [
+        "overhaulModalOcclusionConvergenceAcceptance",
+        "overhaulTaskAgentLaunchInteractionAcceptance"
+      ],
+      "trace": [
+        "AC-2",
+        "AC-3"
+      ]
+    },
+    {
+      "id": "settings-modal",
+      "path": "studio/src/features/studio/modals/SettingsModal.tsx",
+      "action": "modify",
+      "layer": "feature",
+      "purpose": "C2: the SettingsFrame close.",
+      "symbols": [
+        "SettingsFrame"
+      ],
+      "responsibilities": [
+        "Replace lines 447-454 with `<CloseButton size=\"panel\" label=\"Close dialog\" onClick={onClose} />`."
+      ],
+      "nonResponsibilities": [
+        "The copied focus trap stays (09). RailItem stays (04). No split (460 lines)."
+      ],
+      "implementation": [
+        "Import from `../../../shared/ui/CloseButton`."
+      ],
+      "verification": [
+        "overhaulSettingsAcceptance",
+        "overhaulSettingsNativeOcclusionAcceptance",
+        "overhaulTaskWorkspaceSettingsOcclusionAcceptance"
+      ],
+      "dependencies": "Depends on CloseButton.tsx.",
+      "tests": [
+        "overhaulSettingsAcceptance"
+      ],
+      "trace": [
+        "AC-2",
+        "AC-3"
+      ]
+    },
+    {
+      "id": "conversation-config",
+      "path": "studio/src/features/settings/instant/ConversationConfigurationPanel.tsx",
+      "action": "modify",
+      "layer": "feature",
+      "purpose": "C3: the overlay close.",
+      "symbols": [
+        "ConversationConfigurationPanel"
+      ],
+      "responsibilities": [
+        "Replace lines 18-25 with `<CloseButton size=\"panel\" label=\"Close Conversation configuration\" onClick={onClose} />`."
+      ],
+      "nonResponsibilities": [
+        "Overlay structure stays (09 introduces PaneOverlay)."
+      ],
+      "implementation": [
+        "Import from `../../../shared/ui/CloseButton`."
+      ],
+      "verification": [
+        "overhaulInstantTicketsAcceptance"
+      ],
+      "dependencies": "Depends on CloseButton.tsx.",
+      "tests": [
+        "overhaulInstantTicketsAcceptance"
+      ],
+      "trace": [
+        "AC-2",
+        "AC-3"
+      ]
+    },
+    {
+      "id": "state-config",
+      "path": "studio/src/features/workflows/StateConfigurationPanel.tsx",
+      "action": "modify",
+      "layer": "feature",
+      "purpose": "C4: the state configuration overlay close.",
+      "symbols": [
+        "StateConfigurationPanel"
+      ],
+      "responsibilities": [
+        "Replace lines 127-134 with ``<CloseButton size=\"panel\" label={`Close ${state.name} state configuration`} onClick={onClose} />``."
+      ],
+      "nonResponsibilities": [
+        "The pill tablist (04) and the header (09) stay. No split (461 lines)."
+      ],
+      "implementation": [
+        "Import from `../../shared/ui/CloseButton`."
+      ],
+      "verification": [
+        "overhaulWorkflowSettingsAcceptance",
+        "overhaulLaunchConfigurationConvergenceAcceptance"
+      ],
+      "dependencies": "Depends on CloseButton.tsx.",
+      "tests": [
+        "overhaulWorkflowSettingsAcceptance"
+      ],
+      "trace": [
+        "AC-2",
+        "AC-3"
+      ]
+    },
+    {
+      "id": "shell-tab-strip",
+      "path": "studio/src/features/terminal-panel/ShellTabStrip.tsx",
+      "action": "modify",
+      "layer": "feature",
+      "purpose": "C7: the shell tab close.",
+      "symbols": [
+        "ShellTabStrip"
+      ],
+      "responsibilities": [
+        "Replace lines 61-69 with ``<CloseButton size=\"chip\" label={`Close shell ${index + 1}`} data-testid=\"terminal-panel-tab-close\" onClick={() => onClose(runId)} />``."
+      ],
+      "nonResponsibilities": [
+        "Tab wrapper, `role=\"tab\"` button and the + button stay (03)."
+      ],
+      "implementation": [
+        "Import from `../../shared/ui/CloseButton`."
+      ],
+      "verification": [
+        "overhaulTerminalPanelTabsAcceptance"
+      ],
+      "dependencies": "Depends on CloseButton.tsx.",
+      "tests": [
+        "overhaulTerminalPanelTabsAcceptance"
+      ],
+      "trace": [
+        "AC-2",
+        "AC-3"
+      ]
+    },
+    {
+      "id": "stage-skills",
+      "path": "studio/src/features/workflows/StageSkillsField.tsx",
+      "action": "modify",
+      "layer": "feature",
+      "purpose": "C8: the skill chip remove control.",
+      "symbols": [
+        "StageSkillsField"
+      ],
+      "responsibilities": [
+        "Replace lines 37-44 with ``<CloseButton size=\"chip\" tone=\"danger\" label={`Remove skill \"${skill}\"`} onClick={() => onChange(skills.filter((candidate) => candidate !== skill))} />``."
+      ],
+      "nonResponsibilities": [
+        "`SETTINGS_FIELD_CLASS` stays (06)."
+      ],
+      "implementation": [
+        "Import from `../../shared/ui/CloseButton`.",
+        "The focus ring changes to the shared outline."
+      ],
+      "verification": [
+        "overhaulWorkflowStageSkillsAcceptance",
+        "overhaulWorkflowStageSkillSerializationAcceptance"
+      ],
+      "dependencies": "Depends on CloseButton.tsx.",
+      "tests": [
+        "overhaulWorkflowStageSkillsAcceptance"
+      ],
+      "trace": [
+        "AC-2",
+        "AC-3",
+        "D-3"
+      ]
+    },
+    {
+      "id": "state-catalog",
+      "path": "studio/src/features/workflows/StateCatalog.tsx",
+      "action": "modify",
+      "layer": "feature",
+      "purpose": "C9: the hover-revealed state delete control.",
+      "symbols": [
+        "CatalogStateRow"
+      ],
+      "responsibilities": [
+        "Replace lines 335-343 with ``<CloseButton size=\"chip\" tone=\"danger\" reveal=\"hover\" label={`Delete ${state.name}`} onClick={onRemove} disabled={action !== null} className=\"size-8\" />``."
+      ],
+      "nonResponsibilities": [
+        "The `group` class on `li` stays. The delete-confirm dialog stays (09)."
+      ],
+      "implementation": [
+        "Import from `../../shared/ui/CloseButton`.",
+        "While disabled, the control stays invisible, as today."
+      ],
+      "verification": [
+        "overhaulWorkflowSettingsAcceptance (`Delete Review` → `Delete Review?`)"
+      ],
+      "dependencies": "Depends on CloseButton.tsx.",
+      "tests": [
+        "overhaulWorkflowSettingsAcceptance"
+      ],
+      "trace": [
+        "AC-2",
+        "AC-3",
+        "D-3"
+      ]
+    },
+    {
+      "id": "axis-drag",
+      "path": "studio/src/shared/dragDrop/useAxisDragAndDrop.ts",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "Supplies `DragAxis`, `DropIntent` and the drag/drop prop types consumed unchanged.",
+      "symbols": [
+        "useAxisDragAndDrop",
+        "DragAxis",
+        "DropIntent",
+        "DragSourceProps",
+        "DropTargetProps"
+      ],
+      "responsibilities": [
+        "Continues to resolve targets and intents."
+      ],
+      "nonResponsibilities": [
+        "No change in this ticket."
+      ],
+      "implementation": [
+        "None."
+      ],
+      "verification": [
+        "useAxisDragAndDrop.test.tsx unchanged."
+      ],
+      "dependencies": "Consumed by DropSeam.tsx.",
+      "tests": [
+        "useAxisDragAndDrop.test.tsx"
+      ],
+      "trace": [
+        "INV"
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "title": "DropSeam props",
+      "note": "No `className`, `style` or children. ARIA: always `aria-hidden=\"true\"`.",
+      "columns": [
+        "Prop",
+        "Type",
+        "Req.",
+        "Behaviour"
+      ],
+      "rows": [
+        [
+          "`axis`",
+          "`DragAxis` = `horizontal | vertical`",
+          "yes",
+          "List reorder axis. `horizontal` → vertical line at left/right; `vertical` → horizontal line at top/bottom."
+        ],
+        [
+          "`edge`",
+          "`DropIntent | null`",
+          "yes",
+          "`null` renders nothing; `near` = left/top, `far` = right/bottom; written to `data-drop-intent`."
+        ],
+        [
+          "`data-testid`",
+          "`string`",
+          "yes",
+          "Caller's stable hook."
+        ],
+        [
+          "`data-*`",
+          "`string | undefined`",
+          "no",
+          "Forwarded verbatim (`data-ticket-drop-seam`)."
+        ]
+      ]
+    },
+    {
+      "title": "CloseButton props",
+      "note": "Native `<button type=\"button\">`: Enter and Space activate it and it never submits a form. Its only child is `<span aria-hidden=\"true\">×<\/span>`.",
+      "columns": [
+        "Prop",
+        "Type",
+        "Default",
+        "Behaviour"
+      ],
+      "rows": [
+        [
+          "`label`",
+          "`string` (required)",
+          "—",
+          "`aria-label`; names the object being closed."
+        ],
+        [
+          "`onClick`",
+          "`(event: MouseEvent<HTMLButtonElement>) => void` (required)",
+          "—",
+          "Called on activation; never stops propagation."
+        ],
+        [
+          "`size`",
+          "`chip | panel` (required)",
+          "—",
+          "`chip` for tabs and chips (min 20×20 px); `panel` for modal and overlay headers."
+        ],
+        [
+          "`tone`",
+          "`neutral | danger`",
+          "`neutral`",
+          "`danger` for destructive removal."
+        ],
+        [
+          "`reveal`",
+          "`always | hover`",
+          "`always`",
+          "`hover` stays hidden until the ancestor `group` is hovered or contains focus, or the button has keyboard focus. Hidden while disabled."
+        ],
+        [
+          "`title`",
+          "`string`",
+          "none",
+          "Native tooltip; not defaulted to `label`."
+        ],
+        [
+          "`disabled`",
+          "`boolean`",
+          "`false`",
+          "Native disabled."
+        ],
+        [
+          "`data-testid`",
+          "`string`",
+          "none",
+          "Forwarded."
+        ],
+        [
+          "`className`",
+          "`string`",
+          "none",
+          "Layout only: position, inset, margin, placement, box size."
+        ]
+      ]
+    },
+    {
+      "title": "CloseButton rendered classes",
+      "columns": [
+        "Part",
+        "Case",
+        "Classes"
+      ],
+      "rows": [
+        [
+          "Button",
+          "always",
+          "`group/close inline-flex shrink-0 items-center justify-center leading-none text-text-muted focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus-accent`"
+        ],
+        [
+          "Button",
+          "chip",
+          "`min-h-5 min-w-5 text-sm`"
+        ],
+        [
+          "Button",
+          "panel",
+          "`px-2 py-1 text-lg`"
+        ],
+        [
+          "Button",
+          "panel + neutral",
+          "`hover:bg-pane-title hover:text-text-primary`"
+        ],
+        [
+          "Button",
+          "panel + danger",
+          "`hover:bg-lifecycle-danger/10 hover:text-lifecycle-danger`"
+        ],
+        [
+          "Button",
+          "reveal always",
+          "`disabled:cursor-not-allowed disabled:opacity-40`"
+        ],
+        [
+          "Button",
+          "reveal hover",
+          "`opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:!opacity-0`"
+        ],
+        [
+          "Glyph",
+          "chip",
+          "`flex size-4 items-center justify-center`"
+        ],
+        [
+          "Glyph",
+          "chip + neutral",
+          "`group-hover/close:bg-pane-bg group-hover/close:text-text-primary`"
+        ],
+        [
+          "Glyph",
+          "chip + danger",
+          "`group-hover/close:bg-lifecycle-danger/10 group-hover/close:text-lifecycle-danger`"
+        ]
+      ]
+    },
+    {
+      "title": "Caller mapping",
+      "columns": [
+        "Caller",
+        "Component",
+        "Props"
+      ],
+      "rows": [
+        [
+          "S1 ModuleTab",
+          "DropSeam",
+          "`axis=\"horizontal\"`, `edge={dropIntent}`, `data-testid=\"module-tab-drop-seam\"`"
+        ],
+        [
+          "S2 WorkspaceTab",
+          "DropSeam",
+          "`axis=\"horizontal\"`, `edge={dropIntent}`, `data-testid=\"workspace-tab-drop-seam\"`"
+        ],
+        [
+          "S3 ModuleRow",
+          "DropSeam",
+          "`axis=\"vertical\"`, `edge={dropIntent}`, `data-testid=\"module-drop-seam\"`"
+        ],
+        [
+          "S4 TasksPane",
+          "DropSeam",
+          "`axis=\"vertical\"`, `edge={isTarget ? dragDrop.intent : null}`, `data-testid=\"ticket-drop-seam\"`, `data-ticket-drop-seam=\"true\"`"
+        ],
+        [
+          "S5 StateHeaderRow",
+          "DropSeam",
+          "`axis=\"vertical\"`, `edge={showDropSeam ? \"far\" : null}`, `data-testid=\"ticket-drop-seam\"`"
+        ],
+        [
+          "C1 ModalShell",
+          "CloseButton",
+          "`size=\"panel\"`, `label=\"Close dialog\"`"
+        ],
+        [
+          "C2 SettingsFrame",
+          "CloseButton",
+          "`size=\"panel\"`, `label=\"Close dialog\"`"
+        ],
+        [
+          "C3 ConversationConfigurationPanel",
+          "CloseButton",
+          "`size=\"panel\"`, `label=\"Close Conversation configuration\"`"
+        ],
+        [
+          "C4 StateConfigurationPanel",
+          "CloseButton",
+          "`size=\"panel\"`, ``label={`Close ${state.name} state configuration`}``"
+        ],
+        [
+          "C5 ModuleTab",
+          "CloseButton",
+          "`size=\"chip\"`, `reveal=\"hover\"`, `label=\"Hide <name> tab\"`, `title=\"Hide tab\"`, `className=\"absolute top-0 right-0 h-full w-7\"`"
+        ],
+        [
+          "C6 WorkspaceTab",
+          "CloseButton",
+          "`size=\"chip\"`, ``label={closeLabel ?? `Close ${name}`}``; handler stops propagation first"
+        ],
+        [
+          "C7 ShellTabStrip",
+          "CloseButton",
+          "`size=\"chip\"`, `label=\"Close shell N\"`, `data-testid=\"terminal-panel-tab-close\"`"
+        ],
+        [
+          "C8 StageSkillsField",
+          "CloseButton",
+          "`size=\"chip\"`, `tone=\"danger\"`, `label='Remove skill \"<skill>\"'`"
+        ],
+        [
+          "C9 StateCatalog",
+          "CloseButton",
+          "`size=\"chip\"`, `tone=\"danger\"`, `reveal=\"hover\"`, `label=\"Delete <state>\"`, `disabled={action !== null}`, `className=\"size-8\"`"
+        ]
+      ]
+    },
+    {
+      "title": "Guarding tests",
+      "note": "These must pass unchanged. No test asserts class strings on C1–C4 or C6–C9.",
+      "columns": [
+        "Hook",
+        "Tests"
+      ],
+      "rows": [
+        [
+          "`module-tab-drop-seam`, `data-drop-intent`",
+          "overhaulModuleTabReorderAcceptance"
+        ],
+        [
+          "`workspace-tab-drop-seam`",
+          "overhaulWorkspaceTabOrderAcceptance"
+        ],
+        [
+          "`module-drop-seam`",
+          "overhaulModuleReorderAcceptance, overhaulModuleTabReorderAcceptance"
+        ],
+        [
+          "`ticket-drop-seam`",
+          "not asserted; overhaulStoryReorderAcceptance guards behaviour"
+        ],
+        [
+          "ModuleTab close classes and name",
+          "overhaulModuleTabCloseAcceptance [overhaul-183], overhaulModulePickerAcceptance, overhaulModuleVisibilityAcceptance, e2e/web-app.spec.ts"
+        ],
+        [
+          "`Close dialog`",
+          "overhaulSettings, ModalOcclusionConvergence, SettingsNativeOcclusion, TaskWorkspaceSettingsOcclusion, ZeroProviderPlanning, TaskAgentLaunchInteraction, NativeWebViewSibling"
+        ],
+        [
+          "`Close Conversation configuration`",
+          "overhaulInstantTicketsAcceptance"
+        ],
+        [
+          "State configuration close",
+          "overhaulWorkflowSettings, LaunchConfigurationConvergence, WorkflowStageSkillSerialization"
+        ],
+        [
+          "Workspace tab close",
+          "overhaulTerminalClose, WorkspaceTabOrder, TerminalTabIdentity"
+        ],
+        [
+          "`terminal-panel-tab-close`",
+          "overhaulTerminalPanelTabsAcceptance"
+        ],
+        [
+          "`Remove skill \"…\"`",
+          "overhaulWorkflowStageSkills, WorkflowStageSkillSerialization"
+        ],
+        [
+          "`Delete <state>`",
+          "overhaulWorkflowSettingsAcceptance"
+        ]
+      ]
+    }
+  ],
+  "decisions": [
+    "D-1 `DropSeam.edge` accepts `null` and renders nothing.",
+    "D-2 `DropSeam` forwards extra `data-*`, so `data-ticket-drop-seam` survives.",
+    "D-3 `CloseButton` adds closed `tone` and `reveal` unions; C8/C9 are destructive and C5/C9 are hover-revealed today.",
+    "D-4 `CloseButton` never stops propagation; C6 does so in its own handler.",
+    "D-5 Intended visual deltas: WorkspaceTab and ShellTabStrip adopt the shared chip hover; StageSkillsField adopts the shared focus outline; the ModuleTab close is revealed on focus-within."
+  ],
+  "execution": [
+    {
+      "title": "DropSeam",
+      "detail": "Add `DropSeam.tsx` and its test.",
+      "gate": "DropSeam.test.tsx"
+    },
+    {
+      "title": "CloseButton",
+      "detail": "Add `CloseButton.tsx` and its test.",
+      "gate": "CloseButton.test.tsx"
+    },
+    {
+      "title": "ModuleRow seam",
+      "detail": "S3 → DropSeam.",
+      "gate": "overhaulModuleReorderAcceptance"
+    },
+    {
+      "title": "Stories and state seams",
+      "detail": "S4 and S5 → DropSeam.",
+      "gate": "overhaulStoryReorderAcceptance"
+    },
+    {
+      "title": "ModuleTab",
+      "detail": "S1 and C5.",
+      "gate": "overhaulModuleTabClose/Reorder/Picker/Visibility"
+    },
+    {
+      "title": "WorkspaceTab",
+      "detail": "S2 and C6 (keep stopPropagation).",
+      "gate": "overhaulWorkspaceTabOrder, TerminalClose"
+    },
+    {
+      "title": "Panel closes",
+      "detail": "C1–C4.",
+      "gate": "Close-dialog suites, InstantTickets, WorkflowSettings"
+    },
+    {
+      "title": "Remaining chip closes",
+      "detail": "C7–C9.",
+      "gate": "TerminalPanelTabs, StageSkills, WorkflowSettings"
+    },
+    {
+      "title": "Gate",
+      "detail": "Static `rg` check, typecheck, studio tests, `test:overhaul`.",
+      "gate": "all green"
+    }
+  ],
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "text": "`shared/ui/DropSeam.tsx` and `shared/ui/CloseButton.tsx` exist with behaviour tests. Signal: both colocated tests pass."
+    },
+    {
+      "id": "AC-2",
+      "text": "All listed instances use them, with no inline seam or × markup left. Signal: `rg -n '×|pointer-events-none absolute .*bg-focus-accent' studio/src --glob '!**/*.test.*'` lists only the two components."
+    },
+    {
+      "id": "AC-3",
+      "text": "Every CloseButton has an `aria-label` and test ids are preserved. Signal: `label` is required (typecheck), CloseButton test case 1, guard suites unchanged."
+    },
+    {
+      "id": "AC-4",
+      "text": "`npm run typecheck`, `npm run test --workspace @worktracker/studio` and `npm run test:overhaul` pass."
+    }
+  ]
+};
+
+    const actionLabels = { all: "All", create: "Create", modify: "Modify", delete: "Delete", move: "Move", untouched: "Untouched" };
+    const state = { action: "all", query: "", selected: null };
+
+    const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+    const fmt = (value) => esc(value).replace(/``(.+?)``|`([^`]+)`/g, (match, wide, narrow) => `<code>${wide ?? narrow}</code>`);
+    function renderContracts() {
+      document.getElementById("contract-list").innerHTML = (LLD_DOCUMENT.contracts || []).map(block => `
+        <div class="contract-block">
+          <h3>${esc(block.title)}</h3>
+          ${block.note ? `<p>${fmt(block.note)}</p>` : ""}
+          <div class="table-wrap"><table class="contract-table">
+            <thead><tr>${block.columns.map(col => `<th scope="col">${esc(col)}</th>`).join("")}</tr></thead>
+            <tbody>${block.rows.map(row => `<tr>${row.map(cell => `<td>${fmt(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+          </table></div>
+        </div>`).join("");
+      document.getElementById("decision-list").innerHTML = (LLD_DOCUMENT.decisions || []).map(item => `<li>${fmt(item)}</li>`).join("");
+    }
+    window.addEventListener("hashchange", () => {
+      const id = decodeURIComponent(location.hash.replace(/^#file:/, ""));
+      if (LLD_DOCUMENT.files.some(file => file.id === id)) { state.selected = id; renderFiles(); }
+    });
+    const directory = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ".";
+    const basename = path => path.slice(path.lastIndexOf("/") + 1);
+    const list = items => `<ul>${(items || []).map(item => `<li>${fmt(item)}</li>`).join("")}</ul>`;
+    const tokens = (items, extra = "") => (items || []).map(item => `<span class="token ${extra}">${esc(item)}</span>`).join("");
+
+    function visibleFiles() {
+      const needle = state.query.trim().toLowerCase();
+      return LLD_DOCUMENT.files.filter(file => {
+        const actionMatch = state.action === "all" || file.action === state.action;
+        const haystack = [file.path, file.layer, file.purpose, ...(file.symbols || []), ...(file.responsibilities || []), ...(file.implementation || []), ...(file.verification || []), ...(file.trace || [])].join(" ").toLowerCase();
+        return actionMatch && (!needle || haystack.includes(needle));
+      });
+    }
+
+    function renderHeader() {
+      document.getElementById("doc-crumb").textContent = LLD_DOCUMENT.meta.crumb;
+      document.getElementById("doc-title").textContent = LLD_DOCUMENT.meta.title;
+      document.getElementById("doc-summary").textContent = LLD_DOCUMENT.meta.summary;
+      document.getElementById("doc-status").textContent = LLD_DOCUMENT.meta.status;
+      document.getElementById("scope-lede").textContent = LLD_DOCUMENT.scope.lede;
+      document.getElementById("scope-list").innerHTML = LLD_DOCUMENT.scope.in.map(item => `<li>${esc(item)}</li>`).join("");
+      document.getElementById("boundary-list").innerHTML = LLD_DOCUMENT.scope.boundaries.map(item => `<li>${esc(item)}</li>`).join("");
+      const counts = Object.keys(actionLabels).filter(action => action !== "all").map(action => ({ action, count: LLD_DOCUMENT.files.filter(file => file.action === action).length }));
+      document.getElementById("metrics").innerHTML = counts.map(item => `<div class="metric"><b>${item.count}</b><span>${actionLabels[item.action]}</span></div>`).join("");
+    }
+
+    function renderFilters() {
+      const actions = ["all", ...new Set(LLD_DOCUMENT.files.map(file => file.action))];
+      document.getElementById("filters").innerHTML = actions.map(action => `<button class="filter" type="button" data-action="${action}" aria-pressed="${state.action === action}">${actionLabels[action] || action}</button>`).join("");
+      document.querySelectorAll(".filter").forEach(button => button.addEventListener("click", () => {
+        state.action = button.dataset.action;
+        renderFilters();
+        renderFiles();
+      }));
+    }
+
+    function renderFiles() {
+      const files = visibleFiles();
+      if (!files.some(file => file.id === state.selected)) state.selected = files[0]?.id || null;
+      const groups = Map.groupBy ? Map.groupBy(files, file => directory(file.path)) : files.reduce((map, file) => map.set(directory(file.path), [...(map.get(directory(file.path)) || []), file]), new Map());
+      const rail = document.getElementById("file-rail");
+      rail.innerHTML = files.length ? [...groups.entries()].map(([dir, entries]) => `<div class="dir-group"><div class="dir-label">${esc(dir)}</div>${entries.map(file => `<button class="file-button" type="button" role="option" data-file="${esc(file.id)}" aria-selected="${file.id === state.selected}"><span class="action-dot ${esc(file.action)}" aria-hidden="true"></span><span class="file-button-copy"><span class="file-name">${esc(basename(file.path))}</span><span class="file-meta">${esc(actionLabels[file.action] || file.action)} · ${esc(file.layer)}</span></span></button>`).join("")}</div>`).join("") : `<div class="rail-empty">No files match this view.</div>`;
+      rail.querySelectorAll(".file-button").forEach(button => {
+        button.addEventListener("click", () => selectFile(button.dataset.file));
+        button.addEventListener("keydown", event => navigateFiles(event, button.dataset.file));
+      });
+      renderInspector();
+    }
+
+    function selectFile(id) {
+      state.selected = id;
+      document.querySelectorAll(".file-button").forEach(button => button.setAttribute("aria-selected", String(button.dataset.file === id)));
+      renderInspector();
+      history.replaceState(null, "", `#file:${encodeURIComponent(id)}`);
+    }
+
+    function navigateFiles(event, id) {
+      if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+      event.preventDefault();
+      const files = visibleFiles();
+      const index = files.findIndex(file => file.id === id);
+      const next = event.key === 'ArrowDown' ? Math.min(index + 1, files.length - 1) : Math.max(index - 1, 0);
+      state.selected = files[next]?.id || id;
+      renderFiles();
+      document.querySelector(`[data-file="${CSS.escape(state.selected)}"]`)?.focus();
+    }
+
+    function renderInspector() {
+      const file = LLD_DOCUMENT.files.find(entry => entry.id === state.selected);
+      const inspector = document.getElementById("file-inspector");
+      if (!file) { inspector.innerHTML = `<p class="rail-empty">Choose a file to inspect.</p>`; return; }
+      inspector.innerHTML = `
+        <div class="inspector-head">
+          <div><h3 class="path">${esc(file.path)}</h3><p class="purpose">${fmt(file.purpose)}</p></div>
+          <span class="action-badge ${esc(file.action)}">${esc(actionLabels[file.action] || file.action)}</span>
+        </div>
+        <div class="symbol-row" aria-label="Symbols">${tokens(file.symbols)}</div>
+        <div class="inspector-grid">
+          <div class="info-block"><h4>Responsibilities</h4>${list(file.responsibilities)}</div>
+          <div class="info-block no"><h4>Preserved boundary</h4>${list(file.nonResponsibilities)}</div>
+          <div class="info-block"><h4>Implementation</h4>${list(file.implementation)}</div>
+          <div class="info-block"><h4>Verification</h4>${list(file.verification)}</div>
+        </div>
+        <div class="dependency-strip"><b>Dependency position</b><p>${fmt(file.dependencies)}</p></div>
+        <div class="trace-row" aria-label="Tests and requirement trace">${tokens(file.tests)}${tokens(file.trace, "trace-token")}</div>`;
+    }
+
+    function renderTimeline() {
+      document.getElementById("timeline").innerHTML = LLD_DOCUMENT.execution.map(step => `<article class="step"><div><b>${esc(step.title)}</b><p>${fmt(step.detail)}</p></div><code>${esc(step.gate)}</code></article>`).join("");
+      document.getElementById("acceptance-list").innerHTML = LLD_DOCUMENT.acceptance.map(item => `<article class="acceptance-item"><strong>${esc(item.id)}</strong><p>${fmt(item.text)}</p></article>`).join("");
+    }
+
+    document.getElementById("file-search").addEventListener("input", event => { state.query = event.target.value; renderFiles(); });
+    document.addEventListener("keydown", event => {
+      if (event.key === "/" && document.activeElement !== document.getElementById("file-search")) { event.preventDefault(); document.getElementById("file-search").focus(); }
+      if (event.key === "Escape" && document.activeElement === document.getElementById("file-search")) { state.query = ""; document.getElementById("file-search").value = ""; renderFiles(); }
+    });
+
+    const deepLink = decodeURIComponent(location.hash.replace(/^#file:/, ""));
+    state.selected = LLD_DOCUMENT.files.some(file => file.id === deepLink) ? deepLink : LLD_DOCUMENT.files[0]?.id;
+    renderHeader();
+    renderFilters();
+    renderFiles();
+    renderTimeline();
+    renderContracts();
+  </script>
+</body>
+</html>

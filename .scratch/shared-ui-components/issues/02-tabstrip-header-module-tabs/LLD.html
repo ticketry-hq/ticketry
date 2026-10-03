@@ -1,0 +1,1432 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="lld-source" content="LLD.md">
+  <meta name="lld-source-sha256" content="0bfd15b9d1fb4491e9236784704d5b26bd6f4e860f5e563175e735723fae7dfb">
+  <title>TabStrip Header Tabs LLD</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --surface: #202b3b;
+      --rail: #121c29;
+      --group: #263448;
+      --on-accent: #0e1520;
+      --focus: #a7ceff;
+      --paper: #0e1520;
+      --sheet: #172130;
+      --ink: #e6edf6;
+      --muted: #a6b5c9;
+      --line: #34445b;
+      --line-strong: #657a96;
+      --navy: #91c4ff;
+      --navy-soft: #203852;
+      --orange: #ffb180;
+      --orange-soft: #422d24;
+      --green: #7bdbb1;
+      --green-soft: #183b32;
+      --red: #ff9eaa;
+      --red-soft: #432731;
+      --violet: #c4b2ff;
+      --violet-soft: #332e4c;
+      --shadow: 0 18px 45px rgba(0, 0, 0, .24);
+      --radius: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(145, 196, 255, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(20, 61, 102, .035) 1px, transparent 1px),
+        var(--paper);
+      background-size: 24px 24px;
+      font-family: var(--sans);
+      line-height: 1.55;
+    }
+
+    button, input { font: inherit; }
+    button:focus-visible, input:focus-visible, a:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .shell { width: min(1480px, calc(100% - 40px)); margin: 0 auto; }
+    .masthead {
+      margin-top: 20px;
+      border: 1px solid var(--line-strong);
+      background: var(--sheet);
+      box-shadow: var(--shadow);
+    }
+    .masthead-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      padding: 30px 34px 28px;
+      border-bottom: 1px solid var(--line);
+    }
+    .crumb {
+      margin: 0 0 12px;
+      color: var(--orange);
+      font: 700 11px/1.2 var(--mono);
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; max-width: 900px; font-size: clamp(32px, 5vw, 64px); line-height: .98; letter-spacing: -.045em; }
+    .summary { max-width: 780px; margin: 18px 0 0; color: var(--muted); font-size: 16px; }
+    .phase-card {
+      min-width: 180px;
+      align-self: stretch;
+      display: grid;
+      align-content: space-between;
+      padding: 18px;
+      background: var(--navy);
+      color: var(--on-accent);
+    }
+    .phase-card span { font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; opacity: .68; }
+    .phase-card strong { font-size: 30px; letter-spacing: -.03em; }
+    .phase-card small { font-family: var(--mono); opacity: .78; }
+    .metrics { display: grid; grid-template-columns: repeat(5, 1fr); }
+    .metric { padding: 15px 20px; border-right: 1px solid var(--line); }
+    .metric:last-child { border-right: 0; }
+    .metric b { display: block; font-size: 24px; line-height: 1; }
+    .metric span { color: var(--muted); font: 700 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+
+    .sticky-nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      gap: 4px;
+      margin: 14px 0 32px;
+      padding: 7px;
+      border: 1px solid var(--line);
+      background: rgba(23, 33, 48, .92);
+      backdrop-filter: blur(14px);
+    }
+    .sticky-nav a { padding: 8px 13px; color: var(--muted); font: 700 11px/1 var(--mono); text-decoration: none; text-transform: uppercase; }
+    .sticky-nav a:hover { color: var(--navy); background: var(--navy-soft); }
+
+    section { margin: 0 0 46px; scroll-margin-top: 72px; }
+    .primary-section { margin-bottom: 56px; }
+    .section-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px; align-items: end; }
+    .workspace-note { max-width: 310px; margin: 0 0 22px; padding: 12px 14px; border-left: 3px solid var(--orange); color: var(--muted); background: var(--sheet); font-size: 12px; }
+    .section-kicker { margin: 0 0 6px; color: var(--orange); font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; }
+    h2 { margin: 0; font-size: clamp(25px, 3vw, 39px); letter-spacing: -.035em; }
+    .lede { max-width: 820px; margin: 10px 0 22px; color: var(--muted); }
+
+    .overview-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 16px; }
+    .card { border: 1px solid var(--line); background: var(--sheet); padding: 22px; }
+    .card h3 { margin: 0 0 12px; font-size: 16px; }
+    .plain-list { margin: 0; padding-left: 18px; }
+    .plain-list li + li { margin-top: 8px; }
+    .boundary { border-left: 4px solid var(--orange); }
+
+    .change-view { border: 1px solid var(--line-strong); background: var(--sheet); box-shadow: var(--shadow); }
+    .change-toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 16px;
+      padding: 15px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .search-wrap { position: relative; }
+    .search-wrap span { position: absolute; left: 12px; top: 9px; color: var(--muted); font-family: var(--mono); }
+    #file-search {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px 0 36px;
+      border: 1px solid var(--line-strong);
+      background: var(--rail);
+      color: var(--ink);
+    }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .filter {
+      border: 1px solid var(--line);
+      background: var(--sheet);
+      color: var(--muted);
+      padding: 7px 10px;
+      cursor: pointer;
+      font: 700 10px/1 var(--mono);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .filter[aria-pressed="true"] { color: var(--on-accent); border-color: var(--navy); background: var(--navy); }
+    .change-workspace { display: grid; grid-template-columns: minmax(330px, .72fr) minmax(0, 1.8fr); height: clamp(620px, 72vh, 820px); }
+    .file-rail { border-right: 1px solid var(--line); background: var(--rail); overflow: auto; }
+    .rail-empty { padding: 30px; color: var(--muted); text-align: center; }
+    .dir-group + .dir-group { border-top: 1px solid var(--line); }
+    .dir-label { position: sticky; top: 0; z-index: 2; padding: 9px 13px; color: var(--muted); background: var(--group); font: 700 10px/1.2 var(--mono); }
+    .file-button {
+      width: 100%;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 11px 13px;
+      border: 0;
+      border-top: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+    }
+    .file-button:hover { background: var(--surface); }
+    .file-button[aria-selected="true"] { background: var(--surface); box-shadow: inset 4px 0 0 var(--orange); }
+    .file-button-copy { min-width: 0; display: grid; gap: 4px; }
+    .file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 12px/1.3 var(--mono); }
+    .file-meta { color: var(--muted); font: 700 9px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+    .action-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+    .action-dot.create { background: var(--green); }
+    .action-dot.modify { background: var(--orange); }
+    .action-dot.delete { background: var(--red); }
+    .action-dot.move { background: var(--violet); }
+    .action-dot.untouched { background: var(--navy); }
+
+    .file-inspector { min-width: 0; padding: 28px; overflow: auto; }
+    .inspector-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .path { margin: 0; overflow-wrap: anywhere; font: 700 clamp(16px, 2vw, 22px)/1.3 var(--mono); }
+    .purpose { margin: 8px 0 0; color: var(--muted); }
+    .action-badge { flex: 0 0 auto; padding: 6px 9px; border: 1px solid currentColor; font: 800 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .action-badge.create { color: var(--green); background: var(--green-soft); }
+    .action-badge.modify { color: var(--orange); background: var(--orange-soft); }
+    .action-badge.delete { color: var(--red); background: var(--red-soft); }
+    .action-badge.move { color: var(--violet); background: var(--violet-soft); }
+    .action-badge.untouched { color: var(--navy); background: var(--navy-soft); }
+    .inspector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+    .info-block { border-top: 3px solid var(--navy); padding: 13px 14px 15px; background: var(--surface); }
+    .info-block.no { border-top-color: var(--red); }
+    .info-block h4 { margin: 0 0 8px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .info-block ul { margin: 0; padding-left: 18px; font-size: 13px; }
+    .info-block li + li { margin-top: 6px; }
+    .symbol-row, .trace-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+    .token { padding: 5px 8px; border: 1px solid var(--line); background: var(--rail); font: 600 11px/1 var(--mono); }
+    .trace-token { color: var(--navy); border-color: var(--line-strong); background: var(--navy-soft); }
+    .dependency-strip { margin-top: 20px; padding: 14px; border: 1px dashed var(--line-strong); }
+    .dependency-strip b { display: block; margin-bottom: 7px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .dependency-strip p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .timeline { display: grid; gap: 9px; counter-reset: step; }
+    .step { counter-increment: step; display: grid; grid-template-columns: 48px 1fr auto; gap: 16px; align-items: start; padding: 17px; border: 1px solid var(--line); background: var(--sheet); }
+    .step::before { content: counter(step, decimal-leading-zero); color: var(--orange); font: 800 18px/1 var(--mono); }
+    .step b { display: block; margin-bottom: 4px; }
+    .step p { margin: 0; color: var(--muted); }
+    .step code { color: var(--navy); font: 700 11px/1.4 var(--mono); }
+    .acceptance { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .acceptance-item { display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 16px; border: 1px solid var(--line); background: var(--green-soft); }
+    .acceptance-item strong { color: var(--green); font-family: var(--mono); }
+    .acceptance-item p { margin: 0; }
+    footer { margin: 50px 0 24px; padding: 18px 0; border-top: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; }
+    footer code { color: var(--navy); }
+
+
+    html { background: var(--paper); }
+    a { color: var(--navy); }
+    ::selection { background: var(--navy-soft); color: var(--ink); }
+    input::placeholder { color: var(--muted); opacity: 1; }
+    code { font-family: var(--mono); font-size: .92em; color: var(--navy); overflow-wrap: anywhere; }
+    .token, .info-block, .step { overflow-wrap: anywhere; }
+    .masthead-top { padding: 14px 20px 12px; }
+    h1 { font-size: clamp(22px, 2.6vw, 32px); line-height: 1.1; letter-spacing: -.02em; }
+    .summary { margin-top: 8px; font-size: 14px; }
+    .phase-card { padding: 12px 14px; min-width: 150px; }
+    .phase-card strong { font-size: 20px; }
+    .metric { padding: 8px 14px; }
+    .metric b { font-size: 18px; }
+    .sticky-nav { margin: 10px 0 18px; }
+    section { margin-bottom: 36px; }
+    .primary-section { margin-bottom: 40px; }
+    h2 { font-size: clamp(20px, 2.2vw, 28px); }
+    .lede { margin: 6px 0 14px; }
+    .workspace-note { margin-bottom: 14px; }
+    .change-workspace { height: clamp(560px, 74vh, 880px); }
+    .contract-block + .contract-block { margin-top: 22px; }
+    .contract-block h3 { margin: 0 0 4px; font-size: 16px; }
+    .contract-block p { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); background: var(--sheet); }
+    .contract-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .contract-table th, .contract-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .contract-table th { background: var(--group); color: var(--muted); font: 700 10px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .contract-table td:first-child { white-space: nowrap; }
+    .decisions { margin-top: 16px; }
+    @media (max-width: 880px) {
+      .contract-table td:first-child { white-space: normal; }
+      .change-workspace { height: auto; }
+      .sticky-nav { overflow-x: auto; }
+    }
+
+    @media (max-width: 880px) {
+      .shell { width: min(100% - 22px, 1480px); }
+      .masthead-top, .overview-grid, .section-heading { grid-template-columns: 1fr; }
+      .masthead-top { gap: 18px; padding: 22px; }
+      h1 { font-size: clamp(30px, 8vw, 42px); }
+      .phase-card { min-height: 0; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; }
+      .phase-card strong { font-size: 22px; }
+      .metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .metric { padding: 12px 10px; }
+      .metric b { font-size: 20px; }
+      .metric span { font-size: 8px; }
+      .metric { border-bottom: 1px solid var(--line); }
+      .change-toolbar { grid-template-columns: 1fr; }
+      .filters { justify-content: flex-start; }
+      .change-workspace { grid-template-columns: 1fr; height: auto; }
+      .file-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: 330px; }
+      .inspector-grid, .acceptance { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 42px 1fr; }
+      .step code { grid-column: 2; }
+    }
+
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body data-template="false">
+  <div class="shell">
+    <header class="masthead" id="overview">
+      <div class="masthead-top">
+        <div>
+          <p class="crumb" id="doc-crumb">Module · Work item · LLD</p>
+          <h1 id="doc-title">File change plan</h1>
+          <p class="summary" id="doc-summary"></p>
+        </div>
+        <div class="phase-card">
+          <span>Design state</span>
+          <strong>LLD</strong>
+          <small id="doc-status">candidate</small>
+        </div>
+      </div>
+      <div class="metrics" id="metrics" aria-label="File change totals"></div>
+    </header>
+
+    <nav class="sticky-nav" aria-label="Document sections">
+      <a href="#file-changes">File changes</a>
+      <a href="#contracts">Contracts</a>
+      <a href="#context">Context</a>
+      <a href="#execution">Build order</a>
+      <a href="#acceptance">Acceptance</a>
+    </nav>
+
+    <main>
+      <section class="primary-section" id="file-changes" aria-labelledby="changes-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Primary implementation plan</p>
+            <h2 id="changes-title">Build the design file by file</h2>
+            <p class="lede">Select a file to see exactly why it changes, what to implement, what must remain stable, and how that file is verified.</p>
+          </div>
+          <p class="workspace-note"><strong>Start here.</strong> Search paths, symbols, or requirement IDs. Use ↑ and ↓ to inspect files without leaving the keyboard. Press / to search. Each file has a deep link (#file:&lt;id&gt;).</p>
+        </div>
+        <div class="change-view">
+          <div class="change-toolbar">
+            <label class="search-wrap">
+              <span aria-hidden="true">/</span>
+              <input id="file-search" type="search" placeholder="Find a path, symbol, or requirement" autocomplete="off">
+            </label>
+            <div class="filters" id="filters" aria-label="Filter files by action"></div>
+          </div>
+          <div class="change-workspace">
+            <div class="file-rail" id="file-rail" role="listbox" aria-label="Planned file changes"></div>
+            <article class="file-inspector" id="file-inspector" aria-live="polite"></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="contracts" aria-labelledby="contracts-title">
+        <p class="section-kicker">Fixed interfaces</p>
+        <h2 id="contracts-title">Contracts</h2>
+        <p class="lede">Props, rendered classes, keyboard behaviour and caller mappings exactly as fixed in <code>LLD.md</code>.</p>
+        <div id="contract-list"></div>
+      </section>
+
+      <section id="context" aria-labelledby="scope-title">
+        <p class="section-kicker">Supporting context</p>
+        <h2 id="scope-title">Scope and preserved boundaries</h2>
+        <p class="lede" id="scope-lede"></p>
+        <div class="overview-grid">
+          <article class="card">
+            <h3>In scope</h3>
+            <ul class="plain-list" id="scope-list"></ul>
+          </article>
+          <article class="card boundary">
+            <h3>Preserved boundaries</h3>
+            <ul class="plain-list" id="boundary-list"></ul>
+          </article>
+        </div>
+        <article class="card decisions">
+          <h3>Decisions recorded</h3>
+          <ul class="plain-list" id="decision-list"></ul>
+        </article>
+      </section>
+
+      <section id="execution" aria-labelledby="execution-title">
+        <p class="section-kicker">Dependency order</p>
+        <h2 id="execution-title">Build order</h2>
+        <p class="lede">Each step should leave a locally verifiable result and unblock the next dependency.</p>
+        <div class="timeline" id="timeline"></div>
+      </section>
+
+      <section id="acceptance" aria-labelledby="acceptance-title">
+        <p class="section-kicker">Completion signals</p>
+        <h2 id="acceptance-title">Acceptance</h2>
+        <p class="lede">Every signal traces back to the canonical LLD and names an observable result.</p>
+        <div class="acceptance" id="acceptance-list"></div>
+      </section>
+    </main>
+
+    <footer><code>LLD.md</code> is authoritative. This HTML is its presentation mirror.</footer>
+  </div>
+
+  <script>
+    const LLD_DOCUMENT = {
+  "meta": {
+    "pageTitle": "TabStrip Header Tabs LLD",
+    "crumb": "Studio frontend · Shared UI 02 · LLD",
+    "title": "TabStrip and Tab on the header module tabs",
+    "summary": "A shared TabStrip and Tab with roving keyboard support, scroll-into-view, slots, per-tab close and drag passthrough. All five variants are declared and underline is implemented. Header module tabs move onto it; the #7aa2f7 underline becomes a token.",
+    "status": "implementation-ready after 01"
+  },
+  "scope": {
+    "lede": "Create the TabStrip API that 03 and 04 extend without changing it, and migrate the header module selector onto it with no behaviour change except new keyboard support.",
+    "in": [
+      "`shared/ui/TabStrip.tsx` (TabStrip, Tab, the five-member variant union, underline class table) and `shared/ui/tabStripKeys.ts`.",
+      "Header module tabs (`ModuleTabStrip`, `ModuleTab`) on `TabStrip variant=\"underline\"`.",
+      "The `shadow-tab-underline` token in `tailwind.config.ts`, used by the module tab and `FooterChangesToggle`.",
+      "`ModulesPaneToggle` → `useGlobalShortcutLabel`; `ModuleJumpBadge` → `KeyBadge`.",
+      "`useGlobalKeymap` yields unmodified roving keys to a focused TabStrip."
+    ],
+    "boundaries": [
+      "Selection, hide fallback, drag reorder, jump-badge routing and ModulePicker internals stay unchanged.",
+      "The DOM contract used by tests is preserved: labels, toggle first, picker after tablist, `w-max shrink-0`, `pr-7`, close classes, seam inside tab, `data-module-id`, badge attributes.",
+      "boxed/plain/pill/rail styling (03/04), the tab-look toggle (04) and ModulePicker internals (08) are out of scope.",
+      "The xterm and CodeMirror `#7aa2f7` theme literals are not Tailwind chrome and are untouched."
+    ]
+  },
+  "files": [
+    {
+      "id": "tabstrip",
+      "path": "studio/src/shared/ui/TabStrip.tsx",
+      "action": "create",
+      "layer": "shared ui",
+      "purpose": "TabStrip, Tab, the variant union and per-variant class tables. Once 03/04 land, this is the only tab-strip markup.",
+      "symbols": [
+        "TabStrip",
+        "Tab",
+        "TabStripVariant",
+        "TabStripKeyboard",
+        "TabStripZoneChrome",
+        "TabStripProps",
+        "TabProps",
+        "TabClose",
+        "DataAttributes",
+        "VARIANT_CLASSES",
+        "ORIENTATION",
+        "TabStripContext"
+      ],
+      "responsibilities": [
+        "DOM, in order: root (`data-tab-strip-root`, `aria-label={regionLabel}`) → `leading` → scroller (`aria-label={scrollLabel}`) → `role=\"tablist\"` (`aria-label={label}`, `aria-orientation`, `data-tab-strip` when roving) → Tabs; `trailing` follows the tablist inside the scroller.",
+        "Roving keys on the tablist (§5.4): focus the target tab, then `click()` it; `preventDefault` for handled keys.",
+        "`scrollKey`: on mount and on every change, scroll the selected tab into view with `{ block: \"nearest\", inline: \"nearest\" }`.",
+        "Tab: wrapper → `button role=\"tab\"` (DropSeam first, then children) → sibling CloseButton.",
+        "Context default `{ variant: \"underline\", keyboard: \"roving\" }`, so a standalone Tab works."
+      ],
+      "nonResponsibilities": [
+        "Owns no selection state, data or drag controller.",
+        "In 02, boxed/plain/pill/rail reuse the underline class entry; 03/04 replace only their own entry."
+      ],
+      "implementation": [
+        "`VARIANT_CLASSES: Record<TabStripVariant, VariantClasses>` with keys root, scroller, tablist, wrapper, tab, tabClosable, tabPlain, selected, idle, closeClassName, closeReveal.",
+        "`ORIENTATION`: rail → vertical; others → horizontal.",
+        "Merge `tabRef` with `dropTargetProps.ref`.",
+        "Target ≤ 250 lines."
+      ],
+      "verification": [
+        "TabStrip.test.tsx cases 1–13"
+      ],
+      "dependencies": "Depends on 01 (CloseButton, DropSeam), tabStripKeys.ts and the tailwind token.",
+      "tests": [
+        "TabStrip.test.tsx"
+      ],
+      "trace": [
+        "AC-1",
+        "AC-2",
+        "D-1",
+        "D-2",
+        "D-4",
+        "D-5",
+        "D-6"
+      ]
+    },
+    {
+      "id": "keys",
+      "path": "studio/src/shared/ui/tabStripKeys.ts",
+      "action": "create",
+      "layer": "shared ui",
+      "purpose": "Pure key-to-action mapping, plus the predicate the global keymap uses to yield roving keys.",
+      "symbols": [
+        "TAB_STRIP_ATTRIBUTE",
+        "tabStripKeyAction",
+        "isTabStripKeyEvent"
+      ],
+      "responsibilities": [
+        "`tabStripKeyAction(event, orientation)` returns null with any modifier.",
+        "Horizontal: ArrowLeft/ArrowRight → previous/next. Vertical: ArrowUp/ArrowDown → previous/next.",
+        "Home → first, End → last, Enter and Space → activate.",
+        "`isTabStripKeyEvent(event)` is true only when the target is inside `[data-tab-strip]` and the key maps to an action."
+      ],
+      "nonResponsibilities": [
+        "No React, no DOM mutation."
+      ],
+      "implementation": [
+        "`TAB_STRIP_ATTRIBUTE = \"data-tab-strip\"`; its value is the orientation.",
+        "≤ 50 lines."
+      ],
+      "verification": [
+        "TabStrip.test.tsx case 13",
+        "overhaulModuleTabKeyboardAcceptance"
+      ],
+      "dependencies": "No dependencies.",
+      "tests": [
+        "TabStrip.test.tsx"
+      ],
+      "trace": [
+        "AC-2",
+        "D-3"
+      ]
+    },
+    {
+      "id": "tabstrip-test",
+      "path": "studio/src/shared/ui/TabStrip.test.tsx",
+      "action": "create",
+      "layer": "test",
+      "purpose": "Behaviour test for TabStrip, Tab and the key mapping.",
+      "symbols": [
+        "TabStrip",
+        "Tab",
+        "isTabStripKeyEvent"
+      ],
+      "responsibilities": [
+        "Roles and roving tabindex.",
+        "Arrow (with wrap), Home and End move focus and selection.",
+        "Enter and Space select.",
+        "The close button does not select; arrows on it do nothing.",
+        "Disabled tabs are skipped.",
+        "`scrollKey` scrolls only when it changes.",
+        "Rail uses Up/Down and `aria-orientation`.",
+        "`keyboard=\"external\"` handles no keys.",
+        "Modified chords are ignored.",
+        "Slot placement.",
+        "Seam and `draggable`.",
+        "A standalone Tab works.",
+        "`isTabStripKeyEvent` truth table."
+      ],
+      "nonResponsibilities": [
+        "Never asserts class strings."
+      ],
+      "implementation": [
+        "`fireEvent`; mock `Element.prototype.scrollIntoView` in `beforeEach`."
+      ],
+      "verification": [
+        "`vitest run src/shared/ui/TabStrip.test.tsx`"
+      ],
+      "dependencies": "Depends on TabStrip.tsx.",
+      "tests": [
+        "self"
+      ],
+      "trace": [
+        "AC-1",
+        "AC-2"
+      ]
+    },
+    {
+      "id": "tailwind",
+      "path": "studio/tailwind.config.ts",
+      "action": "modify",
+      "layer": "theme",
+      "purpose": "Adds the `shadow-tab-underline` token derived from the focus accent.",
+      "symbols": [
+        "FOCUS_ACCENT",
+        "boxShadow.tab-underline"
+      ],
+      "responsibilities": [
+        "`const FOCUS_ACCENT = \"#7aa2f7\"` feeds `colors.focus.accent` and ``boxShadow[\"tab-underline\"] = `inset 0 -2px 0 0 ${FOCUS_ACCENT}` ``."
+      ],
+      "nonResponsibilities": [
+        "`lifecycle.idle` and the other tokens stay unchanged."
+      ],
+      "implementation": [
+        "Add `theme.extend.boxShadow`."
+      ],
+      "verification": [
+        "`rg -n 7aa2f7 studio/tailwind.config.ts` shows only FOCUS_ACCENT."
+      ],
+      "dependencies": "First step.",
+      "tests": [
+        "static check"
+      ],
+      "trace": [
+        "AC-4"
+      ]
+    },
+    {
+      "id": "strip",
+      "path": "studio/src/app/shell/ticket-workspace/ModuleTabStrip.tsx",
+      "action": "modify",
+      "layer": "app shell",
+      "purpose": "Composes TabStrip and keeps the selection, hide and reorder wiring.",
+      "symbols": [
+        "ModuleTabStrip",
+        "handleSelect",
+        "handleHide",
+        "moduleOrderKey"
+      ],
+      "responsibilities": [
+        "Render `TabStrip variant=\"underline\"` with `label=\"Project module tabs\"`, `regionLabel=\"Project modules\"` and `scrollLabel=\"Scrollable project module tabs\"`.",
+        "Slots: `leading={<ModulesPaneToggle />}`; `trailing` is ModulePicker when not loading.",
+        "```scrollKey={loading ? \"loading\" : `${selectedModuleId ?? \"\"}|${moduleOrderKey}`}```."
+      ],
+      "nonResponsibilities": [
+        "`handleSelect`, `handleHide`, `dragDrop` and `moduleJumpBadges` stay unchanged."
+      ],
+      "implementation": [
+        "Delete `tabRefs`, `registerRef` and the scroll `useEffect` (lines 35-43 and 86-92), and the `useRef`/`useEffect` imports.",
+        "Import from `../../../shared/ui/TabStrip`."
+      ],
+      "verification": [
+        "overhaulModuleTabReorderAcceptance [overhaul-52]",
+        "overhaulModulePickerAcceptance [overhaul-237]",
+        "overhaulModuleVisibilityAcceptance",
+        "overhaulModuleOrderAcceptance"
+      ],
+      "dependencies": "Depends on TabStrip.tsx and ModuleTab.tsx.",
+      "tests": [
+        "overhaulModuleTabReorderAcceptance",
+        "overhaulModulePickerAcceptance"
+      ],
+      "trace": [
+        "AC-3",
+        "D-2"
+      ]
+    },
+    {
+      "id": "tab",
+      "path": "studio/src/app/shell/ticket-workspace/ModuleTab.tsx",
+      "action": "modify",
+      "layer": "app shell",
+      "purpose": "Maps a Module onto Tab.",
+      "symbols": [
+        "ModuleTab"
+      ],
+      "responsibilities": [
+        "Props: module, isSelected, dropIntent, onSelect, onHide, jumpBadge?, dragSourceProps?, dropTargetProps?. `registerRef` is deleted.",
+        "Tab props: `selected`, `accessibleName`/`title` = name, `onSelect`, `tabAttributes={{ \"data-module-id\": module.id }}`, drag props, `dropIntent`, `dropSeamTestId=\"module-tab-drop-seam\"`, `close={{ label: \"Hide <name> tab\", title: \"Hide tab\", onClose }}`.",
+        "Children: name span (`truncate`), `ModuleLifecycleChicklets`, `ModuleJumpBadge`."
+      ],
+      "nonResponsibilities": [
+        "Hide fallback logic stays in ModuleTabStrip."
+      ],
+      "implementation": [
+        "Remove the 01 DropSeam/CloseButton imports; import `Tab`."
+      ],
+      "verification": [
+        "`[overhaul-183]` assertions unchanged",
+        "`[overhaul-179]`"
+      ],
+      "dependencies": "Depends on TabStrip.tsx.",
+      "tests": [
+        "overhaulModuleTabCloseAcceptance",
+        "overhaulModuleJumpBadgesAcceptance"
+      ],
+      "trace": [
+        "AC-3",
+        "AC-4"
+      ]
+    },
+    {
+      "id": "toggle",
+      "path": "studio/src/app/shell/ticket-workspace/ModulesPaneToggle.tsx",
+      "action": "modify",
+      "layer": "app shell",
+      "purpose": "Replaces its copied subscription with useGlobalShortcutLabel.",
+      "symbols": [
+        "ModulesPaneToggle",
+        "useGlobalShortcutLabel"
+      ],
+      "responsibilities": [
+        "`const shortcut = useGlobalShortcutLabel(\"toggle-sidebar\")`; render `KeyBadge` when the shortcut is non-null."
+      ],
+      "nonResponsibilities": [
+        "`data-testid=\"modules-pane-toggle\"`, labels, `aria-expanded`, classes and icon stay unchanged."
+      ],
+      "implementation": [
+        "Remove the `useSyncExternalStore`, `formatChordSymbols` and `studioKeymapRegistry` imports.",
+        "Delta: a single-letter rebind shows upper-cased."
+      ],
+      "verification": [
+        "overhaulModuleVisibilityAcceptance",
+        "overhaulCaptureDraftAcceptance",
+        "static rg check"
+      ],
+      "dependencies": "Independent.",
+      "tests": [
+        "overhaulModuleVisibilityAcceptance"
+      ],
+      "trace": [
+        "Instance"
+      ]
+    },
+    {
+      "id": "badge",
+      "path": "studio/src/features/module-tabs/ModuleJumpBadge.tsx",
+      "action": "modify",
+      "layer": "feature",
+      "purpose": "Positions a KeyBadge.",
+      "symbols": [
+        "ModuleJumpBadge",
+        "KeyBadge"
+      ],
+      "responsibilities": [
+        "The outer span keeps `aria-hidden`, `data-module-jump-position` and `data-testid=\"module-jump-badge\"`.",
+        "Outer span classes: `pointer-events-none absolute top-1/2 right-1 inline-flex -translate-y-1/2 select-none items-center text-xs font-normal leading-4`.",
+        "Child: `<KeyBadge>{badge.label}<\/KeyBadge>`."
+      ],
+      "nonResponsibilities": [
+        "Badge computation (`useModuleJumpBadges`) stays unchanged."
+      ],
+      "implementation": [
+        "Import from `../../shared/ui/KeyChordHint`.",
+        "Visible change: shared keycap look."
+      ],
+      "verification": [
+        "overhaulModuleJumpBadgesAcceptance [overhaul-179]"
+      ],
+      "dependencies": "Independent.",
+      "tests": [
+        "overhaulModuleJumpBadgesAcceptance"
+      ],
+      "trace": [
+        "Instance",
+        "D-7"
+      ]
+    },
+    {
+      "id": "footer",
+      "path": "studio/src/app/shell/FooterChangesToggle.tsx",
+      "action": "modify",
+      "layer": "app shell",
+      "purpose": "One-class swap of the literal underline for the token.",
+      "symbols": [
+        "FooterChangesToggle"
+      ],
+      "responsibilities": [
+        "Line 56: `shadow-[inset_0_-2px_0_0_#7aa2f7]` → `shadow-tab-underline`."
+      ],
+      "nonResponsibilities": [
+        "Everything else stays; 04 migrates it onto the tab-look button."
+      ],
+      "implementation": [
+        "Single class edit."
+      ],
+      "verification": [
+        "overhaulModuleVersionControlAcceptance",
+        "overhaulTaskWorktreeChangesAcceptance"
+      ],
+      "dependencies": "Depends on the tailwind token.",
+      "tests": [
+        "overhaulModuleVersionControlAcceptance"
+      ],
+      "trace": [
+        "AC-4"
+      ]
+    },
+    {
+      "id": "keymap",
+      "path": "studio/src/app/navigation/useGlobalKeymap.ts",
+      "action": "modify",
+      "layer": "navigation",
+      "purpose": "Yields roving keys to a focused TabStrip.",
+      "symbols": [
+        "onCaptureKeyDown",
+        "onKeyDown",
+        "isTabStripKeyEvent"
+      ],
+      "responsibilities": [
+        "`if (isTabStripKeyEvent(event)) return;` after the `isLaunchMenuTarget` check in `onCaptureKeyDown`, and as the first statement of `onKeyDown`."
+      ],
+      "nonResponsibilities": [
+        "With focus off a roving strip, routing is unchanged. Modified chords are never yielded."
+      ],
+      "implementation": [
+        "Import from `../../shared/ui/tabStripKeys`. +4 lines."
+      ],
+      "verification": [
+        "overhaulModuleTabKeyboardAcceptance",
+        "full test:overhaul"
+      ],
+      "dependencies": "Depends on tabStripKeys.ts.",
+      "tests": [
+        "overhaulModuleTabKeyboardAcceptance"
+      ],
+      "trace": [
+        "AC-2",
+        "D-3"
+      ]
+    },
+    {
+      "id": "kb-acceptance",
+      "path": "studio/src/test/overhaulModuleTabKeyboardAcceptance.test.tsx",
+      "action": "create",
+      "layer": "test",
+      "purpose": "Header tab keyboard behaviour with the global keymap mounted.",
+      "symbols": [
+        "useGlobalKeymap",
+        "ModuleTabStrip"
+      ],
+      "responsibilities": [
+        "ArrowRight from Module 1 selects and focuses Module 3 (module-2 is hidden).",
+        "End selects and focuses the last visible tab.",
+        "Enter selects the focused tab.",
+        "ArrowRight on `document.body` selects nothing."
+      ],
+      "nonResponsibilities": [
+        "Does not re-test jump chords (overhaul-179)."
+      ],
+      "implementation": [
+        "Copy the jump-badge harness mocks and surface. The name matches the `test:overhaul` glob."
+      ],
+      "verification": [
+        "`npm run test:overhaul`"
+      ],
+      "dependencies": "Depends on keymap and strip.",
+      "tests": [
+        "self"
+      ],
+      "trace": [
+        "AC-2"
+      ]
+    },
+    {
+      "id": "close-test",
+      "path": "studio/src/test/overhaulModuleTabCloseAcceptance.test.tsx",
+      "action": "modify",
+      "layer": "test",
+      "purpose": "Drops the removed `registerRef={vi.fn()}` prop.",
+      "symbols": [
+        "[overhaul-183]"
+      ],
+      "responsibilities": [
+        "Delete one JSX prop line."
+      ],
+      "nonResponsibilities": [
+        "Every `expect` stays byte-for-byte."
+      ],
+      "implementation": [
+        "The only edit to an existing test in this ticket."
+      ],
+      "verification": [
+        "The test passes."
+      ],
+      "dependencies": "Same step as ModuleTab.tsx.",
+      "tests": [
+        "self"
+      ],
+      "trace": [
+        "D-2"
+      ]
+    },
+    {
+      "id": "keybadge",
+      "path": "studio/src/shared/ui/KeyChordHint.tsx",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "`KeyBadge` is reused as is.",
+      "symbols": [
+        "KeyBadge"
+      ],
+      "responsibilities": [
+        "Renders the keycap."
+      ],
+      "nonResponsibilities": [
+        "No className passthrough is added."
+      ],
+      "implementation": [
+        "None."
+      ],
+      "verification": [
+        "—"
+      ],
+      "dependencies": "Consumed by ModuleJumpBadge and ModulesPaneToggle.",
+      "tests": [],
+      "trace": [
+        "INV"
+      ]
+    },
+    {
+      "id": "picker",
+      "path": "studio/src/features/module-tabs/ModulePicker.tsx",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "Trailing slot content; internals move in 08.",
+      "symbols": [
+        "ModulePicker"
+      ],
+      "responsibilities": [
+        "Rendered as the tablist's next sibling."
+      ],
+      "nonResponsibilities": [
+        "Not draggable, not a tab."
+      ],
+      "implementation": [
+        "None."
+      ],
+      "verification": [
+        "overhaulModulePickerAcceptance"
+      ],
+      "dependencies": "—",
+      "tests": [
+        "overhaulModulePickerAcceptance"
+      ],
+      "trace": [
+        "INV"
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "title": "TabStrip props",
+      "note": "DOM: root `[data-tab-strip-root]` → leading → scroller → `role=tablist` → Tabs, then trailing inside the scroller after the tablist.",
+      "columns": [
+        "Prop",
+        "Type",
+        "Default",
+        "Behaviour"
+      ],
+      "rows": [
+        [
+          "`variant`",
+          "`underline | boxed | plain | pill | rail` (required)",
+          "—",
+          "Class table entry and orientation (rail vertical)."
+        ],
+        [
+          "`label`",
+          "`string` (required)",
+          "—",
+          "Tablist `aria-label`."
+        ],
+        [
+          "`children`",
+          "`ReactNode` (required)",
+          "—",
+          "Tab elements."
+        ],
+        [
+          "`regionLabel`",
+          "`string`",
+          "none",
+          "Root `aria-label`."
+        ],
+        [
+          "`scrollLabel`",
+          "`string`",
+          "none",
+          "Scroller `aria-label`."
+        ],
+        [
+          "`leading`",
+          "`ReactNode`",
+          "none",
+          "Root's first child; never scrolls."
+        ],
+        [
+          "`trailing`",
+          "`ReactNode`",
+          "none",
+          "Tablist's next sibling inside the scroller; no wrapper."
+        ],
+        [
+          "`scrollKey`",
+          "`string`",
+          "none",
+          "Change → selected tab `scrollIntoView({ block: \"nearest\", inline: \"nearest\" })`."
+        ],
+        [
+          "`keyboard`",
+          "`roving | external`",
+          "`roving`",
+          "`external`: no handler, no `data-tab-strip`, all tabs `tabIndex -1`."
+        ],
+        [
+          "`zoneChrome`",
+          "`none | active | dimmed`",
+          "`none`",
+          "`active` → `ring-1 ring-focus-accent ring-inset`; `dimmed` → `opacity-[0.65]` on the tablist."
+        ],
+        [
+          "`tablistRef`",
+          "`Ref<HTMLDivElement>`",
+          "none",
+          "Tablist ref."
+        ],
+        [
+          "`tablistProps`",
+          "`{ tabIndex?, onFocus?, onMouseDown? } & DataAttributes`",
+          "none",
+          "Tablist passthrough (03 zone hooks)."
+        ],
+        [
+          "`className`",
+          "`string`",
+          "none",
+          "Root layout only."
+        ]
+      ]
+    },
+    {
+      "title": "Tab props",
+      "note": "DOM: wrapper → `button type=button role=tab` (DropSeam, then children) → sibling CloseButton.",
+      "columns": [
+        "Prop",
+        "Type",
+        "Default",
+        "Behaviour"
+      ],
+      "rows": [
+        [
+          "`selected`",
+          "`boolean` (required)",
+          "—",
+          "`aria-selected`; roving `tabIndex` 0/-1."
+        ],
+        [
+          "`onSelect`",
+          "`(event: MouseEvent<HTMLButtonElement>) => void` (required)",
+          "—",
+          "Click handler; keyboard activation clicks too."
+        ],
+        [
+          "`accessibleName`",
+          "`string` (required)",
+          "—",
+          "Tab `aria-label`."
+        ],
+        [
+          "`children`",
+          "`ReactNode` (required)",
+          "—",
+          "Visible content."
+        ],
+        [
+          "`title`",
+          "`string`",
+          "none",
+          "Tooltip."
+        ],
+        [
+          "`disabled`",
+          "`boolean`",
+          "`false`",
+          "Native disabled; skipped by keys."
+        ],
+        [
+          "`highlighted`",
+          "`boolean`",
+          "`false`",
+          "`data-highlighted=\"true\"` + `ring-1 ring-focus-accent ring-inset`."
+        ],
+        [
+          "`toneClassName`",
+          "`string`",
+          "none",
+          "`boxed` only, from `providerToneClasses`; replaces selected/idle colours."
+        ],
+        [
+          "`close`",
+          "`{ label; onClose(event); title?; testId? }`",
+          "none",
+          "CloseButton chip as a sibling; reveal and layout from the variant; closable padding."
+        ],
+        [
+          "`dragSourceProps`",
+          "`DragSourceProps`",
+          "none",
+          "Spread on the tab."
+        ],
+        [
+          "`dropTargetProps`",
+          "`DropTargetProps`",
+          "none",
+          "Spread on the tab; ref merged with `tabRef`."
+        ],
+        [
+          "`dropIntent`",
+          "`DropIntent | null`",
+          "`null`",
+          "DropSeam first child; axis horizontal (rail vertical)."
+        ],
+        [
+          "`dropSeamTestId`",
+          "`string`",
+          "`\"tab-drop-seam\"`",
+          "Seam test id."
+        ],
+        [
+          "`tabRef`",
+          "`(node: HTMLButtonElement | null) => void`",
+          "none",
+          "Tab button ref."
+        ],
+        [
+          "`tabAttributes`",
+          "`DataAttributes`",
+          "none",
+          "`data-*` on the tab button."
+        ],
+        [
+          "`wrapperAttributes`",
+          "`DataAttributes`",
+          "none",
+          "`data-*` on the wrapper."
+        ]
+      ]
+    },
+    {
+      "title": "underline class table",
+      "columns": [
+        "Key",
+        "Classes"
+      ],
+      "rows": [
+        [
+          "root",
+          "`flex h-7 min-w-0 shrink-0 border-b border-pane-border bg-pane-title`"
+        ],
+        [
+          "scroller",
+          "`flex min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`"
+        ],
+        [
+          "tablist",
+          "`flex shrink-0`"
+        ],
+        [
+          "wrapper",
+          "`group relative flex w-max shrink-0 border-r border-pane-border`"
+        ],
+        [
+          "tab",
+          "`relative flex min-w-0 flex-1 items-center py-0 pl-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-focus-accent`"
+        ],
+        [
+          "tabClosable / tabPlain",
+          "`pr-7` / `pr-3`"
+        ],
+        [
+          "selected",
+          "`bg-pane-panel font-semibold text-text-primary shadow-tab-underline`"
+        ],
+        [
+          "idle",
+          "`text-text-muted hover:bg-pane-panel hover:text-text-primary`"
+        ],
+        [
+          "closeClassName / closeReveal",
+          "`absolute top-0 right-0 h-full w-7` / `hover`"
+        ]
+      ]
+    },
+    {
+      "title": "Keyboard (roving) and global keymap yield",
+      "columns": [
+        "Key (no modifiers)",
+        "Horizontal variants",
+        "rail",
+        "Effect"
+      ],
+      "rows": [
+        [
+          "ArrowLeft / ArrowRight",
+          "previous / next",
+          "ignored",
+          "Focus the adjacent enabled tab (wrapping), then `click()`."
+        ],
+        [
+          "ArrowUp / ArrowDown",
+          "ignored",
+          "previous / next",
+          "Same as above."
+        ],
+        [
+          "Home / End",
+          "first / last",
+          "first / last",
+          "Focus the tab, then `click()`."
+        ],
+        [
+          "Enter / Space",
+          "activate",
+          "activate",
+          "`click()` the focused tab."
+        ],
+        [
+          "any + modifier",
+          "ignored",
+          "ignored",
+          "Not yielded; ⌘1–⌘9 and ⌘←/→ keep working."
+        ],
+        [
+          "Global keymap",
+          "—",
+          "—",
+          "`isTabStripKeyEvent` makes both window listeners return early, so the capture `edit-view.*` routes can no longer consume the key."
+        ]
+      ]
+    },
+    {
+      "title": "Guarding tests",
+      "columns": [
+        "Test",
+        "What it pins"
+      ],
+      "rows": [
+        [
+          "overhaulModuleTabCloseAcceptance [overhaul-183]",
+          "Standalone ModuleTab; `w-max shrink-0`, `pr-7`, close `h-full w-7` and its glyph classes (one prop line removed, F12)."
+        ],
+        [
+          "overhaulModuleTabReorderAcceptance [overhaul-52]",
+          "Root/scroller/tablist/picker order; seam inside the tab; scroll after reorder; post-drop click."
+        ],
+        [
+          "overhaulModulePickerAcceptance [overhaul-237]",
+          "Toggle first child; scroller `min-w-0 flex-1 overflow-x-auto`; picker after tablist; hide fallback."
+        ],
+        [
+          "overhaulModuleJumpBadgesAcceptance [overhaul-179]",
+          "Badge text and attributes; tab className stable while ⌘ is held."
+        ],
+        [
+          "overhaulModuleVisibility, ModuleOrder, CaptureDraft",
+          "`data-module-id`, hide, Modules pane toggle."
+        ],
+        [
+          "e2e/web-app.spec.ts",
+          "`modules-pane-toggle`, `Hide … tab` (outside the vitest gate)."
+        ]
+      ]
+    }
+  ],
+  "decisions": [
+    "D-1 Keyboard activation dispatches `click()` on the tab; one selection path; no value/id prop.",
+    "D-2 TabStrip owns scroll-into-view via `scrollKey`; `ModuleTab.registerRef` is removed (one-line test edit, F12).",
+    "D-3 `useGlobalKeymap` yields roving keys through `isTabStripKeyEvent` (precedent: `isLaunchMenuTarget`).",
+    "D-4 `keyboard=\"external\"`, `zoneChrome`, `tablistRef`, `tablistProps`, `highlighted`, `toneClassName`, `wrapperAttributes` and `data-tab-strip-root` exist so 03 needs no API change.",
+    "D-5 `toneClassName` is the one sanctioned colour input: `boxed` only, from `providerToneClasses`.",
+    "D-6 Unstyled variants reuse the underline entry until 03/04.",
+    "D-7 ModuleJumpBadge adopts the KeyBadge look (story 23)."
+  ],
+  "execution": [
+    {
+      "title": "Token",
+      "detail": "Add `FOCUS_ACCENT` and `shadow-tab-underline` to `tailwind.config.ts`.",
+      "gate": "build"
+    },
+    {
+      "title": "Key mapping",
+      "detail": "`tabStripKeys.ts`.",
+      "gate": "typecheck"
+    },
+    {
+      "title": "TabStrip and Tab",
+      "detail": "Full union, underline table, tests.",
+      "gate": "TabStrip.test.tsx"
+    },
+    {
+      "title": "ModuleTab on Tab",
+      "detail": "Drop `registerRef` and the test's prop line.",
+      "gate": "overhaulModuleTabCloseAcceptance"
+    },
+    {
+      "title": "ModuleTabStrip on TabStrip",
+      "detail": "Slots, labels, scrollKey.",
+      "gate": "ModuleTabReorder, ModulePicker, ModuleVisibility, ModuleOrder"
+    },
+    {
+      "title": "Keymap yield",
+      "detail": "`useGlobalKeymap` guard and keyboard acceptance.",
+      "gate": "overhaulModuleTabKeyboardAcceptance"
+    },
+    {
+      "title": "Toggle and badge",
+      "detail": "`useGlobalShortcutLabel`, `KeyBadge`.",
+      "gate": "overhaulModuleJumpBadgesAcceptance"
+    },
+    {
+      "title": "Footer token",
+      "detail": "One-class swap.",
+      "gate": "ModuleVersionControl, TaskWorktreeChanges"
+    },
+    {
+      "title": "Gate",
+      "detail": "Static checks, typecheck, studio tests, `test:overhaul`.",
+      "gate": "all green"
+    }
+  ],
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "text": "`shared/ui/TabStrip.tsx` with Tab exists, implements `underline`, and declares `boxed`, `plain`, `pill` and `rail`. Signal: five-member union, full `Record`, TabStrip.test passes."
+    },
+    {
+      "id": "AC-2",
+      "text": "Arrows move focus and selection, Enter/Space selects, close does not select, and the active tab scrolls into view. Signal: TabStrip.test cases 2/3/4/6 and the keyboard acceptance cases 1–3."
+    },
+    {
+      "id": "AC-3",
+      "text": "Header tabs render through TabStrip; hide, drag reorder, jump badge and chicklets behave as before. Signal: guard suites green."
+    },
+    {
+      "id": "AC-4",
+      "text": "No `#7aa2f7` in the tab or footer toggle, and the token lives in `tailwind.config.ts`. Signal: `rg` static checks."
+    },
+    {
+      "id": "AC-5",
+      "text": "Typecheck, studio tests and `test:overhaul` pass."
+    }
+  ]
+};
+
+    const actionLabels = { all: "All", create: "Create", modify: "Modify", delete: "Delete", move: "Move", untouched: "Untouched" };
+    const state = { action: "all", query: "", selected: null };
+
+    const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+    const fmt = (value) => esc(value).replace(/``(.+?)``|`([^`]+)`/g, (match, wide, narrow) => `<code>${wide ?? narrow}</code>`);
+    function renderContracts() {
+      document.getElementById("contract-list").innerHTML = (LLD_DOCUMENT.contracts || []).map(block => `
+        <div class="contract-block">
+          <h3>${esc(block.title)}</h3>
+          ${block.note ? `<p>${fmt(block.note)}</p>` : ""}
+          <div class="table-wrap"><table class="contract-table">
+            <thead><tr>${block.columns.map(col => `<th scope="col">${esc(col)}</th>`).join("")}</tr></thead>
+            <tbody>${block.rows.map(row => `<tr>${row.map(cell => `<td>${fmt(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+          </table></div>
+        </div>`).join("");
+      document.getElementById("decision-list").innerHTML = (LLD_DOCUMENT.decisions || []).map(item => `<li>${fmt(item)}</li>`).join("");
+    }
+    window.addEventListener("hashchange", () => {
+      const id = decodeURIComponent(location.hash.replace(/^#file:/, ""));
+      if (LLD_DOCUMENT.files.some(file => file.id === id)) { state.selected = id; renderFiles(); }
+    });
+    const directory = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ".";
+    const basename = path => path.slice(path.lastIndexOf("/") + 1);
+    const list = items => `<ul>${(items || []).map(item => `<li>${fmt(item)}</li>`).join("")}</ul>`;
+    const tokens = (items, extra = "") => (items || []).map(item => `<span class="token ${extra}">${esc(item)}</span>`).join("");
+
+    function visibleFiles() {
+      const needle = state.query.trim().toLowerCase();
+      return LLD_DOCUMENT.files.filter(file => {
+        const actionMatch = state.action === "all" || file.action === state.action;
+        const haystack = [file.path, file.layer, file.purpose, ...(file.symbols || []), ...(file.responsibilities || []), ...(file.implementation || []), ...(file.verification || []), ...(file.trace || [])].join(" ").toLowerCase();
+        return actionMatch && (!needle || haystack.includes(needle));
+      });
+    }
+
+    function renderHeader() {
+      document.getElementById("doc-crumb").textContent = LLD_DOCUMENT.meta.crumb;
+      document.getElementById("doc-title").textContent = LLD_DOCUMENT.meta.title;
+      document.getElementById("doc-summary").textContent = LLD_DOCUMENT.meta.summary;
+      document.getElementById("doc-status").textContent = LLD_DOCUMENT.meta.status;
+      document.getElementById("scope-lede").textContent = LLD_DOCUMENT.scope.lede;
+      document.getElementById("scope-list").innerHTML = LLD_DOCUMENT.scope.in.map(item => `<li>${esc(item)}</li>`).join("");
+      document.getElementById("boundary-list").innerHTML = LLD_DOCUMENT.scope.boundaries.map(item => `<li>${esc(item)}</li>`).join("");
+      const counts = Object.keys(actionLabels).filter(action => action !== "all").map(action => ({ action, count: LLD_DOCUMENT.files.filter(file => file.action === action).length }));
+      document.getElementById("metrics").innerHTML = counts.map(item => `<div class="metric"><b>${item.count}</b><span>${actionLabels[item.action]}</span></div>`).join("");
+    }
+
+    function renderFilters() {
+      const actions = ["all", ...new Set(LLD_DOCUMENT.files.map(file => file.action))];
+      document.getElementById("filters").innerHTML = actions.map(action => `<button class="filter" type="button" data-action="${action}" aria-pressed="${state.action === action}">${actionLabels[action] || action}</button>`).join("");
+      document.querySelectorAll(".filter").forEach(button => button.addEventListener("click", () => {
+        state.action = button.dataset.action;
+        renderFilters();
+        renderFiles();
+      }));
+    }
+
+    function renderFiles() {
+      const files = visibleFiles();
+      if (!files.some(file => file.id === state.selected)) state.selected = files[0]?.id || null;
+      const groups = Map.groupBy ? Map.groupBy(files, file => directory(file.path)) : files.reduce((map, file) => map.set(directory(file.path), [...(map.get(directory(file.path)) || []), file]), new Map());
+      const rail = document.getElementById("file-rail");
+      rail.innerHTML = files.length ? [...groups.entries()].map(([dir, entries]) => `<div class="dir-group"><div class="dir-label">${esc(dir)}</div>${entries.map(file => `<button class="file-button" type="button" role="option" data-file="${esc(file.id)}" aria-selected="${file.id === state.selected}"><span class="action-dot ${esc(file.action)}" aria-hidden="true"></span><span class="file-button-copy"><span class="file-name">${esc(basename(file.path))}</span><span class="file-meta">${esc(actionLabels[file.action] || file.action)} · ${esc(file.layer)}</span></span></button>`).join("")}</div>`).join("") : `<div class="rail-empty">No files match this view.</div>`;
+      rail.querySelectorAll(".file-button").forEach(button => {
+        button.addEventListener("click", () => selectFile(button.dataset.file));
+        button.addEventListener("keydown", event => navigateFiles(event, button.dataset.file));
+      });
+      renderInspector();
+    }
+
+    function selectFile(id) {
+      state.selected = id;
+      document.querySelectorAll(".file-button").forEach(button => button.setAttribute("aria-selected", String(button.dataset.file === id)));
+      renderInspector();
+      history.replaceState(null, "", `#file:${encodeURIComponent(id)}`);
+    }
+
+    function navigateFiles(event, id) {
+      if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+      event.preventDefault();
+      const files = visibleFiles();
+      const index = files.findIndex(file => file.id === id);
+      const next = event.key === 'ArrowDown' ? Math.min(index + 1, files.length - 1) : Math.max(index - 1, 0);
+      state.selected = files[next]?.id || id;
+      renderFiles();
+      document.querySelector(`[data-file="${CSS.escape(state.selected)}"]`)?.focus();
+    }
+
+    function renderInspector() {
+      const file = LLD_DOCUMENT.files.find(entry => entry.id === state.selected);
+      const inspector = document.getElementById("file-inspector");
+      if (!file) { inspector.innerHTML = `<p class="rail-empty">Choose a file to inspect.</p>`; return; }
+      inspector.innerHTML = `
+        <div class="inspector-head">
+          <div><h3 class="path">${esc(file.path)}</h3><p class="purpose">${fmt(file.purpose)}</p></div>
+          <span class="action-badge ${esc(file.action)}">${esc(actionLabels[file.action] || file.action)}</span>
+        </div>
+        <div class="symbol-row" aria-label="Symbols">${tokens(file.symbols)}</div>
+        <div class="inspector-grid">
+          <div class="info-block"><h4>Responsibilities</h4>${list(file.responsibilities)}</div>
+          <div class="info-block no"><h4>Preserved boundary</h4>${list(file.nonResponsibilities)}</div>
+          <div class="info-block"><h4>Implementation</h4>${list(file.implementation)}</div>
+          <div class="info-block"><h4>Verification</h4>${list(file.verification)}</div>
+        </div>
+        <div class="dependency-strip"><b>Dependency position</b><p>${fmt(file.dependencies)}</p></div>
+        <div class="trace-row" aria-label="Tests and requirement trace">${tokens(file.tests)}${tokens(file.trace, "trace-token")}</div>`;
+    }
+
+    function renderTimeline() {
+      document.getElementById("timeline").innerHTML = LLD_DOCUMENT.execution.map(step => `<article class="step"><div><b>${esc(step.title)}</b><p>${fmt(step.detail)}</p></div><code>${esc(step.gate)}</code></article>`).join("");
+      document.getElementById("acceptance-list").innerHTML = LLD_DOCUMENT.acceptance.map(item => `<article class="acceptance-item"><strong>${esc(item.id)}</strong><p>${fmt(item.text)}</p></article>`).join("");
+    }
+
+    document.getElementById("file-search").addEventListener("input", event => { state.query = event.target.value; renderFiles(); });
+    document.addEventListener("keydown", event => {
+      if (event.key === "/" && document.activeElement !== document.getElementById("file-search")) { event.preventDefault(); document.getElementById("file-search").focus(); }
+      if (event.key === "Escape" && document.activeElement === document.getElementById("file-search")) { state.query = ""; document.getElementById("file-search").value = ""; renderFiles(); }
+    });
+
+    const deepLink = decodeURIComponent(location.hash.replace(/^#file:/, ""));
+    state.selected = LLD_DOCUMENT.files.some(file => file.id === deepLink) ? deepLink : LLD_DOCUMENT.files[0]?.id;
+    renderHeader();
+    renderFilters();
+    renderFiles();
+    renderTimeline();
+    renderContracts();
+  </script>
+</body>
+</html>

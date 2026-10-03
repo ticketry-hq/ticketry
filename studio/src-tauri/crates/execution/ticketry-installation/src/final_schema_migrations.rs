@@ -97,7 +97,10 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
         .map_err(|error| step_error("0062", error))?;
     sprint_migration::install(database)
         .await
-        .map_err(|error| step_error("0063", error))
+        .map_err(|error| step_error("0063", error))?;
+    ticketry_work_management::install_sprint_execution_schema(database)
+        .await
+        .map_err(|error| step_error("0064-exec", error))
 }
 
 fn step_error(step: &str, error: DbErr) -> DbErr {

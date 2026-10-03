@@ -4,63 +4,8 @@ use sprint_planning_support::*;
 use sea_orm::{ConnectionTrait, DbBackend, EntityTrait, Statement};
 use seaography::async_graphql::{Request, Variables};
 use serde_json::{json, Value};
-use ticketry_entities::{issue, project, sprint_suggestion, status_event};
-use ticketry_work_management::{
-    goals_for_sprint, record_for_run, RecordSprintSuggestion, SprintStorySuggestion,
-};
-
-const UPDATE: &str = "mutation($id: String!, $status: String!, $name: String) {
-    update_sprint_suggestion(id: $id, status: $status, proposed_name: $name) {
-        id status issueId proposedName issue { id sprintId name parentId stateRevision }
-    }
-}";
-
-fn input(story: SprintStorySuggestion) -> RecordSprintSuggestion {
-    RecordSprintSuggestion {
-        sprint_id: SPRINT.into(),
-        goal_id: GOAL.into(),
-        story,
-        reason: "Fits G1".into(),
-    }
-}
-fn proposal() -> SprintStorySuggestion {
-    SprintStorySuggestion::Proposal {
-        name: "Proposed".into(),
-        epic_id: Some(EPIC.into()),
-    }
-}
-async fn record(f: &Fixture, story: SprintStorySuggestion) -> sprint_suggestion::Model {
-    record_for_run(&f.db, PROJECT, RUN, input(story))
-        .await
-        .unwrap()
-}
-async fn update(f: &Fixture, id: &str, status: &str, name: Option<&str>) -> Value {
-    let mut vars = json!({"id": id, "status": status});
-    if let Some(name) = name {
-        vars["name"] = json!(name);
-    }
-    let response = f
-        .schema
-        .execute(Request::new(UPDATE).variables(Variables::from_json(vars)))
-        .await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    response.data.into_json().unwrap()["update_sprint_suggestion"].clone()
-}
-async fn snapshot(
-    f: &Fixture,
-) -> (
-    Vec<issue::Model>,
-    Vec<project::Model>,
-    Vec<status_event::Model>,
-    Vec<sprint_suggestion::Model>,
-) {
-    (
-        issue::Entity::find().all(&f.db).await.unwrap(),
-        project::Entity::find().all(&f.db).await.unwrap(),
-        status_event::Entity::find().all(&f.db).await.unwrap(),
-        sprint_suggestion::Entity::find().all(&f.db).await.unwrap(),
-    )
-}
+use ticketry_entities::{issue, status_event};
+use ticketry_work_management::{goals_for_sprint, record_for_run, SprintStorySuggestion};
 
 #[tokio::test]
 async fn accept_existing_returns_assigned_issue_and_undo_restores_backlog() {
@@ -102,7 +47,14 @@ async fn proposal_accept_rename_and_undo_preserve_one_created_story() {
     assert_eq!(accepted["issue"]["name"], "Edited");
     assert_eq!(accepted["issue"]["parentId"], EPIC);
     assert_eq!(accepted["issue"]["sprintId"], SPRINT);
+    let before = snapshot(&f).await;
+    assert_eq!(
+        update(&f, &row.id, "accepted", Some("  Edited  ")).await,
+        accepted
+    );
+    assert_eq!(snapshot(&f).await, before);
     let undone = update(&f, &row.id, "waiting", None).await;
+    assert_eq!(undone["status"], "waiting");
     assert_eq!(undone["issueId"], accepted["issueId"]);
     assert_eq!(undone["issue"]["sprintId"], Value::Null);
     assert_eq!(undone["proposedName"], Value::Null);
@@ -149,7 +101,7 @@ async fn failed_accept_rolls_back_creation_assignment_counters_and_facts() {
     let response = f
         .schema
         .execute(Request::new(UPDATE).variables(Variables::from_json(
-            json!({"id": row.id, "status": "accepted"}),
+            json!({"id": row.id, "status": "accepted", "name": "  Edited  "}),
         )))
         .await;
     assert!(
@@ -362,14 +314,16 @@ async fn accept_rejects_a_foreign_story_and_undo_does_not_unassign_a_moved_story
 }
 
 #[tokio::test]
-async fn simultaneous_proposal_accepts_create_one_story() {
+async fn simultaneous_edited_proposal_accepts_create_one_story() {
     let f = fixture().await;
     let row = record(&f, proposal()).await;
     let (first, second) = tokio::join!(
-        update(&f, &row.id, "accepted", None),
-        update(&f, &row.id, "accepted", None)
+        update(&f, &row.id, "accepted", Some("  Edited  ")),
+        update(&f, &row.id, "accepted", Some("Edited"))
     );
     assert_eq!(first["issueId"], second["issueId"]);
+    assert_eq!(first["issue"]["name"], "Edited");
+    assert_eq!(first, second);
     assert_eq!(issue::Entity::find().all(&f.db).await.unwrap().len(), 3);
     assert_eq!(
         status_event::Entity::find().all(&f.db).await.unwrap().len(),

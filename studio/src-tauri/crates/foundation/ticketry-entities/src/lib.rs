@@ -27,7 +27,7 @@ pub use documents::{
     design_document, register_entity_modules as register_document_entities, DESIGN_DOCUMENT_OBJECT,
 };
 pub use execution::{
-    graph_run, launch_claim, register_entity_modules as register_execution_entities,
+    agent_execution, graph_run, launch_claim, register_entity_modules as register_execution_entities,
 };
 pub use foundation::{migration_probes, register_entity_modules as register_foundation_entities};
 pub use graphql_scalars::StringList;

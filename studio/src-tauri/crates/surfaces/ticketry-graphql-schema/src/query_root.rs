@@ -232,6 +232,7 @@ fn build_schema(
     let builder = ticketry_terminal::register_launch_graphql(builder);
     let builder = ticketry_terminal::register_cleanup_graphql(builder);
     let builder = ticketry_terminal::register_session_graphql(builder);
+    let builder = ticketry_agent_execution::register_sprint_execution_graphql(builder);
     let builder = ticketry_agent_execution::run_now::register_graphql(builder);
     let builder = if contract.product_generated_mutations {
         ticketry_agent_execution::graph_run::register_graphql(builder)
@@ -243,6 +244,9 @@ fn build_schema(
     let builder = ticketry_workspace_runtime::design_document::register_graphql(builder);
     let builder = ticketry_workspace_runtime::directory_completion_query::register(builder);
     let mut schema = builder.schema_builder().data(entity_database);
+    if let (Some(work_items), Some(directory)) = (&worktracker_database, &readiness_data_directory) {
+        schema = schema.data(ticketry_agent_execution::SprintSuggestionExecutor::new(work_items.clone(), directory.clone()));
+    }
     if let Some(title_service) = terminal_services
         .as_ref()
         .and_then(|services| services.instant_run_ticket_titles.clone())

@@ -19,6 +19,7 @@ export function ServiceHealthGate({
   const initialHealth = runtime.startup().serviceHealth;
   const [health, setHealth] = useState(initialHealth);
   const [retrying, setRetrying] = useState(false);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const retryInFlight = useRef(false);
   const recoveryObserved = useRef(initialHealth.state === "recovering");
 
@@ -42,10 +43,12 @@ export function ServiceHealthGate({
       if (retryInFlight.current) return;
       retryInFlight.current = true;
       setRetrying(true);
+      setRecoveryError(null);
       try {
         await runtime.retryServices();
-      } catch {
-        // The shell publishes the actionable failed health before rejecting.
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setRecoveryError(`Recovery failed: ${message}. Resolve the reported problem, then retry or restart Ticketry.`);
       } finally {
         retryInFlight.current = false;
         setRetrying(false);
@@ -69,15 +72,29 @@ export function ServiceHealthGate({
               </span>
             </p>
           )}
+          {runtime.serviceRecovery !== "retry" && (
+            <p className="mt-2 text-sm text-text-muted">
+              {runtime.platform === "desktop"
+                ? "Resolve the reported startup problem, then quit and reopen Ticketry to retry startup."
+                : "Resolve the reported startup problem, restart the Ticketry development server, then reload this page."}
+            </p>
+          )}
+          {recoveryError && (
+            <p role="alert" className="mt-2 text-sm text-text-primary">
+              {recoveryError}
+            </p>
+          )}
           <div className="mt-5 flex items-center justify-center gap-2">
-            <button
-              type="button"
-              disabled={retrying}
-              onClick={() => void retry()}
-              className="bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-            >
-              {retrying ? "Retrying…" : "Retry"}
-            </button>
+            {runtime.serviceRecovery === "retry" && (
+              <button
+                type="button"
+                disabled={retrying}
+                onClick={() => void retry()}
+                className="bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              >
+                {retrying ? "Retrying…" : "Retry"}
+              </button>
+            )}
             {/* Settings is otherwise unreachable while this gate owns the screen. */}
             <SettingsAccess />
           </div>

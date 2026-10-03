@@ -1,8 +1,11 @@
 #![allow(dead_code)]
+mod suggestions;
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DbBackend, Schema};
 use seaography::async_graphql::dynamic::Schema as GraphqlSchema;
+#[allow(unused_imports)]
+pub use suggestions::{input, proposal, record, snapshot, update, UPDATE};
 use ticketry_entities::{
-    issue, issue_type, project, sprint, sprint_goal, sprint_suggestion, state,
+    app_settings, issue, issue_type, project, sprint, sprint_goal, sprint_suggestion, state,
 };
 use ticketry_work_management::commands::{status_facts::WorkFactRecorder, CommandDatabase};
 
@@ -26,6 +29,7 @@ pub async fn fixture() -> Fixture {
         .unwrap();
     let ddl = Schema::new(DbBackend::Sqlite);
     for table in [
+        ddl.create_table_from_entity(app_settings::Entity),
         ddl.create_table_from_entity(project::Entity),
         ddl.create_table_from_entity(issue::Entity),
         ddl.create_table_from_entity(issue_type::Entity),

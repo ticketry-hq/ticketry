@@ -1,0 +1,1461 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="lld-source" content="LLD.md">
+  <meta name="lld-source-sha256" content="d5f2634e2ae127241c54ba231c57aa67ffbc26ff004a03e7daa5ff39a8d5d7dc">
+  <title>LLD 07 · Menu and Listbox</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --surface: #202b3b;
+      --rail: #121c29;
+      --group: #263448;
+      --on-accent: #0e1520;
+      --focus: #a7ceff;
+      --paper: #0e1520;
+      --sheet: #172130;
+      --ink: #e6edf6;
+      --muted: #a6b5c9;
+      --line: #34445b;
+      --line-strong: #657a96;
+      --navy: #91c4ff;
+      --navy-soft: #203852;
+      --orange: #ffb180;
+      --orange-soft: #422d24;
+      --green: #7bdbb1;
+      --green-soft: #183b32;
+      --red: #ff9eaa;
+      --red-soft: #432731;
+      --violet: #c4b2ff;
+      --violet-soft: #332e4c;
+      --shadow: 0 18px 45px rgba(0, 0, 0, .24);
+      --radius: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--paper); }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(145, 196, 255, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(20, 61, 102, .035) 1px, transparent 1px),
+        var(--paper);
+      background-size: 24px 24px;
+      font-family: var(--sans);
+      line-height: 1.55;
+    }
+
+    button, input { font: inherit; }
+    button:focus-visible, input:focus-visible, a:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .shell { width: min(1480px, calc(100% - 40px)); margin: 0 auto; }
+    .masthead {
+      margin-top: 20px;
+      border: 1px solid var(--line-strong);
+      background: var(--sheet);
+      box-shadow: var(--shadow);
+    }
+    .masthead-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      padding: 30px 34px 28px;
+      border-bottom: 1px solid var(--line);
+    }
+    .crumb {
+      margin: 0 0 12px;
+      color: var(--orange);
+      font: 700 11px/1.2 var(--mono);
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; max-width: 900px; font-size: clamp(32px, 5vw, 64px); line-height: .98; letter-spacing: -.045em; }
+    .summary { max-width: 780px; margin: 18px 0 0; color: var(--muted); font-size: 16px; }
+    .phase-card {
+      min-width: 180px;
+      align-self: stretch;
+      display: grid;
+      align-content: space-between;
+      padding: 18px;
+      background: var(--navy);
+      color: var(--on-accent);
+    }
+    .phase-card span { font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; opacity: .68; }
+    .phase-card strong { font-size: 30px; letter-spacing: -.03em; }
+    .phase-card small { font-family: var(--mono); opacity: .78; }
+    .metrics { display: grid; grid-template-columns: repeat(5, 1fr); }
+    .metric { padding: 15px 20px; border-right: 1px solid var(--line); }
+    .metric:last-child { border-right: 0; }
+    .metric b { display: block; font-size: 24px; line-height: 1; }
+    .metric span { color: var(--muted); font: 700 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+
+    .sticky-nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      gap: 4px;
+      margin: 14px 0 32px;
+      padding: 7px;
+      border: 1px solid var(--line);
+      background: rgba(23, 33, 48, .92);
+      backdrop-filter: blur(14px);
+    }
+    .sticky-nav a { padding: 8px 13px; color: var(--muted); font: 700 11px/1 var(--mono); text-decoration: none; text-transform: uppercase; }
+    .sticky-nav a:hover { color: var(--navy); background: var(--navy-soft); }
+
+    section { margin: 0 0 46px; scroll-margin-top: 72px; }
+    .primary-section { margin-bottom: 56px; }
+    .section-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px; align-items: end; }
+    .workspace-note { max-width: 310px; margin: 0 0 22px; padding: 12px 14px; border-left: 3px solid var(--orange); color: var(--muted); background: var(--sheet); font-size: 12px; }
+    .section-kicker { margin: 0 0 6px; color: var(--orange); font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; }
+    h2 { margin: 0; font-size: clamp(25px, 3vw, 39px); letter-spacing: -.035em; }
+    .lede { max-width: 820px; margin: 10px 0 22px; color: var(--muted); }
+
+    .overview-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 16px; }
+    .card { border: 1px solid var(--line); background: var(--sheet); padding: 22px; }
+    .card h3 { margin: 0 0 12px; font-size: 16px; }
+    .plain-list { margin: 0; padding-left: 18px; }
+    .plain-list li + li { margin-top: 8px; }
+    .boundary { border-left: 4px solid var(--orange); }
+
+    .change-view { border: 1px solid var(--line-strong); background: var(--sheet); box-shadow: var(--shadow); }
+    .change-toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 16px;
+      padding: 15px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .search-wrap { position: relative; }
+    .search-wrap span { position: absolute; left: 12px; top: 9px; color: var(--muted); font-family: var(--mono); }
+    #file-search {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px 0 36px;
+      border: 1px solid var(--line-strong);
+      background: var(--rail);
+      color: var(--ink);
+    }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .filter {
+      border: 1px solid var(--line);
+      background: var(--sheet);
+      color: var(--muted);
+      padding: 7px 10px;
+      cursor: pointer;
+      font: 700 10px/1 var(--mono);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .filter[aria-pressed="true"] { color: var(--on-accent); border-color: var(--navy); background: var(--navy); }
+    .change-workspace { display: grid; grid-template-columns: minmax(330px, .72fr) minmax(0, 1.8fr); height: clamp(620px, 72vh, 820px); }
+    .file-rail { border-right: 1px solid var(--line); background: var(--rail); overflow: auto; }
+    .rail-empty { padding: 30px; color: var(--muted); text-align: center; }
+    .dir-group + .dir-group { border-top: 1px solid var(--line); }
+    .dir-label { position: sticky; top: 0; z-index: 2; padding: 9px 13px; color: var(--muted); background: var(--group); font: 700 10px/1.2 var(--mono); }
+    .file-button {
+      width: 100%;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 11px 13px;
+      border: 0;
+      border-top: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+    }
+    .file-button:hover { background: var(--surface); }
+    .file-button[aria-selected="true"] { background: var(--surface); box-shadow: inset 4px 0 0 var(--orange); }
+    .file-button-copy { min-width: 0; display: grid; gap: 4px; }
+    .file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 12px/1.3 var(--mono); }
+    .file-meta { color: var(--muted); font: 700 9px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+    .action-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+    .action-dot.create { background: var(--green); }
+    .action-dot.modify { background: var(--orange); }
+    .action-dot.delete { background: var(--red); }
+    .action-dot.move { background: var(--violet); }
+    .action-dot.untouched { background: var(--navy); }
+
+    .file-inspector { min-width: 0; padding: 28px; overflow: auto; }
+    .inspector-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .path { margin: 0; overflow-wrap: anywhere; font: 700 clamp(16px, 2vw, 22px)/1.3 var(--mono); }
+    .purpose { margin: 8px 0 0; color: var(--muted); }
+    .action-badge { flex: 0 0 auto; padding: 6px 9px; border: 1px solid currentColor; font: 800 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .action-badge.create { color: var(--green); background: var(--green-soft); }
+    .action-badge.modify { color: var(--orange); background: var(--orange-soft); }
+    .action-badge.delete { color: var(--red); background: var(--red-soft); }
+    .action-badge.move { color: var(--violet); background: var(--violet-soft); }
+    .action-badge.untouched { color: var(--navy); background: var(--navy-soft); }
+    .inspector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+    .info-block { border-top: 3px solid var(--navy); padding: 13px 14px 15px; background: var(--surface); }
+    .info-block.no { border-top-color: var(--red); }
+    .info-block h4 { margin: 0 0 8px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .info-block ul { margin: 0; padding-left: 18px; font-size: 13px; }
+    .info-block li + li { margin-top: 6px; }
+    .symbol-row, .trace-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+    .token { padding: 5px 8px; border: 1px solid var(--line); background: var(--rail); overflow-wrap: anywhere; font: 600 11px/1 var(--mono); }
+    .trace-token { color: var(--navy); border-color: #3d5f86; background: var(--navy-soft); }
+    .dependency-strip { margin-top: 20px; padding: 14px; border: 1px dashed var(--line-strong); }
+    .dependency-strip b { display: block; margin-bottom: 7px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .dependency-strip p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .timeline { display: grid; gap: 9px; counter-reset: step; }
+    .step { counter-increment: step; display: grid; grid-template-columns: 48px 1fr auto; gap: 16px; align-items: start; padding: 17px; border: 1px solid var(--line); background: var(--sheet); }
+    .step::before { content: counter(step, decimal-leading-zero); color: var(--orange); font: 800 18px/1 var(--mono); }
+    .step b { display: block; margin-bottom: 4px; }
+    .step p { margin: 0; color: var(--muted); }
+    .step code { color: var(--navy); font: 700 11px/1.4 var(--mono); }
+    .acceptance { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .acceptance-item { display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 16px; border: 1px solid #2f6b56; background: var(--green-soft); }
+    .acceptance-item strong { color: var(--green); font-family: var(--mono); }
+    .acceptance-item p { margin: 0; }
+    footer { margin: 50px 0 24px; padding: 18px 0; border-top: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; }
+    footer code { color: var(--navy); }
+
+
+    a { color: var(--navy); }
+    ::selection { background: var(--navy-soft); color: var(--ink); }
+    input::placeholder { color: var(--muted); opacity: 1; }
+    .info-block, .step { overflow-wrap: anywhere; }
+    .contract-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .contract { min-width: 0; }
+    .sticky-nav { overflow-x: auto; }
+    .sticky-nav a { flex: 0 0 auto; }
+    .contract { border: 1px solid var(--line); background: var(--sheet); }
+    .contract h3 { margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--line); font: 700 13px/1.3 var(--mono); color: var(--navy); }
+    .contract p.note { margin: 0; padding: 10px 16px 0; color: var(--muted); font-size: 13px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 8px 16px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font: 700 10px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    td code, .decision code { font: 600 12px/1.4 var(--mono); color: var(--orange); overflow-wrap: anywhere; }
+    .decisions { display: grid; gap: 8px; }
+    .decision { display: grid; grid-template-columns: 56px 1fr; gap: 12px; padding: 12px 16px; border: 1px solid var(--line); background: var(--sheet); }
+    .decision strong { color: var(--violet); font-family: var(--mono); }
+    .decision p { margin: 0; }
+
+    @media (max-width: 880px) {
+      .shell { width: min(100% - 22px, 1480px); }
+      .masthead-top, .overview-grid, .section-heading { grid-template-columns: 1fr; }
+      .masthead-top { gap: 18px; padding: 22px; }
+      h1 { font-size: clamp(30px, 8vw, 42px); }
+      .phase-card { min-height: 0; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; }
+      .phase-card strong { font-size: 22px; }
+      .metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .metric { padding: 12px 10px; }
+      .metric b { font-size: 20px; }
+      .metric span { font-size: 8px; }
+      .metric { border-bottom: 1px solid var(--line); }
+      .change-toolbar { grid-template-columns: 1fr; }
+      .filters { justify-content: flex-start; }
+      .change-workspace { grid-template-columns: 1fr; height: auto; }
+      .file-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: 330px; }
+      .inspector-grid, .acceptance { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 42px 1fr; }
+      .step code { grid-column: 2; }
+    }
+
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body data-template="false">
+  <div class="shell">
+    <header class="masthead" id="overview">
+      <div class="masthead-top">
+        <div>
+          <p class="crumb" id="doc-crumb">Module · Work item · LLD</p>
+          <h1 id="doc-title">File change plan</h1>
+          <p class="summary" id="doc-summary"></p>
+        </div>
+        <div class="phase-card">
+          <span>Design state</span>
+          <strong>LLD</strong>
+          <small id="doc-status">candidate</small>
+        </div>
+      </div>
+      <div class="metrics" id="metrics" aria-label="File change totals"></div>
+    </header>
+
+    <nav class="sticky-nav" aria-label="Document sections">
+      <a href="#file-changes">File changes</a>
+      <a href="#contracts">Contracts</a>
+      <a href="#context">Context</a>
+      <a href="#execution">Build order</a>
+      <a href="#acceptance">Acceptance</a>
+    </nav>
+
+    <main>
+      <section class="primary-section" id="file-changes" aria-labelledby="changes-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Primary implementation plan</p>
+            <h2 id="changes-title">Build the design file by file</h2>
+            <p class="lede">Select a file to see exactly why it changes, what to implement, what must remain stable, and how that file is verified.</p>
+          </div>
+          <p class="workspace-note"><strong>Start here.</strong> Search paths, symbols, or requirement IDs. Use ↑ and ↓ to inspect files without leaving the keyboard.</p>
+        </div>
+        <div class="change-view">
+          <div class="change-toolbar">
+            <label class="search-wrap">
+              <span aria-hidden="true">/</span>
+              <input id="file-search" type="search" placeholder="Find a path, symbol, or requirement" autocomplete="off">
+            </label>
+            <div class="filters" id="filters" aria-label="Filter files by action"></div>
+          </div>
+          <div class="change-workspace">
+            <div class="file-rail" id="file-rail" role="listbox" aria-label="Planned file changes"></div>
+            <article class="file-inspector" id="file-inspector" aria-live="polite"></article>
+          </div>
+        </div>
+      </section>
+
+
+      <section id="contracts" aria-labelledby="contracts-title">
+        <p class="section-kicker">Fixed interfaces</p>
+        <h2 id="contracts-title">Contracts and decisions</h2>
+        <p class="lede">Public component and hook APIs, ARIA, and the recorded decisions. Exact behavior lives in LLD.md sections 6 and 11.</p>
+        <div class="contract-grid" id="contract-list"></div>
+        <h3 style="margin:22px 0 10px">Decisions</h3>
+        <div class="decisions" id="decision-list"></div>
+      </section>
+
+      <section id="context" aria-labelledby="scope-title">
+        <p class="section-kicker">Supporting context</p>
+        <h2 id="scope-title">Scope and preserved boundaries</h2>
+        <p class="lede" id="scope-lede"></p>
+        <div class="overview-grid">
+          <article class="card">
+            <h3>In scope</h3>
+            <ul class="plain-list" id="scope-list"></ul>
+          </article>
+          <article class="card boundary">
+            <h3>Preserved boundaries</h3>
+            <ul class="plain-list" id="boundary-list"></ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="execution" aria-labelledby="execution-title">
+        <p class="section-kicker">Dependency order</p>
+        <h2 id="execution-title">Build order</h2>
+        <p class="lede">Each step should leave a locally verifiable result and unblock the next dependency.</p>
+        <div class="timeline" id="timeline"></div>
+      </section>
+
+      <section id="acceptance" aria-labelledby="acceptance-title">
+        <p class="section-kicker">Completion signals</p>
+        <h2 id="acceptance-title">Acceptance</h2>
+        <p class="lede">Every signal traces back to the canonical LLD and names an observable result.</p>
+        <div class="acceptance" id="acceptance-list"></div>
+      </section>
+    </main>
+
+    <footer><code>LLD.md</code> is authoritative. This HTML is its presentation mirror. Source: <code>.scratch/shared-ui-components/issues/07-menu-listbox-on-popover/LLD.md</code>.</footer>
+  </div>
+
+  <script>
+    const LLD_DOCUMENT = {
+  "meta": {
+    "crumb": "Studio frontend · Shared UI · Ticket 07 · LLD",
+    "title": "Menu and Listbox on Popover",
+    "summary": "Popover gains flip, clamp, tablist anchoring, opt-in portal, controlled state, Escape focus return and one panel surface. PopoverOption becomes the single row. useListNavigation owns Up/Down/Home/End/Enter/Space. Menu and Listbox compose them; IssueActionsMenu, DormantWorkspaceTabs and WorkspaceLauncher move onto Menu.",
+    "status": "implementation-ready · blocks 08"
+  },
+  "scope": {
+    "lede": "Shared floating-surface plumbing in shared/ui plus three action-menu migrations. Listbox ships with tests but no production caller; ticket 08 adopts it.",
+    "in": [
+      "Extend Popover and PopoverOption in shared/ui/Popover.tsx (additive; existing callers compile unchanged)",
+      "Create useListNavigation, Menu and Listbox with colocated vitest + Testing Library tests",
+      "Move IssueActionsMenu, DormantWorkspaceTabs and WorkspaceLauncher onto Menu and delete their dismissal, positioning and arrow-key code",
+      "One floating panel surface: Popover's fixed z-50 w-max min-w-[200px] max-w-[380px] … py-1 shadow-2xl"
+    ],
+    "boundaries": [
+      "Search pickers (ModulePicker, WorktreeSwitcher, MergeDestinationPicker) belong to ticket 08",
+      "WorktreeBlock stays a Popover disclosure, not a Menu (D-7)",
+      "Field pickers and WorkItemSearchList keep their markup; Listbox adoption is follow-up",
+      "Private Dot copies and duplicate “No permitted transitions” rows are left for tickets 10/11; no new copies",
+      "Button (05), TextField (06), SectionHeading/EmptyState (10), StatusDot (11) are optional later swaps only",
+      "No Menu typeahead (D-9); no guarding test may be edited (G-3)"
+    ]
+  },
+  "files": [
+    {
+      "id": "popover",
+      "path": "studio/src/shared/ui/Popover.tsx",
+      "action": "modify",
+      "layer": "shared/ui",
+      "purpose": "Single floating surface: anchoring, flip, clamp, portal, open state, dismissal, focus return; PopoverOption as the single row.",
+      "symbols": [
+        "Popover",
+        "PopoverTriggerProps",
+        "PopoverOption"
+      ],
+      "responsibilities": [
+        "Props: align, anchor (\"trigger\" | \"tablist\"), portal, disabled, open/onOpenChange, triggerRef, dismissOnFocusOut, panelRole (\"dialog\" | \"region\"), panelLabel, className (layout only), data-testid",
+        "Trigger props: open, disabled, onClick (toggle), onKeyDown (Enter/Space toggle, preventDefault + stopPropagation), triggerRef callback, panelId",
+        "Position: below = anchorBottom + 4; flip above when it does not fit and there is more room above; clamp left to [8, innerWidth − 8 − width]; style is always { top, left }",
+        "Track window resize, capture-phase passive scroll, and a ResizeObserver on trigger, panel and tablist",
+        "Escape inside the panel: preventDefault, stopPropagation, focus trigger, close, focus trigger again in requestAnimationFrame; document Escape closes and focuses trigger without stopping propagation",
+        "Outside pointerdown (wrapper + panel) closes without moving focus; dismissOnFocusOut closes on a non-null outside relatedTarget",
+        "Panel carries id=panelId, data-native-terminal-overlay, and optional role/aria-label",
+        "PopoverOption: button props minus className/type, plus selected, active, tone (\"default\" | \"danger\"); one style"
+      ],
+      "nonResponsibilities": [
+        "Does not own roles inside the panel (Menu and Listbox do)",
+        "Does not do key navigation or item markup",
+        "trigger fields open/onClick/disabled and children(close) are unchanged for existing callers"
+      ],
+      "implementation": [
+        "Replace the mousedown listener with pointerdown checked against the wrapper and panel refs",
+        "Measure the panel with getBoundingClientRect in a layout effect before paint; apply the 6.2 algorithm",
+        "Use createPortal(panel, document.body) only when portal is set",
+        "Resolve the trigger element: triggerRef prop, else the registered callback ref, else the first button/input in the wrapper",
+        "Close when disabled becomes true; in controlled mode request onOpenChange(false)",
+        "If the file passes 300 lines, extract a private popoverPosition.ts (pure rects to style)"
+      ],
+      "verification": [
+        "Popover.test.tsx: flip, right-align clamp, tablist anchor, portal, overlay attribute, Escape focus return, pointerdown, controlled, disabled, focus-out, trigger Enter",
+        "Field-picker, WorktreeBlock and WorkItemSearchList guarding tests stay green unchanged"
+      ],
+      "dependencies": "First step. Additive; no caller edits required.",
+      "tests": [
+        "shared/ui/Popover.test.tsx",
+        "WorkItemSearchList.test.tsx",
+        "worktree/WorktreeBlock.test.tsx"
+      ],
+      "trace": [
+        "AC-3",
+        "Story 6",
+        "Story 9",
+        "Story 10",
+        "D-1",
+        "D-2",
+        "D-3",
+        "D-5",
+        "D-6",
+        "D-8"
+      ]
+    },
+    {
+      "id": "nav",
+      "path": "studio/src/shared/ui/useListNavigation.ts",
+      "action": "create",
+      "layer": "shared/ui",
+      "purpose": "The one keyboard-navigation hook: active-item state plus Up/Down/Home/End/Enter/Space.",
+      "symbols": [
+        "useListNavigation"
+      ],
+      "responsibilities": [
+        "Input { items: { id, disabled? }[], preferredId?, onActivate(id) }; output { activeId, setActiveId, onKeyDown }",
+        "activeId is derived during render: stored id if enabled, else preferredId if enabled, else first enabled, else null",
+        "ArrowDown/ArrowUp move to the next/previous enabled item and clamp at the ends (no wrap)",
+        "Home/End jump to first/last enabled, except when the target is an input or textarea",
+        "Enter activates the active item and is always consumed; Space activates only outside text inputs",
+        "Handled keys call preventDefault + stopPropagation; ignores defaultPrevented events and any alt/ctrl/meta/shift"
+      ],
+      "nonResponsibilities": [
+        "No DOM access and no focus moves",
+        "Does not handle Escape, Tab or typeahead"
+      ],
+      "implementation": [
+        "Pure state + key handler; stored id null means \"use fallback\""
+      ],
+      "verification": [
+        "Covered through Listbox.test.tsx and Menu.test.tsx; no separate hook test"
+      ],
+      "dependencies": "Step 2. No caller until Menu and Listbox.",
+      "tests": [
+        "shared/ui/Listbox.test.tsx",
+        "shared/ui/Menu.test.tsx"
+      ],
+      "trace": [
+        "AC-1",
+        "D-4",
+        "D-9"
+      ]
+    },
+    {
+      "id": "menu",
+      "path": "studio/src/shared/ui/Menu.tsx",
+      "action": "create",
+      "layer": "shared/ui",
+      "purpose": "role=\"menu\" action list on Popover with roving DOM focus.",
+      "symbols": [
+        "Menu",
+        "MenuEntry",
+        "MenuItem",
+        "MenuHeading",
+        "MenuTriggerProps"
+      ],
+      "responsibilities": [
+        "Props: label, items, trigger, plus Popover pass-through (align, anchor, portal, disabled, open, onOpenChange, triggerRef, className, data-testid)",
+        "MenuItem { kind: \"item\", id, label, onSelect, disabled?, ariaLabel?, title?, testId?, tone?, keepOpen? }; MenuHeading { kind: \"heading\", id, label }",
+        "ariaProps: aria-haspopup=\"menu\", aria-expanded, aria-controls (menu id while open)",
+        "Inner div role=\"menu\" with aria-label, tabIndex −1, class flex max-h-[60vh] flex-col overflow-y-auto",
+        "Items are PopoverOption role=\"menuitem\" with tabIndex −1; headings are role=\"presentation\" eyebrow rows and are not navigable",
+        "On open, focus the first enabled item (or the menu); focus and scrollIntoView follow the active item",
+        "Activate (click, Enter, Space) runs onSelect, then closes unless keepOpen; no focus move on select"
+      ],
+      "nonResponsibilities": [
+        "No focus-out dismissal (dormant resumes keep it open)",
+        "No item domain logic and no trigger styling"
+      ],
+      "implementation": [
+        "Compose Popover + useListNavigation + PopoverOption; menu id from useId"
+      ],
+      "verification": [
+        "Menu.test.tsx: roles, first-item focus, skip disabled, clamp, Home/End, Enter/Space, keepOpen, Escape focus return, outside pointerdown"
+      ],
+      "dependencies": "Step 3. Depends on Popover.tsx and useListNavigation.ts.",
+      "tests": [
+        "shared/ui/Menu.test.tsx"
+      ],
+      "trace": [
+        "AC-1",
+        "Story 6",
+        "Story 7"
+      ]
+    },
+    {
+      "id": "listbox",
+      "path": "studio/src/shared/ui/Listbox.tsx",
+      "action": "create",
+      "layer": "shared/ui",
+      "purpose": "role=\"listbox\" picker on Popover with three focus modes; the contract ticket 08 consumes as-is.",
+      "symbols": [
+        "Listbox",
+        "ListboxOption",
+        "ListboxSearch",
+        "ListboxTriggerProps"
+      ],
+      "responsibilities": [
+        "Props: label, options { id, content, ariaLabel?, title?, disabled? }[], value?, onSelect(id), trigger, search?, panel? { role, label }, header?, footer?, emptyLabel?, plus Popover pass-through; dismissOnFocusOut always on",
+        "aria-selected marks value when the value prop is present (even null); otherwise it follows the active option",
+        "Focus mode (no search): options take DOM focus; the active option is refocused while focus is in the panel or on body",
+        "Panel search: PopoverSearch becomes a combobox with aria-controls, aria-activedescendant, aria-autocomplete=\"list\", and the hook's onKeyDown",
+        "Trigger combobox: comboboxProps (role, aria-*, autoComplete off, onFocus/onClick open, Escape close only while open, Arrow opens while closed)",
+        "Active resets on open (value, else first) and when search.value changes (first); search-mode options preventDefault mousedown and set active on mousemove",
+        "Select closes, then calls onSelect; no focus move"
+      ],
+      "nonResponsibilities": [
+        "Callers filter options",
+        "Holds no domain value; no caret"
+      ],
+      "implementation": [
+        "Compose Popover + useListNavigation + PopoverOption + PopoverSearch; option DOM id = listboxId + \"-\" + option.id"
+      ],
+      "verification": [
+        "Listbox.test.tsx covers all three modes, aria-selected rules, fallback refocus, focus-out close, Escape propagation while closed"
+      ],
+      "dependencies": "Step 4. No production caller in this ticket.",
+      "tests": [
+        "shared/ui/Listbox.test.tsx"
+      ],
+      "trace": [
+        "AC-1",
+        "Story 7",
+        "Story 8"
+      ]
+    },
+    {
+      "id": "popover-test",
+      "path": "studio/src/shared/ui/Popover.test.tsx",
+      "action": "create",
+      "layer": "test",
+      "purpose": "Positioning, dismissal, focus return and controlled-mode behavior of Popover.",
+      "symbols": [
+        "Popover"
+      ],
+      "responsibilities": [
+        "Mock rects per element with vi.spyOn(Element.prototype, \"getBoundingClientRect\") plus innerHeight/innerWidth; assert inline top/left"
+      ],
+      "nonResponsibilities": [
+        "No class-string assertions beyond inline position styles"
+      ],
+      "implementation": [
+        "Cases listed in LLD.md 9.1"
+      ],
+      "verification": [
+        "npx vitest run src/shared/ui/Popover.test.tsx"
+      ],
+      "dependencies": "With step 1.",
+      "tests": [
+        "self"
+      ],
+      "trace": [
+        "AC-1",
+        "Story 10"
+      ]
+    },
+    {
+      "id": "menu-test",
+      "path": "studio/src/shared/ui/Menu.test.tsx",
+      "action": "create",
+      "layer": "test",
+      "purpose": "Menu roles and keyboard behavior, Escape, outside click, focus return.",
+      "symbols": [
+        "Menu"
+      ],
+      "responsibilities": [
+        "Assert roles, names, focus, disabled state and callbacks only"
+      ],
+      "nonResponsibilities": [
+        "No DOM-structure assertions beyond roles"
+      ],
+      "implementation": [
+        "Cases listed in LLD.md 9.1"
+      ],
+      "verification": [
+        "npx vitest run src/shared/ui/Menu.test.tsx"
+      ],
+      "dependencies": "With step 3.",
+      "tests": [
+        "self"
+      ],
+      "trace": [
+        "AC-1"
+      ]
+    },
+    {
+      "id": "listbox-test",
+      "path": "studio/src/shared/ui/Listbox.test.tsx",
+      "action": "create",
+      "layer": "test",
+      "purpose": "Listbox in all three modes; this is the hook's test.",
+      "symbols": [
+        "Listbox",
+        "useListNavigation"
+      ],
+      "responsibilities": [
+        "Panel search, focus mode and trigger combobox cases from LLD.md 9.1"
+      ],
+      "nonResponsibilities": [
+        "No class-string assertions"
+      ],
+      "implementation": [
+        "Cases listed in LLD.md 9.1"
+      ],
+      "verification": [
+        "npx vitest run src/shared/ui/Listbox.test.tsx"
+      ],
+      "dependencies": "With step 4.",
+      "tests": [
+        "self"
+      ],
+      "trace": [
+        "AC-1"
+      ]
+    },
+    {
+      "id": "issue-actions",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/IssueActionsMenu.tsx",
+      "action": "modify",
+      "layer": "app shell",
+      "purpose": "Issue \"⋯\" actions become two Menu items; the hand-rolled mousedown/Escape effect and absolute panel go.",
+      "symbols": [
+        "IssueActionsMenu"
+      ],
+      "responsibilities": [
+        "Menu label=\"Issue actions\" align=\"right\", not portalled (within(details) queries)",
+        "Item open-terminal: \"Open terminal\", disabled when moduleId is null, testId open-issue-terminal, onSelect chooseTerminal",
+        "Item delete: \"Delete issue…\", disabled when hasSubtasks, tone danger, testId delete-issue, onSelect chooseDelete",
+        "Trigger keeps aria-label/title \"Issue actions\", data-testid issue-actions-trigger, \"⋯\" and its class; spreads ariaProps"
+      ],
+      "nonResponsibilities": [
+        "createWorkItemShell failure toast is unchanged",
+        "Delete confirmation dialog is unchanged"
+      ],
+      "implementation": [
+        "Delete lines 22-44 (state, refs, effect) and 76-110 (panel)",
+        "Remove the hard-coded aria-controls/aria-haspopup; drop setOpen calls from chooseTerminal/chooseDelete"
+      ],
+      "verification": [
+        "overhaulTaskWorkspaceIdentifierAcceptance",
+        "overhaulNativeWebViewSiblingAcceptance (one overlay frame)",
+        "overhaulSubtreeRunAcceptance"
+      ],
+      "dependencies": "Step 5. Depends on Menu.",
+      "tests": [
+        "overhaulTaskWorkspaceIdentifierAcceptance",
+        "overhaulNativeWebViewSiblingAcceptance",
+        "overhaulSubtreeRunAcceptance"
+      ],
+      "trace": [
+        "AC-2",
+        "AC-3"
+      ]
+    },
+    {
+      "id": "dormant",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/internal/DormantWorkspaceTabs.tsx",
+      "action": "modify",
+      "layer": "app shell",
+      "purpose": "“↻ Resume” dropdown becomes a portalled Menu anchored to the tab strip.",
+      "symbols": [
+        "DormantWorkspaceTabs"
+      ],
+      "responsibilities": [
+        "Menu label=\"Dormant tabs\" align=\"right\" anchor=\"tablist\" portal className=\"ml-1 flex shrink-0 items-center\"",
+        "Headings Resume conversation / Reopen document / Terminated, then items",
+        "Resume items: aria \"Resume …\", disabled while resuming, keepOpen, label span with providerTextClass(chip)",
+        "Reopen items: aria \"Reopen …\", label \"+ …\", closes on select",
+        "Terminated items: aria \"Terminated …\", disabled, no-op onSelect",
+        "Trigger keeps dormant-tabs-trigger, Dormant tabs (N), title, count, ▴/▾ on open"
+      ],
+      "nonResponsibilities": [
+        "Derivation of resumable/count/empty/resumingCount is unchanged",
+        "if (empty) return null stays; unmount closes it"
+      ],
+      "implementation": [
+        "Delete the classes at 33-36, state/refs at 55-58, effects at 69-115, onMenuKeyDown, and the portal panel"
+      ],
+      "verification": [
+        "overhaulDormantWorkspaceTabsAcceptance (max-h-[60vh] overflow-y-auto on menu)",
+        "suites using dormantTabsFixture"
+      ],
+      "dependencies": "Step 6. Depends on Menu (anchor, portal).",
+      "tests": [
+        "overhaulDormantWorkspaceTabsAcceptance",
+        "dormantTabsFixture.ts"
+      ],
+      "trace": [
+        "AC-2",
+        "AC-3"
+      ]
+    },
+    {
+      "id": "launcher",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/internal/WorkspaceLauncher.tsx",
+      "action": "modify",
+      "layer": "app shell",
+      "purpose": "Scratch “＋ Agent” mode menu becomes a controlled, portalled Menu; task kind still opens the agent-picker modal.",
+      "symbols": [
+        "WorkspaceLauncher",
+        "SCRATCH_LAUNCH_MODES"
+      ],
+      "responsibilities": [
+        "Controlled Menu label=\"Launch agent\" anchor=\"tablist\" portal className=\"shrink-0\" triggerRef={triggerRef} open={launchOpen}",
+        "onOpenChange clears openLauncherRef on close and sets launchOpen",
+        "Items Plan / Instant call activateLauncherItem(id)",
+        "Trigger keeps its own onClick (task: pushModal; scratch: toggle with identity bookkeeping) and does not spread onClick/onKeyDown"
+      ],
+      "nonResponsibilities": [
+        "Identity guard, launchCommittedRef, warmLaunchIntent and prefetchProviderCatalog are unchanged",
+        "Task kind never mounts the menu"
+      ],
+      "implementation": [
+        "Delete launchMenuRef/position, effects at 108-128 and 130-180, onLauncherMenuKeyDown, the portal panel and data-launcher-item"
+      ],
+      "verification": [
+        "overhaulTaskAgentLaunchAcceptance",
+        "overhaulScratchAcceptance",
+        "overhaulTaskAgentLaunchInteractionAcceptance",
+        "overhaulEditViewNavigationAcceptance"
+      ],
+      "dependencies": "Step 7. Depends on Menu (controlled, anchor, portal, triggerRef).",
+      "tests": [
+        "overhaulTaskAgentLaunchAcceptance",
+        "overhaulScratchAcceptance"
+      ],
+      "trace": [
+        "AC-2",
+        "AC-3"
+      ]
+    },
+    {
+      "id": "worktree-block",
+      "path": "studio/src/features/agents/worktrees/WorktreeBlock.tsx",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "“⋯” details disclosure stays a plain Popover (D-7).",
+      "symbols": [
+        "WorktreeBlock"
+      ],
+      "responsibilities": [
+        "Inherits flip, clamp, pointerdown dismissal and Escape focus return through the wrapper button fallback"
+      ],
+      "nonResponsibilities": [
+        "Not a role=\"menu\": the content is text plus a Discard confirm found by role button in tests"
+      ],
+      "implementation": [
+        "No code change"
+      ],
+      "verification": [
+        "WorktreeBlock.test.tsx, overhaulWorktreeDiscardRuntimeAcceptance, overhaulSelectedTaskWorktreeAcceptance green unchanged"
+      ],
+      "dependencies": "Consumes Popover only.",
+      "tests": [
+        "worktree/WorktreeBlock.test.tsx"
+      ],
+      "trace": [
+        "D-7",
+        "AC-2"
+      ]
+    },
+    {
+      "id": "field-pickers",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/fields/StatePicker.tsx",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "Representative of the untouched Popover callers: StatePicker, IssueTypePicker, ParentPicker, BlockerPicker, WorkflowStatePicker, WorkItemSearchList.",
+      "symbols": [
+        "StatePicker",
+        "IssueTypePicker",
+        "ParentPicker",
+        "BlockerPicker",
+        "WorkflowStatePicker",
+        "WorkItemSearchList"
+      ],
+      "responsibilities": [
+        "Keep compiling against the additive props; options keep role button"
+      ],
+      "nonResponsibilities": [
+        "No Listbox adoption here (follow-up)",
+        "Private Dot copies left for 10/11"
+      ],
+      "implementation": [
+        "No code change"
+      ],
+      "verification": [
+        "overhaulTransitionLandingAcceptance, overhaulRunNowAcceptance, overhaulWorkItemAcceptance, overhaulReparentConvergenceAcceptance, WorkItemSearchList.test.tsx"
+      ],
+      "dependencies": "Consumes Popover and PopoverOption.",
+      "tests": [
+        "overhaulWorkItemAcceptance",
+        "WorkItemSearchList.test.tsx"
+      ],
+      "trace": [
+        "INV"
+      ]
+    },
+    {
+      "id": "native-overlay",
+      "path": "studio/src/features/agents/terminal/internal/useNativeWebViewSiblingInteraction.ts",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "Overlay selector keeps matching: the panel has data-native-terminal-overlay, and menu/listbox are nested inside it.",
+      "symbols": [
+        "WEBVIEW_OVERLAY_SELECTOR",
+        "currentOverlayFrames"
+      ],
+      "responsibilities": [
+        "Report exactly one frame per open panel (outermost match only)"
+      ],
+      "nonResponsibilities": [
+        "No selector change"
+      ],
+      "implementation": [
+        "No code change"
+      ],
+      "verification": [
+        "overhaulNativeWebViewSiblingAcceptance expects overlayFrames [FRAME] with the Issue actions menu open"
+      ],
+      "dependencies": "Reads DOM produced by Popover.",
+      "tests": [
+        "overhaulNativeWebViewSiblingAcceptance"
+      ],
+      "trace": [
+        "D-6"
+      ]
+    },
+    {
+      "id": "keymap",
+      "path": "studio/src/app/navigation/useGlobalKeymap.ts",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "isLaunchMenuTarget still finds [role=\"menu\"][aria-label=\"Launch agent\"] as an ancestor of launcher items.",
+      "symbols": [
+        "isLaunchMenuTarget"
+      ],
+      "responsibilities": [
+        "Capture-phase keymap skips events inside the launch menu"
+      ],
+      "nonResponsibilities": [
+        "No change"
+      ],
+      "implementation": [
+        "No code change"
+      ],
+      "verification": [
+        "overhaulEditViewNavigationAcceptance"
+      ],
+      "dependencies": "Reads DOM produced by Menu.",
+      "tests": [
+        "overhaulEditViewNavigationAcceptance"
+      ],
+      "trace": [
+        "INV"
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "name": "Popover props (new: everything except trigger, children, align, disabled, data-testid)",
+      "columns": [
+        "Prop",
+        "Type",
+        "Default",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "`trigger`",
+          "`(props: PopoverTriggerProps) => ReactNode`",
+          "required",
+          "Renders the trigger"
+        ],
+        [
+          "`children`",
+          "`(close) => ReactNode`",
+          "required",
+          "`close()` closes without moving focus"
+        ],
+        [
+          "`align`",
+          "`\"left\" | \"right\"`",
+          "`\"left\"`",
+          "Edge alignment to the trigger"
+        ],
+        [
+          "`anchor`",
+          "`\"trigger\" | \"tablist\"`",
+          "`\"trigger\"`",
+          "Below the lower of the trigger and the closest `[role=\"tablist\"]`"
+        ],
+        [
+          "`portal`",
+          "`boolean`",
+          "`false`",
+          "Render the panel in `document.body`"
+        ],
+        [
+          "`disabled`",
+          "`boolean`",
+          "`false`",
+          "Becoming true while open closes it"
+        ],
+        [
+          "`open` / `onOpenChange`",
+          "`boolean` / `(open) => void`",
+          "uncontrolled",
+          "Controlled when `open` is defined; `onOpenChange` fires in both modes"
+        ],
+        [
+          "`triggerRef`",
+          "`RefObject<HTMLElement>`",
+          "internal",
+          "Focus target on Escape; excluded from outside dismissal"
+        ],
+        [
+          "`dismissOnFocusOut`",
+          "`boolean`",
+          "`false`",
+          "Close on a non-null `relatedTarget` outside wrapper and panel"
+        ],
+        [
+          "`panelRole` / `panelLabel`",
+          "`\"dialog\" | \"region\"` / `string`",
+          "none",
+          "Role and aria-label on the panel"
+        ],
+        [
+          "`className`",
+          "`string`",
+          "none",
+          "Wrapper layout only"
+        ]
+      ]
+    },
+    {
+      "name": "PopoverTriggerProps",
+      "columns": [
+        "Field",
+        "Type",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "`open`, `disabled`, `onClick`",
+          "unchanged",
+          "Existing callers keep working"
+        ],
+        [
+          "`onKeyDown`",
+          "`(e: KeyboardEvent<HTMLElement>) => void`",
+          "Enter/Space with no modifier toggles; preventDefault + stopPropagation"
+        ],
+        [
+          "`triggerRef`",
+          "`(el: HTMLElement | null) => void`",
+          "Registers the trigger when no `triggerRef` prop is given; fallback is the first button/input in the wrapper"
+        ],
+        [
+          "`panelId`",
+          "`string`",
+          "useId-based panel id for `aria-controls`"
+        ]
+      ]
+    },
+    {
+      "name": "Positioning (GAP 4, MARGIN 8)",
+      "columns": [
+        "Step",
+        "Rule"
+      ],
+      "rows": [
+        [
+          "Anchor",
+          "`anchorBottom` = `t.bottom`, or for `\"tablist\"` `max(t.bottom, tablist.bottom)`"
+        ],
+        [
+          "Vertical",
+          "`below = anchorBottom + 4`; use it if `below + h <= innerHeight - 8`; else flip to `max(8, t.top - 4 - h)` when there is more room above; else `below`"
+        ],
+        [
+          "Horizontal",
+          "start `t.left` (left) or `t.right - w` (right); clamp to `[8, innerWidth - 8 - w]`"
+        ],
+        [
+          "Tracking",
+          "resize, capture passive scroll, one ResizeObserver on trigger, panel and tablist (guarded)"
+        ]
+      ]
+    },
+    {
+      "name": "PopoverOption (single row)",
+      "columns": [
+        "Prop",
+        "Effect"
+      ],
+      "rows": [
+        [
+          "button attributes (minus className/type)",
+          "Pass through: role, id, aria-*, title, disabled, tabIndex, data-testid, handlers"
+        ],
+        [
+          "`selected`",
+          "`text-focus-accent` (committed value)"
+        ],
+        [
+          "`active`",
+          "`bg-pane-title` (same look as hover)"
+        ],
+        [
+          "`tone`",
+          "`\"danger\"` gives `text-lifecycle-danger`"
+        ],
+        [
+          "base",
+          "`flex w-full items-center gap-2 px-3 py-1.5 text-left text-base outline-none hover:bg-pane-title disabled:cursor-not-allowed disabled:opacity-50`"
+        ]
+      ]
+    },
+    {
+      "name": "useListNavigation({ items, preferredId, onActivate }) → { activeId, setActiveId, onKeyDown }",
+      "columns": [
+        "Key",
+        "Behavior"
+      ],
+      "rows": [
+        [
+          "ArrowDown / ArrowUp",
+          "Next/previous enabled item; clamps at the ends"
+        ],
+        [
+          "Home / End",
+          "First/last enabled item; not handled in input/textarea"
+        ],
+        [
+          "Enter",
+          "Activate the active item; always consumed"
+        ],
+        [
+          "Space",
+          "Activate, except in input/textarea"
+        ],
+        [
+          "Other",
+          "Escape, Tab and printable keys are not handled; ignores modifiers and defaultPrevented events"
+        ]
+      ]
+    },
+    {
+      "name": "Menu",
+      "columns": [
+        "Part",
+        "Contract"
+      ],
+      "rows": [
+        [
+          "Props",
+          "`label`, `items: MenuEntry[]`, `trigger(MenuTriggerProps)`, plus Popover pass-through"
+        ],
+        [
+          "MenuItem",
+          "`{ kind: \"item\", id, label, onSelect, disabled?, ariaLabel?, title?, testId?, tone?, keepOpen? }`"
+        ],
+        [
+          "MenuHeading",
+          "`{ kind: \"heading\", id, label }`, rendered as `role=\"presentation\"`"
+        ],
+        [
+          "ariaProps",
+          "`aria-haspopup=\"menu\"`, `aria-expanded`, `aria-controls` (menu id while open)"
+        ],
+        [
+          "DOM",
+          "`role=\"menu\"` div, `max-h-[60vh] overflow-y-auto`; items `role=\"menuitem\"` tabIndex −1"
+        ],
+        [
+          "Focus",
+          "First enabled item on open; follows the active item; Escape returns to the trigger; select does not move focus"
+        ]
+      ]
+    },
+    {
+      "name": "Listbox",
+      "columns": [
+        "Part",
+        "Contract"
+      ],
+      "rows": [
+        [
+          "Props",
+          "`label`, `options: ListboxOption[]`, `value?`, `onSelect(id)`, `trigger`, `search?`, `panel?`, `header?`, `footer?`, `emptyLabel?`, plus Popover pass-through"
+        ],
+        [
+          "ListboxOption",
+          "`{ id, content, ariaLabel?, title?, disabled? }`"
+        ],
+        [
+          "search",
+          "`{ placement: \"panel\", value, onChange, label, placeholder? }` or `{ placement: \"trigger\", value }`"
+        ],
+        [
+          "aria-selected",
+          "Marks `value` when the prop is present (even null); otherwise follows the active option"
+        ],
+        [
+          "ariaProps",
+          "`aria-haspopup` `\"dialog\"` (panel dialog) or `\"listbox\"`; `aria-expanded`; `aria-controls` panel or listbox id while open"
+        ],
+        [
+          "comboboxProps",
+          "ref, role combobox, aria-expanded, aria-controls, aria-activedescendant, aria-autocomplete list, autoComplete off, onFocus/onClick open, onKeyDown"
+        ],
+        [
+          "Active",
+          "Reset on open (value, else first) and on `search.value` change (first); falls back when it disappears"
+        ]
+      ]
+    },
+    {
+      "name": "ARIA and focus by surface",
+      "columns": [
+        "Surface",
+        "Roles",
+        "Focus",
+        "Escape"
+      ],
+      "rows": [
+        [
+          "Menu",
+          "menu / menuitem / presentation",
+          "Roving DOM focus",
+          "Close, focus trigger"
+        ],
+        [
+          "Listbox focus mode",
+          "listbox / option",
+          "Roving DOM focus, value first",
+          "Close, focus trigger"
+        ],
+        [
+          "Listbox panel search",
+          "combobox + aria-activedescendant",
+          "Stays in search",
+          "Close, focus trigger"
+        ],
+        [
+          "Listbox trigger combobox",
+          "caller combobox",
+          "Stays in input",
+          "Close while open; propagate while closed"
+        ]
+      ]
+    },
+    {
+      "name": "Hooks preserved",
+      "columns": [
+        "Hook",
+        "Owner after migration"
+      ],
+      "rows": [
+        [
+          "`issue-actions-trigger`, button and menu \"Issue actions\", `open-issue-terminal`, `delete-issue`",
+          "IssueActionsMenu"
+        ],
+        [
+          "`dormant-tabs-trigger`, `Dormant tabs (N)`, menu \"Dormant tabs\" with `max-h-[60vh] overflow-y-auto`, menuitems Resume/Reopen/Terminated",
+          "DormantWorkspaceTabs + Menu"
+        ],
+        [
+          "menu \"Launch agent\", menuitems Plan / Instant, button \"＋ Agent\"",
+          "WorkspaceLauncher"
+        ],
+        [
+          "`state-picker`, `issue-type-picker`, `parent-picker`, `blocker-picker`, `worktree-details`",
+          "Unchanged Popover callers"
+        ]
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "D-1",
+      "text": "Outside dismissal uses `pointerdown`, not `mousedown`; no test depends on mousedown."
+    },
+    {
+      "id": "D-2",
+      "text": "Escape always returns focus to the trigger (sync and again in requestAnimationFrame); select and outside dismissal never move focus."
+    },
+    {
+      "id": "D-3",
+      "text": "Escape inside a panel stops propagation; the document-level Escape does not. Escape closes the innermost surface."
+    },
+    {
+      "id": "D-4",
+      "text": "Navigation clamps at the ends in every list; the dormant and launcher menus used to wrap."
+    },
+    {
+      "id": "D-5",
+      "text": "Portal is opt-in; only the tab-strip menus (and ModulePicker in 08) use it."
+    },
+    {
+      "id": "D-6",
+      "text": "Every Popover panel carries `data-native-terminal-overlay`, so native terminals yield to all floating panels."
+    },
+    {
+      "id": "D-7",
+      "text": "WorktreeBlock's \"⋯\" is a details disclosure, not an action menu: it stays a Popover. So the ticket's four menus become three Menu migrations plus one Popover disclosure."
+    },
+    {
+      "id": "D-8",
+      "text": "The single row is PopoverOption at `text-base px-3 py-1.5`; text-xs and text-sm menu rows grow."
+    },
+    {
+      "id": "D-9",
+      "text": "No Menu typeahead; \"type-to-filter\" is the Listbox search field."
+    }
+  ],
+  "execution": [
+    {
+      "title": "Extend Popover and PopoverOption",
+      "detail": "Additive props, positioning, dismissal and focus return; write Popover.test.tsx alongside. No caller edits.",
+      "gate": "Popover.test.tsx + field-picker suites"
+    },
+    {
+      "title": "Add useListNavigation",
+      "detail": "Pure hook; no caller yet.",
+      "gate": "npm run typecheck"
+    },
+    {
+      "title": "Add Menu",
+      "detail": "Compose Popover, hook and PopoverOption.",
+      "gate": "Menu.test.tsx"
+    },
+    {
+      "title": "Add Listbox",
+      "detail": "Three focus modes, aria-selected rule, slots.",
+      "gate": "Listbox.test.tsx"
+    },
+    {
+      "title": "Migrate IssueActionsMenu",
+      "detail": "Two items, not portalled.",
+      "gate": "overhaulTaskWorkspaceIdentifier / NativeWebViewSibling / SubtreeRun"
+    },
+    {
+      "title": "Migrate DormantWorkspaceTabs",
+      "detail": "Headings and items, tablist anchor, portal, keepOpen resumes.",
+      "gate": "overhaulDormantWorkspaceTabsAcceptance"
+    },
+    {
+      "title": "Migrate WorkspaceLauncher",
+      "detail": "Controlled Menu; task kind still opens the modal.",
+      "gate": "overhaulTaskAgentLaunch / Scratch / EditViewNavigation"
+    },
+    {
+      "title": "Delete-check",
+      "detail": "The step 8 rg over the three migrated files returns nothing.",
+      "gate": "rg (LLD.md step 8)"
+    },
+    {
+      "title": "Full gate",
+      "detail": "typecheck, studio tests, test:overhaul, build.",
+      "gate": "npm run typecheck && npm run test && npm run test:overhaul && npm run build"
+    }
+  ],
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "text": "Menu.tsx, Listbox.tsx and useListNavigation exist; tests cover Escape, outside click, Up/Down/Home/End/Enter and focus return (steps 2-4; Menu.test.tsx, Listbox.test.tsx)."
+    },
+    {
+      "id": "AC-2",
+      "text": "IssueActionsMenu, DormantWorkspaceTabs and WorkspaceLauncher use Menu, and their dismissal and positioning code is gone (steps 5-8; rg returns nothing). WorktreeBlock stays a Popover disclosure (D-7)."
+    },
+    {
+      "id": "AC-3",
+      "text": "One floating surface: only shared/ui/Popover.tsx defines the panel class (rg 'bg-pane-panel py-1 shadow')."
+    },
+    {
+      "id": "AC-4",
+      "text": "Typecheck, studio tests and test:overhaul pass, with no existing test edited (step 9)."
+    },
+    {
+      "id": "Story 6/9/10",
+      "text": "Escape and outside click everywhere; one active-row look; reposition, flip and clamp (Popover.test.tsx plus the manual desktop check)."
+    }
+  ]
+};
+
+    const actionLabels = { all: "All", create: "Create", modify: "Modify", delete: "Delete", move: "Move", untouched: "Untouched" };
+    const state = { action: "all", query: "", selected: null };
+
+    const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+    const directory = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ".";
+    const basename = path => path.slice(path.lastIndexOf("/") + 1);
+    const list = items => `<ul>${(items || []).map(item => `<li>${esc(item)}</li>`).join("")}</ul>`;
+    const tokens = (items, extra = "") => (items || []).map(item => `<span class="token ${extra}">${esc(item)}</span>`).join("");
+
+    function visibleFiles() {
+      const needle = state.query.trim().toLowerCase();
+      return LLD_DOCUMENT.files.filter(file => {
+        const actionMatch = state.action === "all" || file.action === state.action;
+        const haystack = [file.path, file.layer, file.purpose, ...(file.symbols || []), ...(file.responsibilities || []), ...(file.implementation || []), ...(file.verification || []), ...(file.trace || [])].join(" ").toLowerCase();
+        return actionMatch && (!needle || haystack.includes(needle));
+      });
+    }
+
+    function renderHeader() {
+      document.getElementById("doc-crumb").textContent = LLD_DOCUMENT.meta.crumb;
+      document.getElementById("doc-title").textContent = LLD_DOCUMENT.meta.title;
+      document.getElementById("doc-summary").textContent = LLD_DOCUMENT.meta.summary;
+      document.getElementById("doc-status").textContent = LLD_DOCUMENT.meta.status;
+      document.getElementById("scope-lede").textContent = LLD_DOCUMENT.scope.lede;
+      document.getElementById("scope-list").innerHTML = LLD_DOCUMENT.scope.in.map(item => `<li>${esc(item)}</li>`).join("");
+      document.getElementById("boundary-list").innerHTML = LLD_DOCUMENT.scope.boundaries.map(item => `<li>${esc(item)}</li>`).join("");
+      const counts = Object.keys(actionLabels).filter(action => action !== "all").map(action => ({ action, count: LLD_DOCUMENT.files.filter(file => file.action === action).length }));
+      document.getElementById("metrics").innerHTML = counts.map(item => `<div class="metric"><b>${item.count}</b><span>${actionLabels[item.action]}</span></div>`).join("");
+    }
+
+    function renderFilters() {
+      const actions = ["all", ...new Set(LLD_DOCUMENT.files.map(file => file.action))];
+      document.getElementById("filters").innerHTML = actions.map(action => `<button class="filter" type="button" data-action="${action}" aria-pressed="${state.action === action}">${actionLabels[action] || action}</button>`).join("");
+      document.querySelectorAll(".filter").forEach(button => button.addEventListener("click", () => {
+        state.action = button.dataset.action;
+        renderFilters();
+        renderFiles();
+      }));
+    }
+
+    function renderFiles() {
+      const files = visibleFiles();
+      if (!files.some(file => file.id === state.selected)) state.selected = files[0]?.id || null;
+      const groups = Map.groupBy ? Map.groupBy(files, file => directory(file.path)) : files.reduce((map, file) => map.set(directory(file.path), [...(map.get(directory(file.path)) || []), file]), new Map());
+      const rail = document.getElementById("file-rail");
+      rail.innerHTML = files.length ? [...groups.entries()].map(([dir, entries]) => `<div class="dir-group"><div class="dir-label">${esc(dir)}</div>${entries.map(file => `<button class="file-button" type="button" role="option" data-file="${esc(file.id)}" aria-selected="${file.id === state.selected}"><span class="action-dot ${esc(file.action)}" aria-hidden="true"></span><span class="file-button-copy"><span class="file-name">${esc(basename(file.path))}</span><span class="file-meta">${esc(actionLabels[file.action] || file.action)} · ${esc(file.layer)}</span></span></button>`).join("")}</div>`).join("") : `<div class="rail-empty">No files match this view.</div>`;
+      rail.querySelectorAll(".file-button").forEach(button => {
+        button.addEventListener("click", () => selectFile(button.dataset.file));
+        button.addEventListener("keydown", event => navigateFiles(event, button.dataset.file));
+      });
+      renderInspector();
+    }
+
+    function selectFile(id) {
+      state.selected = id;
+      document.querySelectorAll(".file-button").forEach(button => button.setAttribute("aria-selected", String(button.dataset.file === id)));
+      renderInspector();
+      history.replaceState(null, "", `#file:${encodeURIComponent(id)}`);
+    }
+
+    function navigateFiles(event, id) {
+      if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+      event.preventDefault();
+      const files = visibleFiles();
+      const index = files.findIndex(file => file.id === id);
+      const next = event.key === 'ArrowDown' ? Math.min(index + 1, files.length - 1) : Math.max(index - 1, 0);
+      state.selected = files[next]?.id || id;
+      renderFiles();
+      document.querySelector(`[data-file="${CSS.escape(state.selected)}"]`)?.focus();
+    }
+
+    function renderInspector() {
+      const file = LLD_DOCUMENT.files.find(entry => entry.id === state.selected);
+      const inspector = document.getElementById("file-inspector");
+      if (!file) { inspector.innerHTML = `<p class="rail-empty">Choose a file to inspect.</p>`; return; }
+      inspector.innerHTML = `
+        <div class="inspector-head">
+          <div><h3 class="path">${esc(file.path)}</h3><p class="purpose">${esc(file.purpose)}</p></div>
+          <span class="action-badge ${esc(file.action)}">${esc(actionLabels[file.action] || file.action)}</span>
+        </div>
+        <div class="symbol-row" aria-label="Symbols">${tokens(file.symbols)}</div>
+        <div class="inspector-grid">
+          <div class="info-block"><h4>Responsibilities</h4>${list(file.responsibilities)}</div>
+          <div class="info-block no"><h4>Preserved boundary</h4>${list(file.nonResponsibilities)}</div>
+          <div class="info-block"><h4>Implementation</h4>${list(file.implementation)}</div>
+          <div class="info-block"><h4>Verification</h4>${list(file.verification)}</div>
+        </div>
+        <div class="dependency-strip"><b>Dependency position</b><p>${esc(file.dependencies)}</p></div>
+        <div class="trace-row" aria-label="Tests and requirement trace">${tokens(file.tests)}${tokens(file.trace, "trace-token")}</div>`;
+    }
+
+    function renderTimeline() {
+      document.getElementById("timeline").innerHTML = LLD_DOCUMENT.execution.map(step => `<article class="step"><div><b>${esc(step.title)}</b><p>${esc(step.detail)}</p></div><code>${esc(step.gate)}</code></article>`).join("");
+      document.getElementById("acceptance-list").innerHTML = LLD_DOCUMENT.acceptance.map(item => `<article class="acceptance-item"><strong>${esc(item.id)}</strong><p>${esc(item.text)}</p></article>`).join("");
+    }
+
+
+    function renderContracts() {
+      const code = text => esc(text).replace(/`([^`]+)`/g, "<code>$1</code>");
+      document.getElementById("contract-list").innerHTML = (LLD_DOCUMENT.contracts || []).map(c => `
+        <article class="contract"><h3>${esc(c.name)}</h3>${c.note ? `<p class="note">${code(c.note)}</p>` : ""}
+          <div class="table-wrap"><table><thead><tr>${c.columns.map(h => `<th scope="col">${esc(h)}</th>`).join("")}</tr></thead>
+          <tbody>${c.rows.map(r => `<tr>${r.map(cell => `<td>${code(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></article>`).join("");
+      document.getElementById("decision-list").innerHTML = (LLD_DOCUMENT.decisions || []).map(d => `<article class="decision"><strong>${esc(d.id)}</strong><p>${code(d.text)}</p></article>`).join("");
+    }
+    window.addEventListener("hashchange", () => {
+      const id = decodeURIComponent(location.hash.replace(/^#file:/, ""));
+      if (LLD_DOCUMENT.files.some(file => file.id === id)) { state.selected = id; renderFiles(); }
+    });
+
+    document.getElementById("file-search").addEventListener("input", event => { state.query = event.target.value; renderFiles(); });
+    document.addEventListener("keydown", event => {
+      if (event.key === "/" && document.activeElement !== document.getElementById("file-search")) { event.preventDefault(); document.getElementById("file-search").focus(); }
+      if (event.key === "Escape" && document.activeElement === document.getElementById("file-search")) { state.query = ""; document.getElementById("file-search").value = ""; renderFiles(); }
+    });
+
+    const deepLink = decodeURIComponent(location.hash.replace(/^#file:/, ""));
+    state.selected = LLD_DOCUMENT.files.some(file => file.id === deepLink) ? deepLink : LLD_DOCUMENT.files[0]?.id;
+    renderHeader();
+    renderFilters();
+    renderFiles();
+    renderTimeline();
+    renderContracts();
+  </script>
+</body>
+</html>

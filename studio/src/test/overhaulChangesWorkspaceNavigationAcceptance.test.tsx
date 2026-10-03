@@ -231,7 +231,7 @@ describe("overhaul acceptance - independent Changes workspace navigation", () =>
       "aria-selected",
       "true",
     );
-    const changes = screen.getByRole("button", { name: "Open module Changes" });
+    const changes = screen.getByTestId("workspace-tab-changes");
     changes.focus();
     fireEvent.keyDown(changes, { key: "Enter" });
 
@@ -242,7 +242,7 @@ describe("overhaul acceptance - independent Changes workspace navigation", () =>
     });
     await waitFor(() => expect(switcher).toHaveFocus());
     expect(within(moduleWorkspace).queryByRole("tablist", { name: "Workspace tabs" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Back to planning workspace" })).toBeVisible();
+    expect(screen.getByRole("tab", { name: "Module 1" })).toBeVisible();
     expect(useClientStore.getState().selectedTaskId).toBe(ORIGIN_TASK_ID);
     expect(useClientStore.getState().workspaces[ORIGIN_TASK_ID]).toMatchObject({
       active: "details",
@@ -317,10 +317,10 @@ describe("overhaul acceptance - independent Changes workspace navigation", () =>
     ).toHaveFocus());
     expect(useClientStore.getState().selectedTaskId).toBe(ORIGIN_TASK_ID);
 
-    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
+    fireEvent.keyDown(document.body, { key: "Escape" });
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Open module Changes" })).toHaveFocus(),
+      expect(screen.getByTestId("workspace-tab-changes")).toHaveFocus(),
     );
     expect(screen.queryByTestId("changes-workspace")).toBeNull();
     expect(within(moduleWorkspace).getByRole("tab", { name: "Details" })).toHaveAttribute(
@@ -338,15 +338,13 @@ describe("overhaul acceptance - independent Changes workspace navigation", () =>
     });
 
     act(() => useClientStore.setState({ sidebarVisible: false }));
-    const hiddenSidebarEntry = screen.getByRole("button", {
-      name: "Open module Changes",
-    });
+    const hiddenSidebarEntry = screen.getByTestId("workspace-tab-changes");
     hiddenSidebarEntry.focus();
     fireEvent.keyDown(hiddenSidebarEntry, { key: " " });
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Choose checkout" })).toHaveFocus(),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Module 1" }));
     keymap.unmount();
   });
 

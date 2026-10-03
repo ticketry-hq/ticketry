@@ -6,6 +6,7 @@ use std::env;
 pub const SMOKE_EXIT_AFTER_STARTUP: &str = "MUXED_DESKTOP_SMOKE_EXIT_AFTER_STARTUP";
 pub const ACCEPTANCE_EXIT_AFTER_STARTUP: &str = "MUXED_DESKTOP_ACCEPTANCE_EXIT_AFTER_STARTUP";
 pub const DEVELOPMENT_LOG_PATH_ENV: &str = "MUXED_DEVELOPMENT_LOG_PATH";
+pub const DESKTOP_ORIGIN_ENV: &str = "MUXED_DESKTOP_ORIGIN";
 pub const PLANNER_PORT_ENV: &str = "TICKETRY_PLANNER_PORT";
 pub const STARTUP_TRACE_ID_ENV: &str = "MUXED_STARTUP_TRACE_ID";
 #[cfg(debug_assertions)]
@@ -56,4 +57,25 @@ pub(crate) fn planner_port() -> Result<u16, String> {
         Err(env::VarError::NotPresent) => Ok(0),
         Err(_) => Err("TICKETRY_PLANNER_PORT must contain a valid port".to_owned()),
     }
+}
+
+/// Resolve the launcher's selected origin, falling back to Tauri's dev URL.
+pub(crate) fn planner_frontend_origin(
+    config: &tauri::Config,
+) -> Result<Option<ticketry_planner::PlannerFrontendOrigin>, String> {
+    let origin = match env::var(DESKTOP_ORIGIN_ENV) {
+        Ok(origin) => Some(origin),
+        Err(env::VarError::NotPresent) => config
+            .build
+            .dev_url
+            .as_ref()
+            .map(|url| url.origin().ascii_serialization()),
+        Err(_) => {
+            return Err("MUXED_DESKTOP_ORIGIN must contain a valid frontend origin".to_owned())
+        }
+    };
+    origin
+        .as_deref()
+        .map(ticketry_planner::PlannerFrontendOrigin::parse)
+        .transpose()
 }

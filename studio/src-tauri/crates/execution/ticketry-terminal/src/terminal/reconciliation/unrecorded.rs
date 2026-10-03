@@ -179,7 +179,7 @@ impl TerminalReconciliationService {
         let Some(module_id) = work_item.module_id.clone() else {
             return Ok(None);
         };
-        if run.scope == "docchat" {
+        if matches!(run.scope.as_str(), "docchat" | "exec") {
             return Ok(None);
         }
         let Some(agent) = run.agent.clone() else {

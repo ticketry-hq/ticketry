@@ -38,6 +38,8 @@ const WORKTREE_GIT_OPERATION_EXCEPTIONS = {
 };
 
 const PRODUCT_MUTATIONS = [
+  "agent_execution_create",
+  "agent_execution_update",
   "acknowledge_onboarding",
   "clear_module_link",
   "create_issue_type_transition",
@@ -96,6 +98,7 @@ const PRODUCT_MUTATIONS = [
 const FOUNDATION_QUERIES = ["migrationProbes"];
 
 const GENERATED_PRODUCT_QUERIES = [
+  "agentExecutions",
   "worktrackerSprint",
   "worktrackerSprintGoal",
   "worktrackerSprintSuggestion",

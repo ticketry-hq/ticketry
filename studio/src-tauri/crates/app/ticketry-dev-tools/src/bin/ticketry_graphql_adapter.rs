@@ -30,6 +30,12 @@ mod terminal_ws;
 #[path = "ticketry_graphql_adapter/viewer_session.rs"]
 mod viewer_session;
 
+#[path = "ticketry_graphql_adapter/planner.rs"]
+mod planner;
+
+#[path = "ticketry_graphql_adapter/recovery.rs"]
+mod recovery;
+
 #[derive(Clone)]
 struct AdapterState {
     api: TransportApiImpl,
@@ -85,9 +91,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await
     .map_err(|error| error.message)?;
-    // This development-only process completes the adoption synchronously and
-    // has no desktop lifecycle available to publish the command gate.
-    publish_development_readiness(&data_directory)?;
 
     // Browser GraphQL launches resolve agent-run launch material through the
     // same runtime authority the desktop shell configures, so hook spooling,
@@ -108,6 +111,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             granted_operations: ticketry_mcp::allowed_provider_operations(),
         });
 
+    let (planner_runtime, mut planner_failure) = planner::start(api.clone()).await?;
+    eprintln!(
+        "Ticketry planner listening on {}",
+        planner_runtime.endpoint().graphql_url
+    );
     let mcp_runtime = mcp::start(&data_directory, &data_directory_guard).await?;
     eprintln!(
         "Ticketry WorkTracker MCP listening on {}",
@@ -117,6 +125,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .runtime
         .terminal_runtime()
         .replace_mcp_authority(data_directory.clone(), mcp_runtime.authority())?;
+
+    let recovery = recovery::RecoveryRuntimes::start(&adopted.runtime, &data_directory).await?;
+    publish_development_readiness(&data_directory)?;
 
     let port = std::env::var("TICKETRY_GRAPHQL_ADAPTER_PORT")
         .unwrap_or_else(|_| "8790".to_owned())
@@ -138,13 +149,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(state);
     let mut interrupt = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
-    mcp::serve(listener, app, mcp_runtime, async move {
-        tokio::select! {
-            _ = interrupt.recv() => {},
-            _ = terminate.recv() => {},
-        }
-    })
-    .await?;
+    let result = planner::serve(
+        planner_runtime,
+        mcp::serve(listener, app, mcp_runtime, async move {
+            tokio::select! {
+                _ = interrupt.recv() => {},
+                _ = terminate.recv() => {},
+                failure = planner_failure.recv() => {
+                    if let Some(message) = failure {
+                        eprintln!("{message}");
+                    }
+                },
+            }
+        }),
+    )
+    .await;
+    recovery.shutdown().await;
+    result?;
     Ok(())
 }
 

@@ -27,6 +27,7 @@ pub(crate) fn start_planner_service(
         return Ok(());
     }
     let port = super::environment::planner_port()?;
+    let frontend_origin = super::environment::planner_frontend_origin(application.config())?;
     let handle = application.clone();
     let log_path = application
         .state::<DesktopDataDirectoryOwnership>()
@@ -35,6 +36,7 @@ pub(crate) fn start_planner_service(
     let runtime = tauri::async_runtime::block_on(ticketry_planner::PlannerService::start(
         api.clone(),
         port,
+        frontend_origin,
         move |message| {
             eprintln!("{message}");
             handle

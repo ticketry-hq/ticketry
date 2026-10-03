@@ -16,14 +16,23 @@ import {
 import { getModuleFolder } from "../../../features/module-links";
 import { useClientStore } from "../../../state/clientStore";
 import { ModuleTab } from "./ModuleTab";
+import { useWorkspaceTabNavigation } from "./useWorkspaceTabNavigation";
+import { WorkspaceTabs } from "./WorkspaceTabs";
+import { leavePlanWorkspace, usePlanWorkspace } from "../../../features/sprints";
+import { leaveChangesWorkspace, useChangesWorkspace } from "../../../features/agents/worktrees";
 import { ModulesPaneToggle } from "./ModulesPaneToggle";
 
 export function ModuleTabStrip() {
+  const tabNavigation = useWorkspaceTabNavigation();
   const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
   const modulesQuery = useModulesQuery(selectedProjectId);
   const modules = modulesQuery.data ?? [];
   const presentations = useModulePresentations(selectedProjectId);
   const shownModules = visibleModules(modules, presentations);
+  const planActive = usePlanWorkspace((state) => state.active);
+  const planModuleId = usePlanWorkspace((state) => state.origin?.selectedModuleId ?? null);
+  const changesActive = useChangesWorkspace((state) => state.active);
+  const surfaceActive = planActive || changesActive;
   const selectedModuleId = useClientStore((state) => state.selectedModuleId);
   const selectModule = useClientStore((state) => state.selectModule);
   const deselectModule = useClientStore((state) => state.deselectModule);
@@ -45,6 +54,8 @@ export function ModuleTabStrip() {
   const handleSelect = useCallback(
     (moduleId: string) => {
       if (dragDrop.consumePostDropClick()) return;
+      if (usePlanWorkspace.getState().active) leavePlanWorkspace();
+      if (useChangesWorkspace.getState().active) leaveChangesWorkspace();
       void selectModule(moduleId);
     },
     [dragDrop, selectModule],
@@ -102,16 +113,19 @@ export function ModuleTabStrip() {
         className="flex min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div
+          {...tabNavigation}
+          data-workspace-tablist
           role="tablist"
           aria-label="Project module tabs"
           className="flex shrink-0"
         >
+          <WorkspaceTabs moduleName={modules.find((module) => module.id === (planActive ? planModuleId : selectedModuleId))?.name} />
           {!loading
             ? shownModules.map((module, index) => (
                 <ModuleTab
                   key={module.id}
                   module={module}
-                  isSelected={module.id === selectedModuleId}
+                  isSelected={module.id === selectedModuleId && !surfaceActive}
                   dropIntent={dragDrop.dropIntentFor(module.id)}
                   onSelect={handleSelect}
                   onHide={handleHide}

@@ -19,6 +19,8 @@
 
 mod execution;
 mod graph_run_service;
+mod sprint_suggestions;
+pub use sprint_suggestions::{register_sprint_execution_graphql, SprintSuggestionExecutor};
 
 // `execution` is the private implementation root. The capability modules
 // below are the stable facade used by desktop, MCP, GraphQL, and integration

@@ -5,6 +5,8 @@
 mod catalog;
 mod contract;
 mod error;
+mod exec;
+pub use exec::{construct_exec, ExecConstructionRequest};
 mod launch;
 mod profile;
 mod providers;

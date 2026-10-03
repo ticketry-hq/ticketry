@@ -115,7 +115,28 @@ impl ServerHandler for WorktrackerMcpService {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        Ok(ListToolsResult::with_all_items(self.tools.as_ref().clone())
+        let tools = match self
+            .connection
+            .as_ref()
+            .and_then(ConnectionAuthorization::bearer)
+        {
+            None => self.tools.as_ref().clone(),
+            Some(authorization) => {
+                let allowed = self
+                    .authority
+                    .allowed_operations(Some(authorization))
+                    .await
+                    .map_err(|_| {
+                        ErrorData::internal_error("Run authorization is unavailable.", None)
+                    })?;
+                self.tools
+                    .iter()
+                    .filter(|tool| allowed.contains(tool.name.as_ref()))
+                    .cloned()
+                    .collect()
+            }
+        };
+        Ok(ListToolsResult::with_all_items(tools)
             .with_ttl_ms(0)
             .with_cache_scope(CacheScope::Private))
     }

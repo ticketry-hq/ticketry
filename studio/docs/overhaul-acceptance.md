@@ -221,7 +221,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 236 | A bottom-left toast stays outside the selected native Ghostty host and above the Studio footer and safe areas; stacked notifications remain actionable without lowering, detaching, recreating, or focusing the terminal. |
 | 237 | The Modules pane toggle stays fixed at the workspace's left edge, while module creation sits after the last module tab and scrolls horizontally with the tabs. |
 | 238 | An authoritative snapshot that reports an agent run exited closes its mounted terminal tab and clears the local terminal session. |
-| 239 | Module Changes occupies the footer's left slot with a version-control symbol, stays disabled without a selected Module, and no longer appears beside Terminal and Settings. |
+| 239 | Module Changes appears in the top strip with a version-control symbol, stays disabled without a selected Module, and is absent from the footer. |
 | 240 | A newly captured Story appears first in its issue type's initial workflow state while creation is pending and remains first after the authoritative persisted result replaces it. |
 | 241 | Normal desktop development and packaged builds select embedded native libghostty by default and link and ship the pinned library; browser development selects xterm; development-only renderer overrides remain, and packaged builds ignore them. |
 | 242 | Development builds can compare three Conversations designs in the real Stories pane; each makes New chat obvious, caps the initial list at ten, and expands or hides the remaining chats. |
@@ -407,6 +407,51 @@ named gate before the full Studio suite, typecheck, and build.
 | 419 | Epic changes and deletions update planning groups. |
 | 420 | Planning fact convergence refreshes only the affected project's active planning views. |
 | 421 | External Story deletion removes its row and updates counts and the completion preview without fetching the deleted entity. |
+| 422 | Suggestion accept and Undo return the generated issue relation and await authoritative planning and suggestion collections, including closed views. |
+| 423 | Suggestion dismiss and Undo converge in Apollo; rejected transitions preserve waiting suggestions and actionable server errors. |
+| 424 | Typed sprint execution stays on the sprint card with progress, Cancel, ready count, Review, staleness and Retry. Launching creates no Conversation or terminal tab and preserves the current workspace and focus. |
+
+| 425 | A desktop planner bind failure retains its address and application log, offers normal quit/reopen guidance and Settings, and does not offer unsupported Retry. |
+| 426 | A recoverable runtime offers Retry and reports a rejected recovery command while preserving the original planner diagnostic, log, and Settings access. |
+| 427 | Goal-scoped typed suggestion launches preserve the workspace and return the run identity persisted by agent_execution_create. |
+| 428 | Changed goals replace an old failure message; an active execution remains cancellable while goals change. |
+| 429 | Reopening a sprint card restores completed suggestion counts and failure reasons from persisted execution records. |
+| 430 | Pending launches disable repeated starts and show a rejected launch reason without changing the workspace. |
+| 431 | Card status uses the sprint's persisted run identity and prevents launching while that execution is unavailable. |
+| 432 | Initial agent-status loading, failed reads, and missing goals prevent launching from incomplete card data. |
+| 433 | Dismiss and Undo await the completed card's authoritative ready count, including cached cards that are closed and reopened. |
+| 434 | adds, steps and closes epic tabs while preserving the sprint's visit |
+| 435 | offers real new epic creation and reports missing project type before a write |
+| 436 | creates an epic once through the model write and opens its returned identity |
+| 437 | waits for suggestions before seeding and supports roving tab focus |
+| 438 | keeps waiting suggestions visible in the add menu after closing their epic |
+| 439 | shows sprint-wide counts, the sprint name on hover and read-only goals with separate back and Done actions |
+| 440 | directs an empty backlog to + Add epic, focuses one epic while keeping every sprint story visible, and finishes the epic from the backlog's end with a next cue |
+| 441 | opens a suggested story from its row without accepting it |
+| 442 | renders the unchanged story detail below its suggestion reason and removes the banner for a ticket |
+| 443 | opens selected tickets, moves with buttons and Alt arrows, and dims other epic stories |
+| 444 | optimistically assigns, blocks another view's duplicate, and restores the cache after failure |
+| 445 | opens the next planned sprint when the cold planning graph arrives |
+| 446 | keeps the sprint list after explicitly cancelling the cold default |
+| 447 | leaves the old project's workspace without restoring its origin over a new selection |
+| 448 | adds two numbered goals with Enter and removes one |
+| 449 | keeps a failed goal draft and lets Escape cancel it |
+| 450 | offers no goal changes on completed sprints |
+| 451 | opens a suggestion's moduleless story in the first visible module |
+| 452 | Leaving and reopening the same story ignores the prior request's completion. |
+| 453 | Plan and module-scoped Changes precede module tabs; selecting a module leaves both surfaces. |
+| 454 | Plan opens without a selected module while the module workspace stays mounted and hidden. |
+| 455 | Arrow keys, Home and End select and focus tabs across Plan, Changes and modules. |
+| 456 | Plan opens project-wide in a project with no modules; Changes stays disabled. |
+| 457 | Plan waits for waiting suggestions before offering an epic to finish. |
+| 458 | Each sprint restores its chosen tabs and active epic after leaving Plan. |
+| 459 | Plan owns epic shortcuts and Escape while preventing module navigation from consuming its keys. |
+| 460 | Bare Escape leaves the Plan sprint list and refocuses its workspace tab; modified Escape stays in Plan. |
+| 461 | Waiting suggestions without an epic can be selected, closed and reopened from Add epic with matching counts. |
+| 462 | Failed status reads have a dedicated Retry that preserves cached results, blocks duplicate retries and never launches another agent. |
+| 463 | Leaving the card for Plan during a run observes completion; a failed result refresh can be retried and a moduleless suggestion reviewed and dismissed. |
+| 464 | Removing a selected epic moves its stories and waiting suggestions to the selectable No epic group with matching counts. |
+| 465 | A new sprint starts with the last visited sprint's selected epics and active epic; an untouched sprint starts empty. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

@@ -181,6 +181,8 @@ export interface StudioRuntime {
     approval: string | null,
   ): Promise<DirectoryTrustResult>;
   pickFolder(): Promise<string | null>;
+  /** Offered startup recovery; omitted runtimes require a normal restart. */
+  readonly serviceRecovery?: "retry" | "restart";
   retryServices(): Promise<void>;
   /** Re-read the current listener after background startup or a service failure. */
   plannerEndpoint?(): Promise<PlannerEndpoint | null>;

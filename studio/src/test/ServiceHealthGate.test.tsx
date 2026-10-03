@@ -23,6 +23,7 @@ function runtimeHealthHarness() {
   const retryServices = vi.fn().mockResolvedValue(undefined);
   const runtime = {
     platform: "desktop",
+    serviceRecovery: "retry",
     graphQlTransport: () => { throw new Error("not used"); },
     launchkey: inertLaunchkeyRuntime,
     capabilities: {

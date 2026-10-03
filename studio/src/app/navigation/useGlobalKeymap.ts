@@ -25,6 +25,7 @@ import type { TreeRow } from "../shell/ticket-workspace/tasks/TasksPane";
 import { studioKeymapRegistry } from "./keymapRegistry";
 import { useRestoreAndSelectModule } from "../../features/module-tabs";
 import { routeTaskWorkspaceTabAction } from "../shell/ticket-workspace/selected-ticket/appNavigation";
+import { routePlanKeyboardNavigation, usePlanWorkspace } from "../../features/sprints";
 
 const EMPTY_TASK_ROWS: TreeRow[] = [];
 
@@ -53,6 +54,13 @@ function isChangesEntryActivation(event: KeyboardEvent): boolean {
   );
 }
 
+function isWorkspaceTabNavigation(event: KeyboardEvent): boolean {
+  return !hasModifier(event) &&
+    ["ArrowLeft", "ArrowRight", "Home", "End", "Enter", " "].includes(event.key) &&
+    event.target instanceof HTMLElement &&
+    event.target.closest('[data-workspace-tablist] [role="tab"]') !== null;
+}
+
 /** Installs the application-wide keyboard precedence and delegates actions. */
 export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
   const taskRowsRef = useRef(taskRows);
@@ -79,6 +87,7 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
       if (hasOpenModal()) return;
       if (isLaunchMenuTarget(event.target)) return;
       if (isChangesEntryActivation(event)) return;
+      if (isWorkspaceTabNavigation(event)) return;
 
       // Cmd+W must reach the selected run while its terminal owns typing.
       if (actionId === "close-tab") {
@@ -106,6 +115,7 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
       // Changes owns its local keys before either planning layout sees them.
       // The focused control resolves its exact action through the same registry.
       if (useChangesWorkspace.getState().active) return;
+      if (usePlanWorkspace.getState().active) return;
       if (
         actionId === "workspace-tab-next" ||
         actionId === "workspace-tab-previous"
@@ -126,8 +136,16 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
     }
 
     function onKeyDown(event: KeyboardEvent): void {
+      if (isWorkspaceTabNavigation(event)) return;
       const ui = useClientStore.getState();
       const sidebarVisible = ui.sidebarVisible;
+      if (usePlanWorkspace.getState().active) {
+        if (hasOpenModal() || isTypingTarget(event.target) || event.defaultPrevented) return;
+        routePlanKeyboardNavigation(event);
+        const globalAction = studioKeymapRegistry.resolve("global", event);
+        if (globalAction === "settings") routeSharedNavigation(event, taskRowsRef.current, globalAction);
+        return;
+      }
       if (useChangesWorkspace.getState().active) {
         if (
           hasOpenModal() ||
@@ -144,7 +162,7 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
           leaveChangesWorkspace();
           requestAnimationFrame(() => {
             document.querySelector<HTMLButtonElement>(
-              '[data-testid="footer-module-changes"]',
+              '[data-testid="workspace-tab-changes"]',
             )?.focus();
           });
           return;

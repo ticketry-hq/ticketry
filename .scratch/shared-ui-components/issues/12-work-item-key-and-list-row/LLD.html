@@ -1,0 +1,1255 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="lld-source" content="LLD.md">
+  <meta name="lld-source-sha256" content="1596f8e112f5b42a181c67d8267e826712218c42e42a5dd336d4eba468c1af55">
+  <title>LLD 12 · WorkItemKey and list row</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --paper: #0e1520;
+      --sheet: #172130;
+      --surface: #202b3b;
+      --rail: #121c29;
+      --group: #263448;
+      --on-accent: #0e1520;
+      --focus: #a7ceff;
+      --ink: #e6edf6;
+      --muted: #a6b5c9;
+      --line: #34445b;
+      --line-strong: #657a96;
+      --navy: #91c4ff;
+      --navy-soft: #203852;
+      --orange: #ffb180;
+      --orange-soft: #422d24;
+      --green: #7bdbb1;
+      --green-soft: #183b32;
+      --red: #ff9eaa;
+      --red-soft: #432731;
+      --violet: #c4b2ff;
+      --violet-soft: #332e4c;
+      --shadow: 0 18px 45px rgba(0, 0, 0, .24);
+      --radius: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(145, 196, 255, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(145, 196, 255, .025) 1px, transparent 1px),
+        var(--paper);
+      background-size: 24px 24px;
+      font-family: var(--sans);
+      line-height: 1.55;
+    }
+
+    button, input { font: inherit; }
+    button:focus-visible, input:focus-visible, a:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .shell { width: min(1480px, calc(100% - 40px)); margin: 0 auto; }
+    .masthead {
+      margin-top: 20px;
+      border: 1px solid var(--line-strong);
+      background: var(--sheet);
+      box-shadow: var(--shadow);
+    }
+    .masthead-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      padding: 30px 34px 28px;
+      border-bottom: 1px solid var(--line);
+    }
+    .crumb {
+      margin: 0 0 12px;
+      color: var(--orange);
+      font: 700 11px/1.2 var(--mono);
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; max-width: 900px; font-size: clamp(32px, 5vw, 64px); line-height: .98; letter-spacing: -.045em; }
+    .summary { max-width: 780px; margin: 18px 0 0; color: var(--muted); font-size: 16px; }
+    .phase-card {
+      min-width: 180px;
+      align-self: stretch;
+      display: grid;
+      align-content: space-between;
+      padding: 18px;
+      background: var(--navy);
+      color: var(--on-accent);
+    }
+    .phase-card span { font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; opacity: .68; }
+    .phase-card strong { font-size: 30px; letter-spacing: -.03em; }
+    .phase-card small { font-family: var(--mono); opacity: .78; }
+    .metrics { display: grid; grid-template-columns: repeat(5, 1fr); }
+    .metric { padding: 15px 20px; border-right: 1px solid var(--line); }
+    .metric:last-child { border-right: 0; }
+    .metric b { display: block; font-size: 24px; line-height: 1; }
+    .metric span { color: var(--muted); font: 700 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+
+    .sticky-nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      gap: 4px;
+      margin: 14px 0 32px;
+      padding: 7px;
+      border: 1px solid var(--line);
+      background: rgba(23, 33, 48, .92);
+      backdrop-filter: blur(14px);
+    }
+    .sticky-nav a { padding: 8px 13px; color: var(--muted); font: 700 11px/1 var(--mono); text-decoration: none; text-transform: uppercase; }
+    .sticky-nav a:hover { color: var(--navy); background: var(--navy-soft); }
+
+    section { margin: 0 0 46px; scroll-margin-top: 72px; }
+    .primary-section { margin-bottom: 56px; }
+    .section-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px; align-items: end; }
+    .workspace-note { max-width: 310px; margin: 0 0 22px; padding: 12px 14px; border-left: 3px solid var(--orange); color: var(--muted); background: var(--sheet); font-size: 12px; }
+    .section-kicker { margin: 0 0 6px; color: var(--orange); font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; }
+    h2 { margin: 0; font-size: clamp(25px, 3vw, 39px); letter-spacing: -.035em; }
+    .lede { max-width: 820px; margin: 10px 0 22px; color: var(--muted); }
+
+    .overview-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 16px; }
+    .card { border: 1px solid var(--line); background: var(--sheet); padding: 22px; }
+    .card h3 { margin: 0 0 12px; font-size: 16px; }
+    .plain-list { margin: 0; padding-left: 18px; }
+    .plain-list li + li { margin-top: 8px; }
+    .boundary { border-left: 4px solid var(--orange); }
+
+    .change-view { border: 1px solid var(--line-strong); background: var(--sheet); box-shadow: var(--shadow); }
+    .change-toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 16px;
+      padding: 15px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .search-wrap { position: relative; }
+    .search-wrap span { position: absolute; left: 12px; top: 9px; color: var(--muted); font-family: var(--mono); }
+    #file-search {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px 0 36px;
+      border: 1px solid var(--line-strong);
+      background: var(--rail);
+      color: var(--ink);
+    }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .filter {
+      border: 1px solid var(--line);
+      background: var(--sheet);
+      color: var(--muted);
+      padding: 7px 10px;
+      cursor: pointer;
+      font: 700 10px/1 var(--mono);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .filter[aria-pressed="true"] { color: var(--on-accent); border-color: var(--navy); background: var(--navy); }
+    .change-workspace { display: grid; grid-template-columns: minmax(330px, .72fr) minmax(0, 1.8fr); height: clamp(620px, 72vh, 820px); }
+    .file-rail { border-right: 1px solid var(--line); background: var(--rail); overflow: auto; }
+    .rail-empty { padding: 30px; color: var(--muted); text-align: center; }
+    .dir-group + .dir-group { border-top: 1px solid var(--line); }
+    .dir-label { position: sticky; top: 0; z-index: 2; padding: 9px 13px; color: var(--muted); background: var(--group); font: 700 10px/1.2 var(--mono); }
+    .file-button {
+      width: 100%;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 11px 13px;
+      border: 0;
+      border-top: 1px solid rgba(52, 68, 91, .7);
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+    }
+    .file-button:hover { background: var(--surface); }
+    .file-button[aria-selected="true"] { background: var(--surface); box-shadow: inset 4px 0 0 var(--orange); }
+    .file-button-copy { min-width: 0; display: grid; gap: 4px; }
+    .file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 12px/1.3 var(--mono); }
+    .file-meta { color: var(--muted); font: 700 9px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+    .action-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+    .action-dot.create { background: var(--green); }
+    .action-dot.modify { background: var(--orange); }
+    .action-dot.delete { background: var(--red); }
+    .action-dot.move { background: var(--violet); }
+    .action-dot.untouched { background: var(--navy); }
+
+    .file-inspector { min-width: 0; padding: 28px; overflow: auto; }
+    .inspector-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .path { margin: 0; overflow-wrap: anywhere; font: 700 clamp(16px, 2vw, 22px)/1.3 var(--mono); }
+    .purpose { margin: 8px 0 0; color: var(--muted); }
+    .action-badge { flex: 0 0 auto; padding: 6px 9px; border: 1px solid currentColor; font: 800 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .action-badge.create { color: var(--green); background: var(--green-soft); }
+    .action-badge.modify { color: var(--orange); background: var(--orange-soft); }
+    .action-badge.delete { color: var(--red); background: var(--red-soft); }
+    .action-badge.move { color: var(--violet); background: var(--violet-soft); }
+    .action-badge.untouched { color: var(--navy); background: var(--navy-soft); }
+    .inspector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+    .info-block { border-top: 3px solid var(--navy); padding: 13px 14px 15px; background: var(--surface); }
+    .info-block.no { border-top-color: var(--red); }
+    .info-block h4 { margin: 0 0 8px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .info-block ul { margin: 0; padding-left: 18px; font-size: 13px; }
+    .info-block li + li { margin-top: 6px; }
+    .symbol-row, .trace-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+    .token { padding: 5px 8px; border: 1px solid var(--line); background: var(--rail); font: 600 11px/1 var(--mono); overflow-wrap: anywhere; }
+    .trace-token { color: var(--navy); border-color: #3d6a99; background: var(--navy-soft); }
+    .dependency-strip { margin-top: 20px; padding: 14px; border: 1px dashed var(--line-strong); }
+    .dependency-strip b { display: block; margin-bottom: 7px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .dependency-strip p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .timeline { display: grid; gap: 9px; counter-reset: step; }
+    .step { counter-increment: step; display: grid; grid-template-columns: 48px 1fr auto; gap: 16px; align-items: start; padding: 17px; border: 1px solid var(--line); background: var(--sheet); }
+    .step::before { content: counter(step, decimal-leading-zero); color: var(--orange); font: 800 18px/1 var(--mono); }
+    .step b { display: block; margin-bottom: 4px; }
+    .step p { margin: 0; color: var(--muted); }
+    .step code { color: var(--navy); font: 700 11px/1.4 var(--mono); }
+    .acceptance { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .acceptance-item { display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 16px; border: 1px solid #2f6b56; background: var(--green-soft); }
+    .acceptance-item strong { color: var(--green); font-family: var(--mono); }
+    .acceptance-item p { margin: 0; }
+    footer { margin: 50px 0 24px; padding: 18px 0; border-top: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; }
+    footer code { color: var(--navy); }
+
+
+    html { background: var(--paper); }
+    a { color: var(--navy); }
+    ::selection { background: var(--navy-soft); color: var(--ink); }
+    input::placeholder { color: var(--muted); opacity: 1; }
+    code { font-family: var(--mono); font-size: .92em; color: var(--navy); }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); background: var(--sheet); margin-bottom: 18px; }
+    .table-wrap h3 { margin: 0; padding: 12px 14px; font-size: 14px; border-bottom: 1px solid var(--line); }
+    table.contract { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.contract th, table.contract td { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    table.contract th { color: var(--muted); font: 700 10px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; background: var(--surface); }
+    table.contract td:first-child { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+    .decision-list li { margin-top: 6px; }
+    .sticky-nav { overflow-x: auto; }
+    .overview-grid > *, .card, .plain-list li, .lede, .summary, .acceptance-item, .acceptance-item p, .step > div { min-width: 0; overflow-wrap: anywhere; }
+    .acceptance { grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+
+    @media (max-width: 880px) {
+      .shell { width: min(100% - 22px, 1480px); }
+      .masthead-top, .overview-grid, .section-heading { grid-template-columns: 1fr; }
+      .masthead-top { gap: 18px; padding: 22px; }
+      h1 { font-size: clamp(30px, 8vw, 42px); }
+      .phase-card { min-height: 0; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; }
+      .phase-card strong { font-size: 22px; }
+      .metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .metric { padding: 12px 10px; }
+      .metric b { font-size: 20px; }
+      .metric span { font-size: 8px; }
+      .metric { border-bottom: 1px solid var(--line); }
+      .change-toolbar { grid-template-columns: 1fr; }
+      .filters { justify-content: flex-start; }
+      .change-workspace { grid-template-columns: 1fr; height: auto; }
+      .file-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: 330px; }
+      .inspector-grid, .acceptance { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 42px 1fr; }
+      .step code { grid-column: 2; }
+    }
+
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body data-template="false">
+  <div class="shell">
+    <header class="masthead" id="overview">
+      <div class="masthead-top">
+        <div>
+          <p class="crumb" id="doc-crumb">Module · Work item · LLD</p>
+          <h1 id="doc-title">File change plan</h1>
+          <p class="summary" id="doc-summary"></p>
+        </div>
+        <div class="phase-card">
+          <span>Design state</span>
+          <strong>LLD</strong>
+          <small id="doc-status">candidate</small>
+        </div>
+      </div>
+      <div class="metrics" id="metrics" aria-label="File change totals"></div>
+    </header>
+
+    <nav class="sticky-nav" aria-label="Document sections">
+      <a href="#file-changes">File changes</a>
+      <a href="#contracts">Contracts</a>
+      <a href="#context">Context</a>
+      <a href="#execution">Build order</a>
+      <a href="#acceptance">Acceptance</a>
+    </nav>
+
+    <main>
+      <section class="primary-section" id="file-changes" aria-labelledby="changes-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Primary implementation plan</p>
+            <h2 id="changes-title">Build the design file by file</h2>
+            <p class="lede">Select a file to see exactly why it changes, what to implement, what must remain stable, and how that file is verified.</p>
+          </div>
+          <p class="workspace-note"><strong>Start here.</strong> Search paths, symbols, or requirement IDs. Use ↑ and ↓ to inspect files without leaving the keyboard.</p>
+        </div>
+        <div class="change-view">
+          <div class="change-toolbar">
+            <label class="search-wrap">
+              <span aria-hidden="true">/</span>
+              <input id="file-search" type="search" placeholder="Find a path, symbol, or requirement" autocomplete="off">
+            </label>
+            <div class="filters" id="filters" aria-label="Filter files by action"></div>
+          </div>
+          <div class="change-workspace">
+            <div class="file-rail" id="file-rail" role="listbox" aria-label="Planned file changes"></div>
+            <article class="file-inspector" id="file-inspector" aria-live="polite"></article>
+          </div>
+        </div>
+      </section>
+
+
+      <section id="contracts" aria-labelledby="contracts-title">
+        <p class="section-kicker">Observable contracts</p>
+        <h2 id="contracts-title">Component APIs, tone maps and decisions</h2>
+        <p class="lede">Prop tables and maps mirrored from LLD.md section 4; decisions from section 10.</p>
+        <div id="contract-tables"></div>
+        <article class="card"><h3>Decisions</h3><ul class="plain-list decision-list" id="decision-list"></ul></article>
+      </section>
+
+      <section id="context" aria-labelledby="scope-title">
+        <p class="section-kicker">Supporting context</p>
+        <h2 id="scope-title">Scope and preserved boundaries</h2>
+        <p class="lede" id="scope-lede"></p>
+        <div class="overview-grid">
+          <article class="card">
+            <h3>In scope</h3>
+            <ul class="plain-list" id="scope-list"></ul>
+          </article>
+          <article class="card boundary">
+            <h3>Preserved boundaries</h3>
+            <ul class="plain-list" id="boundary-list"></ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="execution" aria-labelledby="execution-title">
+        <p class="section-kicker">Dependency order</p>
+        <h2 id="execution-title">Build order</h2>
+        <p class="lede">Each step should leave a locally verifiable result and unblock the next dependency.</p>
+        <div class="timeline" id="timeline"></div>
+      </section>
+
+      <section id="acceptance" aria-labelledby="acceptance-title">
+        <p class="section-kicker">Completion signals</p>
+        <h2 id="acceptance-title">Acceptance</h2>
+        <p class="lede">Every signal traces back to the canonical LLD and names an observable result.</p>
+        <div class="acceptance" id="acceptance-list"></div>
+      </section>
+    </main>
+
+    <footer>LLD.md is authoritative. This HTML is its presentation mirror. Source: <code>LLD.md</code> in this directory.</footer>
+  </div>
+
+  <script>
+    const LLD_DOCUMENT = {
+  "meta": {
+    "crumb": "Studio frontend · Work items · Ticket 12 · LLD",
+    "title": "WorkItemKey and WorkItemListRow",
+    "summary": "Add WorkItemKey and WorkItemListRow to features/work-items, render child issues, review findings and the work-item search list through the row, make the Stories-tree label use WorkItemKey, and replace the tinted finding-state pill with the square state chip.",
+    "status": "implementation-ready · stamped"
+  },
+  "scope": {
+    "lede": "Change boundary from LLD.md section 2. Builds on ticket 11 StatusDot and Chip (preflight P-1).",
+    "in": [
+      "Create WorkItemKey and WorkItemListRow with colocated tests; export from features/work-items/index.ts",
+      "ChildIssues, FindingsPanel and WorkItemSearchList use WorkItemListRow; delete private Identifier",
+      "Finding state becomes Chip size=sm with dotColor (square state chip)",
+      "WorkItemRowLabel renders its key via WorkItemKey; identifier -> sequenceId along PlanningRowView/TaskRow/ConversationRows"
+    ],
+    "boundaries": [
+      "Stories-tree label structure, classes, token hook and colour rule unchanged (overhaulWorkItemRowAcceptance)",
+      "All child-issue and finding data-testid hooks and accessible names preserved",
+      "IssueDetail, ParentPicker, Breadcrumb, BlockerChipView identifier renderers untouched",
+      "PopoverOption (07), headings/empty states (10), inputs (06), Cancel button (05) untouched",
+      "PlanningRowView not rewritten; only one prop renamed"
+    ]
+  },
+  "files": [
+    {
+      "id": "F1",
+      "path": "studio/src/features/work-items/WorkItemKey.tsx",
+      "action": "create",
+      "layer": "feature ui",
+      "purpose": "Formatted work-item key in the single shared key style, optionally state-coloured.",
+      "symbols": [
+        "WorkItemKey",
+        "sequenceId",
+        "stateColor",
+        "variant: cell | inline"
+      ],
+      "responsibilities": [
+        "Format with formatWorkItemDisplayIdentifier (T-<n> or empty)",
+        "One span[data-task-id-token] with only the identifier text",
+        "stateColor truthy -> inline style.color, else text-text-muted",
+        "cell: w-20 flex-none font-mono text-xs; renders empty span when no id",
+        "inline: inherits face/size; returns null when no id"
+      ],
+      "nonResponsibilities": [
+        "No fallback-text prop (callers compose stubs)",
+        "Never renders T-null / T-undefined"
+      ],
+      "implementation": [
+        "Implement per LLD 4.1"
+      ],
+      "verification": [
+        "WorkItemKey.test.tsx"
+      ],
+      "dependencies": "Lands first (S1). Depends on displayIdentifier.ts only.",
+      "tests": [
+        "WorkItemKey.test.tsx"
+      ],
+      "trace": [
+        "D-2",
+        "D-3",
+        "AC-1"
+      ]
+    },
+    {
+      "id": "F2",
+      "path": "studio/src/features/work-items/WorkItemKey.test.tsx",
+      "action": "create",
+      "layer": "test",
+      "purpose": "Behaviour test for WorkItemKey.",
+      "symbols": [
+        "WorkItemKey"
+      ],
+      "responsibilities": [
+        "sequenceId 7 -> T-7",
+        "null + inline -> renders nothing",
+        "null + cell -> no T- text",
+        "stateColor -> style color; absent -> none",
+        "carries data-task-id-token"
+      ],
+      "nonResponsibilities": [
+        "No class-string assertions"
+      ],
+      "implementation": [
+        "vitest + @testing-library/react"
+      ],
+      "verification": [
+        "npx vitest run src/features/work-items/WorkItemKey.test.tsx"
+      ],
+      "dependencies": "Depends on F1.",
+      "tests": [
+        "self"
+      ],
+      "trace": [
+        "AC-1"
+      ]
+    },
+    {
+      "id": "F3",
+      "path": "studio/src/features/work-items/WorkItemListRow.tsx",
+      "action": "create",
+      "layer": "feature ui",
+      "purpose": "One work-item row: optional state StatusDot, key cell, name, trailing slot; list or option variant.",
+      "symbols": [
+        "WorkItemListRow",
+        "sequenceId",
+        "name",
+        "stateColor",
+        "variant: list | option",
+        "onClick",
+        "selected",
+        "trailing",
+        "data-testid"
+      ],
+      "responsibilities": [
+        "list root div: flex items-center gap-2.5 border-b border-pane-border/60 px-3 py-2 last:border-b-0 hover:bg-pane-title (+ bg-pane-title when selected)",
+        "list primary: button type=button (onClick) or span, flex min-w-0 flex-1 items-center gap-2.5 text-left; aria-current=true when selected",
+        "option root span: flex min-w-0 flex-1 items-center gap-2; no button",
+        "Order: StatusDot (only when stateColor prop present) -> WorkItemKey cell -> name -> trailing",
+        "trailing always outside the button"
+      ],
+      "nonResponsibilities": [
+        "onClick/selected only on list (typed)",
+        "option relies on PopoverOption for hover/selection (ticket 07)",
+        "Name in option inherits colour so the selected accent applies"
+      ],
+      "implementation": [
+        "Implement per LLD 4.2 using StatusDot from shared/ui (ticket 11)"
+      ],
+      "verification": [
+        "WorkItemListRow.test.tsx"
+      ],
+      "dependencies": "Depends on F1 and ticket 11 StatusDot (P-1).",
+      "tests": [
+        "WorkItemListRow.test.tsx"
+      ],
+      "trace": [
+        "D-4",
+        "D-5",
+        "AC-1"
+      ]
+    },
+    {
+      "id": "F4",
+      "path": "studio/src/features/work-items/WorkItemListRow.test.tsx",
+      "action": "create",
+      "layer": "test",
+      "purpose": "Behaviour test for WorkItemListRow.",
+      "symbols": [
+        "WorkItemListRow"
+      ],
+      "responsibilities": [
+        "Button named /T-7 Alpha/ fires onClick",
+        "trailing renders outside the button; trailing button click does not fire onClick",
+        "selected -> aria-current=true",
+        "no onClick -> no button role",
+        "option variant renders key + name and no button",
+        "null sequenceId -> no T-null"
+      ],
+      "nonResponsibilities": [
+        "No class-string assertions"
+      ],
+      "implementation": [
+        "vitest + @testing-library/react"
+      ],
+      "verification": [
+        "npx vitest run src/features/work-items/WorkItemListRow.test.tsx"
+      ],
+      "dependencies": "Depends on F3.",
+      "tests": [
+        "self"
+      ],
+      "trace": [
+        "AC-1"
+      ]
+    },
+    {
+      "id": "F5",
+      "path": "studio/src/features/work-items/index.ts",
+      "action": "modify",
+      "layer": "feature api",
+      "purpose": "Export both components from the feature surface.",
+      "symbols": [
+        "WorkItemKey",
+        "WorkItemListRow"
+      ],
+      "responsibilities": [
+        "export { WorkItemKey } from ./WorkItemKey",
+        "export { WorkItemListRow } from ./WorkItemListRow"
+      ],
+      "nonResponsibilities": [
+        "Existing exports unchanged"
+      ],
+      "implementation": [
+        "Two lines next to the WorkItemSearchList export"
+      ],
+      "verification": [
+        "npm run typecheck"
+      ],
+      "dependencies": "Depends on F1, F3.",
+      "tests": [
+        "typecheck"
+      ],
+      "trace": [
+        "D-1",
+        "AC-1"
+      ]
+    },
+    {
+      "id": "F6",
+      "path": "studio/src/features/work-items/WorkItemSearchList.tsx",
+      "action": "modify",
+      "layer": "feature ui",
+      "purpose": "Search list options render through WorkItemListRow; private Identifier deleted.",
+      "symbols": [
+        "Identifier (deleted)",
+        "taskLeading (removed)",
+        "taskStateColor",
+        "PopoverOption"
+      ],
+      "responsibilities": [
+        "Module option: PopoverOption > WorkItemListRow variant=option sequenceId={m.sequence_id} name={m.name}",
+        "Task option: PopoverOption > WorkItemListRow variant=option ... stateColor={taskStateColor?.(t)}",
+        "Prop taskLeading?: (task) => ReactNode replaced by taskStateColor?: (task) => string"
+      ],
+      "nonResponsibilities": [
+        "Filtering, empty row, GroupHeading (ticket 10) and PopoverOption (ticket 07) unchanged"
+      ],
+      "implementation": [
+        "Delete Identifier :106-112 and the formatWorkItemDisplayIdentifier import; keep ReactNode for GroupHeading"
+      ],
+      "verification": [
+        "WorkItemSearchList.test.tsx unchanged",
+        "overhaulReparentConvergenceAcceptance (/Module 2/)"
+      ],
+      "dependencies": "Depends on F3.",
+      "tests": [
+        "WorkItemSearchList.test.tsx",
+        "overhaulReparentConvergenceAcceptance"
+      ],
+      "trace": [
+        "D-4",
+        "AC-2"
+      ]
+    },
+    {
+      "id": "F7",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/fields/BlockerPicker.tsx",
+      "action": "modify",
+      "layer": "app ui",
+      "purpose": "Pass state colour instead of a leading element.",
+      "symbols": [
+        "taskStateColor"
+      ],
+      "responsibilities": [
+        "taskStateColor={(c) => stateColor(stateById(states, c.state))}"
+      ],
+      "nonResponsibilities": [
+        "Cycle filtering unchanged"
+      ],
+      "implementation": [
+        "Replace taskLeading; drop StatusDot import"
+      ],
+      "verification": [
+        "overhaulTaskWorkspaceIdentifierAcceptance"
+      ],
+      "dependencies": "Depends on F6.",
+      "tests": [
+        "overhaulTaskWorkspaceIdentifierAcceptance"
+      ],
+      "trace": [
+        "AC-2"
+      ]
+    },
+    {
+      "id": "F8",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/ChildIssues.tsx",
+      "action": "modify",
+      "layer": "app ui",
+      "purpose": "Child rows render through WorkItemListRow.",
+      "symbols": [
+        "WorkItemListRow"
+      ],
+      "responsibilities": [
+        "WorkItemListRow key sequenceId={c.sequence_id} name={c.name} stateColor={stateColor(stateById(states, c.state))} onClick={() => void selectTask(c.id)}"
+      ],
+      "nonResponsibilities": [
+        "Header, empty state (ticket 10) and add-subtask form (ticket 06) unchanged",
+        "data-testid child-issues, add-subtask, add-subtask-type unchanged",
+        "Row button name still contains key and name"
+      ],
+      "implementation": [
+        "Replace :43-59 map body; drop formatWorkItemDisplayIdentifier and StatusDot imports"
+      ],
+      "verification": [
+        "overhaulTaskWorkspaceIdentifierAcceptance:111-115",
+        "e2e web-app.spec.ts:774,1757,4014-4037"
+      ],
+      "dependencies": "Depends on F3.",
+      "tests": [
+        "overhaulTaskWorkspaceIdentifierAcceptance"
+      ],
+      "trace": [
+        "AC-2"
+      ]
+    },
+    {
+      "id": "F9",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/FindingsPanel.tsx",
+      "action": "modify",
+      "layer": "app ui",
+      "purpose": "Finding rows on WorkItemListRow with the square state chip.",
+      "symbols": [
+        "WorkItemListRow",
+        "Chip dotColor",
+        "FindingLocationLabel"
+      ],
+      "responsibilities": [
+        "WorkItemListRow data-testid=finding-row sequenceId name onClick (no stateColor)",
+        "trailing: FindingLocationLabel -> Chip size=sm dotColor={stateColor(state)} data-testid=finding-state {stateLabel(state)} -> unchanged Cancel button",
+        "finding-state text equals the state label exactly"
+      ],
+      "nonResponsibilities": [
+        "findings-panel, findings-list, finding-cancel, finding-location, findings-queued-count unchanged",
+        "Cancel label Cancel <key> / Cancel finding unchanged",
+        "Tinted inline-style pill deleted"
+      ],
+      "implementation": [
+        "Replace :51-92 row markup; keep formatWorkItemDisplayIdentifier for the Cancel label"
+      ],
+      "verification": [
+        "overhaulTaskWorkspaceIdentifierAcceptance:117-131",
+        "e2e web-app.spec.ts:1575-1600"
+      ],
+      "dependencies": "Depends on F3 and ticket 11 Chip.",
+      "tests": [
+        "overhaulTaskWorkspaceIdentifierAcceptance"
+      ],
+      "trace": [
+        "D-5",
+        "D-7",
+        "AC-2",
+        "AC-5"
+      ]
+    },
+    {
+      "id": "F10",
+      "path": "studio/src/app/shell/ticket-workspace/tasks/components/WorkItemRowLabel.tsx",
+      "action": "modify",
+      "layer": "app ui",
+      "purpose": "Stories-tree label renders its key through WorkItemKey.",
+      "symbols": [
+        "WorkItemRowLabel",
+        "sequenceId",
+        "WorkItemKey variant=inline"
+      ],
+      "responsibilities": [
+        "Props { sequenceId: number | null; stateColor: string | null; name: string }",
+        "sequenceId != null -> WorkItemKey inline + muted ' · ' span; else name alone"
+      ],
+      "nonResponsibilities": [
+        "span[data-task-label] min-w-0 flex-1 truncate unchanged",
+        "span[data-task-name] font-mono font-normal unchanged",
+        "Only the key carries state colour"
+      ],
+      "implementation": [
+        "Swap identifier prop for sequenceId; import WorkItemKey from features/work-items; update doc comment"
+      ],
+      "verification": [
+        "overhaulWorkItemRowAcceptance unchanged",
+        "overhaulDescriptionSelectionAcceptance:76"
+      ],
+      "dependencies": "Depends on F1, F5.",
+      "tests": [
+        "overhaulWorkItemRowAcceptance"
+      ],
+      "trace": [
+        "AC-3"
+      ]
+    },
+    {
+      "id": "F11",
+      "path": "studio/src/app/shell/ticket-workspace/tasks/components/PlanningRowView.tsx",
+      "action": "modify",
+      "layer": "app ui",
+      "purpose": "Prop rename only: identifier -> sequenceId.",
+      "symbols": [
+        "PlanningRowViewProps.sequenceId"
+      ],
+      "responsibilities": [
+        "sequenceId: number | null forwarded to WorkItemRowLabel"
+      ],
+      "nonResponsibilities": [
+        "Row, drag, caret, badges, trailing untouched (no rewrite)"
+      ],
+      "implementation": [
+        "Edit :30, :51, :115"
+      ],
+      "verification": [
+        "Stories-pane suites"
+      ],
+      "dependencies": "Depends on F10.",
+      "tests": [
+        "overhaulStoryReorderAcceptance"
+      ],
+      "trace": [
+        "D-6",
+        "AC-3"
+      ]
+    },
+    {
+      "id": "F12",
+      "path": "studio/src/app/shell/ticket-workspace/tasks/components/TaskRow.tsx",
+      "action": "modify",
+      "layer": "app ui",
+      "purpose": "Pass sequence id instead of formatted string.",
+      "symbols": [
+        "sequenceId"
+      ],
+      "responsibilities": [
+        ":91 sequenceId={task.sequence_id}"
+      ],
+      "nonResponsibilities": [
+        "Everything else unchanged"
+      ],
+      "implementation": [
+        "Edit :91; remove formatWorkItemDisplayIdentifier import :2"
+      ],
+      "verification": [
+        "Stories-pane suites"
+      ],
+      "dependencies": "Depends on F11.",
+      "tests": [
+        "overhaulWorkItemRowAcceptance"
+      ],
+      "trace": [
+        "D-6",
+        "AC-3"
+      ]
+    },
+    {
+      "id": "F13",
+      "path": "studio/src/app/shell/ticket-workspace/tasks/components/ConversationRows.tsx",
+      "action": "modify",
+      "layer": "app ui",
+      "purpose": "Prop rename at the two PlanningRowView call sites.",
+      "symbols": [
+        "sequenceId={null}"
+      ],
+      "responsibilities": [
+        ":58 and :132 identifier=\"\" -> sequenceId={null}"
+      ],
+      "nonResponsibilities": [
+        "Provider swatch untouched (LLD 11 U1)",
+        "label override unchanged"
+      ],
+      "implementation": [
+        "Two attribute edits"
+      ],
+      "verification": [
+        "overhaulWorkItemRowAcceptance:76-77",
+        "overhaulScratchAcceptance",
+        "overhaulInstantTicketsAcceptance"
+      ],
+      "dependencies": "Depends on F11.",
+      "tests": [
+        "overhaulScratchAcceptance"
+      ],
+      "trace": [
+        "D-6",
+        "AC-3"
+      ]
+    },
+    {
+      "id": "U1",
+      "path": "studio/src/features/work-items/displayIdentifier.ts",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "formatWorkItemDisplayIdentifier stays the single formatter and public export.",
+      "symbols": [
+        "formatWorkItemDisplayIdentifier"
+      ],
+      "responsibilities": [
+        "Single formatter"
+      ],
+      "nonResponsibilities": [
+        "No change"
+      ],
+      "implementation": [
+        "No change"
+      ],
+      "verification": [
+        "n/a"
+      ],
+      "dependencies": "Boundary.",
+      "tests": [
+        "existing suites"
+      ],
+      "trace": [
+        "INV"
+      ]
+    },
+    {
+      "id": "U2",
+      "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/Breadcrumb.tsx",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "issue-identifier is a text-primary crumb, not a key cell; IssueDetail, ParentPicker and BlockerChipView compose strings and stay too.",
+      "symbols": [
+        "Breadcrumb",
+        "IssueDetail:241",
+        "ParentPicker:54",
+        "BlockerChipView:23"
+      ],
+      "responsibilities": [
+        "Checked; string composition or crumb styling"
+      ],
+      "nonResponsibilities": [
+        "Not migrated"
+      ],
+      "implementation": [
+        "No change"
+      ],
+      "verification": [
+        "n/a"
+      ],
+      "dependencies": "Boundary.",
+      "tests": [
+        "existing suites"
+      ],
+      "trace": [
+        "INV"
+      ]
+    },
+    {
+      "id": "U3",
+      "path": "studio/src/shared/ui/Popover.tsx",
+      "action": "untouched",
+      "layer": "boundary",
+      "purpose": "PopoverOption owned by ticket 07.",
+      "symbols": [
+        "PopoverOption"
+      ],
+      "responsibilities": [
+        "Option row wrapper"
+      ],
+      "nonResponsibilities": [
+        "Not touched here"
+      ],
+      "implementation": [
+        "No change"
+      ],
+      "verification": [
+        "n/a"
+      ],
+      "dependencies": "Boundary.",
+      "tests": [
+        "existing suites"
+      ],
+      "trace": [
+        "D-4"
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "title": "WorkItemKey props · features/work-items/WorkItemKey.tsx",
+      "headers": [
+        "Prop",
+        "Type",
+        "Default",
+        "Behaviour"
+      ],
+      "rows": [
+        [
+          "sequenceId",
+          "number | null | undefined",
+          "required",
+          "formatWorkItemDisplayIdentifier -> T-<n> or empty"
+        ],
+        [
+          "stateColor",
+          "string | null",
+          "—",
+          "Truthy -> inline style.color; else text-text-muted"
+        ],
+        [
+          "variant",
+          "cell | inline",
+          "cell",
+          "cell w-20 flex-none font-mono text-xs (empty span kept); inline inherits, null when empty"
+        ],
+        [
+          "(render)",
+          "span[data-task-id-token]",
+          "",
+          "Only the identifier text"
+        ]
+      ]
+    },
+    {
+      "title": "WorkItemListRow props · features/work-items/WorkItemListRow.tsx",
+      "headers": [
+        "Prop",
+        "Type",
+        "Default",
+        "Behaviour"
+      ],
+      "rows": [
+        [
+          "sequenceId",
+          "number | null | undefined",
+          "required",
+          "WorkItemKey variant=cell"
+        ],
+        [
+          "name",
+          "string",
+          "required",
+          "min-w-0 flex-1 truncate (+ text-base text-text-primary in list)"
+        ],
+        [
+          "stateColor",
+          "string | null",
+          "—",
+          "Present -> leading StatusDot color (null -> muted); absent -> no dot"
+        ],
+        [
+          "variant",
+          "list | option",
+          "list",
+          "list = bordered row; option = bare content inside PopoverOption"
+        ],
+        [
+          "onClick",
+          "() => void",
+          "—",
+          "list only; primary region is a button"
+        ],
+        [
+          "selected",
+          "boolean",
+          "false",
+          "list only; root bg-pane-title, button aria-current=true"
+        ],
+        [
+          "trailing",
+          "ReactNode",
+          "—",
+          "Sibling after the primary region, never inside the button"
+        ],
+        [
+          "data-testid",
+          "string",
+          "—",
+          "Forwarded to root"
+        ]
+      ]
+    },
+    {
+      "title": "Changed internal props",
+      "headers": [
+        "Component",
+        "Before",
+        "After"
+      ],
+      "rows": [
+        [
+          "WorkItemSearchList",
+          "taskLeading?: (task) => ReactNode",
+          "taskStateColor?: (task) => string"
+        ],
+        [
+          "WorkItemRowLabel",
+          "identifier: string",
+          "sequenceId: number | null"
+        ],
+        [
+          "PlanningRowViewProps",
+          "identifier: string",
+          "sequenceId: number | null"
+        ]
+      ]
+    },
+    {
+      "title": "Deliberate visible changes (LLD.md 2.4)",
+      "headers": [
+        "Surface",
+        "Before",
+        "After"
+      ],
+      "rows": [
+        [
+          "Finding state",
+          "state-colour text on 13% tint",
+          "Chip size=sm neutral with state-colour StatusDot (square state chip)"
+        ],
+        [
+          "Finding location",
+          "inside select button (in its name)",
+          "trailing slot, outside the button"
+        ],
+        [
+          "Search-list module name",
+          "truncate",
+          "min-w-0 flex-1 truncate"
+        ]
+      ]
+    }
+  ],
+  "decisions": [
+    "D-1 Components live at the features/work-items root beside WorkItemSearchList and FindingLocationLabel; named exports via index.ts.",
+    "D-2 WorkItemKey takes sequenceId and formats itself; no fallback prop; cell keeps an empty column, inline renders nothing.",
+    "D-3 WorkItemKey always carries data-task-id-token.",
+    "D-4 WorkItemListRow variant list | option; option keeps the search list on PopoverOption (ticket 07) without nested buttons.",
+    "D-5 Trailing content is always outside the select button.",
+    "D-6 Tree label input becomes sequenceId along PlanningRowView, TaskRow, ConversationRows (rename only).",
+    "D-7 Finding state is Chip size=sm with dotColor; findings rows pass no stateColor so the square appears once."
+  ],
+  "execution": [
+    {
+      "title": "S1 · Components",
+      "detail": "F1-F5: WorkItemKey, WorkItemListRow, tests, index exports. Preflight P-1 ticket 11 landed, P-2 baseline green.",
+      "gate": "vitest WorkItemKey + WorkItemListRow tests"
+    },
+    {
+      "title": "S2 · Search list",
+      "detail": "F6-F7: options via WorkItemListRow variant=option; taskLeading -> taskStateColor; delete Identifier.",
+      "gate": "rg 'function Identifier|taskLeading' empty"
+    },
+    {
+      "title": "S3 · Detail rows",
+      "detail": "F8-F9: ChildIssues and FindingsPanel on WorkItemListRow; square state chip.",
+      "gate": "rg 'w-20 flex-none font-mono' only in WorkItemKey.tsx"
+    },
+    {
+      "title": "S4 · Tree label",
+      "detail": "F10-F13: WorkItemRowLabel uses WorkItemKey; sequenceId rename.",
+      "gate": "Stories-pane suites unchanged"
+    },
+    {
+      "title": "S5 · Full gates",
+      "detail": "Run all gates.",
+      "gate": "typecheck · studio tests · test:overhaul"
+    }
+  ],
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "text": "Both components exported from features/work-items/index.ts with tests (key fallback, trailing slot, selected) — S1."
+    },
+    {
+      "id": "AC-2",
+      "text": "ChildIssues, FindingsPanel and WorkItemSearchList use WorkItemListRow; Identifier deleted — S2/S3."
+    },
+    {
+      "id": "AC-3",
+      "text": "WorkItemRowLabel renders its key via WorkItemKey; Stories-pane tests pass unchanged — S4."
+    },
+    {
+      "id": "AC-4",
+      "text": "npm run typecheck, studio tests and test:overhaul pass — S5."
+    },
+    {
+      "id": "AC-5",
+      "text": "Square state chip is the single state style; FindingsPanel has no inline style; finding-state is a Chip with dotColor — S3."
+    }
+  ]
+};
+
+    const actionLabels = { all: "All", create: "Create", modify: "Modify", delete: "Delete", move: "Move", untouched: "Untouched" };
+    const state = { action: "all", query: "", selected: null };
+
+    const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+    const directory = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ".";
+    const basename = path => path.slice(path.lastIndexOf("/") + 1);
+    const list = items => `<ul>${(items || []).map(item => `<li>${esc(item)}</li>`).join("")}</ul>`;
+    const tokens = (items, extra = "") => (items || []).map(item => `<span class="token ${extra}">${esc(item)}</span>`).join("");
+
+    function visibleFiles() {
+      const needle = state.query.trim().toLowerCase();
+      return LLD_DOCUMENT.files.filter(file => {
+        const actionMatch = state.action === "all" || file.action === state.action;
+        const haystack = [file.path, file.layer, file.purpose, ...(file.symbols || []), ...(file.responsibilities || []), ...(file.implementation || []), ...(file.verification || []), ...(file.trace || [])].join(" ").toLowerCase();
+        return actionMatch && (!needle || haystack.includes(needle));
+      });
+    }
+
+    function renderHeader() {
+      document.getElementById("doc-crumb").textContent = LLD_DOCUMENT.meta.crumb;
+      document.getElementById("doc-title").textContent = LLD_DOCUMENT.meta.title;
+      document.getElementById("doc-summary").textContent = LLD_DOCUMENT.meta.summary;
+      document.getElementById("doc-status").textContent = LLD_DOCUMENT.meta.status;
+      document.getElementById("scope-lede").textContent = LLD_DOCUMENT.scope.lede;
+      document.getElementById("scope-list").innerHTML = LLD_DOCUMENT.scope.in.map(item => `<li>${esc(item)}</li>`).join("");
+      document.getElementById("boundary-list").innerHTML = LLD_DOCUMENT.scope.boundaries.map(item => `<li>${esc(item)}</li>`).join("");
+      const counts = Object.keys(actionLabels).filter(action => action !== "all").map(action => ({ action, count: LLD_DOCUMENT.files.filter(file => file.action === action).length }));
+      document.getElementById("metrics").innerHTML = counts.map(item => `<div class="metric"><b>${item.count}</b><span>${actionLabels[item.action]}</span></div>`).join("");
+    }
+
+    function renderFilters() {
+      const actions = ["all", ...new Set(LLD_DOCUMENT.files.map(file => file.action))];
+      document.getElementById("filters").innerHTML = actions.map(action => `<button class="filter" type="button" data-action="${action}" aria-pressed="${state.action === action}">${actionLabels[action] || action}</button>`).join("");
+      document.querySelectorAll(".filter").forEach(button => button.addEventListener("click", () => {
+        state.action = button.dataset.action;
+        renderFilters();
+        renderFiles();
+      }));
+    }
+
+    function renderFiles() {
+      const files = visibleFiles();
+      if (!files.some(file => file.id === state.selected)) state.selected = files[0]?.id || null;
+      const groups = Map.groupBy ? Map.groupBy(files, file => directory(file.path)) : files.reduce((map, file) => map.set(directory(file.path), [...(map.get(directory(file.path)) || []), file]), new Map());
+      const rail = document.getElementById("file-rail");
+      rail.innerHTML = files.length ? [...groups.entries()].map(([dir, entries]) => `<div class="dir-group"><div class="dir-label">${esc(dir)}</div>${entries.map(file => `<button class="file-button" type="button" role="option" data-file="${esc(file.id)}" aria-selected="${file.id === state.selected}"><span class="action-dot ${esc(file.action)}" aria-hidden="true"></span><span class="file-button-copy"><span class="file-name">${esc(basename(file.path))}</span><span class="file-meta">${esc(actionLabels[file.action] || file.action)} · ${esc(file.layer)}</span></span></button>`).join("")}</div>`).join("") : `<div class="rail-empty">No files match this view.</div>`;
+      rail.querySelectorAll(".file-button").forEach(button => {
+        button.addEventListener("click", () => selectFile(button.dataset.file));
+        button.addEventListener("keydown", event => navigateFiles(event, button.dataset.file));
+      });
+      renderInspector();
+    }
+
+    function selectFile(id) {
+      state.selected = id;
+      document.querySelectorAll(".file-button").forEach(button => button.setAttribute("aria-selected", String(button.dataset.file === id)));
+      renderInspector();
+      history.replaceState(null, "", `#file:${encodeURIComponent(id)}`);
+    }
+
+    function navigateFiles(event, id) {
+      if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+      event.preventDefault();
+      const files = visibleFiles();
+      const index = files.findIndex(file => file.id === id);
+      const next = event.key === 'ArrowDown' ? Math.min(index + 1, files.length - 1) : Math.max(index - 1, 0);
+      state.selected = files[next]?.id || id;
+      renderFiles();
+      document.querySelector(`[data-file="${CSS.escape(state.selected)}"]`)?.focus();
+    }
+
+    function renderInspector() {
+      const file = LLD_DOCUMENT.files.find(entry => entry.id === state.selected);
+      const inspector = document.getElementById("file-inspector");
+      if (!file) { inspector.innerHTML = `<p class="rail-empty">Choose a file to inspect.</p>`; return; }
+      inspector.innerHTML = `
+        <div class="inspector-head">
+          <div><h3 class="path">${esc(file.path)}</h3><p class="purpose">${esc(file.purpose)}</p></div>
+          <span class="action-badge ${esc(file.action)}">${esc(actionLabels[file.action] || file.action)}</span>
+        </div>
+        <div class="symbol-row" aria-label="Symbols">${tokens(file.symbols)}</div>
+        <div class="inspector-grid">
+          <div class="info-block"><h4>Responsibilities</h4>${list(file.responsibilities)}</div>
+          <div class="info-block no"><h4>Preserved boundary</h4>${list(file.nonResponsibilities)}</div>
+          <div class="info-block"><h4>Implementation</h4>${list(file.implementation)}</div>
+          <div class="info-block"><h4>Verification</h4>${list(file.verification)}</div>
+        </div>
+        <div class="dependency-strip"><b>Dependency position</b><p>${esc(file.dependencies)}</p></div>
+        <div class="trace-row" aria-label="Tests and requirement trace">${tokens(file.tests)}${tokens(file.trace, "trace-token")}</div>`;
+    }
+
+    function renderTimeline() {
+      document.getElementById("timeline").innerHTML = LLD_DOCUMENT.execution.map(step => `<article class="step"><div><b>${esc(step.title)}</b><p>${esc(step.detail)}</p></div><code>${esc(step.gate)}</code></article>`).join("");
+      document.getElementById("acceptance-list").innerHTML = LLD_DOCUMENT.acceptance.map(item => `<article class="acceptance-item"><strong>${esc(item.id)}</strong><p>${esc(item.text)}</p></article>`).join("");
+    }
+
+
+    function renderContracts() {
+      document.getElementById("contract-tables").innerHTML = LLD_DOCUMENT.contracts.map(table => `<div class="table-wrap"><h3>${esc(table.title)}</h3><table class="contract"><thead><tr>${table.headers.map(h => `<th scope="col">${esc(h)}</th>`).join("")}</tr></thead><tbody>${table.rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`).join("");
+      document.getElementById("decision-list").innerHTML = LLD_DOCUMENT.decisions.map(item => `<li>${esc(item)}</li>`).join("");
+    }
+    window.addEventListener("hashchange", () => {
+      const id = decodeURIComponent(location.hash.replace(/^#file:/, ""));
+      if (location.hash.startsWith("#file:") && LLD_DOCUMENT.files.some(file => file.id === id) && id !== state.selected) { state.selected = id; renderFiles(); }
+    });
+
+    document.getElementById("file-search").addEventListener("input", event => { state.query = event.target.value; renderFiles(); });
+    document.addEventListener("keydown", event => {
+      if (event.key === "/" && document.activeElement !== document.getElementById("file-search")) { event.preventDefault(); document.getElementById("file-search").focus(); }
+      if (event.key === "Escape" && document.activeElement === document.getElementById("file-search")) { state.query = ""; document.getElementById("file-search").value = ""; renderFiles(); }
+    });
+
+    const deepLink = decodeURIComponent(location.hash.replace(/^#file:/, ""));
+    state.selected = LLD_DOCUMENT.files.some(file => file.id === deepLink) ? deepLink : LLD_DOCUMENT.files[0]?.id;
+    renderHeader();
+    renderFilters();
+    renderFiles();
+    renderTimeline();
+    renderContracts();
+  </script>
+</body>
+</html>

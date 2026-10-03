@@ -1,0 +1,41 @@
+{
+  "ticket": "CODING-2514",
+  "state": "Review",
+  "entrypoint_shipped": true,
+  "delivered": [
+    "Public SprintsWorkspace and Plan state/action exports",
+    "Real PlanSprintView with header, epic tabs, story panes, generated normal-story moves and unchanged detail callback",
+    "Default goals editor and persisted agent card list slots",
+    "Cold graph arrival selects next planned sprint; deliberate list navigation cancels default",
+    "Project switching leaves previous workspace without restoring old origin",
+    "Apollo generation/request counters prevent stale completions after leaving and reopening"
+  ],
+  "validation": {
+    "overhaul": "669 passed across 180 files",
+    "final_numbered_gate_and_state": "8 passed, numbered gate current through 452",
+    "feature_boundaries": "8 passed",
+    "typecheck": "passed",
+    "architecture": "passed",
+    "build": "passed",
+    "graphql_drift": "passed",
+    "uuid_cache": "hyphenated/compact share one record; optimistic assignment and rollback passed",
+    "diff_check": "passed"
+  },
+  "logs": {
+    "overhaul": "/private/tmp/2514-delivery-overhaul.log",
+    "typecheck": "/private/tmp/2514-delivery-typecheck.log",
+    "build": "/private/tmp/2514-delivery-build.log",
+    "architecture": "/private/tmp/2514-impl-architecture.log",
+    "registration": "/private/tmp/2514-final-registration.log"
+  },
+  "remaining_sibling_scope": [
+    "Proposal editing",
+    "Add all suggestion action",
+    "Suggestion-specific accept Undo",
+    "Inline new story creation",
+    "Mount Plan/Changes in shell through CODING-2515"
+  ],
+  "coordination": "Prerequisite code delivery recorded on CODING-2518, CODING-2519, CODING-2520. Their workflow states were not changed.",
+  "transition_performed": true,
+  "terminate_current_run_called": false
+}

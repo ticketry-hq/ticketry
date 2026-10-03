@@ -169,3 +169,9 @@ mutation RunWorkTrackerWorkItemNow($idOrKey: String!, $requestIdentity: String!)
     run { target_id agent agent_run_id }
   }
 }
+
+mutation PlanWorkItem($id: String!, $sprintId: String) {
+  update_work_item(id: $id, sprint_id: $sprintId) {
+    ...GeneratedWorkTrackerWorkItemFields
+  }
+}

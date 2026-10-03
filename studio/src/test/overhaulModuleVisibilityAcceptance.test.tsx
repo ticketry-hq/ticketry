@@ -123,7 +123,7 @@ function installVisibilityTransport() {
 }
 
 function tabNames(): string[] {
-  return screen.queryAllByRole("tab").map((tab) => tab.getAttribute("aria-label") ?? "");
+  return screen.queryAllByRole("tab").filter((tab) => tab.hasAttribute("data-module-id")).map((tab) => tab.getAttribute("aria-label") ?? "");
 }
 
 const defaultDeselectModule = useClientStore.getState().deselectModule;
@@ -242,7 +242,7 @@ describe("module tab visibility acceptance", () => {
     expect(
       await screen.findByText("Open the Modules sidebar to restore a module tab."),
     ).toBeVisible();
-    expect(screen.queryByRole("tab")).toBeNull();
+    expect(screen.queryAllByRole("tab").filter((tab) => tab.hasAttribute("data-module-id"))).toEqual([]);
     const openModules = screen.getByRole("button", {
       name: "Open Modules pane",
     });

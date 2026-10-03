@@ -91,7 +91,7 @@ async fn prepare_projects(directory: &Path) {
                 lifecycle_updated_at varchar, design_dir varchar, resumed_from varchar,
                 scope varchar NOT NULL, launch_state varchar, launch_model varchar,
                 initial_prompt text, launch_reasoning varchar,
-                launch_unattended bool NOT NULL DEFAULT 0
+                launch_unattended bool NOT NULL DEFAULT 0, attention_reason text
             );
             INSERT INTO worktracker_project VALUES
                 ('10000000000000000000000000000000',
@@ -117,6 +117,12 @@ async fn prepare_projects(directory: &Path) {
     ticketry_work_management::module_presentation_migration::install(&database)
         .await
         .expect("install final module-presentation shape");
+    let table = sea_orm::Schema::new(sea_orm::DbBackend::Sqlite)
+        .create_table_from_entity(ticketry_entities::app_settings::Entity);
+    database
+        .execute_raw(sea_orm::DbBackend::Sqlite.build(&table))
+        .await
+        .unwrap();
     database.close().await.expect("close MCP fixture writer");
 }
 
@@ -400,7 +406,7 @@ async fn global_connections_read_everything_while_run_connections_stay_scoped() 
     let listed = global
         .request(json!({"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}))
         .await;
-    assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 33);
+    assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 35);
     assert_eq!(listed["result"]["ttlMs"], 0, "{listed:#}");
     assert_eq!(listed["result"]["cacheScope"], "private", "{listed:#}");
     let projects = global.structured(2, "list_projects", json!({})).await;
@@ -621,10 +627,14 @@ fn mcp_dispatch_has_no_backend_http_authorization_path() {
 fn mcp_write_adapters_do_not_own_seaorm_queries_or_domain_sequencing() {
     let dependency = include_str!("dependency_tools.rs");
     let dispatch = include_str!("dispatch.rs");
+    let work_items = include_str!("work_item_tools.rs");
     let workflow = include_str!("workflow_tools.rs");
     for (name, source) in [
         ("dependency_tools.rs", dependency),
         ("dispatch.rs", dispatch),
+        ("work_item_tools.rs", work_items),
+        ("attachment_tools.rs", include_str!("attachment_tools.rs")),
+        ("launch_tools.rs", include_str!("launch_tools.rs")),
         ("workflow_tools.rs", workflow),
     ] {
         for forbidden in [
@@ -642,7 +652,7 @@ fn mcp_write_adapters_do_not_own_seaorm_queries_or_domain_sequencing() {
     assert!(!dependency.contains("blockers::replace"));
     assert_eq!(dependency.matches("blockers::change(").count(), 2);
 
-    let append = dispatch
+    let append = work_items
         .split("async fn append_description")
         .nth(1)
         .unwrap()
@@ -652,12 +662,9 @@ fn mcp_write_adapters_do_not_own_seaorm_queries_or_domain_sequencing() {
     assert_eq!(append.matches("work_items::append_description(").count(), 1);
     assert!(!append.contains("work_items::update("));
 
-    let finding = dispatch
+    let finding = work_items
         .split("async fn create_review_finding")
         .nth(1)
-        .unwrap()
-        .split("fn hyphenate")
-        .next()
         .unwrap();
     assert_eq!(
         finding

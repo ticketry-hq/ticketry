@@ -8,19 +8,26 @@ use axum::{
 };
 use tauri_graphql::{TransportApi, TransportApiImpl};
 
-use crate::PlannerEndpoint;
+use crate::{PlannerEndpoint, PlannerFrontendOrigin};
 
 #[derive(Clone)]
 struct PlannerHttp {
     api: TransportApiImpl,
     host: String,
     authorization: String,
+    frontend_origin: Option<PlannerFrontendOrigin>,
 }
 
-pub(crate) fn router(api: TransportApiImpl, endpoint: &PlannerEndpoint, host: String) -> Router {
+pub(crate) fn router(
+    api: TransportApiImpl,
+    endpoint: &PlannerEndpoint,
+    host: String,
+    frontend_origin: Option<PlannerFrontendOrigin>,
+) -> Router {
     let state = PlannerHttp {
         api,
         host,
+        frontend_origin,
         authorization: format!("Bearer {}", endpoint.bearer_token),
     };
     Router::new()
@@ -32,7 +39,7 @@ pub(crate) fn router(api: TransportApiImpl, endpoint: &PlannerEndpoint, host: St
 
 async fn admit(State(state): State<PlannerHttp>, request: Request, next: Next) -> Response {
     let headers = request.headers();
-    if !local_request(headers, &state.host) {
+    if !local_request(headers, &state.host, state.frontend_origin.as_ref()) {
         return StatusCode::FORBIDDEN.into_response();
     }
     match *request.method() {
@@ -100,7 +107,11 @@ fn header_value(headers: &HeaderMap, name: header::HeaderName) -> Option<&str> {
     headers.get(name).and_then(|value| value.to_str().ok())
 }
 
-fn local_request(headers: &HeaderMap, host: &str) -> bool {
+fn local_request(
+    headers: &HeaderMap,
+    host: &str,
+    frontend_origin: Option<&PlannerFrontendOrigin>,
+) -> bool {
     if header_value(headers, header::HOST) != Some(host) {
         return false;
     }
@@ -109,11 +120,9 @@ fn local_request(headers: &HeaderMap, host: &str) -> bool {
         Some(origin) => origin.to_str().is_ok_and(|origin| {
             matches!(
                 origin,
-                "tauri://localhost"
-                    | "http://tauri.localhost"
-                    | "https://tauri.localhost"
-                    | "http://127.0.0.1:5174"
-            ) || origin == format!("http://{host}")
+                "tauri://localhost" | "http://tauri.localhost" | "https://tauri.localhost"
+            ) || frontend_origin.is_some_and(|configured| origin == configured.as_str())
+                || origin == format!("http://{host}")
         }),
     }
 }

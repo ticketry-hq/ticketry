@@ -1,3 +1,64 @@
+type AgentExecutions {
+	id: String!
+	agentRunId: String!
+	sprintId: String!
+	outputType: String!
+	goalsRevision: String
+	state: String!
+	error: String
+	cancelRequested: Boolean!
+	createdAt: String!
+	updatedAt: String!
+	agentRun: AgentRuns
+	sprint: WorktrackerSprint
+}
+
+type AgentExecutionsConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [AgentExecutions!]!
+	edges: [AgentExecutionsEdge!]!
+}
+
+type AgentExecutionsEdge {
+	cursor: String!
+	node: AgentExecutions!
+}
+
+input AgentExecutionsFilterInput {
+	id: StringFilterInput
+	agentRunId: StringFilterInput
+	sprintId: StringFilterInput
+	outputType: StringFilterInput
+	goalsRevision: TextFilterInput
+	state: StringFilterInput
+	error: StringFilterInput
+	cancelRequested: BooleanFilterInput
+	createdAt: TextFilterInput
+	updatedAt: TextFilterInput
+	and: [AgentExecutionsFilterInput!]
+	or: [AgentExecutionsFilterInput!]
+	not: AgentExecutionsFilterInput
+}
+
+input AgentExecutionsHavingInput {
+	agentRun: AgentRunsFilterInput
+	sprint: WorktrackerSprintFilterInput
+}
+
+input AgentExecutionsOrderInput {
+	id: OrderByEnum
+	agentRunId: OrderByEnum
+	sprintId: OrderByEnum
+	outputType: OrderByEnum
+	goalsRevision: OrderByEnum
+	state: OrderByEnum
+	error: OrderByEnum
+	cancelRequested: OrderByEnum
+	createdAt: OrderByEnum
+	updatedAt: OrderByEnum
+}
+
 type AgentRunHolding {
 	agent_run_id: String!
 	project_id: String!
@@ -662,6 +723,8 @@ type Mutation {
 	terminal_session_create(client_request_id: String!, project_id: String, issue_id: String, module_id: String!, target_id: String, kind: String!, provider: String, working_directory_identity: String, columns: Int!, rows: Int!, model: String, reasoning: String, policy_reference: String, prompt: String, resume_from_agent_run_id: String, automation_attempt_id: String, required_skills: [String!], design_directory_identity: String, document_relative_path: String): AgentTerminalSessions!
 	terminal_session_update(agent_run_id: String!, termination_request_id: String): AgentTerminalSessions!
 	terminal_output_observe(agent_run_id: String!): TerminalOutputObservation!
+	agent_execution_create(project_id: String!, sprint_id: String!, client_request_id: String!): AgentExecutions!
+	agent_execution_update(project_id: String!, id: String!, cancel_requested: Boolean!): AgentExecutions!
 	run_now(id_or_key: String!, request_identity: String!): RunNowPayload!
 	graph_run_create(root_id: String!, execution_mode: String): GraphRunMutationPayload!
 	graph_run_update(root_id: String!, execution_mode: String): GraphRunMutationPayload!
@@ -765,6 +828,7 @@ type Query {
 	worktrackerReasoninglevel(filters: WorktrackerReasoninglevelFilterInput, having: WorktrackerReasoninglevelHavingInput, orderBy: WorktrackerReasoninglevelOrderInput, pagination: PaginationInput): WorktrackerReasoninglevelConnection!
 	worktrackerTransitionoccurrence(filters: WorktrackerTransitionoccurrenceFilterInput, having: WorktrackerTransitionoccurrenceHavingInput, orderBy: WorktrackerTransitionoccurrenceOrderInput, pagination: PaginationInput): WorktrackerTransitionoccurrenceConnection!
 	shipRecords(filters: ShipRecordsFilterInput, having: ShipRecordsHavingInput, orderBy: ShipRecordsOrderInput, pagination: PaginationInput): ShipRecordsConnection!
+	agentExecutions(filters: AgentExecutionsFilterInput, having: AgentExecutionsHavingInput, orderBy: AgentExecutionsOrderInput, pagination: PaginationInput): AgentExecutionsConnection!
 	graphRuns(filters: GraphRunsFilterInput, having: GraphRunsHavingInput, orderBy: GraphRunsOrderInput, pagination: PaginationInput): GraphRunsConnection!
 	moduleLinks(filters: ModuleLinksFilterInput, having: ModuleLinksHavingInput, orderBy: ModuleLinksOrderInput, pagination: PaginationInput): ModuleLinksConnection!
 	worktrees(filters: WorktreesFilterInput, having: WorktreesHavingInput, orderBy: WorktreesOrderInput, pagination: PaginationInput): WorktreesConnection!

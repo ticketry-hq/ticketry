@@ -6,6 +6,7 @@ import NewSprintButton from "./NewSprintButton";
 import StartSprintDialog from "./StartSprintDialog";
 import CompleteSprintDialog from "./CompleteSprintDialog";
 import { groupSprintItemsByEpic, sprintProgress } from "./selectors/sprintSelectors";
+import { inheritLastPlanVisit } from "./planWorkspaceState";
 
 export type LifecycleUpdate = { id: string; status: "active" | "completed"; carryoverSprintId?: string };
 
@@ -50,7 +51,10 @@ export default function SprintsList({ graph, openStoryId, onOpenStory, onOpenSpr
     <header className="flex flex-wrap items-center gap-3 border-b border-pane-border bg-pane-panel px-4 py-2">
       <h1 className="text-base font-semibold text-text-primary">Sprints</h1>
       <span className="text-sm text-text-muted">{graph.sprints.length}</span>
-      <div className="ml-auto"><NewSprintButton sprints={graph.sprints} onCreate={onCreateSprint} onCreated={onOpenSprint} /></div>
+      <div className="ml-auto"><NewSprintButton sprints={graph.sprints} onCreate={onCreateSprint} onCreated={(id) => {
+        if (graph.project) inheritLastPlanVisit(graph.project.id, id);
+        onOpenSprint(id);
+      }} /></div>
     </header>
     <div className="flex-1 overflow-auto p-4" data-testid="sprints-list"><div className="mx-auto max-w-3xl space-y-3">
       {active && card(active)}

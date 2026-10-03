@@ -15,3 +15,101 @@ mutation UpdateSprint($id: String!, $status: String!, $carryoverSprintId: String
     createdAt
   }
 }
+
+query SprintSuggestions($sprintId: String!) {
+  worktrackerSprintSuggestion(
+    filters: { sprintId: { eq: $sprintId } }
+    orderBy: { createdAt: ASC, id: ASC }
+  ) {
+    nodes {
+      ...SprintSuggestionRecord
+    }
+  }
+}
+
+mutation UpdateSprintSuggestion($id: String!, $status: String!, $proposedName: String) {
+  update_sprint_suggestion(id: $id, status: $status, proposed_name: $proposedName) {
+    ...SprintSuggestionRecord
+  }
+}
+
+fragment SprintSuggestionRecord on WorktrackerSprintSuggestion {
+  __typename
+  id
+  sprintId
+  goalId
+  issueId
+  proposedName
+  proposedEpicId
+  reason
+  status
+  runId
+  createdAt
+  issue {
+    ...SprintSuggestionWorkItem
+  }
+}
+
+fragment SprintSuggestionWorkItem on WorktrackerIssue {
+  __typename
+  id
+  name
+  sequenceId
+  rank
+  parentId
+  moduleId
+  stateId
+  stateRevision
+  sprintId
+  updatedAt
+  issueType {
+    id
+    name
+  }
+}
+
+fragment SprintExecutionRecord on AgentExecutions {
+  __typename
+  id
+  agentRunId
+  sprintId
+  outputType
+  state
+  error
+  cancelRequested
+  goalsRevision
+  createdAt
+  updatedAt
+}
+
+query SprintSuggestionExecution($sprintId: String!) {
+  worktrackerSprint(filters: { id: { eq: $sprintId } }) {
+    nodes {
+      id
+      status
+      goalsRevisedAt
+      suggestionRunId
+      goals { nodes { id text } }
+      suggestions(filters: { status: { eq: "waiting" } }) { nodes { id } }
+    }
+  }
+}
+
+query SprintSuggestionExecutionRun($agentRunId: String!) {
+  agentExecutions(
+    filters: { agentRunId: { eq: $agentRunId } }
+    pagination: { offset: { limit: 1, offset: 0 } }
+  ) { nodes { ...SprintExecutionRecord } }
+}
+
+mutation CreateSprintSuggestionExecution($projectId: String!, $sprintId: String!, $clientRequestId: String!) {
+  agent_execution_create(project_id: $projectId, sprint_id: $sprintId, client_request_id: $clientRequestId) {
+    ...SprintExecutionRecord
+  }
+}
+
+mutation CancelSprintSuggestionExecution($projectId: String!, $id: String!) {
+  agent_execution_update(project_id: $projectId, id: $id, cancel_requested: true) {
+    ...SprintExecutionRecord
+  }
+}

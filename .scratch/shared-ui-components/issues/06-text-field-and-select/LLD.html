@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="lld-source" content="LLD.md">
+  <meta name="lld-source-sha256" content="d87173ee3aedb94a8f1010b81b78efcd0956b709b5484bca92f15ef130ad5ca4">
+  <title>LLD 06 · TextField, TextArea, Select</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --paper: #0e1520;
+      --sheet: #172130;
+      --surface: #202b3b;
+      --rail: #121c29;
+      --group: #263448;
+      --on-accent: #0e1520;
+      --focus: #a7ceff;
+      --ink: #e6edf6;
+      --muted: #a6b5c9;
+      --line: #34445b;
+      --line-strong: #657a96;
+      --navy: #91c4ff;
+      --navy-soft: #203852;
+      --orange: #ffb180;
+      --orange-soft: #422d24;
+      --green: #7bdbb1;
+      --green-soft: #183b32;
+      --red: #ff9eaa;
+      --red-soft: #432731;
+      --violet: #c4b2ff;
+      --violet-soft: #332e4c;
+      --shadow: 0 18px 45px rgba(0, 0, 0, .24);
+      --radius: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--paper); }
+    a { color: var(--navy); }
+    ::selection { background: var(--navy-soft); color: var(--ink); }
+    input::placeholder { color: var(--muted); opacity: 1; }
+    .token, .info-block, .step, .contract-detail { overflow-wrap: anywhere; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(145, 196, 255, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(145, 196, 255, .025) 1px, transparent 1px),
+        var(--paper);
+      background-size: 24px 24px;
+      font-family: var(--sans);
+      line-height: 1.55;
+    }
+
+    button, input { font: inherit; }
+    button:focus-visible, input:focus-visible, a:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .shell { width: min(1480px, calc(100% - 40px)); margin: 0 auto; }
+    .masthead {
+      margin-top: 20px;
+      border: 1px solid var(--line-strong);
+      background: var(--sheet);
+      box-shadow: var(--shadow);
+    }
+    .masthead-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      padding: 22px 30px 20px;
+      border-bottom: 1px solid var(--line);
+    }
+    .crumb {
+      margin: 0 0 12px;
+      color: var(--orange);
+      font: 700 11px/1.2 var(--mono);
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; max-width: 900px; font-size: clamp(28px, 3.4vw, 44px); line-height: .98; letter-spacing: -.045em; }
+    .summary { max-width: 780px; margin: 18px 0 0; color: var(--muted); font-size: 16px; }
+    .phase-card {
+      min-width: 180px;
+      align-self: stretch;
+      display: grid;
+      align-content: space-between;
+      padding: 18px;
+      background: var(--navy);
+      color: var(--on-accent);
+    }
+    .phase-card span { font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; opacity: .68; }
+    .phase-card strong { font-size: 30px; letter-spacing: -.03em; }
+    .phase-card small { font-family: var(--mono); opacity: .78; }
+    .metrics { display: grid; grid-template-columns: repeat(5, 1fr); }
+    .metric { padding: 15px 20px; border-right: 1px solid var(--line); }
+    .metric:last-child { border-right: 0; }
+    .metric b { display: block; font-size: 24px; line-height: 1; }
+    .metric span { color: var(--muted); font: 700 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+
+    .sticky-nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      gap: 4px;
+      margin: 14px 0 24px;
+      padding: 7px;
+      flex-wrap: wrap;
+      border: 1px solid var(--line);
+      background: rgba(23, 33, 48, .92);
+      backdrop-filter: blur(14px);
+    }
+    .sticky-nav a { padding: 8px 13px; color: var(--muted); font: 700 11px/1 var(--mono); text-decoration: none; text-transform: uppercase; }
+    .sticky-nav a:hover { color: var(--navy); background: var(--navy-soft); }
+
+    section { margin: 0 0 46px; scroll-margin-top: 72px; }
+    .primary-section { margin-bottom: 56px; }
+    .section-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px; align-items: end; }
+    .workspace-note { max-width: 310px; margin: 0 0 22px; padding: 12px 14px; border-left: 3px solid var(--orange); color: var(--muted); background: var(--sheet); font-size: 12px; }
+    .section-kicker { margin: 0 0 6px; color: var(--orange); font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; }
+    h2 { margin: 0; font-size: clamp(25px, 3vw, 39px); letter-spacing: -.035em; }
+    .lede { max-width: 820px; margin: 10px 0 22px; color: var(--muted); }
+
+    .overview-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 16px; }
+    .card { border: 1px solid var(--line); background: var(--sheet); padding: 22px; }
+    .card h3 { margin: 0 0 12px; font-size: 16px; }
+    .plain-list { margin: 0; padding-left: 18px; }
+    .plain-list li + li { margin-top: 8px; }
+    .boundary { border-left: 4px solid var(--orange); }
+
+    .change-view { border: 1px solid var(--line-strong); background: var(--sheet); box-shadow: var(--shadow); }
+    .change-toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 16px;
+      padding: 15px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .search-wrap { position: relative; }
+    .search-wrap span { position: absolute; left: 12px; top: 9px; color: var(--muted); font-family: var(--mono); }
+    #file-search {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px 0 36px;
+      border: 1px solid var(--line-strong);
+      background: var(--rail);
+      color: var(--ink);
+    }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .filter {
+      border: 1px solid var(--line);
+      background: var(--sheet);
+      color: var(--muted);
+      padding: 7px 10px;
+      cursor: pointer;
+      font: 700 10px/1 var(--mono);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .filter[aria-pressed="true"] { color: var(--on-accent); border-color: var(--navy); background: var(--navy); }
+    .change-workspace { display: grid; grid-template-columns: minmax(330px, .72fr) minmax(0, 1.8fr); height: clamp(620px, 72vh, 820px); }
+    .file-rail { border-right: 1px solid var(--line); background: var(--rail); overflow: auto; }
+    .rail-empty { padding: 30px; color: var(--muted); text-align: center; }
+    .dir-group + .dir-group { border-top: 1px solid var(--line); }
+    .dir-label { position: sticky; top: 0; z-index: 2; padding: 9px 13px; color: var(--muted); background: var(--group); font: 700 10px/1.2 var(--mono); }
+    .file-button {
+      width: 100%;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 11px 13px;
+      border: 0;
+      border-top: 1px solid rgba(52, 68, 91, .7);
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+    }
+    .file-button:hover { background: var(--surface); }
+    .file-button[aria-selected="true"] { background: var(--surface); box-shadow: inset 4px 0 0 var(--orange); }
+    .file-button-copy { min-width: 0; display: grid; gap: 4px; }
+    .file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 12px/1.3 var(--mono); }
+    .file-meta { color: var(--muted); font: 700 9px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+    .action-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+    .action-dot.create { background: var(--green); }
+    .action-dot.modify { background: var(--orange); }
+    .action-dot.delete { background: var(--red); }
+    .action-dot.move { background: var(--violet); }
+    .action-dot.untouched { background: var(--navy); }
+
+    .file-inspector { min-width: 0; padding: 28px; overflow: auto; }
+    .inspector-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .path { margin: 0; overflow-wrap: anywhere; font: 700 clamp(16px, 2vw, 22px)/1.3 var(--mono); }
+    .purpose { margin: 8px 0 0; color: var(--muted); }
+    .action-badge { flex: 0 0 auto; padding: 6px 9px; border: 1px solid currentColor; font: 800 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .action-badge.create { color: var(--green); background: var(--green-soft); }
+    .action-badge.modify { color: var(--orange); background: var(--orange-soft); }
+    .action-badge.delete { color: var(--red); background: var(--red-soft); }
+    .action-badge.move { color: var(--violet); background: var(--violet-soft); }
+    .action-badge.untouched { color: var(--navy); background: var(--navy-soft); }
+    .inspector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+    .info-block { border-top: 3px solid var(--navy); padding: 13px 14px 15px; background: var(--surface); }
+    .info-block.no { border-top-color: var(--red); }
+    .info-block h4 { margin: 0 0 8px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .info-block ul { margin: 0; padding-left: 18px; font-size: 13px; }
+    .info-block li + li { margin-top: 6px; }
+    .symbol-row, .trace-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+    .token { padding: 5px 8px; border: 1px solid var(--line); background: var(--rail); font: 600 11px/1 var(--mono); }
+    .trace-token { color: var(--navy); border-color: var(--navy); background: var(--navy-soft); }
+    .dependency-strip { margin-top: 20px; padding: 14px; border: 1px dashed var(--line-strong); }
+    .dependency-strip b { display: block; margin-bottom: 7px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .dependency-strip p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .timeline { display: grid; gap: 9px; counter-reset: step; }
+    .step { counter-increment: step; display: grid; grid-template-columns: 48px 1fr auto; gap: 16px; align-items: start; padding: 17px; border: 1px solid var(--line); background: var(--sheet); }
+    .step::before { content: counter(step, decimal-leading-zero); color: var(--orange); font: 800 18px/1 var(--mono); }
+    .step b { display: block; margin-bottom: 4px; }
+    .step p { margin: 0; color: var(--muted); }
+    .step code { color: var(--navy); font: 700 11px/1.4 var(--mono); }
+    .acceptance { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .acceptance-item { display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 16px; border: 1px solid var(--green); background: var(--green-soft); }
+    .acceptance-item strong { color: var(--green); font-family: var(--mono); }
+    .acceptance-item p { margin: 0; }
+    footer { margin: 50px 0 24px; padding: 18px 0; border-top: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; }
+    footer code { color: var(--navy); }
+
+    @media (max-width: 880px) {
+      .shell { width: min(100% - 22px, 1480px); }
+      .masthead-top, .overview-grid, .section-heading { grid-template-columns: 1fr; }
+      .masthead-top { gap: 18px; padding: 22px; }
+      h1 { font-size: clamp(30px, 8vw, 42px); }
+      .phase-card { min-height: 0; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; }
+      .phase-card strong { font-size: 22px; }
+      .metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .metric { padding: 12px 10px; }
+      .metric b { font-size: 20px; }
+      .metric span { font-size: 8px; }
+      .metric { border-bottom: 1px solid var(--line); }
+      .change-toolbar { grid-template-columns: 1fr; }
+      .filters { justify-content: flex-start; }
+      .change-workspace { grid-template-columns: 1fr; height: auto; }
+      .file-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: 330px; }
+      .inspector-grid, .acceptance { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 42px 1fr; }
+      .step code { grid-column: 2; }
+    }
+
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+    .contract-table { width: 100%; border-collapse: collapse; background: var(--sheet); border: 1px solid var(--line); }
+    .contract-table th, .contract-table td { text-align: left; vertical-align: top; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 13px; }
+    .contract-table th { width: 30%; font: 700 12px/1.4 var(--mono); color: var(--navy); }
+    .contract-detail { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+    .table-wrap { overflow-x: auto; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+    @media (max-width: 880px) { .two-col { grid-template-columns: 1fr; } .contract-table th { width: 40%; } }
+  </style>
+</head>
+<body data-template="false">
+  <div class="shell">
+    <header class="masthead" id="overview">
+      <div class="masthead-top">
+        <div>
+          <p class="crumb" id="doc-crumb">Module · Work item · LLD</p>
+          <h1 id="doc-title">File change plan</h1>
+          <p class="summary" id="doc-summary"></p>
+        </div>
+        <div class="phase-card">
+          <span>Design state</span>
+          <strong>LLD</strong>
+          <small id="doc-status">candidate</small>
+        </div>
+      </div>
+      <div class="metrics" id="metrics" aria-label="File change totals"></div>
+    </header>
+
+    <nav class="sticky-nav" aria-label="Document sections">
+      <a href="#file-changes">File changes</a>
+      <a href="#context">Context</a>
+      <a href="#contracts">Contracts</a>
+      <a href="#execution">Build order</a>
+      <a href="#acceptance">Acceptance</a>
+    </nav>
+
+    <main>
+      <section class="primary-section" id="file-changes" aria-labelledby="changes-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Primary implementation plan</p>
+            <h2 id="changes-title">Build the design file by file</h2>
+            <p class="lede">Select a file to see exactly why it changes, what to implement, what must remain stable, and how that file is verified.</p>
+          </div>
+          <p class="workspace-note"><strong>Start here.</strong> Search paths, symbols, or requirement IDs. Use ↑ and ↓ to inspect files without leaving the keyboard.</p>
+        </div>
+        <div class="change-view">
+          <div class="change-toolbar">
+            <label class="search-wrap">
+              <span aria-hidden="true">/</span>
+              <input id="file-search" type="search" placeholder="Find a path, symbol, or requirement" autocomplete="off">
+            </label>
+            <div class="filters" id="filters" aria-label="Filter files by action"></div>
+          </div>
+          <div class="change-workspace">
+            <div class="file-rail" id="file-rail" role="listbox" aria-label="Planned file changes"></div>
+            <article class="file-inspector" id="file-inspector" aria-live="polite"></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="context" aria-labelledby="scope-title">
+        <p class="section-kicker">Supporting context</p>
+        <h2 id="scope-title">Scope and preserved boundaries</h2>
+        <p class="lede" id="scope-lede"></p>
+        <div class="overview-grid">
+          <article class="card">
+            <h3>In scope</h3>
+            <ul class="plain-list" id="scope-list"></ul>
+          </article>
+          <article class="card boundary">
+            <h3>Preserved boundaries</h3>
+            <ul class="plain-list" id="boundary-list"></ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="contracts" aria-labelledby="contracts-title">
+        <p class="section-kicker">Public API</p>
+        <h2 id="contracts-title">Component contracts and decisions</h2>
+        <p class="lede">Bare forwardRef controls with one shared field style. Props tables and full rules are in LLD.md sections 4 and 5.</p>
+        <div class="table-wrap"><table class="contract-table" id="contract-table"></table></div>
+        <div class="two-col">
+          <article class="card">
+            <h3>Decisions</h3>
+            <ul class="plain-list" id="decision-list"></ul>
+          </article>
+          <article class="card boundary">
+            <h3>Description editor focus constraints (b47afeb0)</h3>
+            <ul class="plain-list" id="focus-list"></ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="execution" aria-labelledby="execution-title">
+        <p class="section-kicker">Dependency order</p>
+        <h2 id="execution-title">Build order</h2>
+        <p class="lede">Each step should leave a locally verifiable result and unblock the next dependency.</p>
+        <div class="timeline" id="timeline"></div>
+      </section>
+
+      <section id="acceptance" aria-labelledby="acceptance-title">
+        <p class="section-kicker">Completion signals</p>
+        <h2 id="acceptance-title">Acceptance</h2>
+        <p class="lede">Every signal traces back to the canonical LLD and names an observable result.</p>
+        <div class="acceptance" id="acceptance-list"></div>
+      </section>
+    </main>
+
+    <footer><code>LLD.md</code> is authoritative. This HTML is its presentation mirror. Paths are relative to <code>studio/src/</code>.</footer>
+  </div>
+
+  <script>
+    const LLD_DOCUMENT = {
+      meta: {
+        crumb: "Shared UI components · Ticket 06 · LLD",
+        title: "TextField, TextArea, Select and Checkbox",
+        summary: "One border plus focus-border field style on theme tokens, shared by four forwardRef components in shared/ui. Every listed instance, every SETTINGS_FIELD_CLASS caller and every SETTINGS_CHECKBOX_CLASS caller migrates; both constants are deleted. Description editor focus behaviour is unchanged.",
+        status: "implementation-ready"
+      },
+      scope: {
+        lede: "Studio frontend only (studio/src). Behaviour, accessible names and test hooks stay identical; only the look of fields converges.",
+        in: [
+          "Create fieldStyle.ts, TextField, TextArea, Select and Checkbox in shared/ui, each with a colocated behaviour test.",
+          "Migrate 16 ticket-listed elements in 14 files, 13 SETTINGS_FIELD_CLASS elements in 8 files and 8 SETTINGS_CHECKBOX_CLASS checkboxes in 4 files.",
+          "Delete SETTINGS_FIELD_CLASS and SETTINGS_CHECKBOX_CLASS from SettingsPrimitives.tsx.",
+          "Deliberately update one assertion in overhaulTypographyReadabilityAcceptance (description source stays 14px via size=\"lg\")."
+        ],
+        boundaries: [
+          "Every aria-*, role, id, data-testid, data-coach-anchor, handler, value, autoFocus, disabled and ref on a migrated element is byte-identical.",
+          "PopoverSearch stays unchanged (ticket 07). It should share the field style: 07 re-expresses its input as TextField size=\"sm\" autoFocus className=\"w-full\".",
+          "Untouched non-inventory inputs: IdeaEntry and ConversationComposer textareas (container owns focus), StoriesSearchInput, NameEditor, StateCatalog color and inline-rename inputs.",
+          "No new dependency, no new Tailwind token, no rounded utility, no extraction from the three oversized files touched.",
+          "Buttons, error lines, eyebrows and close buttons beside migrated fields belong to tickets 05, 10 and 01; ModulePicker and MergeDestinationPicker internals belong to 08."
+        ]
+      },
+      contracts: [
+        { name: "fieldClassName({ size, mono?, className? })", detail: "shared/ui/fieldStyle.ts, internal to shared/ui. Returns base + size classes + font-mono (when mono) + className, space-joined. Exports FieldSize = \"xs\" | \"sm\" | \"md\" | \"lg\" and FIELD_SIZE_CLASS." },
+        { name: "Base field classes", detail: "min-w-0 border border-pane-border bg-pane-bg text-text-primary outline-none placeholder:text-text-muted focus:border-focus-accent disabled:cursor-not-allowed disabled:opacity-40 aria-[invalid=true]:border-lifecycle-danger aria-[invalid=true]:focus:border-lifecycle-danger" },
+        { name: "Sizes", detail: "xs: px-2 py-1 text-xs · sm: px-2 py-1 text-sm · md (default): px-3 py-2 text-sm · lg: px-3 py-2 text-base" },
+        { name: "TextField", detail: "forwardRef<HTMLInputElement>. Props: size?: FieldSize = \"md\"; mono?: boolean; type?: \"text\" | \"search\"; className? (layout only); rest = Omit<InputHTMLAttributes, \"size\" | \"type\" | \"className\"> spread onto <input>." },
+        { name: "TextArea", detail: "forwardRef<HTMLTextAreaElement>. Props: size?, mono?, className?; rest = Omit<TextareaHTMLAttributes, \"className\">. Adds resize-y. Object and callback refs both reach the native element." },
+        { name: "Select", detail: "forwardRef<HTMLSelectElement>. Props: size?, className?, children (options); rest = Omit<SelectHTMLAttributes, \"size\" | \"multiple\" | \"className\">. Native select; no mono." },
+        { name: "Checkbox", detail: "forwardRef<HTMLInputElement>. Renders <input type=\"checkbox\"> with the former SETTINGS_CHECKBOX_CLASS string verbatim (private CHECKBOX_CLASS) plus className; rest = Omit<InputHTMLAttributes, \"type\" | \"size\" | \"className\">." },
+        { name: "Labelling", detail: "Bare controls: no label, hint or error prop and no wrapper element. Callers keep their wrapping <label>, htmlFor/id pair or aria-label." },
+        { name: "className allowlist (D-4)", detail: "w-*, min-w-*, max-w-*, min-h-*/h-* (TextArea), margins, flex/grid placement (flex-1, block, self-*), pr-* for an overlaid glyph, and uppercase for identifier entry. Nothing that restyles colour, border, font, text size or other padding." }
+      ],
+      decisions: [
+        "D-1 Bare controls; no built-in label slot.",
+        "D-2 One look, so no variant prop; only size and mono vary.",
+        "D-3 FieldSize xs | sm | md | lg; default md.",
+        "D-4 className is layout only (allowlist above).",
+        "D-5 Create Checkbox: 9 checkboxes in 5 files exceed the one-caller threshold.",
+        "D-6 fieldStyle.ts is internal to shared/ui; features never import it.",
+        "D-7 Description source uses size=\"lg\"; typography guard updated deliberately and pins lg to text-base.",
+        "D-8 Non-inventory inputs stay untouched.",
+        "D-9 PopoverSearch unchanged here; ticket 07 adopts TextField size=\"sm\".",
+        "D-10 No extraction from IssueTypesSection (484), StateConfigurationPanel (461), ModelConfigurationPanel (418): the edit only shortens them.",
+        "D-11 forwardRef (React 18), named exports, no clsx."
+      ],
+      focus: [
+        "The native <textarea> stays a descendant of data-testid=\"issue-description\"; TextArea renders no portal or wrapper, so the container onBlur relatedTarget check and useEditViewWorkspaceFocus's bodyRef.contains(activeElement) check are unchanged.",
+        "TextArea never calls focus(), blur() or preventDefault and has no focusable wrapper.",
+        "autoFocus passes through to the native element.",
+        "The callback ref body is unchanged and receives the HTMLTextAreaElement (element.disabled readable; description-editor-fallback-editable still fires).",
+        "TextArea is module-level and the element type never changes between renders, so typing never remounts the textarea.",
+        "It stays a native textarea, so single-key chords such as s type text instead of opening Settings.",
+        "aria-label=\"Ticket description source\" is kept; size stays 14px (lg)."
+      ],
+      files: [
+        { id: "field-style", path: "shared/ui/fieldStyle.ts", action: "create", layer: "shared ui",
+          purpose: "Single source of the field class contract shared by TextField, TextArea and Select.",
+          symbols: ["FieldSize", "FIELD_SIZE_CLASS", "fieldClassName"],
+          responsibilities: ["Own the base classes, the four size class strings and the mono flag", "Join base, size, font-mono and className with single spaces"],
+          nonResponsibilities: ["Does not render anything", "Does not style checkboxes", "Imported only by the three field components, never by feature code"],
+          implementation: ["Export type FieldSize = \"xs\" | \"sm\" | \"md\" | \"lg\"", "Export FIELD_SIZE_CLASS: xs px-2 py-1 text-xs, sm px-2 py-1 text-sm, md px-3 py-2 text-sm, lg px-3 py-2 text-base", "Export fieldClassName({ size, mono, className }) returning the base string from the Contracts section followed by size, font-mono and className"],
+          verification: ["Typecheck", "Typography guard asserts lg maps to text-base", "No rounded utilities (square-corner scan)"],
+          dependencies: "Lands first; depends on nothing.",
+          tests: ["TextField.test.tsx", "overhaulTypographyReadabilityAcceptance"], trace: ["D-3", "D-6", "AC-5"] },
+        { id: "text-field", path: "shared/ui/TextField.tsx", action: "create", layer: "shared ui",
+          purpose: "Single-line text and search input on the shared field style.",
+          symbols: ["TextField", "TextFieldProps"],
+          responsibilities: ["Render one <input> with fieldClassName({ size, mono, className })", "Forward ref to the input", "Spread all other props unchanged (role, aria-*, data-*, id, handlers)"],
+          nonResponsibilities: ["No label, error or adornment slot", "No combobox logic", "No state or effects"],
+          implementation: ["forwardRef(function TextField(...)) with size default \"md\", mono default false", "Type: Omit<InputHTMLAttributes<HTMLInputElement>, \"size\" | \"type\" | \"className\"> plus size, mono, type?: \"text\" | \"search\", className?"],
+          verification: ["TextField.test.tsx passes"],
+          dependencies: "Depends on fieldStyle.ts.",
+          tests: ["TextField.test.tsx"], trace: ["D-1", "D-2", "D-4", "AC-1"] },
+        { id: "text-area", path: "shared/ui/TextArea.tsx", action: "create", layer: "shared ui",
+          purpose: "Multi-line text entry on the shared field style, safe for the description editor's focus rules.",
+          symbols: ["TextArea", "TextAreaProps"],
+          responsibilities: ["Render one <textarea> with fieldClassName(...) plus resize-y", "Forward object and callback refs to the native element", "Pass autoFocus through"],
+          nonResponsibilities: ["No wrapper, portal or focus management", "No autosize or rich editing"],
+          implementation: ["forwardRef(function TextArea(...)); type Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, \"className\"> plus size, mono, className?", "Defined at module level only"],
+          verification: ["TextArea.test.tsx passes, including callback ref and autoFocus cases"],
+          dependencies: "Depends on fieldStyle.ts.",
+          tests: ["TextArea.test.tsx", "overhaulDescriptionFocusAcceptance"], trace: ["AC-1", "AC-3"] },
+        { id: "select", path: "shared/ui/Select.tsx", action: "create", layer: "shared ui",
+          purpose: "Native select on the shared field style.",
+          symbols: ["Select", "SelectProps"],
+          responsibilities: ["Render one native <select> with fieldClassName({ size, className })", "Render children options as given", "Forward ref"],
+          nonResponsibilities: ["No custom listbox or search (tickets 07/08)", "No mono prop"],
+          implementation: ["forwardRef(function Select(...)); type Omit<SelectHTMLAttributes<HTMLSelectElement>, \"size\" | \"multiple\" | \"className\"> plus size, className?"],
+          verification: ["Select.test.tsx passes"],
+          dependencies: "Depends on fieldStyle.ts.",
+          tests: ["Select.test.tsx"], trace: ["AC-1", "AC-5"] },
+        { id: "checkbox", path: "shared/ui/Checkbox.tsx", action: "create", layer: "shared ui",
+          purpose: "The square settings checkbox as a component, replacing SETTINGS_CHECKBOX_CLASS.",
+          symbols: ["Checkbox", "CheckboxProps", "CHECKBOX_CLASS"],
+          responsibilities: ["Render <input type=\"checkbox\"> with the former SETTINGS_CHECKBOX_CLASS string verbatim plus className", "Forward ref"],
+          nonResponsibilities: ["No label text, switch or tri-state", "Does not remove the browser focus outline"],
+          implementation: ["Move the class string into private CHECKBOX_CLASS", "Type Omit<InputHTMLAttributes<HTMLInputElement>, \"type\" | \"size\" | \"className\"> plus className?"],
+          verification: ["Checkbox.test.tsx passes"],
+          dependencies: "Depends on nothing.",
+          tests: ["Checkbox.test.tsx"], trace: ["D-5", "AC-1", "AC-2"] },
+        { id: "tests", path: "shared/ui/TextField.test.tsx", action: "create", layer: "test",
+          purpose: "Colocated behaviour tests (also TextArea.test.tsx, Select.test.tsx, Checkbox.test.tsx).",
+          symbols: ["TextField.test.tsx", "TextArea.test.tsx", "Select.test.tsx", "Checkbox.test.tsx"],
+          responsibilities: ["Label association via wrapping label and htmlFor/id", "disabled gives toBeDisabled", "createRef points at the element from getByRole; focus() gives toHaveFocus", "aria-invalid gives toBeInvalid, omitted gives toBeValid", "TextField: type=search is a searchbox; data-testid and combobox attributes pass through", "TextArea: callback ref receives the element; autoFocus focuses on mount", "Select: change calls onChange; Checkbox: click calls onChange, toBeChecked"],
+          nonResponsibilities: ["Never assert class strings or DOM structure beyond roles"],
+          implementation: ["vitest + @testing-library/react + fireEvent (user-event is not installed)"],
+          verification: ["npm run test --workspace @worktracker/studio"],
+          dependencies: "Lands with step 1.",
+          tests: ["self"], trace: ["AC-1"] },
+        { id: "settings-primitives", path: "shared/ui/SettingsPrimitives.tsx", action: "modify", layer: "shared ui",
+          purpose: "Delete SETTINGS_FIELD_CLASS (lines 9–10) and SETTINGS_CHECKBOX_CLASS (12–13).",
+          symbols: ["SETTINGS_FIELD_CLASS", "SETTINGS_CHECKBOX_CLASS"],
+          responsibilities: ["Remove both constants after their last caller migrates"],
+          nonResponsibilities: ["settingsButtonClass, SETTINGS_EYEBROW_CLASS, SettingsStatusLine and SettingsSubsection stay (tickets 05 and 10)"],
+          implementation: ["Delete the two exports at the end of step 2"],
+          verification: ["Typecheck fails if any import remains", "Sweep for SETTINGS_FIELD_CLASS|SETTINGS_CHECKBOX_CLASS is empty"],
+          dependencies: "Blocked by every 6.3 caller migration.",
+          tests: ["npm run typecheck"], trace: ["AC-2"] },
+        { id: "popover-search", path: "shared/ui/PopoverSearch.tsx", action: "untouched", layer: "boundary",
+          purpose: "Owned by ticket 07. Should share the field style later.",
+          symbols: ["PopoverSearch"],
+          responsibilities: ["Ticket 07 re-expresses its input as TextField size=\"sm\" autoFocus className=\"w-full\" inside the existing border-b p-1.5 wrapper"],
+          nonResponsibilities: ["No change in ticket 06"],
+          implementation: ["None in this ticket"],
+          verification: ["File unchanged in the 06 diff"],
+          dependencies: "Whichever of 06 and 07 lands second rebases.",
+          tests: ["WorkItemSearchList.test.tsx"], trace: ["D-9"] },
+        { id: "child-issues", path: "app/shell/ticket-workspace/selected-ticket/details/ChildIssues.tsx", action: "modify", layer: "pane",
+          purpose: "Sub-task type select and add input move to Select and TextField.",
+          symbols: ["ChildIssues"],
+          responsibilities: ["select 62–73 becomes Select size=\"sm\"", "input 74–86 becomes TextField size=\"sm\" className=\"flex-1\""],
+          nonResponsibilities: ["Keep aria-label=\"Child issue type\", data-testid=\"add-subtask-type\" and data-testid=\"add-subtask\"", "Rows, dot and key cell belong to tickets 11 and 12"],
+          implementation: ["Swap both elements; keep value, onChange, onKeyDown and placeholder"],
+          verification: ["overhaulWorkItemAcceptance and work-item suites green"],
+          dependencies: "Step 4; depends on step 1.",
+          tests: ["overhaulWorkItemAcceptance"], trace: ["AC-2", "AC-6"] },
+        { id: "keyboard-shortcuts", path: "features/studio/modals/KeyboardShortcutsModal.tsx", action: "modify", layer: "modal",
+          purpose: "Shortcut filter input moves to TextField.",
+          symbols: ["KeyboardShortcutsModal"],
+          responsibilities: ["input 118–125 becomes TextField type=\"search\" className=\"w-full\" (md)"],
+          nonResponsibilities: ["Keep id=\"keyboard-shortcuts-filter\" and the sr-only label", "Eyebrows belong to ticket 10"],
+          implementation: ["Swap element; keep value, onChange, placeholder"],
+          verification: ["overhaulChangesKeymapScopeAcceptance green"],
+          dependencies: "Step 3.",
+          tests: ["overhaulChangesKeymapScopeAcceptance"], trace: ["AC-2", "AC-6"] },
+        { id: "parent-update", path: "features/studio/modals/ParentUpdate.tsx", action: "modify", layer: "modal",
+          purpose: "Parent filter input moves to TextField.",
+          symbols: ["ParentUpdate"],
+          responsibilities: ["input 125–134 becomes TextField type=\"text\" size=\"sm\" className=\"mb-2 w-full\""],
+          nonResponsibilities: ["Keep onChange that resets the cursor", "Empty-state line belongs to ticket 10"],
+          implementation: ["Swap element"],
+          verification: ["Studio suite green"],
+          dependencies: "Step 3.",
+          tests: ["npm run test"], trace: ["AC-2"] },
+        { id: "module-picker", path: "features/module-tabs/ModulePicker.tsx", action: "modify", layer: "picker",
+          purpose: "Module search input moves to TextField; picker internals stay for ticket 08.",
+          symbols: ["ModulePicker", "searchRef"],
+          responsibilities: ["input 200–215 becomes TextField ref={searchRef} type=\"search\" size=\"sm\" className=\"mb-1 w-full\""],
+          nonResponsibilities: ["Keep role=\"combobox\", aria-label, aria-expanded, aria-activedescendant, aria-controls", "Outside-click, anchoring and keyboard code belong to ticket 08"],
+          implementation: ["Swap element; text goes from 14px to 12.5px to match PopoverSearch"],
+          verification: ["overhaulModulePickerAcceptance green"],
+          dependencies: "Step 4. Skip if ticket 08 already replaced this input.",
+          tests: ["overhaulModulePickerAcceptance"], trace: ["AC-2", "AC-6"] },
+        { id: "dialog-host", path: "app/shell/DialogHost.tsx", action: "modify", layer: "modal",
+          purpose: "Reassign select moves to Select; removes the dead accent-primary focus class.",
+          symbols: ["ReassignDialog", "selectRef"],
+          responsibilities: ["select 81–92 becomes Select ref={selectRef} className=\"mt-2 block w-full\" (md)"],
+          nonResponsibilities: ["Button classes at lines 5–8 belong to ticket 05", "initialFocusRef wiring at line 70 unchanged"],
+          implementation: ["Swap element; focus border becomes focus-accent"],
+          verification: ["overhaulDialogAcceptance and singleModalHost green"],
+          dependencies: "Step 3.",
+          tests: ["overhaulDialogAcceptance", "singleModalHost.test.tsx"], trace: ["AC-2", "AC-5"] },
+        { id: "composer", path: "features/conversations/composer/ConversationComposer.tsx", action: "modify", layer: "pane",
+          purpose: "Agent select moves to Select size=\"xs\"; the composer textarea stays.",
+          symbols: ["ConversationComposer"],
+          responsibilities: ["select 93–107 becomes Select size=\"xs\""],
+          nonResponsibilities: ["The textarea at 83 stays: its container owns border and focus", "Keep aria-label, value, onChange, options"],
+          implementation: ["Swap element; text-secondary becomes text-primary, px-1 becomes px-2 py-1, hover border dropped"],
+          verification: ["overhaulConversationComposerAcceptance green"],
+          dependencies: "Step 4.",
+          tests: ["overhaulConversationComposerAcceptance"], trace: ["AC-2", "D-8"] },
+        { id: "merge-destination", path: "features/agents/worktrees/changes/MergeDestinationPicker.tsx", action: "modify", layer: "picker",
+          purpose: "Branch search input moves to TextField; listbox internals stay for ticket 08.",
+          symbols: ["MergeDestinationPicker"],
+          responsibilities: ["input 48–89 becomes TextField size=\"xs\" className=\"w-full pr-6\" (pr-6 reserves the overlaid ▾)"],
+          nonResponsibilities: ["Keep every combobox attribute, autoComplete=\"off\", disabled and all four handlers", "Blur dismissal and bg-white/10 highlight belong to ticket 08"],
+          implementation: ["Swap element; gains focus-accent border, disabled opacity 50 to 40"],
+          verification: ["overhaulTaskWorktreeChangesAcceptance green"],
+          dependencies: "Step 4. Skip if ticket 08 already replaced this input.",
+          tests: ["overhaulTaskWorktreeChangesAcceptance"], trace: ["AC-2", "AC-6", "D-4"] },
+        { id: "add-project", path: "features/studio/modals/AddProject.tsx", action: "modify", layer: "modal",
+          purpose: "Name and key inputs move from the ring style to TextField mono.",
+          symbols: ["AddProject"],
+          responsibilities: ["input 50–57 becomes TextField mono size=\"sm\" className=\"mt-1 w-full\"", "input 61–68 becomes TextField mono size=\"sm\" className=\"mt-1 w-full uppercase\""],
+          nonResponsibilities: ["Keep autoFocus, maxLength={3}, spellCheck={false}, placeholders", "text-red-400 error and buttons belong to tickets 10 and 05"],
+          implementation: ["Swap both elements"],
+          verification: ["overhaulProjectOnboardingAcceptance green"],
+          dependencies: "Step 3.",
+          tests: ["overhaulProjectOnboardingAcceptance"], trace: ["AC-2", "AC-5", "D-4"] },
+        { id: "add-module", path: "features/studio/modals/AddModule.tsx", action: "modify", layer: "modal",
+          purpose: "Module name input moves from the ring style to TextField mono.",
+          symbols: ["AddModule", "moduleNameId"],
+          responsibilities: ["input 176–187 becomes TextField mono size=\"sm\" className=\"mt-2 w-full\""],
+          nonResponsibilities: ["Keep id, data-coach-anchor=\"module-name\", aria-describedby, autoFocus, disabled", "Eyebrow labels belong to ticket 10"],
+          implementation: ["Swap element"],
+          verification: ["overhaulModuleCreationAcceptance, overhaulOnboardingModuleAcceptance and CoachMark.test.tsx green"],
+          dependencies: "Step 3.",
+          tests: ["overhaulModuleCreationAcceptance", "CoachMark.test.tsx"], trace: ["AC-2", "AC-6"] },
+        { id: "prompt-input", path: "features/agents/terminal/PromptInput.tsx", action: "modify", layer: "modal",
+          purpose: "Prompt textarea moves from the ring style to TextArea mono.",
+          symbols: ["PromptInput", "textAreaRef"],
+          responsibilities: ["textarea 69–76 becomes TextArea ref={textAreaRef} mono size=\"sm\" rows={10} className=\"w-full\""],
+          nonResponsibilities: ["initialFocusRef={textAreaRef} at line 67 unchanged", "Error line and buttons belong to tickets 10 and 05"],
+          implementation: ["Swap element; resize becomes vertical-only"],
+          verification: ["Studio suite green; modal still focuses the textarea on open"],
+          dependencies: "Step 3.",
+          tests: ["npm run test"], trace: ["AC-2"] },
+        { id: "module-folder", path: "features/agents/terminal/ModuleFolderSelection.tsx", action: "modify", layer: "modal",
+          purpose: "Folder path input moves from the ring style to TextField mono; aria-invalid becomes visible.",
+          symbols: ["ModuleFolderSelection"],
+          responsibilities: ["input 102–114 becomes TextField mono size=\"sm\" className={pickerInline ? \"flex-1\" : \"w-full\"}"],
+          nonResponsibilities: ["Keep id, autoFocus, disabled, aria-label, aria-describedby and the aria-invalid expression"],
+          implementation: ["Swap element; an invalid path now shows a lifecycle-danger border"],
+          verification: ["overhaulModuleFolderAcceptance green"],
+          dependencies: "Step 3.",
+          tests: ["overhaulModuleFolderAcceptance"], trace: ["AC-2", "AC-5"] },
+        { id: "description-editor", path: "features/documents/DescriptionEditor.tsx", action: "modify", layer: "documents",
+          purpose: "Source-fallback textarea moves to TextArea size=\"lg\" under the focus constraints.",
+          symbols: ["DescriptionEditor"],
+          responsibilities: ["textarea 170–181 becomes TextArea autoFocus mono size=\"lg\" className=\"min-h-[12rem] w-full\""],
+          nonResponsibilities: ["Rich editor path, container onBlur, read view (line 119) and useWorkspaceTabFocus are untouched", "Keep aria-label=\"Ticket description source\" and the callback ref body"],
+          implementation: ["Swap element only; background pane-panel to pane-bg, p-3 to px-3 py-2", "Land with the typography assertion change"],
+          verification: ["overhaulDescriptionFocusAcceptance, Autosave, Selection, ExternalChange, Preload and RollbackReproduction suites green", "Updated typography guard green"],
+          dependencies: "Step 5.",
+          tests: ["overhaulDescriptionFocusAcceptance", "overhaulDescriptionAutosaveAcceptance", "overhaulTypographyReadabilityAcceptance"], trace: ["AC-3", "D-7"] },
+        { id: "document-editor", path: "features/documents/MarkdownDocumentEditor.tsx", action: "modify", layer: "documents",
+          purpose: "Document source textarea moves to TextArea mono (md).",
+          symbols: ["MarkdownDocumentEditor"],
+          responsibilities: ["textarea 174–179 becomes TextArea mono className=\"min-h-[60vh] w-full\""],
+          nonResponsibilities: ["Comparison panes, rich editor and error lines untouched", "Keep aria-label=\"Document source\""],
+          implementation: ["Swap element; background pane-panel to pane-bg, p-4 to px-3 py-2"],
+          verification: ["overhaulDocumentPersistenceAcceptance, overhaulDocumentSaveRuntimeAcceptance green"],
+          dependencies: "Step 5.",
+          tests: ["overhaulDocumentPersistenceAcceptance"], trace: ["AC-2"] },
+        { id: "onboarding-providers", path: "app/onboarding/OnboardingProviders.tsx", action: "modify", layer: "onboarding",
+          purpose: "Provider checkbox moves from the native accent checkbox to Checkbox.",
+          symbols: ["OnboardingProviders"],
+          responsibilities: ["checkbox 205–213 becomes Checkbox"],
+          nonResponsibilities: ["Keep aria-label=\"I use {provider}\", checked, disabled, onChange", "Eyebrow belongs to ticket 10"],
+          implementation: ["Swap element"],
+          verification: ["overhaulOnboardingAcceptance and overhaulOnboardingCompletionAcceptance green"],
+          dependencies: "Step 2.",
+          tests: ["overhaulOnboardingAcceptance"], trace: ["AC-2", "D-5"] },
+        { id: "instant-settings", path: "features/settings/instant/InstantSettingsPanel.tsx", action: "modify", layer: "settings",
+          purpose: "Starter prompt textarea moves from SETTINGS_FIELD_CLASS to TextArea mono.",
+          symbols: ["InstantSettingsPanel", "promptRef"],
+          responsibilities: ["textarea 119–135 becomes TextArea ref={promptRef} mono className=\"w-full\""],
+          nonResponsibilities: ["Keep aria-label, maxLength, disabled, rows={8}, placeholder, onChange"],
+          implementation: ["Swap element; drop SETTINGS_FIELD_CLASS import"],
+          verification: ["overhaulInstantSettingsAcceptance green"],
+          dependencies: "Step 2.",
+          tests: ["overhaulInstantSettingsAcceptance"], trace: ["AC-2"] },
+        { id: "keyboard-settings", path: "features/studio/modals/KeyboardSettingsPanel.tsx", action: "modify", layer: "settings",
+          purpose: "Binding search moves from SETTINGS_FIELD_CLASS to TextField.",
+          symbols: ["KeyboardSettingsPanel"],
+          responsibilities: ["input 198–205 becomes TextField id=\"binding-search\" type=\"search\" className=\"w-full\""],
+          nonResponsibilities: ["SettingsStatusLine and buttons untouched"],
+          implementation: ["Swap element; drop SETTINGS_FIELD_CLASS import"],
+          verification: ["overhaulKeybindingSettingsRuntimeAcceptance green"],
+          dependencies: "Step 2.",
+          tests: ["overhaulKeybindingSettingsRuntimeAcceptance"], trace: ["AC-2"] },
+        { id: "launch-default", path: "features/workflows/LaunchDefaultPicker.tsx", action: "modify", layer: "settings",
+          purpose: "Four provider/profile/model/reasoning selects move to Select.",
+          symbols: ["LaunchDefaultPicker"],
+          responsibilities: ["selects at 84, 102, 121, 140 become Select"],
+          nonResponsibilities: ["Keep each aria-label, value, disabled, onChange and option list"],
+          implementation: ["Swap four elements; drop import"],
+          verification: ["overhaulProviderSettingsAcceptance and LaunchBinding suites green"],
+          dependencies: "Step 2.",
+          tests: ["overhaulProviderSettingsAcceptance"], trace: ["AC-2"] },
+        { id: "stage-skills", path: "features/workflows/StageSkillsField.tsx", action: "modify", layer: "settings",
+          purpose: "Skill entry input moves to TextField.",
+          symbols: ["StageSkillsField"],
+          responsibilities: ["input 48–61 becomes TextField"],
+          nonResponsibilities: ["The remove-skill × button at 37–44 belongs to ticket 01", "Keep id, aria-label=\"Skills\", onBlur, onKeyDown"],
+          implementation: ["Swap element; drop import"],
+          verification: ["overhaulWorkflowStageSkillsAcceptance green"],
+          dependencies: "Step 2.",
+          tests: ["overhaulWorkflowStageSkillsAcceptance"], trace: ["AC-2"] },
+        { id: "model-config", path: "features/workflows/ModelConfigurationPanel.tsx", action: "modify", layer: "settings",
+          purpose: "Provider checkbox and new-profile input move to Checkbox and TextField.",
+          symbols: ["ModelConfigurationPanel"],
+          responsibilities: ["checkbox 338–346 becomes Checkbox", "input 360–366 becomes TextField"],
+          nonResponsibilities: ["No extraction despite 418 lines (D-10)", "Add button belongs to ticket 05"],
+          implementation: ["Swap both; drop both constants from the import"],
+          verification: ["overhaulCodexProfilesAcceptance and overhaulProviderSettingsAcceptance green"],
+          dependencies: "Step 2.",
+          tests: ["overhaulCodexProfilesAcceptance"], trace: ["AC-2", "D-10"] },
+        { id: "issue-types", path: "features/workflows/IssueTypesSection.tsx", action: "modify", layer: "settings",
+          purpose: "Start-state and add-destination selects move to Select.",
+          symbols: ["IssueTypesSection"],
+          responsibilities: ["select 111–136 becomes Select", "select 434–445 becomes Select autoFocus className=\"min-w-44\""],
+          nonResponsibilities: ["No extraction despite 484 lines (D-10)", "settingsButtonClass uses belong to ticket 05"],
+          implementation: ["Swap both; drop SETTINGS_FIELD_CLASS from the import"],
+          verification: ["overhaulWorkflowSettingsAcceptance green"],
+          dependencies: "Step 2.",
+          tests: ["overhaulWorkflowSettingsAcceptance"], trace: ["AC-2", "D-10"] },
+        { id: "state-catalog", path: "features/workflows/StateCatalog.tsx", action: "modify", layer: "settings",
+          purpose: "New-state name input and group select move to TextField and Select.",
+          symbols: ["StateCatalog"],
+          responsibilities: ["input 203–209 becomes TextField autoFocus", "select 213–222 becomes Select"],
+          nonResponsibilities: ["Color swatch (293) and inline-rename input (300) stay untouched", "Delete confirm (120–127) belongs to ticket 09"],
+          implementation: ["Swap both; drop import"],
+          verification: ["overhaulWorkflowSettingsAcceptance green"],
+          dependencies: "Step 2.",
+          tests: ["overhaulWorkflowSettingsAcceptance"], trace: ["AC-2", "D-8"] },
+        { id: "launch-config-form", path: "features/workflows/LaunchConfigurationForm.tsx", action: "modify", layer: "settings",
+          purpose: "Launch prompt textarea moves to TextArea.",
+          symbols: ["LaunchConfigurationForm"],
+          responsibilities: ["textarea 111–119 becomes TextArea className=\"w-full\""],
+          nonResponsibilities: ["Keep aria-label=\"Prompt\", rows={promptRows}, onBlur apply"],
+          implementation: ["Swap element; drop import"],
+          verification: ["LaunchConfigurationForm.test.tsx and overhaulLaunchConfigurationConvergenceAcceptance green"],
+          dependencies: "Step 2.",
+          tests: ["LaunchConfigurationForm.test.tsx"], trace: ["AC-2"] },
+        { id: "state-launch", path: "features/workflows/StateLaunchConfiguration.tsx", action: "modify", layer: "settings",
+          purpose: "Run-subtree and auto-start checkboxes move to Checkbox.",
+          symbols: ["StateLaunchConfiguration"],
+          responsibilities: ["checkboxes 58 and 74 become Checkbox"],
+          nonResponsibilities: ["SETTINGS_EYEBROW_CLASS stays (ticket 10)"],
+          implementation: ["Swap both; drop SETTINGS_CHECKBOX_CLASS from the import"],
+          verification: ["overhaulSubtreeRunAcceptance green"],
+          dependencies: "Step 2.",
+          tests: ["overhaulSubtreeRunAcceptance"], trace: ["AC-2", "D-5"] },
+        { id: "transition-disclosure", path: "features/workflows/TransitionDisclosure.tsx", action: "modify", layer: "settings",
+          purpose: "Agent-permission checkbox moves to Checkbox.",
+          symbols: ["TransitionDisclosure"],
+          responsibilities: ["checkbox 74 becomes Checkbox"],
+          nonResponsibilities: ["SETTINGS_EYEBROW_CLASS stays (ticket 10)"],
+          implementation: ["Swap element; drop SETTINGS_CHECKBOX_CLASS from the import"],
+          verification: ["overhaulWorkflowSettingsAcceptance green"],
+          dependencies: "Step 2.",
+          tests: ["overhaulWorkflowSettingsAcceptance"], trace: ["AC-2"] },
+        { id: "state-config", path: "features/workflows/StateConfigurationPanel.tsx", action: "modify", layer: "settings",
+          purpose: "Four auto-start, subtree, handoff and permission checkboxes move to Checkbox.",
+          symbols: ["StateConfigurationPanel"],
+          responsibilities: ["checkboxes 316, 332, 408, 425 become Checkbox"],
+          nonResponsibilities: ["No extraction despite 461 lines (D-10)"],
+          implementation: ["Swap four elements; drop SETTINGS_CHECKBOX_CLASS from the import"],
+          verification: ["overhaulWorkflowSettingsAcceptance and overhaulSubtreeRunAcceptance green"],
+          dependencies: "Step 2.",
+          tests: ["overhaulWorkflowSettingsAcceptance"], trace: ["AC-2", "D-10"] },
+        { id: "typography-guard", path: "test/overhaulTypographyReadabilityAcceptance.test.tsx", action: "modify", layer: "test",
+          purpose: "Deliberate assertion change: description source stays 14px via size=\"lg\".",
+          symbols: ["[overhaul-160]"],
+          responsibilities: ["Read src/shared/ui/fieldStyle.ts in the Promise.all", "Line 42 regex becomes aria-label=\"Ticket description source\"[\\s\\S]*?size=\"lg\"", "Add: fieldStyle matches lg:\\s*\"[^\"]*\\btext-base\\b"],
+          nonResponsibilities: ["Line 41 and every other assertion unchanged"],
+          implementation: ["Edit in the same commit as DescriptionEditor"],
+          verification: ["Test passes after step 5"],
+          dependencies: "Step 5.",
+          tests: ["self"], trace: ["D-7", "AC-3"] },
+        { id: "workspace-focus", path: "app/shell/ticket-workspace/selected-ticket/internal/useWorkspaceTabFocus.ts", action: "untouched", layer: "boundary",
+          purpose: "The b47afeb0 focus fix this migration must not disturb.",
+          symbols: ["useEditViewWorkspaceFocus"],
+          responsibilities: ["Keeps skipping body focus when bodyRef contains document.activeElement"],
+          nonResponsibilities: ["No change in ticket 06"],
+          implementation: ["None"],
+          verification: ["overhaulDescriptionFocusAcceptance green"],
+          dependencies: "Read-only boundary.",
+          tests: ["overhaulDescriptionFocusAcceptance"], trace: ["AC-3"] },
+        { id: "idea-entry", path: "app/shell/ticket-workspace/tasks/components/IdeaEntry.tsx", action: "untouched", layer: "boundary",
+          purpose: "Composite capture field whose container owns border and focus; not in the inventory.",
+          symbols: ["IdeaEntry"],
+          responsibilities: ["Stays as is (also StoriesSearchInput, NameEditor, ConversationComposer textarea, StateCatalog 293/300)"],
+          nonResponsibilities: ["No change in ticket 06"],
+          implementation: ["None"],
+          verification: ["IdeaEntryFocus.test.tsx green"],
+          dependencies: "Follow-up candidates only.",
+          tests: ["IdeaEntryFocus.test.tsx"], trace: ["D-8"] }
+      ],
+      execution: [
+        { title: "Components", detail: "Create fieldStyle.ts, TextField, TextArea, Select, Checkbox and the four colocated tests. Touch no caller.", gate: "new tests + typecheck" },
+        { title: "Settings callers and checkbox", detail: "Migrate the 8 SETTINGS_FIELD_CLASS files, 4 SETTINGS_CHECKBOX_CLASS files and OnboardingProviders, then delete both constants.", gate: "typecheck + settings/workflow/onboarding suites" },
+        { title: "Modal and ring-style fields", detail: "AddProject, AddModule, PromptInput, ModuleFolderSelection, DialogHost, KeyboardShortcutsModal, ParentUpdate.", gate: "modal + module folder suites" },
+        { title: "Pane and picker fields", detail: "ChildIssues, ConversationComposer, ModulePicker, MergeDestinationPicker (skip a picker row if ticket 08 already replaced it).", gate: "picker + pane suites" },
+        { title: "Document textareas", detail: "DescriptionEditor (size lg, focus constraints) and MarkdownDocumentEditor, with the typography assertion change in the same commit.", gate: "description + document suites" },
+        { title: "Close-out", detail: "Run the source sweeps, typecheck, studio tests, test:overhaul and build, then the manual check in npm run web.", gate: "all green, sweeps empty" }
+      ],
+      acceptance: [
+        { id: "AC-1", text: "Components exist with tests for label association, disabled, forwarded ref and aria-invalid (steps 1; the four colocated test files)." },
+        { id: "AC-2", text: "Every ticket instance migrated; SETTINGS_FIELD_CLASS and SETTINGS_CHECKBOX_CLASS deleted; checkboxes use Checkbox (steps 2–5; typecheck and sweeps)." },
+        { id: "AC-3", text: "Description editor focus behaviour unchanged per b47afeb0 (step 5; description suites and TextArea ref/autoFocus cases)." },
+        { id: "AC-4", text: "Typecheck, studio tests and test:overhaul pass, plus build (step 6)." },
+        { id: "AC-5", text: "One border plus focus-border style on theme tokens; no ring style; no off-token focus colour (fieldStyle.ts; sweeps; manual check)." },
+        { id: "AC-6", text: "Existing data-testid, data-*, id and ARIA hooks kept (change map; unchanged suites)." },
+        { id: "AC-7", text: "className used for layout only, per the D-4 allowlist (review)." }
+      ]
+    };
+
+    const actionLabels = { all: "All", create: "Create", modify: "Modify", delete: "Delete", move: "Move", untouched: "Untouched" };
+    const state = { action: "all", query: "", selected: null };
+
+    const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+    const directory = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ".";
+    const basename = path => path.slice(path.lastIndexOf("/") + 1);
+    const list = items => `<ul>${(items || []).map(item => `<li>${esc(item)}</li>`).join("")}</ul>`;
+    const tokens = (items, extra = "") => (items || []).map(item => `<span class="token ${extra}">${esc(item)}</span>`).join("");
+
+    function visibleFiles() {
+      const needle = state.query.trim().toLowerCase();
+      return LLD_DOCUMENT.files.filter(file => {
+        const actionMatch = state.action === "all" || file.action === state.action;
+        const haystack = [file.path, file.layer, file.purpose, ...(file.symbols || []), ...(file.responsibilities || []), ...(file.implementation || []), ...(file.verification || []), ...(file.trace || [])].join(" ").toLowerCase();
+        return actionMatch && (!needle || haystack.includes(needle));
+      });
+    }
+
+    function renderHeader() {
+      document.getElementById("doc-crumb").textContent = LLD_DOCUMENT.meta.crumb;
+      document.getElementById("doc-title").textContent = LLD_DOCUMENT.meta.title;
+      document.getElementById("doc-summary").textContent = LLD_DOCUMENT.meta.summary;
+      document.getElementById("doc-status").textContent = LLD_DOCUMENT.meta.status;
+      document.getElementById("scope-lede").textContent = LLD_DOCUMENT.scope.lede;
+      document.getElementById("scope-list").innerHTML = LLD_DOCUMENT.scope.in.map(item => `<li>${esc(item)}</li>`).join("");
+      document.getElementById("boundary-list").innerHTML = LLD_DOCUMENT.scope.boundaries.map(item => `<li>${esc(item)}</li>`).join("");
+      const counts = Object.keys(actionLabels).filter(action => action !== "all").map(action => ({ action, count: LLD_DOCUMENT.files.filter(file => file.action === action).length }));
+      document.getElementById("metrics").innerHTML = counts.map(item => `<div class="metric"><b>${item.count}</b><span>${actionLabels[item.action]}</span></div>`).join("");
+    }
+
+    function renderFilters() {
+      const actions = ["all", ...new Set(LLD_DOCUMENT.files.map(file => file.action))];
+      document.getElementById("filters").innerHTML = actions.map(action => `<button class="filter" type="button" data-action="${action}" aria-pressed="${state.action === action}">${actionLabels[action] || action}</button>`).join("");
+      document.querySelectorAll(".filter").forEach(button => button.addEventListener("click", () => {
+        state.action = button.dataset.action;
+        renderFilters();
+        renderFiles();
+      }));
+    }
+
+    function renderFiles() {
+      const files = visibleFiles();
+      if (!files.some(file => file.id === state.selected)) state.selected = files[0]?.id || null;
+      const groups = Map.groupBy ? Map.groupBy(files, file => directory(file.path)) : files.reduce((map, file) => map.set(directory(file.path), [...(map.get(directory(file.path)) || []), file]), new Map());
+      const rail = document.getElementById("file-rail");
+      rail.innerHTML = files.length ? [...groups.entries()].map(([dir, entries]) => `<div class="dir-group"><div class="dir-label">${esc(dir)}</div>${entries.map(file => `<button class="file-button" type="button" role="option" data-file="${esc(file.id)}" aria-selected="${file.id === state.selected}"><span class="action-dot ${esc(file.action)}" aria-hidden="true"></span><span class="file-button-copy"><span class="file-name">${esc(basename(file.path))}</span><span class="file-meta">${esc(actionLabels[file.action] || file.action)} · ${esc(file.layer)}</span></span></button>`).join("")}</div>`).join("") : `<div class="rail-empty">No files match this view.</div>`;
+      rail.querySelectorAll(".file-button").forEach(button => {
+        button.addEventListener("click", () => selectFile(button.dataset.file));
+        button.addEventListener("keydown", event => navigateFiles(event, button.dataset.file));
+      });
+      renderInspector();
+    }
+
+    function selectFile(id) {
+      state.selected = id;
+      document.querySelectorAll(".file-button").forEach(button => button.setAttribute("aria-selected", String(button.dataset.file === id)));
+      renderInspector();
+      history.replaceState(null, "", `#file:${encodeURIComponent(id)}`);
+    }
+
+    function navigateFiles(event, id) {
+      if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+      event.preventDefault();
+      const files = visibleFiles();
+      const index = files.findIndex(file => file.id === id);
+      const next = event.key === 'ArrowDown' ? Math.min(index + 1, files.length - 1) : Math.max(index - 1, 0);
+      state.selected = files[next]?.id || id;
+      renderFiles();
+      history.replaceState(null, "", `#file:${encodeURIComponent(state.selected)}`);
+      document.querySelector(`[data-file="${CSS.escape(state.selected)}"]`)?.focus();
+    }
+
+    function renderInspector() {
+      const file = LLD_DOCUMENT.files.find(entry => entry.id === state.selected);
+      const inspector = document.getElementById("file-inspector");
+      if (!file) { inspector.innerHTML = `<p class="rail-empty">Choose a file to inspect.</p>`; return; }
+      inspector.innerHTML = `
+        <div class="inspector-head">
+          <div><h3 class="path">${esc(file.path)}</h3><p class="purpose">${esc(file.purpose)}</p></div>
+          <span class="action-badge ${esc(file.action)}">${esc(actionLabels[file.action] || file.action)}</span>
+        </div>
+        <div class="symbol-row" aria-label="Symbols">${tokens(file.symbols)}</div>
+        <div class="inspector-grid">
+          <div class="info-block"><h4>Responsibilities</h4>${list(file.responsibilities)}</div>
+          <div class="info-block no"><h4>Preserved boundary</h4>${list(file.nonResponsibilities)}</div>
+          <div class="info-block"><h4>Implementation</h4>${list(file.implementation)}</div>
+          <div class="info-block"><h4>Verification</h4>${list(file.verification)}</div>
+        </div>
+        <div class="dependency-strip"><b>Dependency position</b><p>${esc(file.dependencies)}</p></div>
+        <div class="trace-row" aria-label="Tests and requirement trace">${tokens(file.tests)}${tokens(file.trace, "trace-token")}</div>`;
+    }
+
+    function renderTimeline() {
+      document.getElementById("timeline").innerHTML = LLD_DOCUMENT.execution.map(step => `<article class="step"><div><b>${esc(step.title)}</b><p>${esc(step.detail)}</p></div><code>${esc(step.gate)}</code></article>`).join("");
+      document.getElementById("acceptance-list").innerHTML = LLD_DOCUMENT.acceptance.map(item => `<article class="acceptance-item"><strong>${esc(item.id)}</strong><p>${esc(item.text)}</p></article>`).join("");
+    }
+
+    function renderContracts() {
+      document.getElementById("contract-table").innerHTML = LLD_DOCUMENT.contracts.map(row => `<tr><th scope="row">${esc(row.name)}</th><td class="contract-detail">${esc(row.detail)}</td></tr>`).join("");
+      document.getElementById("decision-list").innerHTML = LLD_DOCUMENT.decisions.map(item => `<li>${esc(item)}</li>`).join("");
+      document.getElementById("focus-list").innerHTML = LLD_DOCUMENT.focus.map(item => `<li>${esc(item)}</li>`).join("");
+    }
+
+    document.getElementById("file-search").addEventListener("input", event => { state.query = event.target.value; renderFiles(); });
+    document.addEventListener("keydown", event => {
+      if (event.key === "/" && document.activeElement !== document.getElementById("file-search")) { event.preventDefault(); document.getElementById("file-search").focus(); }
+      if (event.key === "Escape" && document.activeElement === document.getElementById("file-search")) { state.query = ""; document.getElementById("file-search").value = ""; renderFiles(); }
+    });
+
+    const deepLink = decodeURIComponent(location.hash.replace(/^#file:/, ""));
+    state.selected = LLD_DOCUMENT.files.some(file => file.id === deepLink) ? deepLink : LLD_DOCUMENT.files[0]?.id;
+    renderHeader();
+    renderFilters();
+    renderFiles();
+    renderTimeline();
+    renderContracts();
+    window.addEventListener("hashchange", () => {
+      const id = decodeURIComponent(location.hash.replace(/^#file:/, ""));
+      if (LLD_DOCUMENT.files.some(file => file.id === id) && id !== state.selected) { state.selected = id; renderFiles(); }
+    });
+  </script>
+</body>
+</html>

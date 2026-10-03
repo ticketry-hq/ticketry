@@ -72,7 +72,7 @@ export function rowFor(moduleId: string): HTMLElement {
 }
 
 export function tabs(): HTMLElement[] {
-  return screen.getAllByRole("tab");
+  return screen.getAllByRole("tab").filter((tab) => tab.hasAttribute("data-module-id"));
 }
 
 export function tabFor(moduleId: string): HTMLElement {

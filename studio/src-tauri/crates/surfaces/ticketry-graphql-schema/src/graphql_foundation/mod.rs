@@ -171,6 +171,13 @@ async fn initialize_with_worktracker_commands_and_install_inner(
                 format!("could not install the final WorkTracker schema: {error}"),
             )
         })?;
+    if let Some(directory) = readiness_data_directory {
+        ticketry_agent_execution::SprintSuggestionExecutor::new(worktracker_database.clone(), directory.to_owned())
+            .recover().await.map_err(|error| FoundationInitializationError::new(
+                FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
+                format!("could not recover sprint executions: {error}"),
+            ))?;
+    }
     let settings_repository =
         ticketry_settings::AppSettingRepository::open(worktracker_database_path)
             .await

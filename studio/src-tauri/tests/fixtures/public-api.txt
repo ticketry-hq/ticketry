@@ -1,5 +1,5 @@
-# One `crate|exported_name` approval per public library-root item.
 # Keep entries sorted first by crate, then by exported name.
+# One `crate|exported_name` approval per public library-root item.
 tauri-graphql|GraphQlEndpoint
 tauri-graphql|GraphQlSubscriptionStream
 tauri-graphql|TransportApi
@@ -17,6 +17,7 @@ ticketry-agent-execution|GraphRunServiceError
 ticketry-agent-execution|GraphRunServiceErrorCode
 ticketry-agent-execution|LaunchedChild
 ticketry-agent-execution|ResetGraphRunResult
+ticketry-agent-execution|SprintSuggestionExecutor
 ticketry-agent-execution|ensure_adopted
 ticketry-agent-execution|graph
 ticketry-agent-execution|graph_run
@@ -24,6 +25,7 @@ ticketry-agent-execution|launch_delivery
 ticketry-agent-execution|merge_preparation_launcher
 ticketry-agent-execution|persistence
 ticketry-agent-execution|reconciliation
+ticketry-agent-execution|register_sprint_execution_graphql
 ticketry-agent-execution|run_now
 ticketry-codex-app-server|CodexAppServerClient
 ticketry-codex-app-server|CodexAppServerError
@@ -171,6 +173,7 @@ ticketry-documents|task_dir_name
 ticketry-entities|DESIGN_DOCUMENT_OBJECT
 ticketry-entities|MODULE_LINK_OBJECT
 ticketry-entities|StringList
+ticketry-entities|agent_execution
 ticketry-entities|agent_model
 ticketry-entities|agent_model_reasoning_level
 ticketry-entities|agent_run
@@ -358,12 +361,14 @@ ticketry-mcp|SocketClient
 ticketry-mcp|allowed_provider_operations
 ticketry-mcp|mcp_socket_path
 ticketry-planner|PlannerEndpoint
+ticketry-planner|PlannerFrontendOrigin
 ticketry-planner|PlannerService
 ticketry-provider|CatalogRefreshPolicy
 ticketry-provider|DirectoryTrustApproval
 ticketry-provider|DirectoryTrustContext
 ticketry-provider|DirectoryTrustInspection
 ticketry-provider|DirectoryTrustPreparation
+ticketry-provider|ExecConstructionRequest
 ticketry-provider|InstallationCatalog
 ticketry-provider|LaunchConstructionRequest
 ticketry-provider|ModelDefinition
@@ -381,6 +386,7 @@ ticketry-provider|ProviderOptions
 ticketry-provider|RuntimeSettings
 ticketry-provider|StartupScreen
 ticketry-provider|TimeoutUnit
+ticketry-provider|construct_exec
 ticketry-provider|provider_contract
 ticketry-runs|ADOPTED_TABLES
 ticketry-runs|ATTEMPT_COLUMNS
@@ -497,6 +503,7 @@ ticketry-runs|record_sweep_ended
 ticketry-runs|register_graphql
 ticketry-runs|register_status_graphql
 ticketry-runs|reset_reason
+ticketry-runs|restrict_sprint_suggestion_run_in
 ticketry-runs|run_holding_in
 ticketry-runs|terminating_signal
 ticketry-runs|unavailable_error
@@ -787,6 +794,7 @@ ticketry-work-management|goals_for_sprint
 ticketry-work-management|graphql
 ticketry-work-management|identity
 ticketry-work-management|import
+ticketry-work-management|install_sprint_execution_schema
 ticketry-work-management|launch_binding_entry_skill_migration
 ticketry-work-management|launch_binding_profile_migration
 ticketry-work-management|launch_binding_stage_skills_migration
@@ -802,6 +810,7 @@ ticketry-work-management|read_queries
 ticketry-work-management|read_types
 ticketry-work-management|receipt
 ticketry-work-management|record_for_run
+ticketry-work-management|record_in
 ticketry-work-management|register_graphql
 ticketry-work-management|resolution
 ticketry-work-management|rollback

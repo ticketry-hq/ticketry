@@ -7,5 +7,7 @@
 
 mod authority;
 mod grant_store;
+mod sprint_policy;
+pub use sprint_policy::restrict_sprint_suggestion_run_in;
 
 pub use authority::{AuthorizationFailure, RunAuthority, RunPrincipal};

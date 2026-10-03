@@ -70,6 +70,11 @@ app:
 npm run web
 ```
 
+Both web launchers also start the planner listener against the same in-process
+GraphQL schema and stop it when the adapter exits. `TICKETRY_PLANNER_PORT` selects
+a fixed loopback port; by default the OS chooses an available port. The launcher
+prints the planner URL without its instance credential.
+
 For browser development with the same per-worktree isolation as
 `desktop:dev`, use:
 

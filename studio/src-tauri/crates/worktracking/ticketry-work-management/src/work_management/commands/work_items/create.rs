@@ -1,37 +1,16 @@
+use super::super::{
+    arrival_rank, fractional_rank,
+    identifiers::{database_uuid, new_database_uuid},
+    status_facts::{record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemFact},
+    CommandError,
+};
+use super::{valid_name, CreateWorkItem};
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection,
     DatabaseTransaction, EntityTrait, ExprTrait, JoinType, QueryFilter, QueryOrder, QuerySelect,
     RelationTrait, Set, TransactionTrait,
 };
-
-use super::identifiers::{database_uuid, new_database_uuid, uuid_spellings};
-use super::status_facts::{
-    record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemFact, WorkItemIdentity,
-};
-use super::CommandError;
-use super::{arrival_rank, fractional_rank};
-use ticketry_entities::{design_document, issue, issue_type, module_presentation, project, state};
-
-pub use super::descriptions::{append_description, AppendDescription};
-pub use super::review_findings::{create_review_finding, CreateReviewFinding};
-
-#[derive(Debug, Clone)]
-pub struct CreateWorkItem {
-    pub project_id: String,
-    pub name: String,
-    pub issue_type_id: String,
-    pub description: Option<String>,
-    pub state_id: Option<String>,
-    pub parent_id: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct UpdateWorkItem {
-    pub id: String,
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub issue_type_id: Option<String>,
-}
+use ticketry_entities::{issue, issue_type, module_presentation, project, state};
 
 pub async fn create(
     database: &DatabaseConnection,
@@ -141,7 +120,7 @@ pub(crate) async fn create_in(
         arrival_rank::for_work_item(transaction, &project_id, state_id.as_deref()).await?
     };
     let id = new_database_uuid();
-    let now = super::timestamp::now();
+    let now = super::super::timestamp::now();
     let occurred_at = stamp(now);
     issue::ActiveModel {
         id: Set(id.clone()),
@@ -208,242 +187,6 @@ async fn uses_manual_module_order<C: ConnectionTrait>(
         .one(database)
         .await?
         .is_some())
-}
-
-pub async fn update(
-    database: &DatabaseConnection,
-    input: UpdateWorkItem,
-    facts: Option<&WorkFactRecorder>,
-) -> Result<String, CommandError> {
-    if input.name.is_none() && input.description.is_none() && input.issue_type_id.is_none() {
-        return Err(CommandError::validation(
-            "Supply at least one field to update.",
-        ));
-    }
-    let id = database_uuid(&input.id, "id")?;
-    let existing = issue::Entity::find_by_id(&id)
-        .one(database)
-        .await?
-        .filter(|row| row.r#type == "task")
-        .ok_or_else(|| CommandError::NotFound("Work item not found.".to_owned()))?;
-    let name = input.name.as_deref().map(valid_name).transpose()?;
-    let selected_type = match input.issue_type_id {
-        Some(value) => {
-            let type_id = database_uuid(&value, "issue_type_id")?;
-            Some(resolve_type(database, &existing.project_id, &type_id, "task").await?)
-        }
-        None => None,
-    };
-
-    let changed = name.as_ref().is_some_and(|value| value != &existing.name)
-        || input
-            .description
-            .as_ref()
-            .is_some_and(|value| value != &existing.description)
-        || selected_type
-            .as_ref()
-            .is_some_and(|value| value.id != existing.issue_type_id);
-    if !changed {
-        return Ok(id);
-    }
-
-    let transaction = database.begin().await?;
-    let revision = next_revision(&transaction, &existing.project_id).await?;
-    let identity = WorkItemIdentity::of(&existing);
-    let now = super::timestamp::now();
-    let occurred_at = stamp(now);
-    let mut active: issue::ActiveModel = existing.into();
-    if let Some(value) = name {
-        active.name = Set(value);
-    }
-    if let Some(value) = input.description {
-        active.description = Set(value);
-    }
-    if let Some(value) = selected_type {
-        active.issue_type_id = Set(value.id);
-    }
-    active.state_revision = Set(revision);
-    active.updated_at = Set(now.clone());
-    active.update(&transaction).await?;
-    record_work_item(
-        facts,
-        &transaction,
-        identity.fact(WorkItemChange::Updated, revision, &occurred_at),
-    )
-    .await?;
-    transaction.commit().await?;
-    if let Some(facts) = facts {
-        facts.wake();
-    }
-    Ok(id)
-}
-
-pub async fn archive(
-    database: &DatabaseConnection,
-    id: &str,
-    facts: Option<&WorkFactRecorder>,
-) -> Result<String, CommandError> {
-    let id = database_uuid(id, "id")?;
-    let existing = issue::Entity::find_by_id(&id)
-        .one(database)
-        .await?
-        .ok_or_else(|| CommandError::NotFound("Work item not found.".to_owned()))?;
-    if existing.is_archived {
-        return Ok(id);
-    }
-    let transaction = database.begin().await?;
-    let revision = next_revision(&transaction, &existing.project_id).await?;
-    let mut frontier = vec![id.clone()];
-    let mut archived: Vec<String> = Vec::new();
-    while !frontier.is_empty() {
-        let children = issue::Entity::find()
-            .filter(issue::Column::ParentId.is_in(frontier.clone()))
-            .all(&transaction)
-            .await?;
-        frontier = children.into_iter().map(|row| row.id).collect();
-        if !frontier.is_empty() {
-            issue::Entity::update_many()
-                .col_expr(
-                    issue::Column::IsArchived,
-                    sea_orm::sea_query::Expr::value(true),
-                )
-                .filter(issue::Column::Id.is_in(frontier.clone()))
-                .exec(&transaction)
-                .await?;
-            archived.extend(frontier.iter().cloned());
-        }
-    }
-    let mut identity = WorkItemIdentity::of(&existing);
-    identity.is_archived = true;
-    let now = super::timestamp::now();
-    let occurred_at = stamp(now);
-    let mut active: issue::ActiveModel = existing.into();
-    active.is_archived = Set(true);
-    active.state_revision = Set(revision);
-    active.updated_at = Set(now.clone());
-    active.update(&transaction).await?;
-    // Archiving cascades to the whole subtree, so every descendant leaves the
-    // collections it was displayed in. One fact per affected item keeps the
-    // consumer's refresh proportional to what actually changed.
-    for descendant in &archived {
-        record_work_item(
-            facts,
-            &transaction,
-            WorkItemFact {
-                project_id: &identity.project_id,
-                work_item_id: descendant,
-                change: WorkItemChange::Archived,
-                revision,
-                occurred_at: &occurred_at,
-                parent_id: None,
-                module_id: None,
-                state_id: None,
-                is_archived: true,
-            },
-        )
-        .await?;
-    }
-    record_work_item(
-        facts,
-        &transaction,
-        identity.fact(WorkItemChange::Archived, revision, &occurred_at),
-    )
-    .await?;
-    transaction.commit().await?;
-    if let Some(facts) = facts {
-        facts.wake();
-    }
-    Ok(id)
-}
-
-pub async fn delete(
-    database: &DatabaseConnection,
-    id: &str,
-    facts: Option<&WorkFactRecorder>,
-) -> Result<(), CommandError> {
-    let id = database_uuid(id, "id")?;
-    let existing = issue::Entity::find_by_id(&id)
-        .one(database)
-        .await?
-        .ok_or_else(|| CommandError::NotFound("Work item not found.".to_owned()))?;
-    if issue::Entity::find()
-        .filter(issue::Column::ParentId.eq(&id))
-        .one(database)
-        .await?
-        .is_some()
-    {
-        return Err(CommandError::Conflict(
-            "Issue has children; empty or re-parent them first.".to_owned(),
-        ));
-    }
-    let transaction = database.begin().await?;
-    let revision = next_revision(&transaction, &existing.project_id).await?;
-    let identity = WorkItemIdentity::of(&existing);
-    let now = super::timestamp::now();
-    let occurred_at = stamp(now);
-    issue::Entity::delete_by_id(&id).exec(&transaction).await?;
-    // The document registry has no foreign key to work items. Rows left behind
-    // are the "document-work-item-missing" defect every later launch repairs
-    // behind a full recovery snapshot, so remove them with their owner.
-    let spellings = uuid_spellings(&id);
-    design_document::Entity::delete_many()
-        .filter(
-            design_document::Column::TaskId
-                .is_in(spellings.clone())
-                .or(design_document::Column::ModuleId.is_in(spellings)),
-        )
-        .exec(&transaction)
-        .await?;
-    record_work_item(
-        facts,
-        &transaction,
-        identity.fact(WorkItemChange::Deleted, revision, &occurred_at),
-    )
-    .await?;
-    transaction.commit().await?;
-    if let Some(facts) = facts {
-        facts.wake();
-    }
-    Ok(())
-}
-
-pub async fn next_revision<C: ConnectionTrait>(
-    database: &C,
-    project_id: &str,
-) -> Result<i64, CommandError> {
-    let row = project::Entity::update_many()
-        .col_expr(
-            project::Column::StateRevision,
-            Expr::col(project::Column::StateRevision).add(1),
-        )
-        .col_expr(project::Column::UpdatedAt, Expr::current_timestamp())
-        .filter(project::Column::Id.eq(project_id))
-        .exec_with_returning(database)
-        .await?
-        .into_iter()
-        .next()
-        .ok_or_else(|| CommandError::NotFound("Project not found.".to_owned()))?;
-    Ok(row.state_revision)
-}
-
-async fn resolve_type(
-    database: &DatabaseConnection,
-    project_id: &str,
-    id: &str,
-    level: &str,
-) -> Result<issue_type::Model, CommandError> {
-    let selected = issue_type::Entity::find_by_id(id)
-        .filter(issue_type::Column::ProjectId.eq(project_id))
-        .one(database)
-        .await?
-        .ok_or_else(|| CommandError::NotFound("Issue type not found.".to_owned()))?;
-    if selected.level != level {
-        return Err(CommandError::validation(format!(
-            "Issue type '{}' is level '{}', not '{}'.",
-            selected.name, selected.level, level
-        )));
-    }
-    Ok(selected)
 }
 
 async fn resolve_create_type<C: ConnectionTrait>(
@@ -549,18 +292,4 @@ async fn resolve_parent<C: ConnectionTrait>(
         None
     };
     Ok((Some(parent.id), module_id))
-}
-
-pub(super) fn valid_name(value: &str) -> Result<String, CommandError> {
-    let value = value.trim();
-    if value.is_empty() {
-        return Err(CommandError::field("name", "This field may not be blank."));
-    }
-    if value.chars().count() > 512 {
-        return Err(CommandError::field(
-            "name",
-            "Ensure this field has no more than 512 characters.",
-        ));
-    }
-    Ok(value.to_owned())
 }

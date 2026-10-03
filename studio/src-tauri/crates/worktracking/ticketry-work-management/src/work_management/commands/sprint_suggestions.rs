@@ -5,9 +5,12 @@ use sea_orm::{
 use ticketry_entities::{issue, issue_type, sprint, sprint_suggestion};
 
 mod recording;
+pub(crate) use recording::record_in;
+mod validation;
 pub use recording::{
     goals_for_sprint, record_for_run, RecordSprintSuggestion, SprintStorySuggestion,
 };
+use validation::{validate_epic, validate_name, validate_story};
 
 use super::{
     identifiers::database_uuid,
@@ -65,22 +68,32 @@ pub(crate) async fn set_status(
             ))
         }
         PatchValue::Value(name) => {
-            if current.status != sprint_suggestion::WAITING || current.issue_id.is_some() {
+            let name = name.trim().to_owned();
+            validate_name(&name)?;
+            let same_accept = current.status == sprint_suggestion::ACCEPTED
+                && status == sprint_suggestion::ACCEPTED
+                && current.proposed_name.as_deref() == Some(name.as_str());
+            if !same_accept
+                && (current.status != sprint_suggestion::WAITING || current.issue_id.is_some())
+            {
                 return Err(CommandError::field(
                     "proposed_name",
                     "Only a waiting proposal can be renamed.",
                 ));
             }
-            let name = name.trim().to_owned();
-            validate_name(&name)?;
-            active.proposed_name = Set(Some(name));
+            if !same_accept {
+                active.proposed_name = Set(Some(name));
+            }
         }
     }
     match (current.status.as_str(), status) {
         (from, to) if from == to => {}
         (sprint_suggestion::WAITING, sprint_suggestion::ACCEPTED) => {
             let id = match current.issue_id {
-                Some(id) => id,
+                Some(id) => {
+                    validate_story(txn, &sprint.project_id, &id).await?;
+                    id
+                }
                 None => {
                     validate_epic(txn, &sprint.project_id, current.proposed_epic_id.as_deref())
                         .await?;
@@ -147,33 +160,4 @@ pub(crate) async fn set_status(
     }
     active.status = Set(status.to_owned());
     Ok(active)
-}
-
-fn validate_name(name: &str) -> Result<(), CommandError> {
-    if name.trim().is_empty() || name.trim().chars().count() > 512 {
-        return Err(CommandError::field(
-            "proposed_name",
-            "Enter a name of 1 to 512 characters.",
-        ));
-    }
-    Ok(())
-}
-
-async fn validate_epic(
-    txn: &DatabaseTransaction,
-    project_id: &str,
-    id: Option<&str>,
-) -> Result<(), CommandError> {
-    if let Some(id) = id {
-        let epic = issue::Entity::find_by_id(id).one(txn).await?.filter(|row| {
-            row.project_id == project_id && row.r#type == "module" && !row.is_archived
-        });
-        if epic.is_none() {
-            return Err(CommandError::field(
-                "proposed_epic_id",
-                "Choose a live epic in this project.",
-            ));
-        }
-    }
-    Ok(())
 }

@@ -1,0 +1,13 @@
+query SprintGoals($sprintId: String!) {
+  worktrackerSprintGoal(filters: { sprintId: { eq: $sprintId } }, orderBy: { position: ASC }) {
+    nodes { id text position }
+  }
+}
+
+mutation CreateSprintGoal($sprintId: String!, $text: String!) {
+  create_sprint_goal(sprint_id: $sprintId, text: $text) { id text position }
+}
+
+mutation DeleteSprintGoal($id: String!) {
+  delete_sprint_goal(id: $id)
+}

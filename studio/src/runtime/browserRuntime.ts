@@ -188,6 +188,7 @@ export function createBrowserRuntime({
 
   return Object.freeze({
     platform: "browser" as const,
+    serviceRecovery: "restart" as const,
     graphQlTransport,
     launchkey: inertLaunchkeyRuntime,
     capabilities: Object.freeze({

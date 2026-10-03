@@ -1,0 +1,2058 @@
+<!doctype html>
+<html lang="en" data-theme="dark" style="background:#0e1520;color-scheme:dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="lld-source" content="LLD.md">
+  <meta name="lld-source-sha256" content="d25b85079e399477e0cb5b21f40a166175177d3bbcacc9318b53b95e49e70a56">
+  <title>Button LLD</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --surface: #202b3b;
+      --rail: #121c29;
+      --group: #263448;
+      --on-accent: #0e1520;
+      --focus: #a7ceff;
+      --paper: #0e1520;
+      --sheet: #172130;
+      --ink: #e6edf6;
+      --muted: #a6b5c9;
+      --line: #34445b;
+      --line-strong: #657a96;
+      --navy: #91c4ff;
+      --navy-soft: #203852;
+      --orange: #ffb180;
+      --orange-soft: #422d24;
+      --green: #7bdbb1;
+      --green-soft: #183b32;
+      --red: #ff9eaa;
+      --red-soft: #432731;
+      --violet: #c4b2ff;
+      --violet-soft: #332e4c;
+      --shadow: 0 18px 45px rgba(0, 0, 0, .24);
+      --radius: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--paper); }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(145, 196, 255, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(145, 196, 255, .025) 1px, transparent 1px),
+        var(--paper);
+      background-size: 24px 24px;
+      font-family: var(--sans);
+      line-height: 1.55;
+    }
+
+    button, input { font: inherit; }
+    button:focus-visible, input:focus-visible, a:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .shell { width: min(1480px, calc(100% - 40px)); margin: 0 auto; }
+    .masthead {
+      margin-top: 20px;
+      border: 1px solid var(--line-strong);
+      background: var(--sheet);
+      box-shadow: var(--shadow);
+    }
+    .masthead-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      padding: 30px 34px 28px;
+      border-bottom: 1px solid var(--line);
+    }
+    .crumb {
+      margin: 0 0 12px;
+      color: var(--orange);
+      font: 700 11px/1.2 var(--mono);
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; max-width: 900px; font-size: clamp(32px, 5vw, 64px); line-height: .98; letter-spacing: -.045em; }
+    .summary { max-width: 780px; margin: 18px 0 0; color: var(--muted); font-size: 16px; }
+    .phase-card {
+      min-width: 180px;
+      align-self: stretch;
+      display: grid;
+      align-content: space-between;
+      padding: 18px;
+      background: var(--navy);
+      color: var(--on-accent);
+    }
+    .phase-card span { font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; opacity: .68; }
+    .phase-card strong { font-size: 30px; letter-spacing: -.03em; }
+    .phase-card small { font-family: var(--mono); opacity: .78; }
+    .metrics { display: grid; grid-template-columns: repeat(5, 1fr); }
+    .metric b { color: var(--ink); }
+    .metric { padding: 15px 20px; border-right: 1px solid var(--line); }
+    .metric:last-child { border-right: 0; }
+    .metric b { display: block; font-size: 24px; line-height: 1; }
+    .metric span { color: var(--muted); font: 700 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+
+    .sticky-nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      gap: 4px;
+      margin: 14px 0 32px;
+      padding: 7px;
+      border: 1px solid var(--line);
+      background: rgba(23, 33, 48, .94);
+      backdrop-filter: blur(14px);
+    }
+    .sticky-nav a { padding: 8px 13px; color: var(--muted); font: 700 11px/1 var(--mono); text-decoration: none; text-transform: uppercase; }
+    .sticky-nav a:hover { color: var(--navy); background: var(--navy-soft); }
+
+    section { margin: 0 0 46px; scroll-margin-top: 72px; }
+    .primary-section { margin-bottom: 56px; }
+    .section-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px; align-items: end; }
+    .workspace-note { max-width: 310px; margin: 0 0 22px; padding: 12px 14px; border-left: 3px solid var(--orange); color: var(--muted); background: var(--sheet); font-size: 12px; }
+    .section-kicker { margin: 0 0 6px; color: var(--orange); font: 700 10px/1 var(--mono); letter-spacing: .15em; text-transform: uppercase; }
+    h2 { margin: 0; font-size: clamp(25px, 3vw, 39px); letter-spacing: -.035em; }
+    .lede { max-width: 820px; margin: 10px 0 22px; color: var(--muted); }
+
+    .overview-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 16px; }
+    .card { border: 1px solid var(--line); background: var(--sheet); padding: 22px; }
+    .card h3 { margin: 0 0 12px; font-size: 16px; }
+    .plain-list { margin: 0; padding-left: 18px; }
+    .plain-list li + li { margin-top: 8px; }
+    .boundary { border-left: 4px solid var(--orange); }
+
+    .change-view { border: 1px solid var(--line-strong); background: var(--sheet); box-shadow: var(--shadow); }
+    .change-toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 16px;
+      padding: 15px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .search-wrap { position: relative; }
+    .search-wrap span { position: absolute; left: 12px; top: 9px; color: var(--muted); font-family: var(--mono); }
+    #file-search {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px 0 36px;
+      border: 1px solid var(--line-strong);
+      background: var(--rail);
+      color: var(--ink);
+    }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .filter {
+      border: 1px solid var(--line);
+      background: var(--sheet);
+      color: var(--muted);
+      padding: 7px 10px;
+      cursor: pointer;
+      font: 700 10px/1 var(--mono);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .filter[aria-pressed="true"] { color: var(--on-accent); border-color: var(--navy); background: var(--navy); }
+    .change-workspace { display: grid; grid-template-columns: minmax(330px, .72fr) minmax(0, 1.8fr); height: clamp(620px, 72vh, 820px); }
+    .file-rail { border-right: 1px solid var(--line); background: var(--rail); overflow: auto; }
+    .rail-empty { padding: 30px; color: var(--muted); text-align: center; }
+    .dir-group + .dir-group { border-top: 1px solid var(--line); }
+    .dir-label { position: sticky; top: 0; z-index: 2; padding: 9px 13px; color: var(--muted); background: var(--group); font: 700 10px/1.2 var(--mono); }
+    .file-button {
+      width: 100%;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 11px 13px;
+      border: 0;
+      border-top: 1px solid rgba(201, 209, 220, .7);
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+    }
+    .file-button:hover { background: var(--surface); }
+    .file-button[aria-selected="true"] { background: var(--surface); box-shadow: inset 4px 0 0 var(--orange); }
+    .file-button-copy { min-width: 0; display: grid; gap: 4px; }
+    .file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 12px/1.3 var(--mono); }
+    .file-meta { color: var(--muted); font: 700 9px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+    .action-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+    .action-dot.create { background: var(--green); }
+    .action-dot.modify { background: var(--orange); }
+    .action-dot.delete { background: var(--red); }
+    .action-dot.move { background: var(--violet); }
+    .action-dot.untouched { background: var(--navy); }
+
+    .file-inspector { min-width: 0; padding: 28px; overflow: auto; }
+    .inspector-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .path { margin: 0; overflow-wrap: anywhere; font: 700 clamp(16px, 2vw, 22px)/1.3 var(--mono); }
+    .purpose { margin: 8px 0 0; color: var(--muted); }
+    .action-badge { flex: 0 0 auto; padding: 6px 9px; border: 1px solid currentColor; font: 800 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .action-badge.create { color: var(--green); background: var(--green-soft); }
+    .action-badge.modify { color: var(--orange); background: var(--orange-soft); }
+    .action-badge.delete { color: var(--red); background: var(--red-soft); }
+    .action-badge.move { color: var(--violet); background: var(--violet-soft); }
+    .action-badge.untouched { color: var(--navy); background: var(--navy-soft); }
+    .inspector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+    .info-block { border-top: 3px solid var(--navy); padding: 13px 14px 15px; background: var(--surface); }
+    .info-block.no { border-top-color: var(--red); }
+    .info-block h4 { margin: 0 0 8px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .info-block ul { margin: 0; padding-left: 18px; font-size: 13px; }
+    .info-block li + li { margin-top: 6px; }
+    .symbol-row, .trace-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+    .token { padding: 5px 8px; border: 1px solid var(--line); background: var(--rail); font: 600 11px/1 var(--mono); }
+    .trace-token { color: var(--navy); border-color: var(--navy); background: var(--navy-soft); }
+    .dependency-strip { margin-top: 20px; padding: 14px; border: 1px dashed var(--line-strong); }
+    .dependency-strip b { display: block; margin-bottom: 7px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .dependency-strip p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .timeline { display: grid; gap: 9px; counter-reset: step; }
+    .step { counter-increment: step; display: grid; grid-template-columns: 48px 1fr auto; gap: 16px; align-items: start; padding: 17px; border: 1px solid var(--line); background: var(--sheet); }
+    .step::before { content: counter(step, decimal-leading-zero); color: var(--orange); font: 800 18px/1 var(--mono); }
+    .step b { display: block; margin-bottom: 4px; }
+    .step p { margin: 0; color: var(--muted); }
+    .step code { color: var(--navy); font: 700 11px/1.4 var(--mono); }
+    .acceptance { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .acceptance-item { display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 16px; border: 1px solid var(--green); background: var(--green-soft); }
+    .acceptance-item strong { color: var(--green); font-family: var(--mono); }
+    .acceptance-item p { margin: 0; }
+    footer { margin: 50px 0 24px; padding: 18px 0; border-top: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; }
+    footer code { color: var(--navy); }
+
+
+    a { color: var(--navy); }
+    input::placeholder { color: var(--muted); opacity: 1; }
+    .token, .info-block, .step { overflow-wrap: anywhere; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); background: var(--sheet); margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); background: var(--surface); font: 700 10px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    td code, li code, p code { font: 600 12px/1.45 var(--mono); color: var(--orange); }
+    .contract-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    h3.table-title { margin: 18px 0 8px; font-size: 15px; }
+    .decision-list li b { color: var(--orange); font-family: var(--mono); }
+
+    /* compact header so the file-change workspace owns the first viewport */
+    .masthead { margin-top: 12px; }
+    .masthead-top { padding: 14px 20px; gap: 16px; }
+    .crumb { margin-bottom: 4px; font-size: 10px; }
+    h1 { font-size: clamp(22px, 2.6vw, 30px); line-height: 1.1; letter-spacing: -.02em; }
+    .summary { margin-top: 6px; font-size: 13px; }
+    .phase-card { min-width: 150px; padding: 10px 14px; gap: 4px; }
+    .phase-card strong { font-size: 18px; }
+    .metric { padding: 7px 14px; }
+    .metric b { font-size: 17px; }
+    .sticky-nav { margin: 8px 0 14px; padding: 4px; flex-wrap: wrap; }
+    .sticky-nav a { padding: 7px 11px; }
+    .primary-section h2, section h2 { font-size: clamp(20px, 2.2vw, 26px); }
+    .lede { margin: 4px 0 12px; font-size: 14px; }
+    .workspace-note { margin-bottom: 12px; }
+
+    @media (max-width: 880px) { .contract-grid { grid-template-columns: 1fr; } }
+
+    @media (max-width: 880px) {
+      .shell { width: min(100% - 22px, 1480px); }
+      .masthead-top, .overview-grid, .section-heading { grid-template-columns: 1fr; }
+      .masthead-top { gap: 18px; padding: 22px; }
+      h1 { font-size: clamp(30px, 8vw, 42px); }
+      .phase-card { min-height: 0; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; }
+      .phase-card strong { font-size: 22px; }
+      .metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .metric { padding: 12px 10px; }
+      .metric b { font-size: 20px; }
+      .metric span { font-size: 8px; }
+      .metric { border-bottom: 1px solid var(--line); }
+      .change-toolbar { grid-template-columns: 1fr; }
+      .filters { justify-content: flex-start; }
+      .change-workspace { grid-template-columns: 1fr; height: auto; }
+      .file-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: 330px; }
+      .inspector-grid, .acceptance { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 42px 1fr; }
+      .step code { grid-column: 2; }
+    }
+
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body data-template="false">
+  <div class="shell">
+    <header class="masthead" id="overview">
+      <div class="masthead-top">
+        <div>
+          <p class="crumb" id="doc-crumb">Module · Work item · LLD</p>
+          <h1 id="doc-title">File change plan</h1>
+          <p class="summary" id="doc-summary"></p>
+        </div>
+        <div class="phase-card">
+          <span>Design state</span>
+          <strong>LLD</strong>
+          <small id="doc-status">candidate</small>
+        </div>
+      </div>
+      <div class="metrics" id="metrics" aria-label="File change totals"></div>
+    </header>
+
+    <nav class="sticky-nav" aria-label="Document sections">
+      <a href="#file-changes">File changes</a>
+      <a href="#contracts">Contracts</a>
+      <a href="#context">Context</a>
+      <a href="#execution">Build order</a>
+      <a href="#acceptance">Acceptance</a>
+    </nav>
+
+    <main>
+      <section class="primary-section" id="file-changes" aria-labelledby="changes-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Primary implementation plan</p>
+            <h2 id="changes-title">Build the design file by file</h2>
+            <p class="lede">Select a file to see exactly why it changes, what to implement, what must remain stable, and how that file is verified.</p>
+          </div>
+          <p class="workspace-note"><strong>Start here.</strong> Search paths, symbols, or requirement IDs. Use ↑ and ↓ to inspect files without leaving the keyboard.</p>
+        </div>
+        <div class="change-view">
+          <div class="change-toolbar">
+            <label class="search-wrap">
+              <span aria-hidden="true">/</span>
+              <input id="file-search" type="search" placeholder="Find a path, symbol, or requirement" autocomplete="off">
+            </label>
+            <div class="filters" id="filters" aria-label="Filter files by action"></div>
+          </div>
+          <div class="change-workspace">
+            <div class="file-rail" id="file-rail" role="listbox" aria-label="Planned file changes"></div>
+            <article class="file-inspector" id="file-inspector" aria-live="polite"></article>
+          </div>
+        </div>
+      </section>
+
+
+      <section id="contracts" aria-labelledby="contracts-title">
+        <p class="section-kicker">Fixed public API</p>
+        <h2 id="contracts-title">Button and DialogFooter contracts</h2>
+        <p class="lede">Ticket 09 consumes these contracts unchanged. No test asserts class names; the tokens below are the implementation spec.</p>
+        <h3 class="table-title">Button props (<code>shared/ui/Button.tsx</code>)</h3>
+        <div class="table-wrap"><table><thead><tr><th>Prop</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead><tbody><tr><td><code>variant</code></td><td><code>primary | secondary | danger | ghost | icon | dashed</code></td><td><code>secondary</code></td><td>Closed set (<code>ButtonVariant</code>).</td></tr><tr><td><code>size</code></td><td><code>xs | sm | md</code></td><td><code>md</code></td><td>Closed set (<code>ButtonSize</code>). <code>xs</code> added by D-2.</td></tr><tr><td><code>type</code></td><td><code>button | submit | reset</code></td><td><code>button</code></td><td>Always written to the DOM.</td></tr><tr><td><code>aria-label</code></td><td><code>string</code></td><td>—</td><td>Required when <code>variant</code> is <code>icon</code> (type-level, D-8).</td></tr><tr><td><code>className</code></td><td><code>string</code></td><td><code>""</code></td><td>Layout only (D-7). Appended last.</td></tr><tr><td><code>ref</code></td><td><code>Ref&lt;HTMLButtonElement&gt;</code></td><td>—</td><td><code>forwardRef</code>; <code>displayName</code> <code>Button</code>.</td></tr><tr><td>other</td><td>native button attributes</td><td>—</td><td><code>disabled</code>, handlers, <code>autoFocus</code>, <code>title</code>, <code>aria-*</code>, <code>data-*</code> pass through.</td></tr></tbody></table></div>
+        <p><b>Base, every variant:</b> <code>inline-flex items-center border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:aria-busy:cursor-wait</code></p>
+        <h3 class="table-title">Sizes</h3>
+        <div class="table-wrap"><table><thead><tr><th>Size</th><th>Non-icon classes</th><th>Icon classes</th><th>Replaces</th></tr></thead><tbody><tr><td><code>xs</code></td><td><code>gap-1 px-2 py-0.5 text-xs</code></td><td><code>size-5 justify-center text-xs</code></td><td>footer bar, dashed chip triggers</td></tr><tr><td><code>sm</code></td><td><code>h-7 gap-2 px-2.5 text-sm</code></td><td><code>size-7 justify-center text-sm</code></td><td>h-7 detail actions, picker triggers, Changes toolbar</td></tr><tr><td><code>md</code></td><td><code>gap-2 px-3 py-1.5 text-sm</code></td><td><code>size-8 justify-center text-sm</code></td><td>modal, settings, placeholder, gate buttons</td></tr></tbody></table></div>
+        <h3 class="table-title">Variants</h3>
+        <div class="table-wrap"><table><thead><tr><th>Variant</th><th>Classes</th><th>Absorbs</th></tr></thead><tbody><tr><td><code>primary</code></td><td><code>border-focus-accent bg-pane-title font-semibold text-focus-accent enabled:hover:bg-pane-bg</code></td><td>settings primary, DialogHost primaryButtonClass, OnboardingTour buttonClass, accent-outline modal and gate buttons, run actions, ChangesToolbar primary and Confirm, prototype New chat</td></tr><tr><td><code>secondary</code></td><td><code>border-pane-border text-text-primary enabled:hover:border-text-secondary enabled:hover:bg-pane-title</code></td><td>settings secondary, DialogHost buttonClass, modal Cancel, secondary-with-hover list, SubtreeRunButton, Open subtree run, PickerTrigger default</td></tr><tr><td><code>danger</code></td><td><code>border-lifecycle-danger/60 bg-lifecycle-danger/15 text-lifecycle-danger enabled:hover:bg-lifecycle-danger/25</code></td><td>settings danger and danger-filled, DialogHost dangerButtonClass</td></tr><tr><td><code>ghost</code></td><td><code>border-transparent text-text-muted enabled:hover:bg-pane-bg enabled:hover:text-text-primary</code></td><td>footer bar, onboarding Skip tour, PickerTrigger bare (never border-pane-border, D-14)</td></tr><tr><td><code>icon</code></td><td><code>border-transparent text-text-muted enabled:hover:bg-pane-title enabled:hover:text-text-primary</code></td><td>StateCatalog ↑/↓</td></tr><tr><td><code>dashed</code></td><td><code>border-dashed border-pane-border text-text-muted enabled:hover:border-focus-accent enabled:hover:text-text-primary aria-expanded:border-solid aria-expanded:border-focus-accent aria-expanded:text-text-primary</code></td><td>＋ Agent launcher, dormant tabs trigger, PickerTrigger dashed, Add state, + Add destination</td></tr></tbody></table></div>
+        <h3 class="table-title">DialogFooter props (<code>shared/ui/DialogFooter.tsx</code>)</h3>
+        <p>Renders <code>&lt;div class="flex justify-end gap-2 {className}"&gt;</code>, then Cancel, then the optional confirm. No children slot, no role, no data attributes.</p>
+        <div class="table-wrap"><table><thead><tr><th>Prop</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead><tbody><tr><td><code>onCancel</code></td><td><code>() =&gt; void</code></td><td>required</td><td>Cancel always first, <code>secondary md</code>, <code>type="button"</code>.</td></tr><tr><td><code>cancelLabel</code></td><td><code>ReactNode</code></td><td><code>"Cancel"</code></td><td>ModalErrorBoundary passes Close.</td></tr><tr><td><code>cancelDisabled</code></td><td><code>boolean</code></td><td><code>false</code></td><td>PromptInput while busy.</td></tr><tr><td><code>cancelRef</code></td><td><code>Ref&lt;HTMLButtonElement&gt;</code></td><td>—</td><td>For ModalShell <code>initialFocusRef</code>.</td></tr><tr><td><code>cancelAutoFocus</code></td><td><code>boolean</code></td><td><code>false</code></td><td>StateCatalog until ticket 09; the prop stays.</td></tr><tr><td><code>onConfirm</code></td><td><code>() =&gt; void</code></td><td>—</td><td>Omitted: confirm not rendered.</td></tr><tr><td><code>confirmLabel</code></td><td><code>ReactNode</code></td><td><code>"Confirm"</code></td><td>Busy text supplied by caller.</td></tr><tr><td><code>confirmVariant</code></td><td><code>primary | danger</code></td><td><code>primary</code></td><td>Always <code>md</code>.</td></tr><tr><td><code>confirmDisabled</code></td><td><code>boolean</code></td><td><code>false</code></td><td>—</td></tr><tr><td><code>className</code></td><td><code>string</code></td><td><code>""</code></td><td>Layout only (top margin).</td></tr></tbody></table></div>
+      </section>
+
+      <section id="context" aria-labelledby="scope-title">
+        <p class="section-kicker">Supporting context</p>
+        <h2 id="scope-title">Scope and preserved boundaries</h2>
+        <p class="lede" id="scope-lede"></p>
+        <div class="overview-grid">
+          <article class="card">
+            <h3>In scope</h3>
+            <ul class="plain-list" id="scope-list"></ul>
+          </article>
+          <article class="card boundary">
+            <h3>Preserved boundaries</h3>
+            <ul class="plain-list" id="boundary-list"></ul>
+          </article>
+        </div>
+        <article class="card" style="margin-top:16px">
+          <h3>Decisions</h3>
+          <ul class="plain-list decision-list">
+            <li><b>D-1</b> One file per component; no barrel; no exported class helper.</li>
+            <li><b>D-2</b> Sizes <code>xs</code>, <code>sm</code>, <code>md</code>; <code>xs</code> exists because the footer is 24px and the dashed triggers are <code>text-xs</code>.</li>
+            <li><b>D-3</b> One look per variant: danger and danger-filled become <code>danger</code>; filled accents become accent-border <code>primary</code>.</li>
+            <li><b>D-4</b> Hover tokens use <code>enabled:hover:</code>.</li>
+            <li><b>D-5</b> Pending is shown with <code>aria-busy</code> (wait cursor).</li>
+            <li><b>D-6</b> <code>dashed</code> shows the open state from <code>aria-expanded</code>.</li>
+            <li><b>D-7</b> <code>className</code> is layout only.</li>
+            <li><b>D-8</b> <code>icon</code> requires <code>aria-label</code> in the type.</li>
+            <li><b>D-9</b> <code>DialogFooter</code> is props-driven: Cancel <code>secondary md</code>, then confirm <code>primary</code> or <code>danger</code> at <code>md</code>.</li>
+            <li><b>D-10</b> Single-action dialogs keep their wrapper and use one <code>Button</code>.</li>
+            <li><b>D-11</b> Inline forms, Settings Discard/Save bars and the ChangesToolbar popover keep their order and use plain <code>Button</code>s.</li>
+            <li><b>D-12</b> The KeyboardSettings binding cell drops <code>font-mono</code> and the recording background; the label shows the state. No <code>aria-pressed</code>.</li>
+            <li><b>D-13</b> PickerTrigger keeps its <code>variant</code> prop: default to secondary sm, dashed to dashed xs, bare to ghost sm; <code>crumb</code> stays local.</li>
+            <li><b>D-14</b> <code>ghost</code> uses <code>border-transparent</code> (constraint from <code>overhaulWorkItemAcceptance.test.tsx:190</code>).</li>
+          </ul>
+        </article>
+        <article class="card" style="margin-top:16px">
+          <h3>Deferred copies (follow-up, not 05 acceptance)</h3>
+          <ul class="plain-list">
+            <li><code>WorktreeMergePreview.tsx:223-347</code> (8), <code>BranchInspector.tsx:134-204</code> (6), <code>WorktreeLifecycle.tsx:151</code>, <code>WorktreeBlock.tsx:284,296,317,386</code>: dense text-xs worktree buttons whose size needs a visual review.</li>
+            <li><code>EmptyModuleWorkspace.tsx:22</code>, <code>StoriesSearchEmptyState.tsx:25</code>: placeholders near ticket 10.</li>
+            <li>Prototype only: <code>ConversationListVariant.tsx:226</code>, <code>ConversationInboxVariant.tsx:399</code>.</li>
+          </ul>
+        </article>
+        <article class="card" style="margin-top:16px">
+          <h3>Intentional visual changes</h3>
+          <p>Settings primary changes from filled to accent border. Danger becomes one tinted style. Modal Cancel loses <code>bg-pane-bg</code>. Run actions use accent text. The ChangesToolbar primary changes from inverted to accent. The dashed PickerTrigger becomes muted dashed. StateCatalog ↑/↓ become borderless icon buttons. Onboarding filled buttons become accent border. Footer buttons gain a transparent 1px border and <code>px-2</code>. Every button gains a focus-visible ring. Behaviour is unchanged.</p>
+        </article>
+      </section>
+
+      <section id="execution" aria-labelledby="execution-title">
+        <p class="section-kicker">Dependency order</p>
+        <h2 id="execution-title">Build order</h2>
+        <p class="lede">Each step should leave a locally verifiable result and unblock the next dependency.</p>
+        <div class="timeline" id="timeline"></div>
+      </section>
+
+      <section id="acceptance" aria-labelledby="acceptance-title">
+        <p class="section-kicker">Completion signals</p>
+        <h2 id="acceptance-title">Acceptance</h2>
+        <p class="lede">Every signal traces back to the canonical LLD and names an observable result.</p>
+        <div class="acceptance" id="acceptance-list"></div>
+      </section>
+    </main>
+
+    <footer><code>LLD.md</code> is authoritative. This HTML is its presentation mirror. Baseline <code>main</code> at <code>a2541323</code>.</footer>
+  </div>
+
+  <script>
+    const LLD_DOCUMENT = {
+      "meta": {
+        "crumb": "Shared UI component library · Ticket 05 · LLD",
+        "title": "Button and DialogFooter",
+        "summary": "One closed-variant Button and one Cancel-first DialogFooter in shared/ui replace settingsButtonClass, the DialogHost and OnboardingTour class constants and every listed inline button copy, in six batches that keep every existing suite green.",
+        "status": "implementation-ready · a2541323"
+      },
+      "scope": {
+        "lede": "Ticket 05 adds two shared components and migrates 36 instance files. Inputs, close buttons, tab-look toggles, modal shells, menus and the dense worktree pane buttons stay out of scope.",
+        "in": [
+          "Create shared/ui/Button.tsx (variants primary, secondary, danger, ghost, icon, dashed; sizes xs, sm, md) and shared/ui/DialogFooter.tsx, each with a colocated test",
+          "Migrate every ticket instance plus the unlisted copies in OnboardingTour, OnboardingProviders, StoryWorkflowGuideAction and the ChangesToolbar confirmation",
+          "Delete settingsButtonClass, BUTTON_TIER_CLASS, SettingsButtonTier, the DialogHost buttonClass, primaryButtonClass and dangerButtonClass, and the OnboardingTour buttonClass",
+          "Use DialogFooter for the 7 ticket footers plus the StateCatalog delete confirm and ModalErrorBoundary",
+          "Remove every bg-accent-primary button style"
+        ],
+        "boundaries": [
+          "Inputs and selects, including DialogHost.tsx:85 focus:border-accent-primary: ticket 06",
+          "× close buttons: ticket 01 CloseButton",
+          "Pill selectors, Settings rail and pressed toggles: ticket 04",
+          "Scrim, focus trap and Escape for StateCatalog and WorkflowImpactDialog: ticket 09",
+          "Menu bodies and ▾ suffixes: tickets 07 and 08",
+          "text-red-400 error lines: ticket 10",
+          "The Open PR <a> stays a link; Button renders only <button>",
+          "The tailwind config, CSS and existing test assertions are untouched"
+        ]
+      },
+      "files": [
+        {
+          "id": "button",
+          "path": "studio/src/shared/ui/Button.tsx",
+          "action": "create",
+          "layer": "shared ui",
+          "purpose": "The single button primitive with closed variant and size unions.",
+          "symbols": [
+            "Button",
+            "ButtonVariant",
+            "ButtonSize",
+            "ButtonProps",
+            "BASE_CLASS",
+            "SIZE_CLASS",
+            "ICON_SIZE_CLASS",
+            "VARIANT_CLASS"
+          ],
+          "responsibilities": [
+            "forwardRef<HTMLButtonElement>; displayName Button",
+            "Defaults: variant secondary, size md, type button",
+            "Class = base + size (icon size map for icon) + variant + layout className, joined with spaces",
+            "Type union makes aria-label required for icon",
+            "Pass through every native button attribute"
+          ],
+          "nonResponsibilities": [
+            "Renders only <button>, never <a>",
+            "No exported class-string helper",
+            "Imports only react (moduleBoundaries)",
+            "No clsx or tailwind-merge dependency"
+          ],
+          "implementation": [
+            "Write the four literal class maps exactly as in the Contracts section",
+            "Base: inline-flex items-center border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:aria-busy:cursor-wait"
+          ],
+          "verification": [
+            "Button.test.tsx passes",
+            "npm run typecheck passes"
+          ],
+          "dependencies": "Batch A. No dependency; lands first.",
+          "tests": [
+            "Button.test.tsx"
+          ],
+          "trace": [
+            "D-1",
+            "D-2",
+            "D-4",
+            "D-5",
+            "D-6",
+            "D-7",
+            "D-8",
+            "AC-1"
+          ]
+        },
+        {
+          "id": "button-test",
+          "path": "studio/src/shared/ui/Button.test.tsx",
+          "action": "create",
+          "layer": "test",
+          "purpose": "Behaviour tests for Button; no class assertions.",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Role and name from children; type=button default",
+            "type=submit submits a form; default does not",
+            "disabled blocks onClick",
+            "Forwarded ref equals the element",
+            "aria-expanded, aria-busy, title, data-testid pass through",
+            "All 6 variants x 3 sizes reachable and clickable (danger reachable)",
+            "icon named by aria-label; @ts-expect-error for icon without aria-label"
+          ],
+          "nonResponsibilities": [
+            "Never asserts class strings or DOM beyond roles"
+          ],
+          "implementation": [
+            "vitest + @testing-library/react with fireEvent (user-event not installed)"
+          ],
+          "verification": [
+            "npx vitest run src/shared/ui/Button.test.tsx"
+          ],
+          "dependencies": "Batch A, with Button.tsx.",
+          "tests": [
+            "self"
+          ],
+          "trace": [
+            "AC-1"
+          ]
+        },
+        {
+          "id": "footer",
+          "path": "studio/src/shared/ui/DialogFooter.tsx",
+          "action": "create",
+          "layer": "shared ui",
+          "purpose": "Right-aligned dialog footer that always renders Cancel before the confirm action.",
+          "symbols": [
+            "DialogFooter",
+            "DialogFooterProps"
+          ],
+          "responsibilities": [
+            "Wrapper: div flex justify-end gap-2 plus layout className",
+            "Cancel: Button secondary md, label default Cancel, cancelDisabled, cancelRef, cancelAutoFocus",
+            "Confirm (only when onConfirm given): Button confirmVariant (primary|danger) md, confirmLabel default Confirm, confirmDisabled"
+          ],
+          "nonResponsibilities": [
+            "No children slot (ticket 09 must not add one)",
+            "No scrim, focus trap or Escape (ModalShell owns those)",
+            "No role or data-* attributes"
+          ],
+          "implementation": [
+            "Compose Button; no own class maps beyond the wrapper"
+          ],
+          "verification": [
+            "DialogFooter.test.tsx passes"
+          ],
+          "dependencies": "Batch A. Depends on Button.tsx.",
+          "tests": [
+            "DialogFooter.test.tsx"
+          ],
+          "trace": [
+            "D-9",
+            "AC-1",
+            "AC-6"
+          ]
+        },
+        {
+          "id": "footer-test",
+          "path": "studio/src/shared/ui/DialogFooter.test.tsx",
+          "action": "create",
+          "layer": "test",
+          "purpose": "Behaviour tests for DialogFooter.",
+          "symbols": [
+            "DialogFooter"
+          ],
+          "responsibilities": [
+            "Button order is [Cancel, confirmLabel]",
+            "Default labels Cancel and Confirm",
+            "onCancel and onConfirm fire once",
+            "confirmDisabled and cancelDisabled disable",
+            "No onConfirm renders only Cancel",
+            "cancelRef is the Cancel element; cancelAutoFocus focuses it",
+            "danger confirm reachable and fires"
+          ],
+          "nonResponsibilities": [
+            "No class assertions"
+          ],
+          "implementation": [
+            "vitest + RTL fireEvent"
+          ],
+          "verification": [
+            "npx vitest run src/shared/ui/DialogFooter.test.tsx"
+          ],
+          "dependencies": "Batch A.",
+          "tests": [
+            "self"
+          ],
+          "trace": [
+            "AC-1",
+            "AC-6"
+          ]
+        },
+        {
+          "id": "settings-primitives",
+          "path": "studio/src/shared/ui/SettingsPrimitives.tsx",
+          "action": "modify",
+          "layer": "shared ui",
+          "purpose": "Loses the settings button tier helper once no caller remains.",
+          "symbols": [
+            "settingsButtonClass",
+            "BUTTON_TIER_CLASS",
+            "SettingsButtonTier"
+          ],
+          "responsibilities": [
+            "Delete lines 15-37 (type, map, function)"
+          ],
+          "nonResponsibilities": [
+            "SETTINGS_FIELD_CLASS, SETTINGS_EYEBROW_CLASS, SETTINGS_CHECKBOX_CLASS, SettingsStatusLine, SettingsSubsection stay byte-identical (tickets 06, 10)"
+          ],
+          "implementation": [
+            "Delete after all 8 caller files (25 call sites) migrate in batch C"
+          ],
+          "verification": [
+            "grep settingsButtonClass in studio/src is empty",
+            "typecheck passes"
+          ],
+          "dependencies": "End of batch C.",
+          "tests": [
+            "typecheck"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "dialoghost",
+          "path": "studio/src/app/shell/DialogHost.tsx",
+          "action": "modify",
+          "layer": "app shell",
+          "purpose": "Promise-bus Confirm and Reassign dialogs use DialogFooter; the third button system disappears.",
+          "symbols": [
+            "buttonClass",
+            "primaryButtonClass",
+            "dangerButtonClass",
+            "ConfirmDialog",
+            "ReassignDialog"
+          ],
+          "responsibilities": [
+            "Delete lines 5-8",
+            "Confirm: DialogFooter cancelRef, onCancel resolve(false), onConfirm resolve(true), confirmLabel opts.confirmLabel ?? Confirm, confirmVariant danger when opts.danger, className mt-5",
+            "Reassign: DialogFooter cancelRef, onCancel resolve(null), confirmLabel Reassign or Continue, confirmDisabled hasCandidates && !selectedId, className mt-5"
+          ],
+          "nonResponsibilities": [
+            "Reassign select at :81-92 untouched (ticket 06 owns focus:border-accent-primary)",
+            "ModalShell usage unchanged"
+          ],
+          "implementation": [
+            "Swap footer markup only"
+          ],
+          "verification": [
+            "grep bg-accent-primary is empty",
+            "overhaulDialogAcceptance, overhaulDialogHostNativeOcclusionAcceptance, dialogStore.test.ts green"
+          ],
+          "dependencies": "Batch B.",
+          "tests": [
+            "overhaulDialogAcceptance",
+            "overhaulDirectoryTrustAcceptance",
+            "overhaulModuleSelectionAcceptance",
+            "overhaulWorktreeCreationRuntimeAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "AC-3",
+            "AC-6"
+          ]
+        },
+        {
+          "id": "addproject",
+          "path": "studio/src/features/studio/modals/AddProject.tsx",
+          "action": "modify",
+          "layer": "feature modal",
+          "purpose": "Add-project footer through DialogFooter (78-94).",
+          "symbols": [
+            "DialogFooter"
+          ],
+          "responsibilities": [
+            "onCancel popModal, onConfirm submit, confirmLabel Create, confirmDisabled !canSubmit, className mt-3"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged",
+            "Inputs and text-red-400 error untouched (tickets 06, 10)"
+          ],
+          "implementation": [
+            "Replace the footer div"
+          ],
+          "verification": [
+            "typecheck; DialogFooter tests (no direct suite)"
+          ],
+          "dependencies": "Batch B.",
+          "tests": [
+            "DialogFooter.test.tsx"
+          ],
+          "trace": [
+            "AC-2",
+            "AC-6"
+          ]
+        },
+        {
+          "id": "addmodule",
+          "path": "studio/src/features/studio/modals/AddModule.tsx",
+          "action": "modify",
+          "layer": "feature modal",
+          "purpose": "Add-module footer through DialogFooter (228-244).",
+          "symbols": [
+            "DialogFooter"
+          ],
+          "responsibilities": [
+            "onCancel popModal, onConfirm submit, confirmLabel Save folder or Create module, confirmDisabled !canSubmit, className mt-3"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged",
+            "data-coach-anchor hooks untouched"
+          ],
+          "implementation": [
+            "Replace the footer div"
+          ],
+          "verification": [
+            "overhaulModuleCreationAcceptance, overhaulOnboardingModuleAcceptance green"
+          ],
+          "dependencies": "Batch B.",
+          "tests": [
+            "overhaulModuleCreationAcceptance",
+            "overhaulOnboardingModuleAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "AC-6"
+          ]
+        },
+        {
+          "id": "modulefolder",
+          "path": "studio/src/features/agents/terminal/ModuleFolder.tsx",
+          "action": "modify",
+          "layer": "feature modal",
+          "purpose": "Module-folder footer through DialogFooter (124-140).",
+          "symbols": [
+            "DialogFooter"
+          ],
+          "responsibilities": [
+            "onCancel popModal, onConfirm save, confirmLabel Save, confirmDisabled busy || !selection.isValid, className mt-3"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Replace the footer div"
+          ],
+          "verification": [
+            "overhaulModuleFolderAcceptance, overhaulDirectoryTrustAcceptance green"
+          ],
+          "dependencies": "Batch B.",
+          "tests": [
+            "overhaulModuleFolderAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "AC-6"
+          ]
+        },
+        {
+          "id": "promptinput",
+          "path": "studio/src/features/agents/terminal/PromptInput.tsx",
+          "action": "modify",
+          "layer": "feature modal",
+          "purpose": "Prompt-input footer through DialogFooter (82-99).",
+          "symbols": [
+            "DialogFooter"
+          ],
+          "responsibilities": [
+            "onCancel popModal, cancelDisabled busy, onConfirm submit, confirmLabel and confirmDisabled from existing expressions, className mt-3"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged",
+            "Textarea untouched"
+          ],
+          "implementation": [
+            "Replace the footer div"
+          ],
+          "verification": [
+            "typecheck; DialogFooter tests"
+          ],
+          "dependencies": "Batch B.",
+          "tests": [
+            "DialogFooter.test.tsx"
+          ],
+          "trace": [
+            "AC-2",
+            "AC-6"
+          ]
+        },
+        {
+          "id": "notify",
+          "path": "studio/src/app/modal/NotifyUserModal.tsx",
+          "action": "modify",
+          "layer": "app modal",
+          "purpose": "Single acknowledgement button (46-53).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button primary md with ref acknowledgementRef; wrapper div kept"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged",
+            "Severity badge untouched"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "typecheck; initial focus unchanged"
+          ],
+          "dependencies": "Batch B.",
+          "tests": [
+            "overhaulMcpListenerFailureAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "D-10"
+          ]
+        },
+        {
+          "id": "errorboundary",
+          "path": "studio/src/app/modal/ModalErrorBoundary.tsx",
+          "action": "modify",
+          "layer": "app modal",
+          "purpose": "Close/Retry pair through DialogFooter (79-94).",
+          "symbols": [
+            "DialogFooter"
+          ],
+          "responsibilities": [
+            "onCancel handleClose, cancelLabel Close, onConfirm handleRetry, confirmLabel Retry, className mt-4"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged",
+            "Scrim untouched (ticket 09)"
+          ],
+          "implementation": [
+            "Replace the footer div"
+          ],
+          "verification": [
+            "overhaulModalLoadFailureAcceptance, overhaulChangesWorkspaceRecoveryAcceptance green"
+          ],
+          "dependencies": "Batch B.",
+          "tests": [
+            "overhaulModalLoadFailureAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "AC-6"
+          ]
+        },
+        {
+          "id": "guidedialog",
+          "path": "studio/src/features/workflows/StoryWorkflowGuideDialog.tsx",
+          "action": "modify",
+          "layer": "feature modal",
+          "purpose": "Single Close button (154).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button secondary md Close; border-t wrapper kept"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "overhaulStoryWorkflowGuideAcceptance green"
+          ],
+          "dependencies": "Batch B.",
+          "tests": [
+            "overhaulStoryWorkflowGuideAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "D-10"
+          ]
+        },
+        {
+          "id": "impact",
+          "path": "studio/src/features/workflows/WorkflowImpactDialog.tsx",
+          "action": "modify",
+          "layer": "feature settings",
+          "purpose": "Destructive confirm footer through DialogFooter (59-69).",
+          "symbols": [
+            "DialogFooter"
+          ],
+          "responsibilities": [
+            "onCancel close, onConfirm confirm, confirmLabel change.confirmLabel, confirmVariant danger",
+            "Drop the settingsButtonClass import"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged",
+            "Dialog wrapper and missing focus trap untouched (ticket 09)"
+          ],
+          "implementation": [
+            "Replace the footer div"
+          ],
+          "verification": [
+            "overhaulWorkflowSettingsAcceptance green"
+          ],
+          "dependencies": "Batch C.",
+          "tests": [
+            "overhaulWorkflowSettingsAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "AC-6"
+          ]
+        },
+        {
+          "id": "statecatalog",
+          "path": "studio/src/features/workflows/StateCatalog.tsx",
+          "action": "modify",
+          "layer": "feature settings",
+          "purpose": "State catalog buttons and the delete confirm footer.",
+          "symbols": [
+            "DialogFooter",
+            "Button"
+          ],
+          "responsibilities": [
+            ":138-144 Refresh impact: danger md, mt-2",
+            ":165-193 DialogFooter cancelAutoFocus, existing reset onCancel, onConfirm only when impact && !hardBlocked, confirmVariant danger, confirmLabel Deleting… or Delete state, confirmDisabled action !== null || impactConflict !== null, className mt-5",
+            ":225-231 Create state: primary md; :233-239 Cancel: secondary md",
+            ":244-250 Add state: dashed md, mt-3 w-full text-left",
+            ":317-332 move ↑/↓: icon md with existing aria-label"
+          ],
+          "nonResponsibilities": [
+            ":334-341 × untouched (ticket 01)",
+            "Dialog wrapper untouched (ticket 09)",
+            "Inline create form keeps Create then Cancel (D-11)"
+          ],
+          "implementation": [
+            "Drop the settingsButtonClass import"
+          ],
+          "verification": [
+            "overhaulWorkflowSettingsAcceptance, overhaulSettingsAcceptance green"
+          ],
+          "dependencies": "Batch C.",
+          "tests": [
+            "overhaulWorkflowSettingsAcceptance",
+            "overhaulSettingsAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "AC-6",
+            "D-11"
+          ]
+        },
+        {
+          "id": "transition",
+          "path": "studio/src/features/workflows/TransitionDisclosure.tsx",
+          "action": "modify",
+          "layer": "feature settings",
+          "purpose": "Remove transition button (90-102).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button danger md"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Drop the import"
+          ],
+          "verification": [
+            "typecheck; settings suites"
+          ],
+          "dependencies": "Batch C.",
+          "tests": [
+            "overhaulSettingsAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "issuetypes",
+          "path": "studio/src/features/workflows/IssueTypesSection.tsx",
+          "action": "modify",
+          "layer": "feature settings",
+          "purpose": "Issue-type workflow buttons.",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            ":301-309 Launch configuration: secondary md (aria-expanded kept)",
+            ":311-319 Remove state: danger md",
+            ":420-428 + Add destination: dashed md",
+            ":446-458 Add: primary md; :459-465 Cancel: secondary md"
+          ],
+          "nonResponsibilities": [
+            ":85-104 pill selectors untouched (ticket 04)",
+            "Inline Add then Cancel order kept (D-11)"
+          ],
+          "implementation": [
+            "Drop the import"
+          ],
+          "verification": [
+            "overhaulSettingsAcceptance, LaunchConfigurationForm.test green"
+          ],
+          "dependencies": "Batch C.",
+          "tests": [
+            "overhaulSettingsAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "keyboard",
+          "path": "studio/src/features/studio/modals/KeyboardSettingsPanel.tsx",
+          "action": "modify",
+          "layer": "feature settings",
+          "purpose": "Keyboard settings buttons.",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            ":184-191 Restore defaults: secondary md, shrink-0",
+            ":238-259 binding cell: secondary md, text-left; drop font-mono and the recording bg swap (D-12)",
+            ":264-272 Reset: secondary md"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged",
+            "No aria-pressed added"
+          ],
+          "implementation": [
+            "Drop the import"
+          ],
+          "verification": [
+            "overhaulKeybindingSettingsRuntimeAcceptance green"
+          ],
+          "dependencies": "Batch C.",
+          "tests": [
+            "overhaulKeybindingSettingsRuntimeAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "D-12"
+          ]
+        },
+        {
+          "id": "settingsmodal",
+          "path": "studio/src/features/studio/modals/SettingsModal.tsx",
+          "action": "modify",
+          "layer": "feature settings",
+          "purpose": "Discard / Save changes bar (210-230).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Discard: secondary md; Save changes: primary md"
+          ],
+          "nonResponsibilities": [
+            "SettingsFrame, rail and close untouched (tickets 01, 04, 09)"
+          ],
+          "implementation": [
+            "Drop the import"
+          ],
+          "verification": [
+            "overhaulSettingsAcceptance, overhaulZeroProviderPlanningAcceptance green"
+          ],
+          "dependencies": "Batch C.",
+          "tests": [
+            "overhaulSettingsAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "instant",
+          "path": "studio/src/features/settings/instant/InstantSettingsPanel.tsx",
+          "action": "modify",
+          "layer": "feature settings",
+          "purpose": "Discard / Save bar (142-161).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Discard: secondary md; Save (aria-label Save conversation settings): primary md"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Drop the import"
+          ],
+          "verification": [
+            "overhaulInstantSettingsAcceptance green"
+          ],
+          "dependencies": "Batch C.",
+          "tests": [
+            "overhaulInstantSettingsAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "appupdates",
+          "path": "studio/src/features/app-updates/AppUpdatesSection.tsx",
+          "action": "modify",
+          "layer": "feature settings",
+          "purpose": "Update buttons (94-114).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Update and restart / Retry update: primary md; Check for updates: secondary md"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Drop the import"
+          ],
+          "verification": [
+            "overhaulAppUpdatesAcceptance green"
+          ],
+          "dependencies": "Batch C.",
+          "tests": [
+            "overhaulAppUpdatesAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "bootstrap",
+          "path": "studio/src/app/startup/BootstrapGate.tsx",
+          "action": "modify",
+          "layer": "app startup",
+          "purpose": "Retry on the bootstrap gate (83-89).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button primary md"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "overhaulGateAcceptance, desktopStartupFailure.test green"
+          ],
+          "dependencies": "Batch D.",
+          "tests": [
+            "overhaulGateAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "settingsaccess",
+          "path": "studio/src/app/startup/SettingsAccess.tsx",
+          "action": "modify",
+          "layer": "app startup",
+          "purpose": "Open Settings from gate screens (25-35).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button secondary md; aria-label, preload handlers and icon kept"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "overhaulWebSettingsReachabilityAcceptance green"
+          ],
+          "dependencies": "Batch D.",
+          "tests": [
+            "overhaulWebSettingsReachabilityAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "tour",
+          "path": "studio/src/app/onboarding/OnboardingTour.tsx",
+          "action": "modify",
+          "layer": "app onboarding",
+          "purpose": "Onboarding coach buttons; fourth button system deleted.",
+          "symbols": [
+            "buttonClass",
+            "Button"
+          ],
+          "responsibilities": [
+            "Delete buttonClass (15-16)",
+            ":63-71 Skip tour: ghost md",
+            ":90-97, :109-116, :170-177: primary md",
+            ":158-169 Story workflow guide: secondary md"
+          ],
+          "nonResponsibilities": [
+            "All five data-testids kept"
+          ],
+          "implementation": [
+            "Swap buttons"
+          ],
+          "verification": [
+            "overhaulOnboardingCompletionAcceptance, overhaulOnboardingModuleAcceptance, CoachMark.test green"
+          ],
+          "dependencies": "Batch D.",
+          "tests": [
+            "overhaulOnboardingCompletionAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "providers",
+          "path": "studio/src/app/onboarding/OnboardingProviders.tsx",
+          "action": "modify",
+          "layer": "app onboarding",
+          "purpose": "Filled accent Continue (253-260).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button primary md"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "overhaulProjectOnboardingAcceptance, OnboardingGate.test green"
+          ],
+          "dependencies": "Batch D.",
+          "tests": [
+            "OnboardingGate.test.tsx"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "folderrequired",
+          "path": "studio/src/features/terminal-panel/ModuleFolderRequired.tsx",
+          "action": "modify",
+          "layer": "feature terminal",
+          "purpose": "Use this folder (81-89).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button primary md, mt-3; data-testid terminal-panel-link-folder kept"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "overhaulModuleSelectionAcceptance green"
+          ],
+          "dependencies": "Batch D.",
+          "tests": [
+            "overhaulModuleSelectionAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "deadshell",
+          "path": "studio/src/features/terminal-panel/DeadShell.tsx",
+          "action": "modify",
+          "layer": "feature terminal",
+          "purpose": "Restart shell (32-40).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button secondary md; data-testid terminal-panel-restart-shell kept"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "overhaulTerminalPanelExitAcceptance green"
+          ],
+          "dependencies": "Batch D.",
+          "tests": [
+            "overhaulTerminalPanelExitAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "terminalpanel",
+          "path": "studio/src/features/terminal-panel/TerminalPanel.tsx",
+          "action": "modify",
+          "layer": "feature terminal",
+          "purpose": "Try again (126-133).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button secondary md; data-testid terminal-panel-retry kept"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "overhaulTerminalPanelAcceptance green"
+          ],
+          "dependencies": "Batch D.",
+          "tests": [
+            "overhaulTerminalPanelAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "xterm",
+          "path": "studio/src/features/agents/terminal/XtermTerminal.tsx",
+          "action": "modify",
+          "layer": "feature terminal",
+          "purpose": "View here (123-130).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button secondary md; data-testid terminal-reclaim kept"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "overhaulNativeViewerOwnershipAcceptance green"
+          ],
+          "dependencies": "Batch D.",
+          "tests": [
+            "overhaulNativeViewerOwnershipAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "native",
+          "path": "studio/src/features/agents/terminal/NativeGhosttyTerminal.tsx",
+          "action": "modify",
+          "layer": "feature terminal",
+          "purpose": "View here (299-305).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button secondary md"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged",
+            "Native host data attributes untouched"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "overhaulNativeViewerOwnershipAcceptance green"
+          ],
+          "dependencies": "Batch D.",
+          "tests": [
+            "overhaulNativeViewerOwnershipAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "runnow",
+          "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/RunNowAction.tsx",
+          "action": "modify",
+          "layer": "app details",
+          "purpose": "Run now action (34-45).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button primary sm, flex-none; aria-busy and KeyBadge child kept"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "overhaulRunNowAcceptance green"
+          ],
+          "dependencies": "Batch E.",
+          "tests": [
+            "overhaulRunNowAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "D-5"
+          ]
+        },
+        {
+          "id": "normalrun",
+          "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/NormalRunAction.tsx",
+          "action": "modify",
+          "layer": "app details",
+          "purpose": "Open subtree run and Run item.",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            ":103-114 Open: secondary sm",
+            ":194-206 Run: primary sm, flex-none; IconPlay and KeyBadge kept"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Swap buttons"
+          ],
+          "verification": [
+            "overhaulSubtreeRunAcceptance, overhaulRustLaunchPolicyAcceptance green"
+          ],
+          "dependencies": "Batch E.",
+          "tests": [
+            "overhaulSubtreeRunAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "subtree",
+          "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/internal/SubtreeRunButton.tsx",
+          "action": "modify",
+          "layer": "app details",
+          "purpose": "Subtree run control (26-38).",
+          "symbols": [
+            "SubtreeRunButton",
+            "Button"
+          ],
+          "responsibilities": [
+            "Button secondary sm"
+          ],
+          "nonResponsibilities": [
+            "SubtreeRunButtonProps unchanged",
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "overhaulSubtreeRunAcceptance green"
+          ],
+          "dependencies": "Batch E.",
+          "tests": [
+            "overhaulSubtreeRunAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "guideaction",
+          "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/StoryWorkflowGuideAction.tsx",
+          "action": "modify",
+          "layer": "app details",
+          "purpose": "Story workflow guide toolbar action (3-16).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button secondary sm, flex-none whitespace-nowrap; data-story-workflow-guide-toolbar and currentTarget.focus() kept"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "overhaulStoryWorkflowGuideAcceptance green"
+          ],
+          "dependencies": "Batch E.",
+          "tests": [
+            "overhaulStoryWorkflowGuideAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "picker",
+          "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/fields/PickerTrigger.tsx",
+          "action": "modify",
+          "layer": "app details",
+          "purpose": "Field picker trigger maps its variants to Button.",
+          "symbols": [
+            "PickerTrigger",
+            "Button"
+          ],
+          "responsibilities": [
+            "default to secondary sm; dashed to dashed xs; bare to ghost sm",
+            "crumb keeps the local <button> and class (D-13)"
+          ],
+          "nonResponsibilities": [
+            "PickerTriggerProps unchanged; four callers untouched",
+            "data-testid pass-through kept"
+          ],
+          "implementation": [
+            "Branch on variant === crumb"
+          ],
+          "verification": [
+            "overhaulWorkItemAcceptance :190 class assertion passes (D-14)",
+            "overhaulSelectedTaskWorktreeAcceptance green"
+          ],
+          "dependencies": "Batch E.",
+          "tests": [
+            "overhaulWorkItemAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "D-13",
+            "D-14"
+          ]
+        },
+        {
+          "id": "launcher",
+          "path": "studio/src/app/shell/ticket-workspace/selected-ticket/internal/WorkspaceLauncher.tsx",
+          "action": "modify",
+          "layer": "app workspace",
+          "purpose": "＋ Agent trigger (241-290).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button dashed xs, shrink-0, ref launchTriggerRef; all handlers and aria props kept",
+            "disabled:hover resets dropped (D-4)"
+          ],
+          "nonResponsibilities": [
+            "Launch menu body untouched (ticket 07)"
+          ],
+          "implementation": [
+            "Swap the trigger"
+          ],
+          "verification": [
+            "overhaulTaskAgentLaunchAcceptance, overhaulScratchAcceptance green"
+          ],
+          "dependencies": "Batch E.",
+          "tests": [
+            "overhaulTaskAgentLaunchAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "D-6"
+          ]
+        },
+        {
+          "id": "dormant",
+          "path": "studio/src/app/shell/ticket-workspace/selected-ticket/internal/DormantWorkspaceTabs.tsx",
+          "action": "modify",
+          "layer": "app workspace",
+          "purpose": "Dormant tabs trigger (147-168).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button dashed xs, ref triggerRef; open ternary removed (aria-expanded drives style)",
+            "Count span and ▾ span kept as children"
+          ],
+          "nonResponsibilities": [
+            "Menu and ▾ suffix untouched (tickets 07, 08)",
+            "data-testid dormant-tabs-trigger kept"
+          ],
+          "implementation": [
+            "Swap the trigger"
+          ],
+          "verification": [
+            "overhaulDormantWorkspaceTabsAcceptance green"
+          ],
+          "dependencies": "Batch E.",
+          "tests": [
+            "overhaulDormantWorkspaceTabsAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "D-6"
+          ]
+        },
+        {
+          "id": "changes",
+          "path": "studio/src/features/agents/worktrees/changes/ChangesToolbar.tsx",
+          "action": "modify",
+          "layer": "feature worktrees",
+          "purpose": "Changes primary command and its confirmation buttons.",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            ":106-118 primary: primary sm, ref primaryRef",
+            ":143-150 Confirm: primary sm",
+            ":151-159 Cancel: secondary sm, ref cancelRef; order kept (D-11)"
+          ],
+          "nonResponsibilities": [
+            "Open PR link (165-172) and Branch toggle (174-182, ticket 04) untouched"
+          ],
+          "implementation": [
+            "Swap buttons"
+          ],
+          "verification": [
+            "overhaulChangesActionsAcceptance (Cancel focus and disabled) green"
+          ],
+          "dependencies": "Batch E.",
+          "tests": [
+            "overhaulChangesActionsAcceptance",
+            "overhaulChangesZoneArrowAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "D-11"
+          ]
+        },
+        {
+          "id": "footeractions",
+          "path": "studio/src/app/shell/StudioFooterActions.tsx",
+          "action": "modify",
+          "layer": "app shell",
+          "purpose": "Footer Settings button (21-34).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button ghost xs; aria-label, aria-describedby, preload handlers, children kept"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "Fits the h-6 footer",
+            "overhaulSettingsAcceptance, overhaulAppUpdatesAcceptance green"
+          ],
+          "dependencies": "Batch F.",
+          "tests": [
+            "overhaulSettingsAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "AC-5",
+            "D-2"
+          ]
+        },
+        {
+          "id": "footerterminal",
+          "path": "studio/src/features/terminal-panel/FooterTerminalToggle.tsx",
+          "action": "modify",
+          "layer": "feature terminal",
+          "purpose": "Footer terminal toggle (36-48).",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button ghost xs; data-testid footer-terminal-toggle, aria-label, title, disabled kept"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "overhaulTerminalPanelFurnitureAcceptance, overhaulTerminalPanelModuleScopeAcceptance green"
+          ],
+          "dependencies": "Batch F.",
+          "tests": [
+            "overhaulTerminalPanelFurnitureAcceptance"
+          ],
+          "trace": [
+            "AC-2",
+            "AC-5"
+          ]
+        },
+        {
+          "id": "inbox",
+          "path": "studio/src/features/conversations/prototype/ConversationInboxVariant.tsx",
+          "action": "modify",
+          "layer": "prototype",
+          "purpose": "Prototype New chat (316-322); trivial swap only.",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button primary md, shrink-0"
+          ],
+          "nonResponsibilities": [
+            ":399 deferred"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "overhaulConversationDesignPrototypeAcceptance green"
+          ],
+          "dependencies": "Batch F.",
+          "tests": [
+            "overhaulConversationDesignPrototypeAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "timeline",
+          "path": "studio/src/features/conversations/prototype/ConversationTimelineVariant.tsx",
+          "action": "modify",
+          "layer": "prototype",
+          "purpose": "Prototype New chat (138-144); trivial swap only.",
+          "symbols": [
+            "Button"
+          ],
+          "responsibilities": [
+            "Button primary md, shrink-0"
+          ],
+          "nonResponsibilities": [
+            "Accessible names, roles, handlers, refs, aria-* and data-* hooks are unchanged"
+          ],
+          "implementation": [
+            "Swap the button"
+          ],
+          "verification": [
+            "overhaulConversationDesignPrototypeAcceptance green"
+          ],
+          "dependencies": "Batch F.",
+          "tests": [
+            "overhaulConversationDesignPrototypeAcceptance"
+          ],
+          "trace": [
+            "AC-2"
+          ]
+        },
+        {
+          "id": "tailwind",
+          "path": "studio/tailwind.config.ts",
+          "action": "untouched",
+          "layer": "boundary",
+          "purpose": "All tokens already exist; accent-primary is not a token and is not added.",
+          "symbols": [
+            "pane-*",
+            "focus-accent",
+            "text-*",
+            "lifecycle-danger"
+          ],
+          "responsibilities": [
+            "Supplies every token used by Button"
+          ],
+          "nonResponsibilities": [
+            "No new tokens, no config edit"
+          ],
+          "implementation": [
+            "None"
+          ],
+          "verification": [
+            "npm run build"
+          ],
+          "dependencies": "Boundary.",
+          "tests": [
+            "build"
+          ],
+          "trace": [
+            "INV"
+          ]
+        },
+        {
+          "id": "modalshell",
+          "path": "studio/src/app/modal/ModalShell.tsx",
+          "action": "untouched",
+          "layer": "boundary",
+          "purpose": "Focus trap, Escape and initial focus stay here; DialogFooter only supplies cancelRef.",
+          "symbols": [
+            "ModalShell",
+            "initialFocusRef"
+          ],
+          "responsibilities": [
+            "Unchanged"
+          ],
+          "nonResponsibilities": [
+            "Ticket 09 owns modal changes"
+          ],
+          "implementation": [
+            "None"
+          ],
+          "verification": [
+            "Dialog suites green"
+          ],
+          "dependencies": "Boundary.",
+          "tests": [
+            "overhaulDialogAcceptance"
+          ],
+          "trace": [
+            "INV"
+          ]
+        },
+        {
+          "id": "tests",
+          "path": "studio/src/test/overhaul*Acceptance.test.tsx",
+          "action": "untouched",
+          "layer": "boundary",
+          "purpose": "No existing assertion is edited by ticket 05.",
+          "symbols": [
+            "overhaul*Acceptance"
+          ],
+          "responsibilities": [
+            "Guard every batch"
+          ],
+          "nonResponsibilities": [
+            "No fixture or assertion edits"
+          ],
+          "implementation": [
+            "None"
+          ],
+          "verification": [
+            "npm run test:overhaul",
+            "npm run test --workspace @worktracker/studio"
+          ],
+          "dependencies": "Boundary.",
+          "tests": [
+            "test:overhaul"
+          ],
+          "trace": [
+            "AC-4"
+          ]
+        }
+      ],
+      "execution": [
+        {
+          "title": "A · Components",
+          "detail": "Create Button.tsx, DialogFooter.tsx and both tests per the contracts. Nothing else changes.",
+          "gate": "vitest shared/ui + typecheck"
+        },
+        {
+          "title": "B · Non-settings dialogs",
+          "detail": "DialogHost (delete 3 constants), AddProject, AddModule, ModuleFolder, PromptInput, ModalErrorBoundary, NotifyUserModal, StoryWorkflowGuideDialog.",
+          "gate": "dialog suites"
+        },
+        {
+          "title": "C · Settings callers, then the helper deletion",
+          "detail": "WorkflowImpactDialog, StateCatalog, TransitionDisclosure, IssueTypesSection, KeyboardSettingsPanel, SettingsModal, InstantSettingsPanel, AppUpdatesSection; then delete settingsButtonClass and its type and map.",
+          "gate": "settings suites + grep"
+        },
+        {
+          "title": "D · Gates, onboarding, terminal placeholders",
+          "detail": "BootstrapGate, SettingsAccess, OnboardingTour (delete buttonClass), OnboardingProviders, ModuleFolderRequired, DeadShell, TerminalPanel, XtermTerminal, NativeGhosttyTerminal.",
+          "gate": "gate/onboarding/terminal suites"
+        },
+        {
+          "title": "E · Detail actions and triggers",
+          "detail": "RunNowAction, NormalRunAction, SubtreeRunButton, StoryWorkflowGuideAction, PickerTrigger, WorkspaceLauncher, DormantWorkspaceTabs, ChangesToolbar.",
+          "gate": "run/picker/launch/changes suites"
+        },
+        {
+          "title": "F · Footer bar and prototypes",
+          "detail": "StudioFooterActions and FooterTerminalToggle (ghost xs), ConversationInboxVariant, ConversationTimelineVariant.",
+          "gate": "footer + prototype suites"
+        },
+        {
+          "title": "Final gates",
+          "detail": "typecheck, studio tests, test:overhaul, build; greps for deleted helpers and bg-accent-primary are empty; manual web check of the footer height and focus rings.",
+          "gate": "section 8.4"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "AC-1",
+          "text": "Button.tsx and DialogFooter exist with tests covering disabled, the button type default and danger reachability (steps A)."
+        },
+        {
+          "id": "AC-2",
+          "text": "All instances migrated; settingsButtonClass and the DialogHost class constants deleted; grep is empty (steps B-F)."
+        },
+        {
+          "id": "AC-3",
+          "text": "No bg-accent-primary button styling remains; grep -rn bg-accent-primary studio/src is empty (step B)."
+        },
+        {
+          "id": "AC-4",
+          "text": "Typecheck, studio tests and test:overhaul pass with no edits to existing assertions (final)."
+        },
+        {
+          "id": "AC-5",
+          "text": "Footer bar buttons render Button ghost xs; the terminal-panel furniture suites pass (step F)."
+        },
+        {
+          "id": "AC-6",
+          "text": "Dialog footers render Cancel before confirm through DialogFooter (steps B, C; DialogFooter test 1)."
+        },
+        {
+          "id": "AC-7",
+          "text": "Every listed data-testid and data-* hook stays on its element; existing suites pass unchanged."
+        }
+      ]
+    };
+
+    const actionLabels = { all: "All", create: "Create", modify: "Modify", delete: "Delete", move: "Move", untouched: "Untouched" };
+    const state = { action: "all", query: "", selected: null };
+
+    const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+    const directory = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ".";
+    const basename = path => path.slice(path.lastIndexOf("/") + 1);
+    const list = items => `<ul>${(items || []).map(item => `<li>${esc(item)}</li>`).join("")}</ul>`;
+    const tokens = (items, extra = "") => (items || []).map(item => `<span class="token ${extra}">${esc(item)}</span>`).join("");
+
+    function visibleFiles() {
+      const needle = state.query.trim().toLowerCase();
+      return LLD_DOCUMENT.files.filter(file => {
+        const actionMatch = state.action === "all" || file.action === state.action;
+        const haystack = [file.path, file.layer, file.purpose, ...(file.symbols || []), ...(file.responsibilities || []), ...(file.implementation || []), ...(file.verification || []), ...(file.trace || [])].join(" ").toLowerCase();
+        return actionMatch && (!needle || haystack.includes(needle));
+      });
+    }
+
+    function renderHeader() {
+      document.getElementById("doc-crumb").textContent = LLD_DOCUMENT.meta.crumb;
+      document.getElementById("doc-title").textContent = LLD_DOCUMENT.meta.title;
+      document.getElementById("doc-summary").textContent = LLD_DOCUMENT.meta.summary;
+      document.getElementById("doc-status").textContent = LLD_DOCUMENT.meta.status;
+      document.getElementById("scope-lede").textContent = LLD_DOCUMENT.scope.lede;
+      document.getElementById("scope-list").innerHTML = LLD_DOCUMENT.scope.in.map(item => `<li>${esc(item)}</li>`).join("");
+      document.getElementById("boundary-list").innerHTML = LLD_DOCUMENT.scope.boundaries.map(item => `<li>${esc(item)}</li>`).join("");
+      const counts = Object.keys(actionLabels).filter(action => action !== "all").map(action => ({ action, count: LLD_DOCUMENT.files.filter(file => file.action === action).length }));
+      document.getElementById("metrics").innerHTML = counts.map(item => `<div class="metric"><b>${item.count}</b><span>${actionLabels[item.action]}</span></div>`).join("");
+    }
+
+    function renderFilters() {
+      const actions = ["all", ...new Set(LLD_DOCUMENT.files.map(file => file.action))];
+      document.getElementById("filters").innerHTML = actions.map(action => `<button class="filter" type="button" data-action="${action}" aria-pressed="${state.action === action}">${actionLabels[action] || action}</button>`).join("");
+      document.querySelectorAll(".filter").forEach(button => button.addEventListener("click", () => {
+        state.action = button.dataset.action;
+        renderFilters();
+        renderFiles();
+      }));
+    }
+
+    function renderFiles() {
+      const files = visibleFiles();
+      if (!files.some(file => file.id === state.selected)) state.selected = files[0]?.id || null;
+      const groups = Map.groupBy ? Map.groupBy(files, file => directory(file.path)) : files.reduce((map, file) => map.set(directory(file.path), [...(map.get(directory(file.path)) || []), file]), new Map());
+      const rail = document.getElementById("file-rail");
+      rail.innerHTML = files.length ? [...groups.entries()].map(([dir, entries]) => `<div class="dir-group"><div class="dir-label">${esc(dir)}</div>${entries.map(file => `<button class="file-button" type="button" role="option" data-file="${esc(file.id)}" aria-selected="${file.id === state.selected}"><span class="action-dot ${esc(file.action)}" aria-hidden="true"></span><span class="file-button-copy"><span class="file-name">${esc(basename(file.path))}</span><span class="file-meta">${esc(actionLabels[file.action] || file.action)} · ${esc(file.layer)}</span></span></button>`).join("")}</div>`).join("") : `<div class="rail-empty">No files match this view.</div>`;
+      rail.querySelectorAll(".file-button").forEach(button => {
+        button.addEventListener("click", () => selectFile(button.dataset.file));
+        button.addEventListener("keydown", event => navigateFiles(event, button.dataset.file));
+      });
+      renderInspector();
+    }
+
+    function selectFile(id) {
+      state.selected = id;
+      document.querySelectorAll(".file-button").forEach(button => button.setAttribute("aria-selected", String(button.dataset.file === id)));
+      renderInspector();
+      history.replaceState(null, "", `#file:${encodeURIComponent(id)}`);
+    }
+
+    function navigateFiles(event, id) {
+      if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+      event.preventDefault();
+      const files = visibleFiles();
+      const index = files.findIndex(file => file.id === id);
+      const next = event.key === 'ArrowDown' ? Math.min(index + 1, files.length - 1) : Math.max(index - 1, 0);
+      state.selected = files[next]?.id || id;
+      renderFiles();
+      document.querySelector(`[data-file="${CSS.escape(state.selected)}"]`)?.focus();
+    }
+
+    function renderInspector() {
+      const file = LLD_DOCUMENT.files.find(entry => entry.id === state.selected);
+      const inspector = document.getElementById("file-inspector");
+      if (!file) { inspector.innerHTML = `<p class="rail-empty">Choose a file to inspect.</p>`; return; }
+      inspector.innerHTML = `
+        <div class="inspector-head">
+          <div><h3 class="path">${esc(file.path)}</h3><p class="purpose">${esc(file.purpose)}</p></div>
+          <span class="action-badge ${esc(file.action)}">${esc(actionLabels[file.action] || file.action)}</span>
+        </div>
+        <div class="symbol-row" aria-label="Symbols">${tokens(file.symbols)}</div>
+        <div class="inspector-grid">
+          <div class="info-block"><h4>Responsibilities</h4>${list(file.responsibilities)}</div>
+          <div class="info-block no"><h4>Preserved boundary</h4>${list(file.nonResponsibilities)}</div>
+          <div class="info-block"><h4>Implementation</h4>${list(file.implementation)}</div>
+          <div class="info-block"><h4>Verification</h4>${list(file.verification)}</div>
+        </div>
+        <div class="dependency-strip"><b>Dependency position</b><p>${esc(file.dependencies)}</p></div>
+        <div class="trace-row" aria-label="Tests and requirement trace">${tokens(file.tests)}${tokens(file.trace, "trace-token")}</div>`;
+    }
+
+    function renderTimeline() {
+      document.getElementById("timeline").innerHTML = LLD_DOCUMENT.execution.map(step => `<article class="step"><div><b>${esc(step.title)}</b><p>${esc(step.detail)}</p></div><code>${esc(step.gate)}</code></article>`).join("");
+      document.getElementById("acceptance-list").innerHTML = LLD_DOCUMENT.acceptance.map(item => `<article class="acceptance-item"><strong>${esc(item.id)}</strong><p>${esc(item.text)}</p></article>`).join("");
+    }
+
+    document.getElementById("file-search").addEventListener("input", event => { state.query = event.target.value; renderFiles(); });
+    document.addEventListener("keydown", event => {
+      if (event.key === "/" && document.activeElement !== document.getElementById("file-search")) { event.preventDefault(); document.getElementById("file-search").focus(); }
+      if (event.key === "Escape" && document.activeElement === document.getElementById("file-search")) { state.query = ""; document.getElementById("file-search").value = ""; renderFiles(); }
+    });
+
+    const deepLink = decodeURIComponent(location.hash.replace(/^#file:/, ""));
+    state.selected = LLD_DOCUMENT.files.some(file => file.id === deepLink) ? deepLink : LLD_DOCUMENT.files[0]?.id;
+    renderHeader();
+    renderFilters();
+    renderFiles();
+    renderTimeline();
+  </script>
+</body>
+</html>

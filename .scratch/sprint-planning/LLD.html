@@ -1,0 +1,2635 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="lld-authority" content="html">
+  <title>Sprint planning LLD</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --surface: #202b3b;
+      --rail: #121c29;
+      --group: #263448;
+      --on-accent: #0e1520;
+      --focus: #a7ceff;
+      --paper: #0e1520;
+      --sheet: #172130;
+      --ink: #e6edf6;
+      --muted: #a6b5c9;
+      --line: #34445b;
+      --line-strong: #657a96;
+      --navy: #91c4ff;
+      --navy-soft: #203852;
+      --orange: #ffb180;
+      --orange-soft: #422d24;
+      --green: #7bdbb1;
+      --green-soft: #183b32;
+      --red: #ff9eaa;
+      --red-soft: #432731;
+      --violet: #c4b2ff;
+      --violet-soft: #332e4c;
+      --shadow: 0 18px 45px rgba(0, 0, 0, .24);
+      --radius: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--paper); }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(145, 196, 255, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(145, 196, 255, .025) 1px, transparent 1px),
+        var(--paper);
+      background-size: 24px 24px;
+      font-family: var(--sans);
+      line-height: 1.55;
+    }
+
+    button, input { font: inherit; }
+    a { color: var(--navy); }
+    ::selection { background: var(--navy-soft); color: var(--ink); }
+    input::placeholder { color: var(--muted); opacity: 1; }
+    .token, .info-block, .step { overflow-wrap: anywhere; }
+    button:focus-visible, input:focus-visible, a:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .shell { width: min(1480px, calc(100% - 40px)); margin: 0 auto; }
+    .masthead {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 20px;
+      align-items: start;
+      padding: 12px 18px 14px;
+      border: 1px solid var(--line-strong);
+      background: var(--sheet);
+      box-shadow: var(--shadow);
+    }
+    .crumb {
+      margin: 0 0 4px;
+      color: var(--orange);
+      font: 700 10px/1.2 var(--mono);
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; font-size: 22px; line-height: 1.2; letter-spacing: -.02em; }
+    .summary { max-width: 860px; margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .masthead-side { display: grid; gap: 8px; justify-items: end; }
+    .status-pill { display: inline-flex; gap: 8px; align-items: baseline; padding: 5px 10px; background: var(--navy); color: var(--on-accent); font: 700 11px/1 var(--mono); letter-spacing: .06em; }
+    .status-pill small { font-size: 11px; font-weight: 500; opacity: .8; text-transform: lowercase; }
+    .metrics { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .metric { display: inline-flex; gap: 6px; align-items: center; padding: 4px 8px; border: 1px solid var(--line); background: var(--surface); }
+    .metric b { font: 700 12px/1 var(--mono); }
+    .metric span { color: var(--muted); font: 700 9px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+
+    .sticky-nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin: 10px 0 18px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      background: rgba(23, 33, 48, .96);
+      backdrop-filter: blur(14px);
+    }
+    .sticky-nav a { padding: 6px 11px; color: var(--muted); font: 700 11px/1 var(--mono); text-decoration: none; text-transform: uppercase; }
+    .sticky-nav a:hover { color: var(--navy); background: var(--navy-soft); }
+
+    section { margin: 0 0 36px; scroll-margin-top: 56px; }
+    .primary-section { margin-bottom: 44px; }
+    .section-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: end; margin-bottom: 8px; }
+    .workspace-note { margin: 0; color: var(--muted); font-size: 12px; }
+    .workspace-note kbd { padding: 1px 5px; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--surface); font: 600 10px/1 var(--mono); color: var(--ink); }
+    .section-kicker { margin: 0 0 3px; color: var(--orange); font: 700 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+    h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
+    .lede { max-width: 820px; margin: 6px 0 14px; color: var(--muted); font-size: 14px; }
+
+    .overview-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 16px; }
+    .card { border: 1px solid var(--line); background: var(--sheet); padding: 16px 18px; font-size: 14px; }
+    .card h3 { margin: 0 0 10px; font-size: 14px; }
+    .plain-list { margin: 0; padding-left: 18px; }
+    .plain-list li + li { margin-top: 8px; }
+    .boundary { border-left: 4px solid var(--orange); }
+
+    .change-view { border: 1px solid var(--line-strong); background: var(--sheet); box-shadow: var(--shadow); }
+    .change-toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 12px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .search-wrap { position: relative; }
+    .search-wrap span { position: absolute; left: 10px; top: 6px; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+    #file-search {
+      width: 100%;
+      height: 30px;
+      padding: 0 10px 0 28px;
+      font-size: 13px;
+      border: 1px solid var(--line-strong);
+      background: var(--surface);
+      color: var(--ink);
+    }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .filter {
+      border: 1px solid var(--line);
+      background: var(--sheet);
+      color: var(--muted);
+      padding: 6px 8px;
+      cursor: pointer;
+      font: 700 10px/1 var(--mono);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .filter small { margin-left: 4px; opacity: .7; }
+    .filter[aria-pressed="true"] { color: var(--on-accent); border-color: var(--navy); background: var(--navy); }
+    .change-workspace { display: grid; grid-template-columns: minmax(260px, 300px) minmax(0, 1fr); height: max(480px, calc(100vh - 230px)); }
+    .file-rail { border-right: 1px solid var(--line); background: var(--rail); overflow: auto; }
+    .rail-empty { padding: 30px; color: var(--muted); text-align: center; }
+    .dir-group + .dir-group { border-top: 1px solid var(--line); }
+    .dir-label { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; gap: 8px; padding: 4px 10px; color: var(--muted); background: var(--group); font: 700 10px/1.4 var(--mono); }
+    .dir-label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-button {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px 4px 8px;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+    }
+    .file-button:hover { background: var(--surface); }
+    .file-button[aria-selected="true"] { background: var(--surface); box-shadow: inset 3px 0 0 var(--orange); }
+    .file-button[aria-selected="true"] .file-name { font-weight: 700; }
+    .file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px/1.5 var(--mono); }
+    .file-meta { color: var(--muted); font: 600 9px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+    .action-dot { display: grid; place-items: center; width: 18px; height: 16px; border-radius: 2px; background: var(--line-strong); color: var(--on-accent); font: 800 9px/1 var(--mono); }
+    .action-dot.create { background: var(--green); }
+    .action-dot.modify { background: var(--orange); }
+    .action-dot.delete { background: var(--red); }
+    .action-dot.move { background: var(--violet); }
+    .action-dot.untouched { background: var(--navy); }
+
+    .file-inspector { min-width: 0; padding: 16px 20px 20px; overflow: auto; font-size: 13px; }
+    .inspector-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+    .path { margin: 0; overflow-wrap: anywhere; font: 700 15px/1.4 var(--mono); }
+    .purpose { margin: 4px 0 0; color: var(--muted); }
+    .action-badge { flex: 0 0 auto; padding: 6px 9px; border: 1px solid currentColor; font: 800 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .action-badge.create { color: var(--green); background: var(--green-soft); }
+    .action-badge.modify { color: var(--orange); background: var(--orange-soft); }
+    .action-badge.delete { color: var(--red); background: var(--red-soft); }
+    .action-badge.move { color: var(--violet); background: var(--violet-soft); }
+    .action-badge.untouched { color: var(--navy); background: var(--navy-soft); }
+    .inspector-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-top: 14px; }
+    .info-block { border-top: 3px solid var(--navy); padding: 10px 12px 12px; background: var(--surface); }
+    .info-block.no { border-top-color: var(--red); }
+    .info-block h4 { margin: 0 0 8px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .info-block ul { margin: 0; padding-left: 16px; font-size: 12.5px; }
+    .info-block li + li { margin-top: 4px; }
+    .symbol-row, .trace-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    .token { padding: 5px 8px; border: 1px solid var(--line); background: var(--surface); font: 600 11px/1 var(--mono); }
+    .trace-token { color: var(--navy); border-color: var(--line-strong); background: var(--navy-soft); }
+    .dependency-strip { margin-top: 14px; padding: 10px 12px; border: 1px dashed var(--line-strong); }
+    .dependency-strip b { display: block; margin-bottom: 7px; font: 800 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .dependency-strip p { margin: 0; color: var(--muted); font-size: 12.5px; }
+
+    .timeline { display: grid; gap: 6px; counter-reset: step; }
+    .step { counter-increment: step; display: grid; grid-template-columns: 36px 1fr auto; gap: 12px; align-items: start; padding: 10px 14px; font-size: 14px; border: 1px solid var(--line); background: var(--sheet); }
+    .step::before { content: counter(step, decimal-leading-zero); color: var(--orange); font: 800 14px/1.4 var(--mono); }
+    .step b { display: block; margin-bottom: 4px; }
+    .step p { margin: 0; color: var(--muted); }
+    .step code { color: var(--navy); font: 700 11px/1.4 var(--mono); }
+    .acceptance { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .acceptance-item { display: grid; grid-template-columns: auto 1fr; gap: 10px; padding: 10px 14px; font-size: 14px; border: 1px solid #426e60; background: var(--green-soft); }
+    .acceptance-item strong { color: var(--green); font-family: var(--mono); }
+    .acceptance-item p { margin: 0; }
+    footer { margin: 36px 0 20px; padding: 18px 0; border-top: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; }
+    footer code { color: var(--navy); }
+
+    @media (max-width: 880px) {
+      .shell { width: min(100% - 22px, 1480px); }
+      .masthead, .overview-grid, .section-heading { grid-template-columns: 1fr; }
+      .masthead { gap: 10px; padding: 12px 14px; }
+      .masthead-side { justify-items: start; }
+      .metrics { justify-content: flex-start; }
+      .change-toolbar { grid-template-columns: 1fr; }
+      .filters { justify-content: flex-start; }
+      .change-workspace { grid-template-columns: 1fr; height: auto; }
+      .file-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: 260px; }
+      .inspector-grid, .acceptance { grid-template-columns: minmax(0, 1fr); }
+      .inspector-head { flex-wrap: wrap; }
+      .file-inspector { padding: 14px; }
+      .step { grid-template-columns: 42px 1fr; }
+      .step code { grid-column: 2; }
+    }
+
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body data-template="false">
+  <div class="shell">
+    <header class="masthead" id="overview">
+      <div>
+        <p class="crumb" id="doc-crumb">Module · Work item · LLD</p>
+        <h1 id="doc-title">File change plan</h1>
+        <p class="summary" id="doc-summary"></p>
+      </div>
+      <div class="masthead-side">
+        <span class="status-pill">LLD <small id="doc-status">candidate</small></span>
+        <div class="metrics" id="metrics" aria-label="File change totals"></div>
+      </div>
+    </header>
+
+    <nav class="sticky-nav" aria-label="Document sections">
+      <a href="#file-changes">File changes</a>
+      <a href="#design">Approved design</a>
+      <a href="#context">Context</a>
+      <a href="#execution">Build order</a>
+      <a href="#acceptance">Acceptance</a>
+    </nav>
+
+    <main>
+      <section class="primary-section" id="file-changes" aria-labelledby="changes-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Primary implementation plan</p>
+            <h2 id="changes-title">File changes</h2>
+          </div>
+          <p class="workspace-note"><kbd>/</kbd> search paths, symbols, IDs · <kbd>↑</kbd><kbd>↓</kbd> move between files</p>
+        </div>
+        <div class="change-view">
+          <div class="change-toolbar">
+            <label class="search-wrap">
+              <span aria-hidden="true">/</span>
+              <input id="file-search" type="search" aria-label="Find a path, symbol, or requirement" placeholder="Find a path, symbol, or requirement" autocomplete="off">
+            </label>
+            <div class="filters" id="filters" aria-label="Filter files by action"></div>
+          </div>
+          <div class="change-workspace">
+            <div class="file-rail" id="file-rail" role="listbox" aria-label="Planned file changes"></div>
+            <article class="file-inspector" id="file-inspector" aria-live="polite"></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="design" aria-labelledby="design-title">
+        <p class="section-kicker">Approved interactions</p>
+        <h2 id="design-title">Approved design</h2>
+        <p class="lede">The interactive mockup the user approved. Interactions are binding; pixels are not — build from Studio tokens. <a href="approved-design.html">Open full screen</a>.</p>
+        <iframe src="approved-design.html" title="Approved sprint planning design" loading="lazy" style="width:100%;height:860px;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper)"></iframe>
+      </section>
+
+      <section id="context" aria-labelledby="scope-title">
+        <p class="section-kicker">Supporting context</p>
+        <h2 id="scope-title">Scope and preserved boundaries</h2>
+        <p class="lede" id="scope-lede"></p>
+        <div class="overview-grid">
+          <article class="card">
+            <h3>In scope</h3>
+            <ul class="plain-list" id="scope-list"></ul>
+          </article>
+          <article class="card boundary">
+            <h3>Preserved boundaries</h3>
+            <ul class="plain-list" id="boundary-list"></ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="execution" aria-labelledby="execution-title">
+        <p class="section-kicker">Dependency order</p>
+        <h2 id="execution-title">Build order</h2>
+        <p class="lede">Each step should leave a locally verifiable result and unblock the next dependency.</p>
+        <div class="timeline" id="timeline"></div>
+      </section>
+
+      <section id="acceptance" aria-labelledby="acceptance-title">
+        <p class="section-kicker">Completion signals</p>
+        <h2 id="acceptance-title">Acceptance</h2>
+        <p class="lede">Every signal traces back to the canonical LLD and names an observable result.</p>
+        <div class="acceptance" id="acceptance-list"></div>
+      </section>
+    </main>
+
+    <footer>This HTML document is authoritative. Review and implementation should use this file as the LLD.</footer>
+  </div>
+
+  <script>
+    const LLD_DOCUMENT = {
+ "meta": {
+  "crumb": "Studio · sprint-planning · LLD",
+  "title": "Sprint planning in Studio",
+  "summary": "Brings the roadmap planner into Studio as a Plan tab beside Changes and the module tabs: sprints with goals, an agent that suggests stories behind an approval gate, and a single-epic Plan view whose suggestions open in Studio's own ticket panel.",
+  "status": "implementation-ready"
+ },
+ "scope": {
+  "lede": "Spec: spec.md (same folder). Approved interactions: approved-design.html (embedded below). Visuals come from Studio's tokens, not the mockup's pixels.",
+  "in": [
+   "Sprint, goal and suggestion models, migration 0063, restricted GraphQL writes",
+   "Two Worktracker MCP tools for the suggestion agent",
+   "Workspace tab strip: Plan, Changes, then module tabs",
+   "Sprints list with goals and agent box",
+   "Plan view: one-row header, epic tabs, backlog/sprint panes, moves with Undo/Retry, inline create",
+   "Suggestions pinned in the backlog, opening in the right-hand ticket panel",
+   "D-1: Sprint is transplanted from roadmap without goal text and dates; migration renumbered to 0063_sprints.",
+   "D-2: Goals are rows (worktracker_sprint_goal) numbered by position, not lines in a text field.",
+   "D-3: Suggestions are rows owned by a sprint and a goal; exactly one of issue_id / proposed_name.",
+   "D-4: All three models are registered with mutation:false, like the 16 existing entities (ticketry-entities work_management/mod.rs:22-24); each write is opted in through its own view. This is the repository norm, not an exception.",
+   "D-5: Accept is update_sprint_suggestion(status:accepted), one restricted model write returning the suggestion. Restricted mutations cannot return composites, so the resulting work item is read through the suggestion's generated issue relation in the same selection set.",
+   "D-6: The agent writes only suggestions, through get_sprint_goals and suggest_sprint_story; it cannot assign.",
+   "D-7: The run starts with launchInstantConversation({ reveal:false }), which returns the run id; update_sprint stores it as suggestion_run_id. The agent ends its own run with terminate_current_run after recording suggestions; if the card sees turn_complete without an exit, it calls terminateTerminal. Card state reads the persisted agent_runs row through the sprint's generated suggestionRun relation.",
+   "D-8: Apollo is the only state owner; the Plan local store holds ids only.",
+   "D-9: Epic tabs are per-sprint client state; at most one active epic; first open starts empty. The planner chooses tabs through + Add epic; returning restores the saved visit.",
+   "D-10: Accepting a suggestion is a Plan move with Undo and Retry.",
+   "D-11: The right-hand pane is Studio's unchanged Selected ticket panel (IssueDetail). Because it is module-scoped, Plan selects the open story's own module (issue.moduleId; else the first visible module) in clientStore, snapshotting the planning origin on open and restoring it on leave exactly like the Changes workspace. Suggestions add a banner above it.",
+   "D-12: Setting a new suggestion_run_id on update_sprint deletes the sprint's waiting suggestions in the same transaction. suggest_sprint_story accepts writes only when the caller's agent_run_id equals sprint.suggestion_run_id, so old or foreign runs cannot write.",
+   "D-13: Staleness uses sprint.goals_revised_at, bumped in the same transaction by every goal create, update and delete. stale = goals_revised_at > suggestionRun.startedAt; deletes are detected.",
+   "D-14: The one-of issue_id/proposed_name rule binds waiting rows. Accepting a proposal sets issue_id and keeps proposed_name. Undoing it unassigns the story (which stays in the backlog) and returns the row to waiting as an existing-story suggestion.",
+   "D-15: commands/work_items.rs gains create_in(txn, …), the transaction-scoped body of create; create and review_findings delegate to it so accept can create and assign in one transaction."
+  ],
+  "boundaries": [
+   "EX-1 Modules sidebar unchanged elsewhere in Studio",
+   "EX-2 Story Map, sprint length/timeframe, planning-filters (Recent), plan-voice, evaluation tooling — not transplanted",
+   "EX-3 Roadmap stand-ins (server, refresh, local provenance, operation receipts) — not copied",
+   "EX-4 No feature flag",
+   "EX-5 No new skill and no new launch kind",
+   "EX-6 Operation registry exceptions unchanged",
+   "EX-7 Agents never assign stories without approval",
+   "EX-8 IssueDetail and its module-scoped stories tree are not modified"
+  ]
+ },
+ "files": [
+  {
+   "id": "ent-sprint",
+   "path": "studio/src-tauri/crates/foundation/ticketry-entities/src/work_management/sprint.rs",
+   "action": "create",
+   "layer": "entity",
+   "purpose": "Sprint entity transplanted from roadmap, minus the single goal text and the date columns; adds the latest suggestion run.",
+   "symbols": [
+    "sprint::Model",
+    "PLANNED",
+    "ACTIVE",
+    "COMPLETED",
+    "ActiveModelBehavior::before_save"
+   ],
+   "responsibilities": [
+    "Columns: id, project_id, name, status, suggestion_run_id (nullable), goals_revised_at (nullable), created_at, updated_at",
+    "Lifecycle hook: UUID identity, project existence, status defaults to planned, timestamps",
+    "Relations: belongs_to project; belongs_to agent_run via suggestion_run_id (generated suggestionRun field); has_many issues, goals, suggestions"
+   ],
+   "nonResponsibilities": [
+    "No goal or start/end date columns (timeframe deferred, goals are rows)",
+    "No lifecycle rules beyond defaults — those live in commands/sprints.rs"
+   ],
+   "implementation": [
+    "Copy roadmap foundation/ticketry-entities/src/work_management/sprint.rs",
+    "Delete goal, start_date, end_date fields and their defaults",
+    "Add suggestion_run_id and goals_revised_at (Option), belongs_to runs::agent_run, has_many sprint_goal / sprint_suggestion"
+   ],
+   "verification": [
+    "cargo check passes",
+    "Generated SDL shows WorktrackerSprint without goal/startDate/endDate"
+   ],
+   "dependencies": "First. Every other backend file depends on it.",
+   "tests": [
+    "sprint_planning_graphql.rs"
+   ],
+   "trace": [
+    "D-1",
+    "AC-4",
+    "D-7",
+    "D-13"
+   ]
+  },
+  {
+   "id": "ent-goal",
+   "path": "studio/src-tauri/crates/foundation/ticketry-entities/src/work_management/sprint_goal.rs",
+   "action": "create",
+   "layer": "entity",
+   "purpose": "One goal row per sprint goal, numbered by position.",
+   "symbols": [
+    "sprint_goal::Model"
+   ],
+   "responsibilities": [
+    "Columns: id, sprint_id, position, text, created_at, updated_at",
+    "before_save: UUID, text trimmed and non-empty, timestamps. Position assignment, completed-sprint rejection and goals_revised_at bumping live in the goal views' prepare step (state's pattern)"
+   ],
+   "nonResponsibilities": [
+    "Does not know about suggestions or agent runs"
+   ],
+   "implementation": [
+    "New SeaORM model with belongs_to sprint",
+    "Hook keeps only per-row validation; cross-row work is in goal-views"
+   ],
+   "verification": [
+    "Insert into a completed sprint is rejected",
+    "Two inserts get positions 1 and 2"
+   ],
+   "dependencies": "After sprint.rs.",
+   "tests": [
+    "sprint_planning_graphql.rs"
+   ],
+   "trace": [
+    "D-2",
+    "AC-5"
+   ]
+  },
+  {
+   "id": "ent-sugg",
+   "path": "studio/src-tauri/crates/foundation/ticketry-entities/src/work_management/sprint_suggestion.rs",
+   "action": "create",
+   "layer": "entity",
+   "purpose": "An agent proposal: an existing story or a proposed new one, for one goal, awaiting a person.",
+   "symbols": [
+    "sprint_suggestion::Model",
+    "WAITING",
+    "ACCEPTED",
+    "DISMISSED"
+   ],
+   "responsibilities": [
+    "Columns: id, sprint_id, goal_id, issue_id?, proposed_name?, proposed_epic_id?, reason, status, run_id, created_at",
+    "before_save: a waiting row has exactly one of issue_id / proposed_name; an accepted proposal keeps proposed_name and gains issue_id; issue and epic belong to the sprint's project; status defaults to waiting"
+   ],
+   "nonResponsibilities": [
+    "Accept side effects are not in the hook — they live in commands/sprint_suggestions.rs"
+   ],
+   "implementation": [
+    "New SeaORM model with belongs_to sprint, sprint_goal, issue (optional); the issue relation is the generated field the accept selection set reads"
+   ],
+   "verification": [
+    "A waiting row with both or neither of issue_id/proposed_name is rejected",
+    "Foreign-project issue is rejected"
+   ],
+   "dependencies": "After sprint_goal.rs.",
+   "tests": [
+    "sprint_planning_graphql.rs",
+    "mcp_acceptance/sprint_suggestions.rs"
+   ],
+   "trace": [
+    "D-3",
+    "AC-7",
+    "D-14"
+   ]
+  },
+  {
+   "id": "ent-issue",
+   "path": "studio/src-tauri/crates/foundation/ticketry-entities/src/work_management/issue.rs",
+   "action": "modify",
+   "layer": "entity",
+   "purpose": "Work items gain sprint membership.",
+   "symbols": [
+    "issue::Model.sprint_id",
+    "issue::Model.sprint"
+   ],
+   "responsibilities": [
+    "sprint_id: Option<String> with BelongsTo<Option<sprint::Entity>>"
+   ],
+   "nonResponsibilities": [
+    "No change to existing columns or hooks"
+   ],
+   "implementation": [
+    "Apply the roadmap TRANSPLANT.md Diff row verbatim"
+   ],
+   "verification": [
+    "Existing issue tests stay green"
+   ],
+   "dependencies": "With sprint.rs.",
+   "tests": [
+    "existing work-item suites"
+   ],
+   "trace": [
+    "D-1"
+   ]
+  },
+  {
+   "id": "ent-project",
+   "path": "studio/src-tauri/crates/foundation/ticketry-entities/src/work_management/project.rs",
+   "action": "modify",
+   "layer": "entity",
+   "purpose": "Projects own sprints.",
+   "symbols": [
+    "project::Model.sprints"
+   ],
+   "responsibilities": [
+    "sprints: HasMany<sprint::Entity>"
+   ],
+   "nonResponsibilities": [
+    "Nothing else"
+   ],
+   "implementation": [
+    "Add the relation per TRANSPLANT.md"
+   ],
+   "verification": [
+    "cargo check"
+   ],
+   "dependencies": "With sprint.rs.",
+   "tests": [],
+   "trace": [
+    "D-1"
+   ]
+  },
+  {
+   "id": "ent-mod",
+   "path": "studio/src-tauri/crates/foundation/ticketry-entities/src/work_management/mod.rs",
+   "action": "modify",
+   "layer": "entity",
+   "purpose": "Registers the three new entities with Seaography.",
+   "symbols": [
+    "register_entity!(builder, sprint, mutation: false)",
+    "register_entity!(builder, sprint_goal, mutation: false)",
+    "register_entity!(builder, sprint_suggestion, mutation: false)"
+   ],
+   "responsibilities": [
+    "Public generated queries for sprint, goal, suggestion; mutations come only from the restricted views"
+   ],
+   "nonResponsibilities": [
+    "Raw generated mutators stay private"
+   ],
+   "implementation": [
+    "pub mod sprint; pub mod sprint_goal; pub mod sprint_suggestion; plus the three register calls beside the existing ones (lines ~26-41)"
+   ],
+   "verification": [
+    "Generated SDL lists worktrackerSprint, worktrackerSprintGoal, worktrackerSprintSuggestion queries"
+   ],
+   "dependencies": "After the three entity files.",
+   "tests": [
+    "graphql_mutation_surface.rs"
+   ],
+   "trace": [
+    "D-4"
+   ]
+  },
+  {
+   "id": "ent-lib",
+   "path": "studio/src-tauri/crates/foundation/ticketry-entities/src/lib.rs",
+   "action": "modify",
+   "layer": "entity",
+   "purpose": "Re-exports the new entity modules as public API.",
+   "symbols": [
+    "sprint",
+    "sprint_goal",
+    "sprint_suggestion"
+   ],
+   "responsibilities": [
+    "lib.rs is the only public path"
+   ],
+   "nonResponsibilities": [
+    "No nested path becomes API"
+   ],
+   "implementation": [
+    "Add the three to the work_management re-export list"
+   ],
+   "verification": [
+    "public_api_boundary_contract passes after regenerating public-api.txt"
+   ],
+   "dependencies": "With ent-mod.",
+   "tests": [
+    "public_api_boundary_contract"
+   ],
+   "trace": [
+    "D-4"
+   ]
+  },
+  {
+   "id": "mig",
+   "path": "studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/sprint_migration.rs",
+   "action": "create",
+   "layer": "migration",
+   "purpose": "Migration 0063_sprints: three tables and the issue column. 0062 is already taken by the Codex 6.1 catalog.",
+   "symbols": [
+    "MIGRATION_ID = \"0063_sprints\"",
+    "install"
+   ],
+   "responsibilities": [
+    "CREATE worktracker_sprint (with suggestion_run_id, goals_revised_at), worktracker_sprint_goal, worktracker_sprint_suggestion",
+    "ALTER worktracker_issue ADD sprint_id char(32) NULL",
+    "Partial unique index: one status=active sprint per project",
+    "Index suggestion(sprint_id, status); goal(sprint_id, position) unique"
+   ],
+   "nonResponsibilities": [
+    "No data backfill — every existing issue stays in the backlog"
+   ],
+   "implementation": [
+    "Copy roadmap sprint_migration.rs, renumber 0062 → 0063",
+    "Drop goal/start_date/end_date columns, add suggestion_run_id and goals_revised_at",
+    "Add the goal and suggestion tables in the same install step"
+   ],
+   "verification": [
+    "fresh_production_entry_reaches_the_final_leaf names 0063_sprints as the leaf",
+    "Second active sprint insert fails at the index"
+   ],
+   "dependencies": "After entities; before installation wiring.",
+   "tests": [
+    "tests/final_schema_migration_chain.rs"
+   ],
+   "trace": [
+    "D-1",
+    "D-2",
+    "D-3",
+    "AC-4"
+   ]
+  },
+  {
+   "id": "install",
+   "path": "studio/src-tauri/crates/execution/ticketry-installation/src/final_schema_migrations.rs",
+   "action": "modify",
+   "layer": "migration",
+   "purpose": "Appends 0063 to the ordered chain.",
+   "symbols": [
+    "ORDERED_MIGRATION_IDS",
+    "install"
+   ],
+   "responsibilities": [
+    "Run sprint_migration::install after the 0062 step"
+   ],
+   "nonResponsibilities": [
+    "Order of existing ids unchanged"
+   ],
+   "implementation": [
+    "Append sprint_migration::MIGRATION_ID",
+    "End the 0062 step with ? and add .map_err(|e| step_error(\"0063\", e))"
+   ],
+   "verification": [
+    "Migration chain test passes"
+   ],
+   "dependencies": "After mig.",
+   "tests": [
+    "tests/final_schema_migration_chain.rs"
+   ],
+   "trace": [
+    "AC-4"
+   ]
+  },
+  {
+   "id": "ledger",
+   "path": "studio/src-tauri/crates/execution/ticketry-installation/src/classification/rust_ledger.rs",
+   "action": "modify",
+   "layer": "migration",
+   "purpose": "Owns the new migration ledger.",
+   "symbols": [
+    "owned_ledgers"
+   ],
+   "responsibilities": [
+    "Add ticketry_sprint_migration"
+   ],
+   "nonResponsibilities": [
+    "Nothing else"
+   ],
+   "implementation": [
+    "Per TRANSPLANT.md Diff row"
+   ],
+   "verification": [
+    "Classification tests pass"
+   ],
+   "dependencies": "With install.",
+   "tests": [],
+   "trace": [
+    "AC-4"
+   ]
+  },
+  {
+   "id": "adoption",
+   "path": "studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/adoption.rs",
+   "action": "modify",
+   "layer": "migration",
+   "purpose": "Owns the three tables and issue.sprint_id in the ownership manifest.",
+   "symbols": [
+    "SPRINT",
+    "SPRINT_GOAL",
+    "SPRINT_SUGGESTION"
+   ],
+   "responsibilities": [
+    "Manifest constants; push sprint_id onto worktracker_issue effective columns"
+   ],
+   "nonResponsibilities": [
+    "No change to other owned tables"
+   ],
+   "implementation": [
+    "Per TRANSPLANT.md Diff row, extended to goal and suggestion tables (also ownership_manifest.rs)"
+   ],
+   "verification": [
+    "Adoption tests pass on a fresh and an upgraded database"
+   ],
+   "dependencies": "With install.",
+   "tests": [
+    "adoption suite"
+   ],
+   "trace": [
+    "AC-4"
+   ]
+  },
+  {
+   "id": "literals",
+   "path": "studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/commands/work_items.rs",
+   "action": "modify",
+   "layer": "domain",
+   "purpose": "Extract create_in(txn, …) for transactional reuse, and add sprint_id to every hand-built issue::ActiveModel and issue-table SQL fixture.",
+   "symbols": [
+    "create",
+    "create_in<C: ConnectionTrait>",
+    "issue::ActiveModel { .. }"
+   ],
+   "responsibilities": [
+    "create_in runs the existing create body against a caller's transaction; create opens a transaction and delegates; review_findings.rs:153 delegates instead of duplicating the insert",
+    "Also commands/review_findings.rs, tests/common/execution_fixture.rs, module_presentation_commands.rs, execution_graph_facts.rs, and every CREATE TABLE worktracker_issue fixture"
+   ],
+   "nonResponsibilities": [
+    "No behaviour change to create or review findings"
+   ],
+   "implementation": [
+    "Move the body after database.begin() (~line 69) into create_in; keep facts recording identical",
+    "sprint_id: NotSet in literals; sprint_id char(32) NULL in fixtures (grep per TRANSPLANT.md)"
+   ],
+   "verification": [
+    "cargo test --workspace compiles",
+    "Existing work-item create and review-finding suites stay green"
+   ],
+   "dependencies": "With ent-issue.",
+   "tests": [
+    "workspace tests"
+   ],
+   "trace": [
+    "AC-4",
+    "D-15"
+   ]
+  },
+  {
+   "id": "sprint-views",
+   "path": "studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/sprint/mod.rs",
+   "action": "create",
+   "layer": "graphql",
+   "purpose": "Generated create-one plus the restricted update_sprint (transplanted; allowlist trimmed).",
+   "symbols": [
+    "apply_generated_input_policy",
+    "register_mutations",
+    "update_sprint(id, name?, status?, carryover_sprint_id?, suggestion_run_id?)"
+   ],
+   "responsibilities": [
+    "Create-one: project_id + name",
+    "update_sprint allowlist: name, status, carryover_sprint_id, suggestion_run_id; preserves omitted|null|value",
+    "suggestion_run_id: the run's issue must belong to the sprint's project (join agent_runs.issue_id → worktracker_issue.project_id); a changed value deletes the sprint's waiting suggestions in the same transaction",
+    "Delegates lifecycle to commands/sprints.rs"
+   ],
+   "nonResponsibilities": [
+    "No goal, start_date, end_date inputs",
+    "No delete"
+   ],
+   "implementation": [
+    "Copy roadmap sprint/ (column_policy.rs, mod.rs, views/) and remove the date/goal inputs",
+    "Add suggestion_run_id validation and the waiting-row prune in prepare_sprint_update"
+   ],
+   "verification": [
+    "Surface test lists worktrackerSprintCreateOne and update_sprint",
+    "Unknown run id rejected",
+    "Setting a new run id removes waiting rows and keeps accepted/dismissed rows"
+   ],
+   "dependencies": "After mig.",
+   "tests": [
+    "sprint_planning_graphql.rs"
+   ],
+   "trace": [
+    "D-1",
+    "D-7",
+    "AC-4",
+    "D-12"
+   ]
+  },
+  {
+   "id": "cmd-sprints",
+   "path": "studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/commands/sprints.rs",
+   "action": "create",
+   "layer": "domain",
+   "purpose": "Sprint lifecycle and planning rules (transplanted).",
+   "symbols": [
+    "start",
+    "complete(carryover)",
+    "assign_work_item_sprint"
+   ],
+   "responsibilities": [
+    "planned → active (one active), active → completed with carry-over of unfinished stories",
+    "assign_work_item_sprint: same project, sprint not completed; used by PlanWorkItem and by suggestion accept"
+   ],
+   "nonResponsibilities": [
+    "No date handling"
+   ],
+   "implementation": [
+    "Copy roadmap commands/sprints.rs; replace local find_task with the existing Work Item lookup",
+    "Record WorkItemChange::Updated through status_facts::record_work_item like commands/tags.rs",
+    "Drop sprint-length logic"
+   ],
+   "verification": [
+    "Start with an active sprint present is rejected",
+    "Completing carries unfinished stories"
+   ],
+   "dependencies": "After sprint-views.",
+   "tests": [
+    "sprint_planning_graphql.rs"
+   ],
+   "trace": [
+    "D-1",
+    "AC-4"
+   ]
+  },
+  {
+   "id": "goal-views",
+   "path": "studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/sprint_goal/mod.rs",
+   "action": "create",
+   "layer": "graphql",
+   "purpose": "Goal writes as three restricted views (create, update text, delete), following state/views/{create,update,delete}. Generated delete has no precedent here.",
+   "symbols": [
+    "register_mutations",
+    "restricted create (sprint_id, text)",
+    "restricted update (id, text)",
+    "restricted delete (id)"
+   ],
+   "responsibilities": [
+    "Create: sprint not completed, position = max+1 within the sprint",
+    "Update allowlists text only",
+    "Delete binds a non-null id",
+    "Every write sets sprint.goals_revised_at = now in the same transaction"
+   ],
+   "nonResponsibilities": [
+    "Position is never client-writable",
+    "No reorder operation"
+   ],
+   "implementation": [
+    "Mirror state/views: ModelWrite::Insert / Update / Delete through register_restricted_model_mutation; field names follow state's restricted views",
+    "One shared prepare helper for the completed-sprint check and the goals_revised_at bump"
+   ],
+   "verification": [
+    "Write to a goal on a completed sprint rejected",
+    "Position not in any input type",
+    "Deleting a goal advances goals_revised_at"
+   ],
+   "dependencies": "After ent-goal.",
+   "tests": [
+    "sprint_planning_graphql.rs"
+   ],
+   "trace": [
+    "D-2",
+    "AC-5",
+    "D-13"
+   ]
+  },
+  {
+   "id": "sugg-views",
+   "path": "studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/sprint_suggestion/mod.rs",
+   "action": "create",
+   "layer": "graphql",
+   "purpose": "The one restricted write seam for suggestions.",
+   "symbols": [
+    "update_sprint_suggestion(id, status, proposed_name?) → WorktrackerSprintSuggestion"
+   ],
+   "responsibilities": [
+    "Allowlist: status (accepted|dismissed|waiting) and proposed_name (only for a proposal still waiting)",
+    "Returns the authoritative suggestion; callers select issue { id sprintId … } for the assigned or created work item"
+   ],
+   "nonResponsibilities": [
+    "No create-one from GraphQL — only the MCP tool creates suggestions",
+    "No delete from GraphQL"
+   ],
+   "implementation": [
+    "register_restricted_model_mutation delegating to commands/sprint_suggestions.rs (Seaolim has no payload wrapper)"
+   ],
+   "verification": [
+    "Surface test lists update_sprint_suggestion; operation_registry unchanged"
+   ],
+   "dependencies": "After cmd-sugg.",
+   "tests": [
+    "sprint_planning_graphql.rs",
+    "graphql_mutation_surface.rs"
+   ],
+   "trace": [
+    "D-3",
+    "D-5",
+    "AC-7",
+    "AC-8"
+   ]
+  },
+  {
+   "id": "cmd-sugg",
+   "path": "studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/commands/sprint_suggestions.rs",
+   "action": "create",
+   "layer": "domain",
+   "purpose": "Accept / dismiss / undo transitions, and recording suggestions for an agent run.",
+   "symbols": [
+    "set_status",
+    "record_for_run",
+    "goals_for_sprint"
+   ],
+   "responsibilities": [
+    "accepted (existing story): assign_work_item_sprint + status, one transaction",
+    "accepted (proposal): work_items::create_in under proposed_epic_id, assign, set issue_id (proposed_name kept), status, one transaction",
+    "waiting (undo of accept): unassign the story and restore waiting; a story created by accept stays in the backlog and the row becomes an existing-story suggestion",
+    "dismissed: status only",
+    "record_for_run: reject unless run_id == sprint.suggestion_run_id (error run_not_current); reject an issue already in the sprint; never prunes"
+   ],
+   "nonResponsibilities": [
+    "Never touches accepted or dismissed rows",
+    "Never assigns from record_for_run",
+    "Pruning belongs to update_sprint (D-12)"
+   ],
+   "implementation": [
+    "New command module; reuse commands/sprints.rs::assign_work_item_sprint and work_items::create_in",
+    "Record status facts for every changed work item"
+   ],
+   "verification": [
+    "Accept on completed sprint rolls back fully",
+    "A suggestion from a run other than suggestion_run_id is rejected",
+    "Undo of an accepted proposal leaves the story in the backlog"
+   ],
+   "dependencies": "After cmd-sprints and ent-sugg.",
+   "tests": [
+    "sprint_planning_graphql.rs",
+    "mcp_acceptance/sprint_suggestions.rs"
+   ],
+   "trace": [
+    "D-3",
+    "D-5",
+    "D-6",
+    "AC-7",
+    "AC-8",
+    "AC-9",
+    "D-12",
+    "D-14",
+    "D-15",
+    "AC-11"
+   ]
+  },
+  {
+   "id": "wi-sprint",
+   "path": "studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/work_item/views/update/sprint.rs",
+   "action": "create",
+   "layer": "graphql",
+   "purpose": "The sprint_id path on the one WorkItem update (PlanWorkItem).",
+   "symbols": [
+    "UpdatePath::Sprint"
+   ],
+   "responsibilities": [
+    "Route sprint_id patches to assign_work_item_sprint"
+   ],
+   "nonResponsibilities": [
+    "Exclusive patch rules unchanged"
+   ],
+   "implementation": [
+    "Copy roadmap file"
+   ],
+   "verification": [
+    "Path tests from the roadmap file"
+   ],
+   "dependencies": "After cmd-sprints.",
+   "tests": [
+    "sprint_planning_graphql.rs"
+   ],
+   "trace": [
+    "D-1",
+    "AC-6"
+   ]
+  },
+  {
+   "id": "wi-update",
+   "path": "studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/work_item/views/update/mod.rs",
+   "action": "modify",
+   "layer": "graphql",
+   "purpose": "Adds sprint_id to the WorkItem update input.",
+   "symbols": [
+    "sprint_id: GraphqlPatchString",
+    "UpdatePath::Sprint"
+   ],
+   "responsibilities": [
+    "Domain-patch count term, empty_input(), two path tests"
+   ],
+   "nonResponsibilities": [
+    "No new mutation"
+   ],
+   "implementation": [
+    "Per TRANSPLANT.md Diff row"
+   ],
+   "verification": [
+    "Update tests pass"
+   ],
+   "dependencies": "With wi-sprint.",
+   "tests": [],
+   "trace": [
+    "AC-6"
+   ]
+  },
+  {
+   "id": "gql-mod",
+   "path": "studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/graphql/mod.rs",
+   "action": "modify",
+   "layer": "graphql",
+   "purpose": "Wires the three model policies and mutation registrations.",
+   "symbols": [
+    "apply_generated_input_policy",
+    "register_model_mutations"
+   ],
+   "responsibilities": [
+    "Call sprint::, sprint_goal::, sprint_suggestion:: policy and register functions"
+   ],
+   "nonResponsibilities": [
+    "Operation registry exceptions unchanged"
+   ],
+   "implementation": [
+    "Three added calls each"
+   ],
+   "verification": [
+    "Schema builds"
+   ],
+   "dependencies": "After the three view modules.",
+   "tests": [],
+   "trace": [
+    "D-4"
+   ]
+  },
+  {
+   "id": "wm-mod",
+   "path": "studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/mod.rs",
+   "action": "modify",
+   "layer": "graphql",
+   "purpose": "Declares the new private modules.",
+   "symbols": [
+    "mod sprint; mod sprint_goal; mod sprint_suggestion; pub mod sprint_migration;"
+   ],
+   "responsibilities": [
+    "Also lib.rs re-exports sprint_migration"
+   ],
+   "nonResponsibilities": [
+    "No other module path becomes public"
+   ],
+   "implementation": [
+    "Add declarations"
+   ],
+   "verification": [
+    "public-api.txt regenerated"
+   ],
+   "dependencies": "With gql-mod.",
+   "tests": [
+    "public_api_boundary_contract"
+   ],
+   "trace": [
+    "D-4"
+   ]
+  },
+  {
+   "id": "codecs",
+   "path": "studio/src-tauri/crates/surfaces/ticketry-graphql-schema/src/query_root/context.rs",
+   "action": "modify",
+   "layer": "graphql",
+   "purpose": "UUID codecs for the new id columns.",
+   "symbols": [
+    "sprint::Column::{Id, ProjectId, SuggestionRunId}",
+    "sprint_goal::Column::{Id, SprintId}",
+    "sprint_suggestion::Column::{Id, SprintId, GoalId, IssueId, ProposedEpicId, RunId}",
+    "issue::Column::SprintId"
+   ],
+   "responsibilities": [
+    "Hyphenated UUIDs in and out"
+   ],
+   "nonResponsibilities": [
+    "Nothing else"
+   ],
+   "implementation": [
+    "Add codec rows"
+   ],
+   "verification": [
+    "Filters by sprint id work with hyphenated ids"
+   ],
+   "dependencies": "With ent-mod.",
+   "tests": [
+    "sprint_planning_graphql.rs"
+   ],
+   "trace": [
+    "D-4"
+   ]
+  },
+  {
+   "id": "op-registry",
+   "path": "studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/graphql/operation_registry.rs",
+   "action": "untouched",
+   "layer": "boundary",
+   "purpose": "All new writes are CRUD or restricted CRUD — no domain exception added.",
+   "symbols": [
+    "operation registry"
+   ],
+   "responsibilities": [
+    "Stays equal to the live mutation surface"
+   ],
+   "nonResponsibilities": [
+    "No accept/assign RPC"
+   ],
+   "implementation": [
+    "No change"
+   ],
+   "verification": [
+    "Registry-equals-surface test green"
+   ],
+   "dependencies": "—",
+   "tests": [
+    "graphql_mutation_surface.rs"
+   ],
+   "trace": [
+    "D-5"
+   ]
+  },
+  {
+   "id": "public-api",
+   "path": "studio/src-tauri/tests/fixtures/public-api.txt",
+   "action": "modify",
+   "layer": "test",
+   "purpose": "Records the new exports.",
+   "symbols": [
+    "public-api.txt"
+   ],
+   "responsibilities": [
+    "Regenerated"
+   ],
+   "nonResponsibilities": [
+    "No hand edits"
+   ],
+   "implementation": [
+    "UPDATE_PUBLIC_API=1 cargo test --test public_api_boundary_contract"
+   ],
+   "verification": [
+    "Contract test green"
+   ],
+   "dependencies": "After wm-mod.",
+   "tests": [
+    "public_api_boundary_contract"
+   ],
+   "trace": [
+    "D-4"
+   ]
+  },
+  {
+   "id": "gql-test",
+   "path": "studio/src-tauri/tests/sprint_planning_graphql.rs",
+   "action": "create",
+   "layer": "test",
+   "purpose": "GraphQL seam for sprints, goals, suggestions (seam 1).",
+   "symbols": [
+    "sprint_planning_graphql"
+   ],
+   "responsibilities": [
+    "Ported roadmap cases minus dates/goal text",
+    "Goal CRUD and scoping",
+    "Suggestion accept existing / accept proposal / dismiss / undo; completed-sprint and foreign-project rejection; transaction rollback"
+   ],
+   "nonResponsibilities": [
+    "Does not test private commands directly"
+   ],
+   "implementation": [
+    "Port the roadmap fixture onto studio/src-tauri/tests/common"
+   ],
+   "verification": [
+    "cargo test -p ticketry-graphql-schema"
+   ],
+   "dependencies": "After all backend.",
+   "tests": [
+    "self"
+   ],
+   "trace": [
+    "AC-4",
+    "AC-5",
+    "AC-6",
+    "AC-7",
+    "AC-8"
+   ]
+  },
+  {
+   "id": "surface",
+   "path": "studio/src-tauri/tests/work_management_commands.rs",
+   "action": "modify",
+   "layer": "test",
+   "purpose": "The explicit live mutation list (graphql_exposes_only_authored_mutations_and_structured_errors, ~line 1598) gains the sprint writes.",
+   "symbols": [
+    "SANCTIONED"
+   ],
+   "responsibilities": [
+    "+ worktrackerSprintCreateOne, update_sprint, the three restricted goal writes, update_sprint_suggestion"
+   ],
+   "nonResponsibilities": [
+    "No exception entries"
+   ],
+   "implementation": [
+    "Add the names; mirror in studio/scripts/graphql-product-contract.mjs and studio/e2e/graphql-mutation-surface.spec.ts",
+    "work_management_generated_mutation_audit.rs is unchanged: it audits generated bundles, not the sanctioned list"
+   ],
+   "verification": [
+    "All three surface checks pass"
+   ],
+   "dependencies": "After gql-mod.",
+   "tests": [
+    "self",
+    "graphql:drift"
+   ],
+   "trace": [
+    "D-5"
+   ]
+  },
+  {
+   "id": "mcp-registry",
+   "path": "studio/src-tauri/crates/surfaces/ticketry-mcp/src/registry.rs",
+   "action": "modify",
+   "layer": "mcp",
+   "purpose": "Publishes two sprint tools to run grants.",
+   "symbols": [
+    "tools()",
+    "get_sprint_goals(sprint_id)",
+    "suggest_sprint_story(sprint_id, goal_id, issue_id?, proposed_name?, proposed_epic_id?, reason)"
+   ],
+   "responsibilities": [
+    "closed_tool declarations with nullable_string for the optional fields",
+    "Count assertion 33 → 35 with the ordered name list"
+   ],
+   "nonResponsibilities": [
+    "No assign/move tool; launch_default_coding_agent unchanged"
+   ],
+   "implementation": [
+    "Add two closed_tool entries",
+    "Update registry_publishes_… test and tests.rs tools/list count"
+   ],
+   "verification": [
+    "tools/list returns 35"
+   ],
+   "dependencies": "After cmd-sugg.",
+   "tests": [
+    "registry tests",
+    "tests.rs"
+   ],
+   "trace": [
+    "D-6",
+    "AC-9"
+   ]
+  },
+  {
+   "id": "mcp-tools",
+   "path": "studio/src-tauri/crates/surfaces/ticketry-mcp/src/sprint_tools.rs",
+   "action": "create",
+   "layer": "mcp",
+   "purpose": "Handlers for the two tools, kept out of dispatch.rs.",
+   "symbols": [
+    "get_sprint_goals",
+    "suggest_sprint_story"
+   ],
+   "responsibilities": [
+    "Scope the sprint to the principal's project via scope::project (foreign_scope otherwise)",
+    "get_sprint_goals returns sprint name, status and goals with G-numbers",
+    "suggest_sprint_story calls sprint_suggestions::record_for_run with principal.agent_run_id; a run that is not the sprint's suggestion_run_id is rejected"
+   ],
+   "nonResponsibilities": [
+    "Reads the backlog through existing tools, not here",
+    "Rejects a completed sprint"
+   ],
+   "implementation": [
+    "Two async fns with the dispatch signature"
+   ],
+   "verification": [
+    "Acceptance: foreign sprint rejected, proposal without epic rejected"
+   ],
+   "dependencies": "With mcp-registry.",
+   "tests": [
+    "mcp_acceptance/sprint_suggestions.rs"
+   ],
+   "trace": [
+    "D-6",
+    "AC-9",
+    "D-12"
+   ]
+  },
+  {
+   "id": "mcp-dispatch",
+   "path": "studio/src-tauri/crates/surfaces/ticketry-mcp/src/dispatch.rs",
+   "action": "modify",
+   "layer": "mcp",
+   "purpose": "Routes the two names.",
+   "symbols": [
+    "match name"
+   ],
+   "responsibilities": [
+    "\"get_sprint_goals\" and \"suggest_sprint_story\" arms → sprint_tools"
+   ],
+   "nonResponsibilities": [
+    "Nothing else"
+   ],
+   "implementation": [
+    "Two arms; mod sprint_tools in lib.rs"
+   ],
+   "verification": [
+    "verify_registry passes"
+   ],
+   "dependencies": "With mcp-tools.",
+   "tests": [],
+   "trace": [
+    "AC-9"
+   ]
+  },
+  {
+   "id": "mcp-test",
+   "path": "studio/src-tauri/tests/mcp_acceptance/sprint_suggestions.rs",
+   "action": "create",
+   "layer": "test",
+   "purpose": "MCP seam (seam 2).",
+   "symbols": [
+    "sprint_suggestions acceptance"
+   ],
+   "responsibilities": [
+    "Run-scoped reads, writes, scoping, re-run replacement, no assignment",
+    "Superseded run rejected with run_not_current"
+   ],
+   "nonResponsibilities": [
+    "No GraphQL assertions"
+   ],
+   "implementation": [
+    "Add the module to studio/src-tauri/tests/mcp_acceptance.rs"
+   ],
+   "verification": [
+    "cargo test -p ticketry-mcp"
+   ],
+   "dependencies": "After MCP files.",
+   "tests": [
+    "self"
+   ],
+   "trace": [
+    "AC-9"
+   ]
+  },
+  {
+   "id": "fe-wi-gql",
+   "path": "studio/src/features/work-items/operations/workItems.graphql",
+   "action": "modify",
+   "layer": "frontend api",
+   "purpose": "Adds PlanWorkItem and WorkItemSprint.",
+   "symbols": [
+    "PlanWorkItem",
+    "WorkItemSprint"
+   ],
+   "responsibilities": [
+    "sprint_id update on the existing WorkItem update"
+   ],
+   "nonResponsibilities": [
+    "Create stays CreateWorkTrackerWorkItem"
+   ],
+   "implementation": [
+    "Add two operations; npm run graphql:generate"
+   ],
+   "verification": [
+    "graphql:drift clean"
+   ],
+   "dependencies": "After backend.",
+   "tests": [],
+   "trace": [
+    "AC-6"
+   ]
+  },
+  {
+   "id": "fe-wi-guard",
+   "path": "studio/src/features/work-items/planWriteGuard.ts",
+   "action": "create",
+   "layer": "frontend state",
+   "purpose": "Per-client, per-item PlanWorkItem in-flight guard (transplanted).",
+   "symbols": [
+    "claimPlanWrite",
+    "releasePlanWrite",
+    "usePlanWritePending"
+   ],
+   "responsibilities": [
+    "One write per item at a time across Plan and the ticket panel"
+   ],
+   "nonResponsibilities": [
+    "No data snapshot — ids only"
+   ],
+   "implementation": [
+    "Copy roadmap file; export usePlanWorkItem({notice}) from mutations.ts"
+   ],
+   "verification": [
+    "Unit test from roadmap"
+   ],
+   "dependencies": "With fe-wi-gql.",
+   "tests": [
+    "planWriteGuard test"
+   ],
+   "trace": [
+    "D-8",
+    "AC-6"
+   ]
+  },
+  {
+   "id": "fe-wi-create",
+   "path": "studio/src/features/work-items/storyCreation.ts",
+   "action": "create",
+   "layer": "frontend api",
+   "purpose": "Inline story creation with distinct outcomes (transplanted), built on CreateWorkTrackerWorkItem; graphRefresh.ts comes with it.",
+   "symbols": [
+    "useStoryCreation",
+    "refreshPlanningGraph"
+   ],
+   "responsibilities": [
+    "create → assign → refresh with separate failures"
+   ],
+   "nonResponsibilities": [
+    "Never retries create blindly"
+   ],
+   "implementation": [
+    "Copy roadmap storyCreation.ts and graphRefresh.ts, swap create operation"
+   ],
+   "verification": [
+    "Ported planCreate scenarios"
+   ],
+   "dependencies": "With fe-wi-gql.",
+   "tests": [
+    "overhaulPlanWorkspaceAcceptance"
+   ],
+   "trace": [
+    "AC-6"
+   ]
+  },
+  {
+   "id": "fe-drag",
+   "path": "studio/src/shared/dragDrop/storyDrag.ts",
+   "action": "create",
+   "layer": "frontend shared",
+   "purpose": "Native story drag payload (transplanted).",
+   "symbols": [
+    "writeStoryDrag",
+    "readStoryDrag"
+   ],
+   "responsibilities": [
+    "Shared by backlog and sprint panes"
+   ],
+   "nonResponsibilities": [
+    "No feature imports"
+   ],
+   "implementation": [
+    "Copy roadmap file"
+   ],
+   "verification": [
+    "Drag acceptance case"
+   ],
+   "dependencies": "Any time.",
+   "tests": [],
+   "trace": [
+    "AC-6"
+   ]
+  },
+  {
+   "id": "fe-graph",
+   "path": "studio/src/features/planning-graph/",
+   "action": "create",
+   "layer": "frontend api",
+   "purpose": "Project planning read model (transplanted): epics, stories, sprint membership, story/epic types.",
+   "symbols": [
+    "PlanningGraph",
+    "usePlanningGraph",
+    "planningModel",
+    "isTopLevelIn"
+   ],
+   "responsibilities": [
+    "One query feeding Sprints and Plan"
+   ],
+   "nonResponsibilities": [
+    "Story Map helpers are not ported"
+   ],
+   "implementation": [
+    "Copy roadmap folder; regenerate documents"
+   ],
+   "verification": [
+    "planningModel unit tests"
+   ],
+   "dependencies": "After fe-wi-gql.",
+   "tests": [
+    "planningModel.test.ts"
+   ],
+   "trace": [
+    "D-8"
+   ]
+  },
+  {
+   "id": "fe-sp-gql",
+   "path": "studio/src/features/sprints/operations/sprints.graphql",
+   "action": "create",
+   "layer": "frontend api",
+   "purpose": "Sprint, goal and suggestion operations.",
+   "symbols": [
+    "CreateSprint",
+    "UpdateSprint",
+    "SprintGoals",
+    "CreateSprintGoal",
+    "DeleteSprintGoal",
+    "UpdateSprintGoal",
+    "SprintSuggestions",
+    "UpdateSprintSuggestion"
+   ],
+   "responsibilities": [
+    "UpdateSprintSuggestion returns suggestion and workItem so the cache converges"
+   ],
+   "nonResponsibilities": [
+    "No date or goal-text fields on sprints"
+   ],
+   "implementation": [
+    "Write operations; graphql:generate; mutations.ts adds hooks that refetch PlanningGraph and SprintSuggestions after accept/undo"
+   ],
+   "verification": [
+    "graphql:drift clean"
+   ],
+   "dependencies": "After backend.",
+   "tests": [],
+   "trace": [
+    "D-2",
+    "D-3",
+    "AC-5",
+    "AC-7"
+   ]
+  },
+  {
+   "id": "fe-sp-view",
+   "path": "studio/src/features/sprints/SprintsView.tsx",
+   "action": "create",
+   "layer": "frontend ui",
+   "purpose": "The sprint list (transplanted) — Plan's landing view.",
+   "symbols": [
+    "SprintsView"
+   ],
+   "responsibilities": [
+    "Active/planned/completed cards, New sprint, Start/Complete dialogs; opening a sprint calls openPlanSprint"
+   ],
+   "nonResponsibilities": [
+    "No sprint-length control; no Story Map link"
+   ],
+   "implementation": [
+    "Copy roadmap SprintsView, SprintCard, SprintItemRow, SprintStatusPill, NewSprintButton, StartSprintDialog, CompleteSprintDialog, mutations.ts, selectors/; remove date fields",
+    "SprintCard renders SprintGoals and SuggestionAgentBox"
+   ],
+   "verification": [
+    "Acceptance: create, start, complete with carry-over"
+   ],
+   "dependencies": "After fe-sp-gql.",
+   "tests": [
+    "overhaulPlanWorkspaceAcceptance"
+   ],
+   "trace": [
+    "AC-1",
+    "AC-4"
+   ]
+  },
+  {
+   "id": "fe-goals",
+   "path": "studio/src/features/sprints/goals/SprintGoals.tsx",
+   "action": "create",
+   "layer": "frontend ui",
+   "purpose": "Goals block on a sprint card.",
+   "symbols": [
+    "SprintGoals"
+   ],
+   "responsibilities": [
+    "Numbered list (G1…), remove ×, + Goal input with Enter to add, Escape to cancel; optimistic add with inline error"
+   ],
+   "nonResponsibilities": [
+    "No goal reorder; no editing on completed sprints"
+   ],
+   "implementation": [
+    "Uses CreateSprintGoal/DeleteSprintGoal hooks"
+   ],
+   "verification": [
+    "Acceptance: add two goals with Enter, remove one"
+   ],
+   "dependencies": "With fe-sp-view.",
+   "tests": [
+    "overhaulSprintGoalsAgentAcceptance"
+   ],
+   "trace": [
+    "AC-5"
+   ]
+  },
+  {
+   "id": "fe-agentstate",
+   "path": "studio/src/features/sprints/suggestions/agentState.ts",
+   "action": "create",
+   "layer": "frontend state",
+   "purpose": "Pure derivation of the card's agent state.",
+   "symbols": [
+    "deriveAgentState(run, goalsRevisedAt, waitingCount) → AgentState"
+   ],
+   "responsibilities": [
+    "Input is the persisted run row from sprint.suggestionRun { lifecycleState startedAt endedAt exitCode }, overlaid by the live status feed while the run is alive",
+    "running: starting|working|quiet|reconnecting|needs_input|permission_required",
+    "error: error|lost, or ended with exitCode ≠ 0",
+    "done: ended with exitCode 0, or turn_complete",
+    "stale (over done/error): goalsRevisedAt > startedAt",
+    "idle: no run"
+   ],
+   "nonResponsibilities": [
+    "No store; no React"
+   ],
+   "implementation": [
+    "Pure function + agentState.test.ts table"
+   ],
+   "verification": [
+    "Every row of the state table covered"
+   ],
+   "dependencies": "Any time.",
+   "tests": [
+    "agentState.test.ts"
+   ],
+   "trace": [
+    "D-7",
+    "AC-10",
+    "D-7",
+    "D-13",
+    "AC-11"
+   ]
+  },
+  {
+   "id": "fe-agentbox",
+   "path": "studio/src/features/sprints/suggestions/SuggestionAgentBox.tsx",
+   "action": "create",
+   "layer": "frontend ui",
+   "purpose": "The agent box on a sprint card.",
+   "symbols": [
+    "SuggestionAgentBox"
+   ],
+   "responsibilities": [
+    "idle: ✦ Find stories for these goals (disabled with no goals)",
+    "running: An agent is looking… + Cancel",
+    "done: ✦ N suggestions ready · Review in Plan → · Ask again",
+    "stale: ● Goals changed since the agent ran · Ask again",
+    "error: message + Retry"
+   ],
+   "nonResponsibilities": [
+    "Never navigates to the terminal on launch"
+   ],
+   "implementation": [
+    "Run row from the sprint query's suggestionRun relation (survives restart); live state from useAgentStatusRuns() while alive",
+    "Cancel and the turn_complete fallback call terminateTerminal(runId) from features/agents/api/agentApi"
+   ],
+   "verification": [
+    "Acceptance drives each state from a fake run frame"
+   ],
+   "dependencies": "After fe-agentstate and fe-launch.",
+   "tests": [
+    "overhaulSprintGoalsAgentAcceptance"
+   ],
+   "trace": [
+    "AC-10",
+    "AC-11"
+   ]
+  },
+  {
+   "id": "fe-launch",
+   "path": "studio/src/features/sprints/suggestions/launchSuggestionRun.ts",
+   "action": "create",
+   "layer": "frontend api",
+   "purpose": "Starts the agent and records the run on the sprint.",
+   "symbols": [
+    "launchSuggestionRun(sprint, moduleId)",
+    "buildSprintSuggestionPrompt"
+   ],
+   "responsibilities": [
+    "launchInstantConversation({ projectId, moduleId, prompt, reveal: false }) returns the run id, then UpdateSprint(suggestion_run_id)",
+    "Module = selected module, else first visible module; disabled with a reason when the project has none",
+    "Prompt: sprint id, call get_sprint_goals first, search with existing read tools, record with suggest_sprint_story, propose only and never assign, then call terminate_current_run"
+   ],
+   "nonResponsibilities": [
+    "No new skill; no new launch kind"
+   ],
+   "implementation": [
+    "Model the prompt builder on mergeConflictPrompt.ts (prompt shape only; that flow launches through AgentPicker and is not reused)"
+   ],
+   "verification": [
+    "Prompt snapshot test; acceptance asserts UpdateSprint carries the returned run id"
+   ],
+   "dependencies": "After fe-instant.",
+   "tests": [
+    "overhaulSprintGoalsAgentAcceptance"
+   ],
+   "trace": [
+    "D-7",
+    "AC-10"
+   ]
+  },
+  {
+   "id": "fe-instant",
+   "path": "studio/src/features/agents/terminal/instantConversationLaunch.ts",
+   "action": "modify",
+   "layer": "frontend api",
+   "purpose": "Lets a caller start an instant run without switching the workspace to it.",
+   "symbols": [
+    "launchInstantConversation(request & { reveal?: boolean })"
+   ],
+   "responsibilities": [
+    "reveal defaults to true (existing behaviour)",
+    "reveal:false attaches the run with select:false and skips selectTask/tabSelected/focus"
+   ],
+   "nonResponsibilities": [
+    "Existing callers unchanged"
+   ],
+   "implementation": [
+    "Add the option and branch"
+   ],
+   "verification": [
+    "overhaulInstantTicketsAcceptance stays green"
+   ],
+   "dependencies": "Any time.",
+   "tests": [
+    "overhaulInstantTicketsAcceptance"
+   ],
+   "trace": [
+    "AC-10"
+   ]
+  },
+  {
+   "id": "fe-ws-state",
+   "path": "studio/src/features/sprints/planWorkspaceState.ts",
+   "action": "create",
+   "layer": "frontend state",
+   "purpose": "Apollo local store for Plan, modelled on changesWorkspaceState.ts.",
+   "symbols": [
+    "usePlanWorkspace",
+    "openPlanWorkspace",
+    "leavePlanWorkspace",
+    "openPlanSprint",
+    "closePlanSprint"
+   ],
+   "responsibilities": [
+    "active, sprintId, visits: Record<sprintId, { epicTabs, activeEpicId }>, openItem (workItemId | \"suggestion:<id>\"), origin",
+    "openPlanWorkspace snapshots the planning origin (Changes' planningOrigin fields) unless already active",
+    "Opening an item selects its story's module in clientStore (issue.moduleId, else first visible module) so the unchanged Selected ticket panel resolves its tree",
+    "leavePlanWorkspace restores the origin like leaveChangesWorkspace, including the missing-task fallback",
+    "Opening Plan with no sprint picks the next planned sprint"
+   ],
+   "nonResponsibilities": [
+    "No server data copies — ids only"
+   ],
+   "implementation": [
+    "createApolloStore(\"plan-workspace\", …)"
+   ],
+   "verification": [
+    "Escape and reopen keep epic tabs for the same sprint"
+   ],
+   "dependencies": "Any time.",
+   "tests": [
+    "overhaulPlanWorkspaceAcceptance"
+   ],
+   "trace": [
+    "D-8",
+    "D-9",
+    "AC-1",
+    "AC-3",
+    "D-11",
+    "AC-12"
+   ]
+  },
+  {
+   "id": "fe-epictabs",
+   "path": "studio/src/features/sprints/planning/epicTabs.ts",
+   "action": "create",
+   "layer": "frontend state",
+   "purpose": "Pure epic-tab rules.",
+   "symbols": [
+    "seedEpicTabs(graph, suggestions, sprintId)",
+    "closeEpicTab(visit, epicId)",
+    "stepEpicTab(visit, ±1)"
+   ],
+   "responsibilities": [
+    "Initial visit: no epic tabs and activeEpicId null, regardless of sprint stories or waiting suggestions. Add epic opens and activates a chosen epic; existing visits are restored.",
+    "Close active → right neighbour, else left, else null",
+    "Step wraps"
+   ],
+   "nonResponsibilities": [
+    "No React, no Apollo"
+   ],
+   "implementation": [
+    "Pure module"
+   ],
+   "verification": [
+    "epicTabs.test.ts verifies an empty initial visit even with sprint work and waiting suggestions, plus close and step edges"
+   ],
+   "dependencies": "Any time.",
+   "tests": [
+    "epicTabs.test.ts"
+   ],
+   "trace": [
+    "D-9",
+    "AC-3"
+   ]
+  },
+  {
+   "id": "fe-epicstrip",
+   "path": "studio/src/features/sprints/planning/EpicTabStrip.tsx",
+   "action": "create",
+   "layer": "frontend ui",
+   "purpose": "The epic tab strip, same interaction as the module tabs.",
+   "symbols": [
+    "EpicTabStrip"
+   ],
+   "responsibilities": [
+    "Tab: name, backlog count, ✦ waiting count, × close",
+    "+ Add epic menu (Popover) with backlog counts and + New epic (NewEpicChip)",
+    "Next epic →; ⌥] / ⌥[ via keymap"
+   ],
+   "nonResponsibilities": [
+    "Uses shared Popover/TabStrip once available; no custom menu"
+   ],
+   "implementation": [
+    "role=tablist, roving tabindex"
+   ],
+   "verification": [
+    "Acceptance: add, step, close tabs"
+   ],
+   "dependencies": "After fe-epictabs.",
+   "tests": [
+    "overhaulPlanWorkspaceAcceptance"
+   ],
+   "trace": [
+    "AC-3"
+   ]
+  },
+  {
+   "id": "fe-plan-view",
+   "path": "studio/src/features/sprints/planning/PlanSprintView.tsx",
+   "action": "create",
+   "layer": "frontend ui",
+   "purpose": "Plan view (transplanted, reshaped): header, epic tabs, backlog and sprint panes, detail pane.",
+   "symbols": [
+    "PlanSprintView({ projectId, sprintId, renderWorkItemDetail })"
+   ],
+   "responsibilities": [
+    "Single-epic focus from the visit's activeEpicId",
+    "Wires usePlanMoves eligibility; Done with X → next",
+    "Empty state when no tab is open"
+   ],
+   "nonResponsibilities": [
+    "No Recent filter, no sprint length, no voice bridge"
+   ],
+   "implementation": [
+    "Copy roadmap PlanSprintView and strip sprintLength, planning-filters, plan-voice",
+    "Replace the epic-focus chips with EpicTabStrip"
+   ],
+   "verification": [
+    "Acceptance below"
+   ],
+   "dependencies": "After fe-epicstrip, fe-header.",
+   "tests": [
+    "overhaulPlanWorkspaceAcceptance"
+   ],
+   "trace": [
+    "AC-2",
+    "AC-3",
+    "AC-6"
+   ]
+  },
+  {
+   "id": "fe-header",
+   "path": "studio/src/features/sprints/planning/PlanHeader.tsx",
+   "action": "create",
+   "layer": "frontend ui",
+   "purpose": "One-row Plan header.",
+   "symbols": [
+    "PlanHeader"
+   ],
+   "responsibilities": [
+    "← Plan · Sprint name · N stories │ N goals (hover lists them) · ✦ N to review / Agent still working… · Done"
+   ],
+   "nonResponsibilities": [
+    "No goal editing here — goals live on the card"
+   ],
+   "implementation": [
+    "Small component"
+   ],
+   "verification": [
+    "Snapshot of the row"
+   ],
+   "dependencies": "Any time.",
+   "tests": [
+    "overhaulPlanWorkspaceAcceptance"
+   ],
+   "trace": [
+    "AC-2"
+   ]
+  },
+  {
+   "id": "fe-panes",
+   "path": "studio/src/features/sprints/planning/PlanStoryPanes.tsx",
+   "action": "create",
+   "layer": "frontend ui",
+   "purpose": "Backlog and sprint panes (transplanted with PlanPane, NewStoryRow, NewEpicChip, useStoryEntry, useEpicEntry, storyEntries, planGroups).",
+   "symbols": [
+    "PlanStoryPanes",
+    "PlanPane"
+   ],
+   "responsibilities": [
+    "Backlog = active epic; sprint pane = active epic first, others dimmed",
+    "+ / − buttons, drag with highlighted drop targets, Alt+↑/↓",
+    "Suggestions block rendered above the backlog rows"
+   ],
+   "nonResponsibilities": [
+    "planGroups stays pure"
+   ],
+   "implementation": [
+    "Copy roadmap files; add a suggestions slot"
+   ],
+   "verification": [
+    "Ported planMoves cases"
+   ],
+   "dependencies": "With fe-plan-view.",
+   "tests": [
+    "planGroups.test.ts",
+    "overhaulPlanWorkspaceAcceptance"
+   ],
+   "trace": [
+    "AC-6"
+   ]
+  },
+  {
+   "id": "fe-moves",
+   "path": "studio/src/features/sprints/planning/usePlanMoves.ts",
+   "action": "create",
+   "layer": "frontend state",
+   "purpose": "Optimistic moves with rollback, Retry and Undo (transplanted with moveFeedback.ts and PlanFeedback.tsx).",
+   "symbols": [
+    "usePlanMoves",
+    "moveFeedback",
+    "PlanFeedback"
+   ],
+   "responsibilities": [
+    "Accepting a suggestion is a Move whose undo calls UpdateSprintSuggestion(status: waiting)"
+   ],
+   "nonResponsibilities": [
+    "Unchanged eligibility rule"
+   ],
+   "implementation": [
+    "Copy; add the suggestion move kind"
+   ],
+   "verification": [
+    "moveFeedback.test.ts; Undo of accept returns the suggestion"
+   ],
+   "dependencies": "With fe-panes.",
+   "tests": [
+    "moveFeedback.test.ts",
+    "overhaulPlanSuggestionsAcceptance"
+   ],
+   "trace": [
+    "D-10",
+    "AC-6",
+    "AC-8"
+   ]
+  },
+  {
+   "id": "fe-sugg-rows",
+   "path": "studio/src/features/sprints/planning/SuggestionRows.tsx",
+   "action": "create",
+   "layer": "frontend ui",
+   "purpose": "Suggestions pinned atop the active epic's backlog.",
+   "symbols": [
+    "SuggestionRows"
+   ],
+   "responsibilities": [
+    "✦ rows with goal chip and reason; ✓ Add / Create, × dismiss, Add all",
+    "Row click or Enter opens openItem = suggestion:<id>; open row highlighted"
+   ],
+   "nonResponsibilities": [
+    "No inline editing — editing happens in the detail pane"
+   ],
+   "implementation": [
+    "role=button rows; buttons stop propagation"
+   ],
+   "verification": [
+    "Acceptance: click opens panel; ✓ and × work from the row"
+   ],
+   "dependencies": "With fe-panes.",
+   "tests": [
+    "overhaulPlanSuggestionsAcceptance"
+   ],
+   "trace": [
+    "AC-7",
+    "AC-8"
+   ]
+  },
+  {
+   "id": "fe-detail",
+   "path": "studio/src/features/sprints/planning/PlanDetailPane.tsx",
+   "action": "create",
+   "layer": "frontend ui",
+   "purpose": "Right-hand pane: Studio's own ticket detail, plus the suggestion banner.",
+   "symbols": [
+    "PlanDetailPane",
+    "SuggestionBanner",
+    "ProposedStoryDraft"
+   ],
+   "responsibilities": [
+    "openItem = work item → renderWorkItemDetail(id), after its module is selected",
+    "suggestion for existing story → SuggestionBanner + renderWorkItemDetail(issueId)",
+    "suggestion proposal → SuggestionBanner + ProposedStoryDraft (editable title, epic, sprint)",
+    "After accept, openItem switches to the work item id; after dismiss, closes; Escape closes"
+   ],
+   "nonResponsibilities": [
+    "Never imports app/ — detail comes in as a render prop"
+   ],
+   "implementation": [
+    "Three small components in planning/"
+   ],
+   "verification": [
+    "Acceptance: banner text, accept switches panel, dismiss closes"
+   ],
+   "dependencies": "With fe-sugg-rows.",
+   "tests": [
+    "overhaulPlanSuggestionsAcceptance"
+   ],
+   "trace": [
+    "D-11",
+    "AC-8"
+   ]
+  },
+  {
+   "id": "fe-sp-index",
+   "path": "studio/src/features/sprints/index.ts",
+   "action": "create",
+   "layer": "frontend api",
+   "purpose": "Public entry for the sprints feature.",
+   "symbols": [
+    "SprintsWorkspace",
+    "usePlanWorkspace",
+    "openPlanWorkspace",
+    "leavePlanWorkspace"
+   ],
+   "responsibilities": [
+    "SprintsWorkspace switches SprintsView ↔ PlanSprintView by planWorkspace.sprintId"
+   ],
+   "nonResponsibilities": [
+    "Nothing internal exported"
+   ],
+   "implementation": [
+    "Barrel"
+   ],
+   "verification": [
+    "moduleBoundaries test"
+   ],
+   "dependencies": "After feature files.",
+   "tests": [
+    "moduleBoundaries.test.ts"
+   ],
+   "trace": [
+    "D-8"
+   ]
+  },
+  {
+   "id": "sh-tabs",
+   "path": "studio/src/app/shell/ticket-workspace/WorkspaceTabs.tsx",
+   "action": "create",
+   "layer": "shell",
+   "purpose": "Plan and Changes as tabs at the head of the top strip.",
+   "symbols": [
+    "WorkspaceTabs"
+   ],
+   "responsibilities": [
+    "◆ Plan tab (project scope) and ⑂ Changes tab showing the module name",
+    "Selecting one opens its surface and leaves the other; selecting a module tab leaves both",
+    "Keeps data-changes-keyboard-entry on the Changes tab",
+    "Roving tabindex with ←/→, Home, End across Plan, Changes and module tabs; the strip has none today (every ModuleTab is tabIndex -1). Replaced by the shared TabStrip when shared-ui issue 03 lands"
+   ],
+   "nonResponsibilities": [
+    "Module tab behaviour untouched"
+   ],
+   "implementation": [
+    "Two role=tab buttons inside the existing tablist"
+   ],
+   "verification": [
+    "Acceptance: tab switching, aria-selected"
+   ],
+   "dependencies": "After fe-sp-index.",
+   "tests": [
+    "overhaulPlanWorkspaceAcceptance"
+   ],
+   "trace": [
+    "AC-1"
+   ]
+  },
+  {
+   "id": "sh-strip",
+   "path": "studio/src/app/shell/ticket-workspace/ModuleTabStrip.tsx",
+   "action": "modify",
+   "layer": "shell",
+   "purpose": "Hosts WorkspaceTabs before the module tabs.",
+   "symbols": [
+    "ModuleTabStrip"
+   ],
+   "responsibilities": [
+    "Render <WorkspaceTabs/> as the first children of the tablist; module tabs show unselected while Plan or Changes is active"
+   ],
+   "nonResponsibilities": [
+    "Hide, drag, jump badges, picker unchanged"
+   ],
+   "implementation": [
+    "Insert component; pass isSelected && !surfaceActive"
+   ],
+   "verification": [
+    "Existing module-tab acceptance green"
+   ],
+   "dependencies": "With sh-tabs.",
+   "tests": [
+    "overhaulWorkspaceTabOrderAcceptance"
+   ],
+   "trace": [
+    "AC-1"
+   ]
+  },
+  {
+   "id": "sh-ws",
+   "path": "studio/src/app/shell/ticket-workspace/TicketWorkspace.tsx",
+   "action": "modify",
+   "layer": "shell",
+   "purpose": "Mounts Plan as a full-region branch like Changes.",
+   "symbols": [
+    "TicketWorkspace"
+   ],
+   "responsibilities": [
+    "planActive hides the planning PanelGroup and TerminalPanel (kept mounted) and renders <SprintsWorkspace renderWorkItemDetail={(id) => <IssueDetail issueId={id} detailsVisible />} />, with IssueDetail unchanged",
+    "Plan does not require a selected module to open; module-change dismissal stays Changes-only"
+   ],
+   "nonResponsibilities": [
+    "Changes branch unchanged"
+   ],
+   "implementation": [
+    "Add branch; render Plan even when noModules"
+   ],
+   "verification": [
+    "Acceptance: Plan opens with no module selected"
+   ],
+   "dependencies": "After sh-tabs.",
+   "tests": [
+    "overhaulPlanWorkspaceAcceptance"
+   ],
+   "trace": [
+    "D-11",
+    "AC-1"
+   ]
+  },
+  {
+   "id": "sh-footer",
+   "path": "studio/src/app/shell/FooterChangesToggle.tsx",
+   "action": "delete",
+   "layer": "shell",
+   "purpose": "Changes moves to the top strip.",
+   "symbols": [
+    "FooterChangesToggle"
+   ],
+   "responsibilities": [
+    "Removed with its import in StudioFooter.tsx"
+   ],
+   "nonResponsibilities": [
+    "openModuleChangesWorkspace/leaveChangesWorkspace stay"
+   ],
+   "implementation": [
+    "Delete with its StudioFooter import; no tests reference footer-module-changes; retarget the Escape refocus in useGlobalKeymap.ts:147"
+   ],
+   "verification": [
+    "No remaining references (grep)"
+   ],
+   "dependencies": "After sh-tabs.",
+   "tests": [
+    "Changes acceptance suites"
+   ],
+   "trace": [
+    "AC-1"
+   ]
+  },
+  {
+   "id": "sh-keymap",
+   "path": "studio/src/app/navigation/useGlobalKeymap.ts",
+   "action": "modify",
+   "layer": "shell",
+   "purpose": "Plan keymap guard.",
+   "symbols": [
+    "useGlobalKeymap"
+   ],
+   "responsibilities": [
+    "While Plan is active, planning layouts do not see keys; bare Escape closes the detail pane, then leaves Plan",
+    "⌥] / ⌥[ step epic tabs",
+    "Escape leaving Changes refocuses workspace-tab-changes instead of footer-module-changes"
+   ],
+   "nonResponsibilities": [
+    "Changes guard unchanged"
+   ],
+   "implementation": [
+    "Add branch mirroring the Changes guard"
+   ],
+   "verification": [
+    "Escape test mirrors overhaulChangesEscapeLeavesWorkspace"
+   ],
+   "dependencies": "After fe-ws-state.",
+   "tests": [
+    "overhaulPlanWorkspaceAcceptance"
+   ],
+   "trace": [
+    "AC-2"
+   ]
+  },
+  {
+   "id": "sh-bounds",
+   "path": "studio/src/app/__tests__/moduleBoundaries.test.ts",
+   "action": "modify",
+   "layer": "test",
+   "purpose": "Registers new feature roots.",
+   "symbols": [
+    "PRODUCT_ROOTS",
+    "PUBLIC_ENTRYPOINTS"
+   ],
+   "responsibilities": [
+    "Add features/sprints and features/planning-graph to PRODUCT_ROOTS and their index entries to PUBLIC_ENTRYPOINTS",
+    "sprints imports agents only through listed entrypoints (agents/api/agentApi, agents/status, agents/terminal)"
+   ],
+   "nonResponsibilities": [
+    "Nothing else"
+   ],
+   "implementation": [
+    "Add entries"
+   ],
+   "verification": [
+    "Test green"
+   ],
+   "dependencies": "After frontend.",
+   "tests": [
+    "self"
+   ],
+   "trace": [
+    "D-8"
+   ]
+  },
+  {
+   "id": "sidebar",
+   "path": "studio/src/app/shell/sidebar/StudioSidebar.tsx",
+   "action": "untouched",
+   "layer": "boundary",
+   "purpose": "The modules sidebar stays in Studio; Plan simply does not depend on it.",
+   "symbols": [
+    "StudioSidebar"
+   ],
+   "responsibilities": [
+    "Unchanged"
+   ],
+   "nonResponsibilities": [
+    "Sidebar removal is a separate decision"
+   ],
+   "implementation": [
+    "No change"
+   ],
+   "verification": [
+    "—"
+   ],
+   "dependencies": "—",
+   "tests": [],
+   "trace": [
+    "EX-1"
+   ]
+  },
+  {
+   "id": "t-ws",
+   "path": "studio/src/test/overhaulPlanWorkspaceAcceptance.test.tsx",
+   "action": "create",
+   "layer": "test",
+   "purpose": "Studio seam: Plan tab, sprints, epic tabs, moves.",
+   "symbols": [
+    "overhaul acceptance - Plan workspace"
+   ],
+   "responsibilities": [
+    "Plan/Changes tabs; Escape; open sprint goes straight to Plan; epic tab empty entry/add/step/close; + − drag Alt+↑↓; rollback, Retry, Undo; inline create (ported roadmap scenarios)"
+   ],
+   "nonResponsibilities": [
+    "No hook assertions"
+   ],
+   "implementation": [
+    "RTL against the mocked GraphQL transport used by other overhaul tests"
+   ],
+   "verification": [
+    "npm run test --workspace @worktracker/studio"
+   ],
+   "dependencies": "After shell.",
+   "tests": [
+    "self"
+   ],
+   "trace": [
+    "AC-1",
+    "AC-2",
+    "AC-3",
+    "AC-6"
+   ]
+  },
+  {
+   "id": "t-sugg",
+   "path": "studio/src/test/overhaulPlanSuggestionsAcceptance.test.tsx",
+   "action": "create",
+   "layer": "test",
+   "purpose": "Studio seam: suggestions in Plan.",
+   "symbols": [
+    "overhaul acceptance - Plan suggestions"
+   ],
+   "responsibilities": [
+    "Pinned ✦ rows; click/Enter opens the right-hand panel with banner; accept existing switches to story; create proposal with edited title; dismiss closes; Add all; Undo restores waiting",
+    "Story from a non-selected module opens with correct children and epic; leaving Plan restores origin"
+   ],
+   "nonResponsibilities": [
+    "No backend logic"
+   ],
+   "implementation": [
+    "RTL"
+   ],
+   "verification": [
+    "test run"
+   ],
+   "dependencies": "After fe-detail.",
+   "tests": [
+    "self"
+   ],
+   "trace": [
+    "AC-7",
+    "AC-8"
+   ]
+  },
+  {
+   "id": "t-goals",
+   "path": "studio/src/test/overhaulSprintGoalsAgentAcceptance.test.tsx",
+   "action": "create",
+   "layer": "test",
+   "purpose": "Studio seam: goals and agent box.",
+   "symbols": [
+    "overhaul acceptance - sprint goals and agent"
+   ],
+   "responsibilities": [
+    "Add/remove goals; launch records run id without changing the workspace; running/done/stale/error/cancel from status frames",
+    "Restart shows done/error from the persisted run; goal delete marks stale; turn_complete fallback terminates"
+   ],
+   "nonResponsibilities": [
+    "No terminal rendering"
+   ],
+   "implementation": [
+    "RTL with testStore run frames"
+   ],
+   "verification": [
+    "test run"
+   ],
+   "dependencies": "After fe-agentbox.",
+   "tests": [
+    "self"
+   ],
+   "trace": [
+    "AC-5",
+    "AC-10"
+   ]
+  },
+  {
+   "id": "issue-detail",
+   "path": "studio/src/app/shell/ticket-workspace/selected-ticket/details/IssueDetail.tsx",
+   "action": "untouched",
+   "layer": "boundary",
+   "purpose": "The Selected ticket panel is reused as-is; Plan adapts by selecting the story's module, not by changing this component.",
+   "symbols": [
+    "IssueDetail({ issueId, detailsVisible })"
+   ],
+   "responsibilities": [
+    "Unchanged; reads selectedModuleId and the module stories tree"
+   ],
+   "nonResponsibilities": [
+    "No moduleId prop, no Plan branch"
+   ],
+   "implementation": [
+    "No change"
+   ],
+   "verification": [
+    "Plan acceptance opens a story from a non-selected module and shows its children and epic"
+   ],
+   "dependencies": "—",
+   "tests": [
+    "overhaulPlanSuggestionsAcceptance"
+   ],
+   "trace": [
+    "D-11",
+    "EX-8",
+    "AC-12"
+   ]
+  }
+ ],
+ "execution": [
+  {
+   "title": "Models and migration",
+   "detail": "Entities, 0063_sprints, installation chain, adoption and ActiveModel literals.",
+   "gate": "cargo test final_schema_migration_chain"
+  },
+  {
+   "title": "GraphQL writes",
+   "detail": "Sprint, goal and suggestion views; commands; WorkItem sprint_id path; codecs; surface lists.",
+   "gate": "cargo test -p ticketry-graphql-schema"
+  },
+  {
+   "title": "MCP tools",
+   "detail": "get_sprint_goals, suggest_sprint_story; registry count 35.",
+   "gate": "cargo test -p ticketry-mcp"
+  },
+  {
+   "title": "Frontend data",
+   "detail": "workItems.graphql, planWriteGuard, storyCreation, planning-graph, sprints.graphql; graphql:generate.",
+   "gate": "npm run graphql:drift"
+  },
+  {
+   "title": "Sprints list",
+   "detail": "SprintsView, goals, agent box, launchSuggestionRun, instant reveal:false.",
+   "gate": "overhaulSprintGoalsAgentAcceptance"
+  },
+  {
+   "title": "Plan view",
+   "detail": "Plan store, epic tabs, header, panes, moves, suggestions, detail pane.",
+   "gate": "overhaulPlanWorkspaceAcceptance + overhaulPlanSuggestionsAcceptance"
+  },
+  {
+   "title": "Shell",
+   "detail": "WorkspaceTabs, ModuleTabStrip, TicketWorkspace branch, keymap, delete footer toggle.",
+   "gate": "npm run typecheck && npm run test && npm run build"
+  }
+ ],
+ "acceptance": [
+  {
+   "id": "AC-1",
+   "text": "The top strip reads Plan · Changes · module tabs. Plan opens project-wide without a selected module; Changes keeps its module scope; the footer has no Changes toggle."
+  },
+  {
+   "id": "AC-2",
+   "text": "Opening a sprint goes straight to Plan with a one-row header. Escape closes the detail pane first, then leaves Plan."
+  },
+  {
+   "id": "AC-3",
+   "text": "Epic tabs start empty on first open, add from the menu (with + New epic), step with Next / ⌥] ⌥[, close with ×, and persist for the sprint across leaving Plan, including empty visits. At most one epic is active."
+  },
+  {
+   "id": "AC-4",
+   "text": "Sprints can be created, started (one active per project) and completed with carry-over; migration 0063 is the chain leaf."
+  },
+  {
+   "id": "AC-5",
+   "text": "Goals are added with Enter, numbered G1…, removable, and rejected on completed sprints."
+  },
+  {
+   "id": "AC-6",
+   "text": "Stories move with + / −, drag and Alt+↑/↓; failures roll back with Retry; the last move has Undo."
+  },
+  {
+   "id": "AC-7",
+   "text": "Suggestions are pinned with ✦ at the top of the active epic's backlog with goal and reason; ✓, × and Add all work from the list."
+  },
+  {
+   "id": "AC-8",
+   "text": "Clicking a suggestion opens the right-hand ticket panel with the agent banner; existing stories show full detail; proposals show an editable draft; accept switches to the story in one transactional write; dismiss closes; Undo returns it to waiting."
+  },
+  {
+   "id": "AC-9",
+   "text": "The agent can read goals and record suggestions only for its own project's open sprints; a re-run replaces only waiting suggestions; no MCP tool assigns a story."
+  },
+  {
+   "id": "AC-10",
+   "text": "The sprint card shows idle, running (Cancel), done (N ready · Review in Plan), stale and error (Retry), and launching never switches the workspace to the terminal."
+  },
+  {
+   "id": "AC-11",
+   "text": "After a restart the card still shows done or error from the persisted run; deleting a goal marks it stale; a superseded run's suggest_sprint_story is rejected; a finished run is no longer alive."
+  },
+  {
+   "id": "AC-12",
+   "text": "Opening a story from another module in Plan shows the same Selected ticket panel with correct children and epic; leaving Plan restores the prior module and ticket."
+  }
+ ]
+};
+
+    const actionLabels = { all: "All", create: "Create", modify: "Modify", delete: "Delete", move: "Move", untouched: "Untouched" };
+    const state = { action: "all", query: "", selected: null };
+
+    const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+    const directory = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ".";
+    const basename = path => path.slice(path.lastIndexOf("/") + 1);
+    const list = items => `<ul>${(items || []).map(item => `<li>${esc(item)}</li>`).join("")}</ul>`;
+    const tokens = (items, extra = "") => (items || []).map(item => `<span class="token ${extra}">${esc(item)}</span>`).join("");
+
+    function visibleFiles() {
+      const needle = state.query.trim().toLowerCase();
+      return LLD_DOCUMENT.files.filter(file => {
+        const actionMatch = state.action === "all" || file.action === state.action;
+        const haystack = [file.path, file.layer, file.purpose, ...(file.symbols || []), ...(file.responsibilities || []), ...(file.implementation || []), ...(file.verification || []), ...(file.trace || [])].join(" ").toLowerCase();
+        return actionMatch && (!needle || haystack.includes(needle));
+      });
+    }
+
+    function renderHeader() {
+      document.getElementById("doc-crumb").textContent = LLD_DOCUMENT.meta.crumb;
+      document.getElementById("doc-title").textContent = LLD_DOCUMENT.meta.title;
+      document.getElementById("doc-summary").textContent = LLD_DOCUMENT.meta.summary;
+      document.getElementById("doc-status").textContent = LLD_DOCUMENT.meta.status;
+      document.getElementById("scope-lede").textContent = LLD_DOCUMENT.scope.lede;
+      document.getElementById("scope-list").innerHTML = LLD_DOCUMENT.scope.in.map(item => `<li>${esc(item)}</li>`).join("");
+      document.getElementById("boundary-list").innerHTML = LLD_DOCUMENT.scope.boundaries.map(item => `<li>${esc(item)}</li>`).join("");
+      const counts = Object.keys(actionLabels).filter(action => action !== "all").map(action => ({ action, count: LLD_DOCUMENT.files.filter(file => file.action === action).length })).filter(item => item.count);
+      document.getElementById("metrics").innerHTML = counts.map(item => `<div class="metric"><span class="action-dot ${item.action}" aria-hidden="true">${item.action[0].toUpperCase()}</span><b>${item.count}</b><span>${actionLabels[item.action]}</span></div>`).join("");
+    }
+
+    function renderFilters() {
+      const actions = ["all", ...new Set(LLD_DOCUMENT.files.map(file => file.action))];
+      const count = action => action === "all" ? LLD_DOCUMENT.files.length : LLD_DOCUMENT.files.filter(file => file.action === action).length;
+      document.getElementById("filters").innerHTML = actions.map(action => `<button class="filter" type="button" data-action="${action}" aria-pressed="${state.action === action}">${actionLabels[action] || action}<small>${count(action)}</small></button>`).join("");
+      document.querySelectorAll(".filter").forEach(button => button.addEventListener("click", () => {
+        state.action = button.dataset.action;
+        renderFilters();
+        renderFiles();
+        document.querySelector(`[data-action="${CSS.escape(state.action)}"]`)?.focus();
+      }));
+    }
+
+    function renderFiles() {
+      const files = visibleFiles();
+      if (!files.some(file => file.id === state.selected)) state.selected = files[0]?.id || null;
+      const groups = Map.groupBy ? Map.groupBy(files, file => directory(file.path)) : files.reduce((map, file) => map.set(directory(file.path), [...(map.get(directory(file.path)) || []), file]), new Map());
+      const rail = document.getElementById("file-rail");
+      rail.innerHTML = files.length ? [...groups.entries()].map(([dir, entries]) => `<div class="dir-group"><div class="dir-label"><span title="${esc(dir)}">${esc(dir)}/</span><b>${entries.length}</b></div>${entries.map(file => `<button class="file-button" type="button" role="option" data-file="${esc(file.id)}" aria-selected="${file.id === state.selected}" title="${esc(file.path)} · ${esc(actionLabels[file.action] || file.action)}"><span class="action-dot ${esc(file.action)}" aria-label="${esc(actionLabels[file.action] || file.action)}">${esc((file.action || "?")[0].toUpperCase())}</span><span class="file-name">${esc(basename(file.path))}</span><span class="file-meta">${esc(file.layer)}</span></button>`).join("")}</div>`).join("") : `<div class="rail-empty">No files match this view.</div>`;
+      rail.querySelectorAll(".file-button").forEach(button => {
+        button.addEventListener("click", () => selectFile(button.dataset.file));
+        button.addEventListener("keydown", event => navigateFiles(event, button.dataset.file));
+      });
+      renderInspector();
+    }
+
+    function selectFile(id) {
+      state.selected = id;
+      document.querySelectorAll(".file-button").forEach(button => button.setAttribute("aria-selected", String(button.dataset.file === id)));
+      renderInspector();
+      history.replaceState(null, "", `#file:${encodeURIComponent(id)}`);
+    }
+
+    function navigateFiles(event, id) {
+      if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+      event.preventDefault();
+      const files = visibleFiles();
+      const index = files.findIndex(file => file.id === id);
+      const next = event.key === 'ArrowDown' ? Math.min(index + 1, files.length - 1) : Math.max(index - 1, 0);
+      selectFile(files[next]?.id || id);
+      document.querySelector(`[data-file="${CSS.escape(state.selected)}"]`)?.focus();
+    }
+
+    function renderInspector() {
+      const file = LLD_DOCUMENT.files.find(entry => entry.id === state.selected);
+      const inspector = document.getElementById("file-inspector");
+      if (!file) { inspector.innerHTML = `<p class="rail-empty">Choose a file to inspect.</p>`; return; }
+      inspector.innerHTML = `
+        <div class="inspector-head">
+          <div><h3 class="path">${esc(file.path)}</h3><p class="purpose">${esc(file.purpose)}</p></div>
+          <span class="action-badge ${esc(file.action)}">${esc(actionLabels[file.action] || file.action)}</span>
+        </div>
+        <div class="symbol-row" aria-label="Symbols">${tokens(file.symbols)}</div>
+        <div class="inspector-grid">
+          <div class="info-block"><h4>Responsibilities</h4>${list(file.responsibilities)}</div>
+          <div class="info-block no"><h4>Preserved boundary</h4>${list(file.nonResponsibilities)}</div>
+          <div class="info-block"><h4>Implementation</h4>${list(file.implementation)}</div>
+          <div class="info-block"><h4>Verification</h4>${list(file.verification)}</div>
+        </div>
+        <div class="dependency-strip"><b>Dependency position</b><p>${esc(file.dependencies)}</p></div>
+        <div class="trace-row" aria-label="Tests and requirement trace">${tokens(file.tests)}${tokens(file.trace, "trace-token")}</div>`;
+    }
+
+    function renderTimeline() {
+      document.getElementById("timeline").innerHTML = LLD_DOCUMENT.execution.map(step => `<article class="step"><div><b>${esc(step.title)}</b><p>${esc(step.detail)}</p></div><code>${esc(step.gate)}</code></article>`).join("");
+      document.getElementById("acceptance-list").innerHTML = LLD_DOCUMENT.acceptance.map(item => `<article class="acceptance-item"><strong>${esc(item.id)}</strong><p>${esc(item.text)}</p></article>`).join("");
+    }
+
+    document.getElementById("file-search").addEventListener("input", event => { state.query = event.target.value; renderFiles(); });
+    document.addEventListener("keydown", event => {
+      if (event.key === "/" && document.activeElement !== document.getElementById("file-search")) { event.preventDefault(); document.getElementById("file-search").focus(); }
+      if (event.key === "Escape" && document.activeElement === document.getElementById("file-search")) { state.query = ""; document.getElementById("file-search").value = ""; renderFiles(); }
+    });
+
+    function readDeepLink() {
+      if (!location.hash.startsWith("#file:")) return;
+      let id;
+      try { id = decodeURIComponent(location.hash.slice(6)); } catch { return; }
+      if (!LLD_DOCUMENT.files.some(file => file.id === id)) return;
+      state.selected = id;
+      state.action = "all";
+      state.query = "";
+      document.getElementById("file-search").value = "";
+    }
+    window.addEventListener("hashchange", () => { readDeepLink(); renderFilters(); renderFiles(); });
+    readDeepLink();
+    renderHeader();
+    renderFilters();
+    renderFiles();
+    renderTimeline();
+  </script>
+</body>
+</html>

@@ -277,7 +277,7 @@ export async function selectModuleForProfile(
 
 export async function openModule(page: Page, moduleName: string): Promise<void> {
   await page.goto("/");
-  const moduleTab = page.getByRole("tab", { name: moduleName }).last();
+  const moduleTab = page.getByRole("tab", { name: moduleName, exact: true }).last();
   await expect(moduleTab).toBeVisible();
   const loaded = page.waitForResponse((response) =>
     response.url().endsWith("/graphql")

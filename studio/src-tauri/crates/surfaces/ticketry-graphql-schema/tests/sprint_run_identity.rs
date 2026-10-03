@@ -2,7 +2,7 @@ use sea_orm::{ConnectOptions, ConnectionTrait, Database, DbBackend, Schema, Stat
 use seaography::async_graphql::{dynamic::Schema as GraphqlSchema, Request, Variables};
 use serde_json::{json, Value};
 use ticketry_entities::{
-    agent_run, issue, project, session, sprint, sprint_goal, sprint_suggestion,
+    agent_run, app_settings, issue, project, session, sprint, sprint_goal, sprint_suggestion,
 };
 use ticketry_work_management::commands::CommandDatabase;
 
@@ -43,6 +43,7 @@ async fn opaque_run_ids_round_trip_and_reset_preserves_waiting_suggestions() {
         .unwrap();
     let ddl = Schema::new(DbBackend::Sqlite);
     for table in [
+        ddl.create_table_from_entity(app_settings::Entity),
         ddl.create_table_from_entity(project::Entity),
         ddl.create_table_from_entity(sprint::Entity),
         ddl.create_table_from_entity(sprint_goal::Entity),

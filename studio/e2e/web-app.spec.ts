@@ -375,7 +375,7 @@ test.describe("complete browser application", () => {
     await retry.click();
     await expect(page.getByRole("tablist", { name: "Project module tabs" }))
       .toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("tab", { name: names.module }))
+    await expect(page.getByRole("tab", { name: names.module, exact: true }))
       .toBeVisible();
   });
 
@@ -412,7 +412,7 @@ test.describe("complete browser application", () => {
       .toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("tab", { name: "Cancelled invalid module" }))
       .toHaveCount(1);
-    await page.getByRole("tab", { name: names.module }).click();
+    await page.getByRole("tab", { name: names.module, exact: true }).click();
   });
 
   test("creates, switches, and searches the visible module workspace", async ({
@@ -420,10 +420,10 @@ test.describe("complete browser application", () => {
   }) => {
     await openModule(page, names.module);
 
-    await page.getByRole("tab", { name: names.secondModule }).click();
-    await expect(page.getByRole("tab", { name: names.secondModule }))
+    await page.getByRole("tab", { name: names.secondModule, exact: true }).click();
+    await expect(page.getByRole("tab", { name: names.secondModule, exact: true }))
       .toHaveAttribute("aria-selected", "true");
-    await page.getByRole("tab", { name: names.module }).click();
+    await page.getByRole("tab", { name: names.module, exact: true }).click();
     await expect(page.getByRole("treeitem", { name: names.parent })).toBeVisible();
 
     const idea = page.getByRole("textbox", { name: "Capture an idea" });
@@ -449,8 +449,8 @@ test.describe("complete browser application", () => {
     const moduleTabs = page.getByRole("tablist", {
       name: "Project module tabs",
     });
-    const first = moduleTabs.getByRole("tab", { name: names.module });
-    const second = moduleTabs.getByRole("tab", { name: names.secondModule });
+    const first = moduleTabs.getByRole("tab", { name: names.module, exact: true });
+    const second = moduleTabs.getByRole("tab", { name: names.secondModule, exact: true });
     const sidebarModuleNames = () => modulesPane
       .locator("li[data-module-id]")
       .allTextContents()
@@ -459,7 +459,7 @@ test.describe("complete browser application", () => {
         .filter((label) => [names.module, names.secondModule].includes(label)));
 
     await expect.poll(async () =>
-      (await moduleTabs.getByRole("tab").allTextContents())
+      (await moduleTabs.locator('[role="tab"][data-module-id]').allTextContents())
         .filter((label) => [names.module, names.secondModule].includes(label))
     ).toEqual([names.module, names.secondModule]);
     await expect.poll(sidebarModuleNames)
@@ -478,7 +478,7 @@ test.describe("complete browser application", () => {
     await saved;
 
     await expect.poll(async () =>
-      (await moduleTabs.getByRole("tab").allTextContents())
+      (await moduleTabs.locator('[role="tab"][data-module-id]').allTextContents())
         .filter((label) => [names.module, names.secondModule].includes(label))
     ).toEqual([names.secondModule, names.module]);
     await expect.poll(sidebarModuleNames)
@@ -540,7 +540,7 @@ test.describe("complete browser application", () => {
     // The tab strip reads the same persisted ranks, so it must agree at once.
     await expect.poll(tabOrder).toEqual(after);
     // Dropping a row must not also register as a click that switches module.
-    await expect(page.getByRole("tab", { name: names.module }).last())
+    await expect(page.getByRole("tab", { name: names.module, exact: true }).last())
       .toHaveAttribute("aria-selected", "true");
 
     await page.reload();
@@ -583,14 +583,14 @@ test.describe("complete browser application", () => {
       name: `Hide ${names.secondModule} tab`,
     }).click();
     await hidden;
-    await expect(moduleTabs.getByRole("tab", { name: names.secondModule }))
+    await expect(moduleTabs.getByRole("tab", { name: names.secondModule, exact: true }))
       .toHaveCount(0);
     await expect(modulesPane).toContainText(
       names.secondModule,
     );
 
     await page.reload();
-    await expect(page.getByRole("tab", { name: names.secondModule }))
+    await expect(page.getByRole("tab", { name: names.secondModule, exact: true }))
       .toHaveCount(0);
     await expect(page.getByRole("treeitem", { name: names.parent }))
       .toBeVisible();
@@ -625,10 +625,10 @@ test.describe("complete browser application", () => {
     await restored;
 
     await expect(picker).toHaveCount(0);
-    await expect(page.getByRole("tab", { name: names.secondModule }).last())
+    await expect(page.getByRole("tab", { name: names.secondModule, exact: true }).last())
       .toHaveAttribute("aria-selected", "true");
     await page.reload();
-    await expect(page.getByRole("tab", { name: names.secondModule }).last())
+    await expect(page.getByRole("tab", { name: names.secondModule, exact: true }).last())
       .toBeVisible();
   });
 
@@ -640,7 +640,7 @@ test.describe("complete browser application", () => {
     const moduleTabs = page.getByRole("tablist", {
       name: "Project module tabs",
     });
-    const visibleNames = (await moduleTabs.getByRole("tab").evaluateAll((tabs) =>
+    const visibleNames = (await moduleTabs.locator('[role="tab"][data-module-id]').evaluateAll((tabs) =>
       tabs.map((tab) => tab.getAttribute("aria-label"))
         .filter((name): name is string => Boolean(name))));
     expect(visibleNames.length).toBeGreaterThan(1);
@@ -655,7 +655,7 @@ test.describe("complete browser application", () => {
         name: `Hide ${moduleName} tab`,
       }).click();
       await hidden;
-      await expect(moduleTabs.getByRole("tab", { name: moduleName }))
+      await expect(moduleTabs.getByRole("tab", { name: moduleName, exact: true }))
         .toHaveCount(0);
     }
     await expect(page.getByTestId("empty-module-workspace")).toContainText(
@@ -678,9 +678,9 @@ test.describe("complete browser application", () => {
         .filter({ hasText: names.module })
         .click();
       await restored;
-      await expect(moduleTabs.getByRole("tab", { name: names.module }).last())
+      await expect(moduleTabs.getByRole("tab", { name: names.module, exact: true }).last())
         .toBeVisible();
-      await expect(moduleTabs.getByRole("tab", { name: names.module }).last())
+      await expect(moduleTabs.getByRole("tab", { name: names.module, exact: true }).last())
         .toHaveAttribute("aria-selected", "true");
     } finally {
       for (const module of modules) {
@@ -693,10 +693,10 @@ test.describe("complete browser application", () => {
     }
 
     for (const moduleName of visibleNames) {
-      await expect(page.getByRole("tab", { name: moduleName }).last())
+      await expect(page.getByRole("tab", { name: moduleName, exact: true }).last())
         .toBeVisible();
     }
-    await expect(page.getByRole("tab", { name: names.module }).last())
+    await expect(page.getByRole("tab", { name: names.module, exact: true }).last())
       .toHaveAttribute("aria-selected", "true");
   });
 
@@ -1847,7 +1847,7 @@ test.describe("complete browser application", () => {
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
       await openModule(page, names.module);
-      await page.getByRole("button", { name: "Open module Changes" }).click();
+      await page.getByTestId("workspace-tab-changes").click();
 
       const checkouts = page.getByTestId("changes-checkouts-column");
       const files = page.getByTestId("changes-files-column");
@@ -1913,7 +1913,7 @@ test.describe("complete browser application", () => {
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
       await openModule(page, names.module);
-      await page.getByRole("button", { name: "Open module Changes" }).click();
+      await page.getByTestId("workspace-tab-changes").click();
 
       const files = page.getByRole("list", { name: "Module changed files" });
       const firstFile = files.getByRole("button", {
@@ -1967,8 +1967,8 @@ test.describe("complete browser application", () => {
       )).toBe(0);
 
       await page.keyboard.press("Tab");
-      const back = page.getByRole("button", { name: "Back to planning workspace" });
-      await expect(back).toBeFocused();
+      const footerTerminal = page.getByRole("button", { name: "Open terminal panel" });
+      await expect(footerTerminal).toBeFocused();
       await page.keyboard.press("Shift+Tab");
       await expect(diff).toBeFocused();
 
@@ -2033,7 +2033,7 @@ test.describe("complete browser application", () => {
         route.abort()
       );
       await openModule(page, names.module);
-      await page.getByRole("button", { name: "Open module Changes" }).click();
+      await page.getByTestId("workspace-tab-changes").click();
       await page.getByRole("button", { name: "README.md" }).click();
 
       const diff = page.getByRole("region", { name: "File diff content" });
@@ -2862,7 +2862,7 @@ test.describe("complete browser application", () => {
     try {
       await page.setViewportSize({ width: 720, height: 480 });
       await openModule(page, names.module);
-      await page.getByRole("button", { name: "Open module Changes" }).click();
+      await page.getByTestId("workspace-tab-changes").click();
       await page.getByRole("button", { name: "Open terminal panel" }).click();
 
       const column = page.getByRole("region", { name: "Module checkout changes" });
@@ -2917,7 +2917,7 @@ test.describe("complete browser application", () => {
 
     await page.setViewportSize({ width: 720, height: 480 });
     await openModule(page, names.module);
-    await page.getByRole("button", { name: "Open module Changes" }).click();
+    await page.getByTestId("workspace-tab-changes").click();
     await page.getByRole("button", { name: "Open terminal panel" }).click();
 
     const checkouts = page.getByRole("region", { name: "Current worktrees" });
@@ -3150,13 +3150,13 @@ test.describe("complete browser application", () => {
       String(ordinaryHeight + 24),
     );
 
-    await page.getByRole("tab", { name: names.secondModule }).last().click();
+    await page.getByRole("tab", { name: names.secondModule, exact: true }).last().click();
     await expect(panel).toHaveCount(0);
     await expect(footerToggle).toHaveAttribute(
       "aria-label",
       "Open terminal panel",
     );
-    await page.getByRole("tab", { name: names.module }).last().click();
+    await page.getByRole("tab", { name: names.module, exact: true }).last().click();
     await expect(panel).toBeVisible();
     await expect(panel.getByRole("tab", { name: "Shell 1" })).toBeVisible();
 

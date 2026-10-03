@@ -112,3 +112,5 @@ export {
 } from "./findingLocation";
 export { watchNewTaskRunTab, type NewTaskRunTabWatch } from "./taskRunTabActivation";
 export { consumeLocalWorkItemConvergence } from "./workItemConvergence";
+export { usePlanWorkItem } from "./planMutation";
+export { usePlanWritePending } from "./planWriteGuard";

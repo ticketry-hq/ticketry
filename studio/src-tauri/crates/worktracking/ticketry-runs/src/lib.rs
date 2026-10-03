@@ -18,7 +18,9 @@ mod graphql;
 mod hook_spool;
 mod persistence;
 
-pub use authority::{AuthorizationFailure, RunAuthority, RunPrincipal};
+pub use authority::{
+    restrict_sprint_suggestion_run_in, AuthorizationFailure, RunAuthority, RunPrincipal,
+};
 pub use graphql::register_graphql;
 pub use hook_spool::{
     ensure_hook_spool_directory, hook_spool_directory, DrainReport, HookDiagnostic,

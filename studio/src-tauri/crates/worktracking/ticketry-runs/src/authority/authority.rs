@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -98,10 +98,41 @@ impl RunAuthority {
         let (principal, grant) = self
             .authenticate_grant(authorization, tool == "terminate_current_run")
             .await?;
-        if !grant.allowed_tools.contains(tool) {
+        let allowed = super::sprint_policy::allowed_operations(
+            &self.database,
+            &principal.agent_run_id,
+            grant.allowed_tools,
+        )
+        .await
+        .map_err(|_| {
+            failure(
+                "run_control_unavailable",
+                "authorization_policy_unavailable",
+            )
+        })?;
+        if !allowed.contains(tool) {
             return Err(failure("tool_not_allowed", "authorization_tool_disallowed"));
         }
         Ok(principal)
+    }
+
+    pub async fn allowed_operations(
+        &self,
+        authorization: Option<&str>,
+    ) -> Result<BTreeSet<String>, AuthorizationFailure> {
+        let (principal, grant) = self.authenticate_grant(authorization, true).await?;
+        super::sprint_policy::allowed_operations(
+            &self.database,
+            &principal.agent_run_id,
+            grant.allowed_tools,
+        )
+        .await
+        .map_err(|_| {
+            failure(
+                "run_control_unavailable",
+                "authorization_policy_unavailable",
+            )
+        })
     }
 
     pub async fn authenticate(

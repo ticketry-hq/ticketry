@@ -3,7 +3,7 @@ import { createRef } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { FooterChangesToggle } from "../app/shell/FooterChangesToggle";
+import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import { StudioFooter } from "../app/shell/StudioFooter";
 import { TicketWorkspace } from "../app/shell/ticket-workspace/TicketWorkspace";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
@@ -18,6 +18,8 @@ import { useBranchInspector } from "../features/agents/worktrees/changes/branchI
 import { useClientStore } from "../state/clientStore";
 import { fixture, mountStudio, workItem } from "./seam";
 import { openBranchInspector, openWorktreeCheckouts } from "./changesSurface";
+
+beforeEach(() => { Element.prototype.scrollIntoView = vi.fn(); });
 
 const TASK_ID = "active-task-worktree";
 const PLANNING_TASK_ID = "planning-task";
@@ -105,7 +107,7 @@ function ModuleWorkspaceHarness() {
     : selectedTaskId;
   return (
     <>
-      <FooterChangesToggle />
+      <ModuleTabStrip />
       <SelectedTicketContent
         bucket={bucket}
         projectId="project-1"
@@ -143,30 +145,17 @@ function FullWindowWorkspaceHarness() {
 
 describe("overhaul acceptance - module Changes and current worktrees", () => {
   beforeEach(() => useBranchInspector.setState({ open: false, sections: {} }));
-  it("[overhaul-239] puts module Changes in the footer's left slot with a version-control symbol", () => {
+  it("[overhaul-239] puts module Changes in the top strip and keeps it out of the footer", async () => {
     const http = fixture();
     http.tree("module-1", { rootIds: [], children: {}, order: [] });
-
-    mountStudio({ http, children: <StudioFooter /> });
-
-    const changes = screen.getByRole("button", { name: "Open module Changes" });
-    const footer = changes.parentElement?.parentElement;
-    expect(footer).not.toBeNull();
-    expect(footer?.firstElementChild).toContainElement(changes);
-    expect(footer?.lastElementChild).not.toContainElement(changes);
-    expect(footer?.lastElementChild).toContainElement(
-      screen.getByRole("button", { name: "Open terminal panel" }),
-    );
-    expect(footer?.lastElementChild).toContainElement(
-      screen.getByRole("button", { name: "Open Settings" }),
-    );
-    expect(footer?.children[1]).toHaveClass("justify-center");
+    mountStudio({ http, children: <><ModuleTabStrip /><StudioFooter /></> });
+    const changes = await screen.findByRole("tab", { name: "Changes · Module 1" });
+    expect(screen.getByRole("tablist", { name: "Project module tabs" })).toContainElement(changes);
+    expect(document.querySelector("[data-studio-status-bar]")).not.toContainElement(changes);
     expect(within(changes).getByTestId("version-control-icon")).toBeVisible();
-
     act(() => useClientStore.setState({ selectedModuleId: null }));
-
     expect(changes).toBeDisabled();
-    expect(changes).toHaveAccessibleName("Select a module to open Changes");
+    expect(changes).toHaveAccessibleName("Changes");
     expect(changes).toHaveAttribute("title", "Select a module to open Changes");
   });
 
@@ -210,10 +199,10 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       },
     });
 
-    const control = screen.getByRole("button", { name: "Open module Changes" });
+    const control = screen.getByTestId("workspace-tab-changes");
     fireEvent.click(control);
 
-    expect(screen.getByRole("button", { name: "Back to planning workspace" })).toBeVisible();
+    expect(await screen.findByRole("tab", { name: "Module 1" })).toBeVisible();
     expect(await screen.findByTestId("module-version-control")).toBeVisible();
     await openWorktreeCheckouts();
     expect(await screen.findByText("No current task worktrees.")).toBeVisible();
@@ -445,7 +434,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     const moduleWorkspace = await screen.findByTestId("module-workspace-region");
     expect(moduleWorkspace.querySelector('[data-pane="tasks"]')).not.toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+    fireEvent.click(screen.getByTestId("workspace-tab-changes"));
     expect(useClientStore.getState().selectedTaskId).toBe(PLANNING_TASK_ID);
     const workspace = await within(moduleWorkspace).findByTestId("changes-workspace");
     expect(moduleWorkspace.querySelector('[data-pane="tasks"]')?.closest("[hidden]")).not.toBeNull();
@@ -502,7 +491,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       await within(within(moduleWorkspace).getByRole("region", { name: "Selected file diff" })).findByTestId("patch-viewer"),
     ).toHaveTextContent("+task workspace");
 
-    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Module 1" }));
     await waitFor(() => expect(within(moduleWorkspace).queryByTestId("changes-workspace")).toBeNull());
     expect(useClientStore.getState().selectedTaskId).toBe(PLANNING_TASK_ID);
     expect(moduleWorkspace.querySelector('[data-pane="tasks"]')).not.toBeNull();
@@ -574,7 +563,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+    fireEvent.click(screen.getByTestId("workspace-tab-changes"));
     await openWorktreeCheckouts();
     const taskCheckout = await screen.findByRole("option", {
       name: "Open CODING-1322 Measured checkout Changes",
@@ -586,8 +575,8 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       name: "Open CODING-1322 Measured checkout Changes",
     })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Loading changes...")).toBeVisible();
-    expect(screen.getByRole("button", {
-      name: "Back to planning workspace",
+    expect(screen.getByRole("tab", {
+      name: "Module 1",
     })).toBeEnabled();
 
     act(() => {
@@ -686,7 +675,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+    fireEvent.click(screen.getByTestId("workspace-tab-changes"));
     fireEvent.click(await screen.findByRole("button", { name: path }));
 
     const diff = screen.getByRole("region", { name: "Selected file diff" });
@@ -736,7 +725,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+    fireEvent.click(screen.getByTestId("workspace-tab-changes"));
     expect(await screen.findByText(reason)).toBeVisible();
     expect(screen.getAllByText(reason).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Comparison unavailable").length).toBeGreaterThan(0);
@@ -796,7 +785,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+    fireEvent.click(screen.getByTestId("workspace-tab-changes"));
     await openBranchInspector();
     const commit = await screen.findByRole("button", { name: "Commit" });
     const push = screen.getByRole("button", { name: "Push" });
@@ -876,7 +865,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+    fireEvent.click(screen.getByTestId("workspace-tab-changes"));
     await openBranchInspector();
     expect(await screen.findByRole("button", { name: "Create PR" })).toBeEnabled();
     expect(screen.getByRole("status")).toHaveTextContent(
@@ -920,7 +909,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+    fireEvent.click(screen.getByTestId("workspace-tab-changes"));
     await screen.findByTestId("module-version-control");
     expect(screen.queryByRole("button", { name: "Create PR" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Open PR" })).toBeNull();

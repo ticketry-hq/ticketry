@@ -1,7 +1,7 @@
 use async_graphql::dynamic::{Field, FieldFuture, FieldValue, Object, Schema, TypeRef};
 use reqwest::{Client, StatusCode};
 use tauri_graphql::{GraphQlEndpoint, TransportApiImpl};
-use ticketry_planner::PlannerService;
+use ticketry_planner::{PlannerFrontendOrigin, PlannerService};
 
 fn installed_api() -> TransportApiImpl {
     let query = Object::new("Query").field(Field::new(
@@ -20,14 +20,14 @@ fn installed_api() -> TransportApiImpl {
 
 #[tokio::test]
 async fn requires_an_installed_schema_and_reports_the_requested_bind_address() {
-    let result = PlannerService::start(TransportApiImpl::new(), 0, |_| {}).await;
+    let result = PlannerService::start(TransportApiImpl::new(), 0, None, |_| {}).await;
     assert!(result
         .err()
         .unwrap()
         .contains("authoritative GraphQL endpoint"));
     let occupied = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = occupied.local_addr().unwrap().port();
-    let result = PlannerService::start(installed_api(), port, |_| {}).await;
+    let result = PlannerService::start(installed_api(), port, None, |_| {}).await;
     assert!(result
         .err()
         .unwrap()
@@ -36,9 +36,14 @@ async fn requires_an_installed_schema_and_reports_the_requested_bind_address() {
 
 #[tokio::test]
 async fn admits_the_planner_ui_and_rejects_untrusted_requests_then_releases_the_port() {
-    let runtime = PlannerService::start(installed_api(), 0, |error| panic!("{error}"))
-        .await
-        .unwrap();
+    let runtime = PlannerService::start(
+        installed_api(),
+        0,
+        Some(PlannerFrontendOrigin::parse("http://127.0.0.1:5176").unwrap()),
+        |error| panic!("{error}"),
+    )
+    .await
+    .unwrap();
     let endpoint = runtime.endpoint().clone();
     let client = Client::new();
     let request = serde_json::json!({"query": "{ ready }"});
@@ -102,7 +107,7 @@ async fn admits_the_planner_ui_and_rejects_untrusted_requests_then_releases_the_
     );
     let preflight = client
         .request(reqwest::Method::OPTIONS, &endpoint.graphql_url)
-        .header("Origin", "http://127.0.0.1:5174")
+        .header("Origin", "http://127.0.0.1:5176")
         .header("Access-Control-Request-Method", "POST")
         .header(
             "Access-Control-Request-Headers",
@@ -114,8 +119,45 @@ async fn admits_the_planner_ui_and_rejects_untrusted_requests_then_releases_the_
     assert_eq!(preflight.status(), StatusCode::NO_CONTENT);
     assert_eq!(
         preflight.headers()["access-control-allow-origin"],
-        "http://127.0.0.1:5174"
+        "http://127.0.0.1:5176"
     );
+    for origin in [
+        "http://127.0.0.1:5176",
+        "tauri://localhost",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+    ] {
+        let response = authorized().header("Origin", origin).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["access-control-allow-origin"], origin);
+        assert_eq!(
+            response.json::<serde_json::Value>().await.unwrap(),
+            serde_json::json!({"data": {"ready": true}})
+        );
+    }
+    for origin in [
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
+        "http://localhost:5176",
+        "https://untrusted.example",
+    ] {
+        let response = authorized().header("Origin", origin).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(!response
+            .headers()
+            .contains_key("access-control-allow-origin"));
+        let response = client
+            .request(reqwest::Method::OPTIONS, &endpoint.graphql_url)
+            .header("Origin", origin)
+            .header("Access-Control-Request-Method", "POST")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(!response
+            .headers()
+            .contains_key("access-control-allow-origin"));
+    }
     assert!(!format!("{endpoint:?}").contains(&endpoint.bearer_token));
 
     let port = reqwest::Url::parse(&endpoint.graphql_url)
@@ -131,7 +173,7 @@ async fn admits_the_planner_ui_and_rejects_untrusted_requests_then_releases_the_
 
 #[tokio::test]
 async fn dropping_the_owner_stops_its_listener() {
-    let runtime = PlannerService::start(installed_api(), 0, |error| panic!("{error}"))
+    let runtime = PlannerService::start(installed_api(), 0, None, |error| panic!("{error}"))
         .await
         .unwrap();
     let port = reqwest::Url::parse(&runtime.endpoint().graphql_url)
@@ -182,7 +224,7 @@ async fn clean_shutdown_finishes_an_admitted_request_before_releasing_ownership(
             .unwrap(),
     ))
     .unwrap();
-    let runtime = PlannerService::start(api, 0, |error| panic!("{error}"))
+    let runtime = PlannerService::start(api, 0, None, |error| panic!("{error}"))
         .await
         .unwrap();
     let endpoint = runtime.endpoint().clone();
@@ -218,7 +260,7 @@ async fn clean_shutdown_finishes_an_admitted_request_before_releasing_ownership(
 #[tokio::test]
 async fn rejects_an_unauthorized_request_before_waiting_for_its_body() {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    let runtime = PlannerService::start(installed_api(), 0, |error| panic!("{error}"))
+    let runtime = PlannerService::start(installed_api(), 0, None, |error| panic!("{error}"))
         .await
         .unwrap();
     let url = reqwest::Url::parse(&runtime.endpoint().graphql_url).unwrap();
@@ -237,5 +279,23 @@ async fn rejects_an_unauthorized_request_before_waiting_for_its_body() {
         .unwrap()
         .starts_with("HTTP/1.1 403"));
     drop(connection);
+    runtime.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn no_frontend_configuration_does_not_admit_a_default_browser_origin() {
+    let runtime = PlannerService::start(installed_api(), 0, None, |_| {})
+        .await
+        .unwrap();
+    let endpoint = runtime.endpoint();
+    let response = Client::new()
+        .post(&endpoint.graphql_url)
+        .header("Origin", "http://127.0.0.1:5174")
+        .bearer_auth(&endpoint.bearer_token)
+        .json(&serde_json::json!({"query": "{ ready }"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     runtime.shutdown().await.unwrap();
 }

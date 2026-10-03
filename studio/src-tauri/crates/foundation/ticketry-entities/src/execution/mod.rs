@@ -1,5 +1,6 @@
 //! Generated-contract mappings for dependency-graph execution.
 
+pub mod agent_execution;
 pub mod graph_run;
 pub mod launch_claim;
 
@@ -15,6 +16,7 @@ pub mod launch_claim;
 /// | Graph Run | private: derives scope and policy | private: external fan-out | private: rc.9 skips pre-save | private: reset must serialize |
 /// | Launch claim | private: internal scheduling fact | private: internal scheduling facts | private: retry must serialize | private: reset owns cascade |
 pub fn register_entity_modules(mut builder: seaography::Builder) -> seaography::Builder {
+    seaography::register_entity!(builder, agent_execution, mutation: false);
     seaography::register_entity!(builder, graph_run, mutation: false);
     builder
 }

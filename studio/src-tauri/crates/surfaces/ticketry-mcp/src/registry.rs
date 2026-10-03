@@ -90,6 +90,9 @@ pub fn tools() -> Vec<Tool> {
         tool("get_issue_type_workflow_settings", "Read one issue type's live workflow policy.\n\nReturns its start state, revision-guarded transition map with agent\npermissions, launch bindings with auto-start, and standing warnings.", json!({
             "type_id": {"type": "string"}
         }), &["type_id"]),
+        closed_tool("get_sprint_goals", "Read the goals with G-numbers for an open sprint in your project.", json!({
+            "sprint_id": {"type": "string"}
+        }), &["sprint_id"]),
         tool("get_task_details", "Get detailed information about a specific task using its ID or Key (e.g. PROJ-123).", json!({
             "id_or_key": {"type": "string"}
         }), &["id_or_key"]),
@@ -135,6 +138,11 @@ pub fn tools() -> Vec<Tool> {
         tool("set_task_blockers", "Replace the tasks that block a task. IDs may be UUIDs or keys.", json!({
             "task_id": {"type": "string"}, "blocked_by_ids": {"type": "array", "items": {"type": "string"}}
         }), &["task_id", "blocked_by_ids"]),
+        closed_tool("suggest_sprint_story", "Record a suggestion for the current sprint suggestion run. Supply issue_id alone, or proposed_name and proposed_epic_id. This never assigns a story to a sprint.", json!({
+            "sprint_id": {"type": "string"}, "goal_id": {"type": "string"},
+            "issue_id": nullable_string(), "proposed_name": nullable_string(),
+            "proposed_epic_id": nullable_string(), "reason": {"type": "string"}
+        }), &["sprint_id", "goal_id", "reason"]),
         tool("update_task", "Replace a task's supplied title and/or full description.", json!({
             "id_or_key": {"type": "string"}, "name": nullable_string(), "description": nullable_string()
         }), &["id_or_key"]),
@@ -162,9 +170,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn registry_publishes_add_task_tags_with_the_required_array_contract() {
+    fn registry_publishes_35_tools_with_run_scoped_sprint_contracts() {
         let tools = tools();
-        assert_eq!(tools.len(), 33);
+        assert_eq!(tools.len(), 35);
         let names: Vec<&str> = tools.iter().map(|tool| tool.name.as_ref()).collect();
         assert_eq!(
             names,
@@ -184,6 +192,7 @@ mod tests {
                 "execute_dependency_graph",
                 "get_dependency_graph",
                 "get_issue_type_workflow_settings",
+                "get_sprint_goals",
                 "get_task_details",
                 "get_task_scope_context",
                 "launch_default_coding_agent",
@@ -199,6 +208,7 @@ mod tests {
                 "set_issue_type_workflow_start_state",
                 "set_issue_type_workflow_transition_permission",
                 "set_task_blockers",
+                "suggest_sprint_story",
                 "update_task",
                 "update_task_status",
                 "upsert_issue_type_workflow_launch_binding",
@@ -212,6 +222,24 @@ mod tests {
                 .input_schema["required"],
             json!(["project_id", "name", "issue_type"])
         );
+        for name in ["get_sprint_goals", "suggest_sprint_story"] {
+            let tool = tools.iter().find(|tool| tool.name == name).unwrap();
+            assert_eq!(tool.input_schema["additionalProperties"], false);
+        }
+        let suggestion = tools
+            .iter()
+            .find(|tool| tool.name == "suggest_sprint_story")
+            .unwrap();
+        assert_eq!(
+            suggestion.input_schema["required"],
+            json!(["sprint_id", "goal_id", "reason"])
+        );
+        for field in ["issue_id", "proposed_name", "proposed_epic_id"] {
+            assert_eq!(
+                suggestion.input_schema["properties"][field],
+                nullable_string()
+            );
+        }
         let add_task_tags = tools
             .iter()
             .find(|tool| tool.name == "add_task_tags")

@@ -150,6 +150,7 @@ class BoundaryFixture implements StudioFixture {
     ScopedWorkflowTransition[]
   >();
   private readonly transitionRanks = new Map<string, string>();
+  private readonly sprintAssignments = new Map<string, string | null>();
   private nextFailure: { status: number; body: unknown } | null = null;
   private patchWaiters: Array<{
     id: string;
@@ -448,7 +449,7 @@ class BoundaryFixture implements StudioFixture {
         state_id: item.state,
         issue_type_id: item.issue_type,
         module_id: moduleId,
-        sprint_id: null,
+        sprint_id: this.sprintAssignments.get(item.id) ?? null,
         project: {
           __typename: "WorktrackerProject",
           id: this.projectId(),
@@ -643,12 +644,16 @@ class BoundaryFixture implements StudioFixture {
         size: attachment.size, created_at: attachment.created_at,
       })) } } as TResult;
     }
-    if (["UpdateWorkTrackerWorkItemDetails", "TransitionWorkTrackerWorkItem", "ReparentWorkTrackerWorkItem", "SetWorkTrackerBlockers"].includes(documentOperationName(document))) {
+    if (["UpdateWorkTrackerWorkItemDetails", "TransitionWorkTrackerWorkItem", "ReparentWorkTrackerWorkItem", "SetWorkTrackerBlockers", "PlanWorkItem"].includes(documentOperationName(document))) {
       const id = fixtureKey(this.items, input.id) ?? input.id!;
       const current = fixtureItem(id);
       if (!current) throw new FoundationGraphQlError("not_found", "Not found");
       const submitted = variables as Record<string, unknown>;
       const body: Record<string, unknown> = {};
+      if (submitted.sprintId === null || typeof submitted.sprintId === "string") {
+        body.sprint_id = submitted.sprintId;
+        this.sprintAssignments.set(id, submitted.sprintId);
+      }
       if (submitted.name !== undefined) body.name = submitted.name;
       if (submitted.description !== undefined) body.description = submitted.description;
       if (submitted.issueTypeId !== undefined) body.issue_type_id = submitted.issueTypeId;

@@ -118,7 +118,7 @@ test.beforeAll(async ({ request }) => {
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  const moduleTab = page.getByRole("tab", { name: "Overhaul Module" });
+  const moduleTab = page.getByRole("tab", { name: "Overhaul Module", exact: true });
   await expect(moduleTab).toBeVisible();
   await moduleTab.click();
   await expect(page.getByRole("treeitem", { name: /E2E parent/ })).toBeVisible();
@@ -292,8 +292,8 @@ test("[overhaul-web-15] traverses Changes controls in visible DOM order", async 
     });
   });
   await page.reload();
-  await page.getByRole("tab", { name: "Overhaul Module" }).click();
-  const entry = page.getByRole("button", { name: "Open module Changes" });
+  await page.getByRole("tab", { name: "Overhaul Module", exact: true }).click();
+  const entry = page.getByTestId("workspace-tab-changes");
   await entry.focus();
   await page.keyboard.press("Enter");
 
@@ -341,18 +341,12 @@ test("[overhaul-web-15] traverses Changes controls in visible DOM order", async 
   await page.keyboard.press("Escape");
   await expect(primary).toBeFocused();
 
-  const back = page.getByRole("button", { name: "Back to planning workspace" });
-  for (let step = 0; step < 12; step += 1) {
-    if (await back.evaluate((element) => element === document.activeElement)) break;
-    await page.keyboard.press("Tab");
-  }
-  await expect(back).toBeFocused();
-  await page.keyboard.press("Space");
-  const reopenedEntry = page.getByRole("button", { name: "Open module Changes" });
+  await page.keyboard.press("Escape");
+  const reopenedEntry = page.getByTestId("workspace-tab-changes");
   await expect(reopenedEntry).toBeFocused();
   await page.keyboard.press("Space");
   await expect(workspace).toBeVisible();
   await expect(workspace.getByRole("button", { name: "Choose checkout" }))
     .toBeFocused();
-  await page.getByRole("button", { name: "Back to planning workspace" }).click();
+  await page.keyboard.press("Escape");
 });

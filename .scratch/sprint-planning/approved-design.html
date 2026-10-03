@@ -1,0 +1,932 @@
+<title>Sprint planning · approved design</title>
+<style>
+/* Layout: page header → one live mock of the Studio window → design notes.
+   Single dark look on purpose: Studio itself is dark-only, so the mock uses its palette. */
+:root {
+  color-scheme: dark;
+  --page: #0d0f13;
+  --ink: #d6deeb;
+  --ink-2: #9aa5b8;
+  --muted: #7a8599;
+  --line: #2a2f3a;
+  --pane: #0a0a0a;
+  --panel: #111317;
+  --title: #1f2530;
+  --accent: #7aa2f7;
+  --sel: #2d3a5a;
+  --active: #7dcfff;
+  --warn: #e0af68;
+  --danger: #f7768e;
+  --ok: #9ece6a;
+  --plan: #bb9af7;
+  --agent: #D97757;
+  --sans: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+html, body { background: var(--page); color: var(--ink); }
+body { font-family: var(--sans); font-size: 15px; line-height: 1.5; padding: 28px 24px 64px; }
+.page { max-width: 1240px; margin: 0 auto; display: grid; gap: 20px; }
+h1 { font-size: 28px; line-height: 1.15; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.lede { color: var(--ink-2); margin: 6px 0 0; max-width: 75ch; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; color: var(--ink); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; font-size: 13px; color: var(--ink-2); }
+.controls label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.controls button { background: none; border: 1px solid var(--line); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
+
+.stagewrap { overflow-x: auto; border-radius: 8px; }
+#stage { position: relative; min-width: 1060px; font-family: var(--mono); font-size: 12px; }
+
+/* notes */
+.notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+.notes h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); margin: 0 0 8px; }
+.notes ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.tablewrap { grid-column: 1 / -1; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--ink-2); font-weight: 600; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+td:first-child { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+@media (max-width: 760px) { .notes { grid-template-columns: 1fr; } body { padding-inline: 16px; } }
+
+/* ---------- mock Studio window ---------- */
+.win { position: relative; height: 640px; background: var(--pane); border: 1px solid var(--line); border-radius: 8px; display: grid; grid-template-rows: 30px 30px 1fr 28px; overflow: hidden; }
+.titlebar { display: flex; align-items: center; gap: 10px; padding: 0 10px; background: var(--panel); border-bottom: 1px solid var(--line); color: var(--muted); }
+.dots { display: flex; gap: 6px; } .dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--title); border: 1px solid var(--line); }
+.wtitle { flex: 1; text-align: center; }
+.tabs { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); background: var(--panel); overflow-x: auto; }
+.tab { background: none; border: 0; border-right: 1px solid var(--line); padding: 0 14px; cursor: pointer; color: var(--muted); white-space: nowrap; }
+.tab:hover { color: var(--ink); }
+.tab.on { color: var(--ink); background: var(--pane); box-shadow: inset 0 -2px 0 var(--accent); }
+.tab.plan { color: var(--plan); font-weight: 600; }
+.tab.plan.on { box-shadow: inset 0 -2px 0 var(--plan); }
+.tab.chg { color: var(--ok); font-weight: 600; }
+.tab.chg.on { box-shadow: inset 0 -2px 0 var(--ok); }
+.tab small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+.tabsep { width: 1px; background: var(--muted); margin: 6px 4px; opacity: .5; flex: none; }
+.workarea { min-height: 0; position: relative; }
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 290px; height: 100%; }
+.split.tasks { grid-template-columns: 340px minmax(0, 1fr); }
+.pane { min-height: 0; overflow: auto; }
+.pane.right { border-left: 1px solid var(--line); background: var(--panel); }
+.pane.left { border-right: 1px solid var(--line); }
+.footer { display: flex; align-items: center; gap: 12px; padding: 0 10px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); }
+.footer .spacer { flex: 1; }
+.fbtn { background: none; border: 1px solid var(--line); border-radius: 3px; padding: 1px 8px; cursor: pointer; color: var(--ink-2); }
+.fbtn:hover { color: var(--ink); border-color: var(--muted); }
+.fbtn.live { border-color: var(--active); color: var(--active); }
+.fbtn.wait { border-color: var(--warn); color: var(--warn); }
+
+.eyebrow { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
+.tasks-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); color: var(--ink-2); }
+.group { border-bottom: 1px solid var(--line); }
+.ghead { display: flex; align-items: center; gap: 8px; padding: 6px 10px; color: var(--ink-2); }
+.ghead .n { margin-left: auto; color: var(--muted); }
+.row { display: grid; grid-template-columns: 10px 86px minmax(0, 1fr) auto; gap: 8px; align-items: center; width: 100%; background: none; border: 0; padding: 4px 10px 4px 22px; cursor: pointer; text-align: left; color: var(--ink); }
+.row:hover { background: var(--title); }
+.row.on { background: var(--sel); }
+.row .t, .prow .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .k, .prow .k { color: var(--muted); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--muted)); flex: none; }
+.chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; font-size: 11px; color: var(--ink-2); white-space: nowrap; }
+.chip.sp { color: var(--plan); border-color: color-mix(in srgb, var(--plan) 40%, var(--line)); }
+.chip.goal { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+.chip.agent { color: var(--agent); border-color: color-mix(in srgb, var(--agent) 50%, var(--line)); }
+
+/* detail */
+.detail { padding: 12px 14px; display: grid; gap: 12px; align-content: start; }
+.dhead { display: flex; align-items: center; justify-content: space-between; color: var(--muted); }
+.x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 6px; border-radius: 3px; }
+.x:hover { color: var(--ink); background: var(--title); }
+.detail h3 { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.35; }
+.fields { display: grid; grid-template-columns: 70px 1fr; gap: 6px 10px; align-items: center; }
+.fields label { color: var(--muted); }
+.fields select, .chg-mod { background: var(--pane); border: 1px solid var(--line); border-radius: 3px; padding: 2px 4px; }
+.dtabs { display: flex; gap: 14px; border-bottom: 1px solid var(--line); color: var(--muted); }
+.dtabs span { padding: 4px 0; }
+.dtabs .on { color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn { background: var(--title); border: 1px solid var(--line); border-radius: 4px; padding: 3px 10px; cursor: pointer; white-space: nowrap; }
+.btn:hover:not(:disabled) { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--pane); border-color: var(--accent); font-weight: 600; }
+.btn.agent { border-color: var(--agent); color: var(--agent); background: none; }
+.btn.agent:hover:not(:disabled) { background: color-mix(in srgb, var(--agent) 12%, transparent); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.hint { color: var(--muted); margin: 0; font-size: 11px; line-height: 1.5; }
+.hint.warn { color: var(--warn); }
+.empty { display: grid; place-items: center; height: 100%; color: var(--muted); text-align: center; padding: 20px; }
+.empty > div { display: grid; gap: 10px; justify-items: center; max-width: 46ch; }
+.empty b { color: var(--ink); }
+
+/* sprints list */
+.sprints { overflow: auto; height: 100%; padding: 12px; display: grid; gap: 12px; align-content: start; }
+.sbox { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.sbox > header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.sbox > header b { font-weight: 600; }
+.sbox > header .d { color: var(--muted); }
+.sbox > header .sp { flex: 1; }
+.sbox .list { display: grid; padding: 4px 0; }
+.sbox .list .row { padding-left: 10px; }
+.sbox .goallist { padding: 8px 10px; display: grid; gap: 4px; border-bottom: 1px solid var(--line); }
+.pill { justify-self: start; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; border-radius: 3px; padding: 0 5px; border: 1px solid currentColor; }
+.pill.active { color: var(--active); } .pill.planned { color: var(--ink-2); }
+.bar { height: 4px; background: var(--title); border-radius: 2px; overflow: hidden; width: 120px; }
+.bar i { display: block; height: 100%; background: var(--ok); }
+.egroup { color: var(--muted); padding: 6px 12px 2px; font-size: 11px; display: flex; gap: 8px; align-items: center; }
+.egroup .sp { flex: 1; }
+.dialog { margin: 0 10px 10px; padding: 10px; border: 1px solid var(--warn); border-radius: 4px; display: grid; gap: 8px; }
+.dialog label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+
+/* plan view */
+.planview { display: grid; grid-template-rows: auto auto 1fr; height: 100%; min-height: 0; }
+.planhead { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 12px; border-bottom: 1px solid var(--line); min-width: 0; }
+.planhead > * { flex: none; }
+.vsep { width: 1px; height: 16px; background: var(--line); }
+.goalchips { flex: 1 1 auto !important; min-width: 0; display: flex; align-items: center; gap: 6px; overflow-x: auto; }
+.gchip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 2px 0 7px; border: 1px solid color-mix(in srgb, var(--ok) 35%, var(--line)); border-radius: 3px; background: color-mix(in srgb, var(--ok) 6%, var(--pane)); }
+.gchip .gt { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gchip .sg { color: var(--agent); }
+.gchip .x { font-size: 13px; padding: 0 4px; }
+.gadd { flex: none; background: none; border: 1px dashed var(--line); border-radius: 3px; height: 22px; padding: 0 8px; color: var(--ok); cursor: pointer; }
+.gadd:hover { border-color: var(--ok); }
+.goalinput { flex: none; width: 240px; height: 22px; background: var(--pane); border: 1px solid var(--ok); border-radius: 3px; padding: 0 8px; color: var(--ink); }
+.goalinput:focus { outline: none; }
+.agentstate.err { color: var(--danger); }
+.indet.sm { width: 60px; }
+.planhead b { font-size: 13px; }
+.planhead .d { color: var(--muted); }
+.planhead .sp { flex: 1; }
+.crumb { background: none; border: 0; color: var(--accent); cursor: pointer; padding: 0; }
+
+.goals { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--ok) 4%, var(--pane)); }
+.goals ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+.goals li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.goals li .gt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.goals li .gm { color: var(--muted); white-space: nowrap; }
+.gnum { color: var(--ok); font-weight: 600; flex: none; }
+.goalinput::placeholder, .newissue::placeholder { color: var(--muted); }
+.agentbox { display: grid; gap: 6px; align-content: start; justify-items: end; text-align: right; max-width: 330px; }
+.agentstate { color: var(--agent); }
+.agentstate.err { color: var(--danger); }
+.agentstate.stale { color: var(--warn); }
+.indet { width: 200px; height: 3px; background: var(--title); border-radius: 2px; overflow: hidden; position: relative; }
+.indet i { position: absolute; inset: 0 auto 0 0; width: 40%; background: var(--agent); animation: slide 1.2s linear infinite; }
+@keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+
+.etabs { display: flex; align-items: stretch; height: 30px; background: var(--title); border-bottom: 1px solid var(--line); position: relative; }
+.estrip { display: flex; min-width: 0; overflow-x: auto; }
+.etab { flex: none; display: flex; align-items: stretch; border-right: 1px solid var(--line); color: var(--muted); }
+.etab > button { background: none; border: 0; cursor: pointer; color: inherit; }
+.etab .sel { display: flex; gap: 8px; align-items: center; padding: 0 4px 0 12px; }
+.etab .nm { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.etab .ct { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.etab .sg { color: var(--agent); font-variant-numeric: tabular-nums; }
+.etab .cls { padding: 0 8px; opacity: .6; }
+.etab .cls:hover { opacity: 1; color: var(--ink); }
+.etab:hover { color: var(--ink); }
+.etab.on { background: var(--pane); color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+.etab-add { flex: none; background: none; border: 0; border-right: 1px solid var(--line); padding: 0 12px; color: var(--accent); cursor: pointer; }
+.etabs .spacer { flex: 1; }
+.etabs .nav { flex: none; display: flex; align-items: center; gap: 6px; padding: 0 10px; color: var(--muted); }
+.menu { position: absolute; top: 30px; z-index: 6; min-width: 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 8px 24px rgb(0 0 0 / .45); padding: 4px; display: grid; animation: rise 150ms ease-out; }
+.menu button { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; background: none; border: 0; padding: 6px 8px; text-align: left; cursor: pointer; border-radius: 3px; }
+.menu button:hover, .menu button:focus-visible { background: var(--sel); }
+.menu .m { color: var(--muted); }
+.menu .sg { color: var(--agent); }
+
+.planpanes { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+.ppane { overflow: auto; min-height: 0; padding-bottom: 12px; transition: background 120ms ease-out; }
+.ppane + .ppane { border-left: 1px solid var(--line); }
+.ppane > header { position: sticky; top: 0; z-index: 1; display: flex; gap: 8px; align-items: center; padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--line); color: var(--ink-2); font-weight: 600; }
+.ppane > header .sp { flex: 1; }
+.prow { display: grid; grid-template-columns: 10px 86px minmax(0, 1fr) auto 22px; gap: 8px; align-items: center; padding: 3px 8px 3px 12px; cursor: grab; }
+.prow:hover { background: var(--title); }
+.prow.on { background: var(--sel); }
+.prow.pending { opacity: .5; }
+.prow.dim { opacity: .55; }
+.pm { width: 22px; height: 20px; background: none; border: 1px solid var(--line); border-radius: 3px; cursor: pointer; color: var(--ink-2); }
+.pm:hover { color: var(--ink); border-color: var(--accent); }
+.newissue { display: block; width: calc(100% - 24px); margin: 6px 12px 8px; background: transparent; border: 1px dashed var(--line); padding: 3px 8px; color: var(--ink); }
+.newissue:focus { border-style: solid; border-color: var(--accent); outline: none; }
+.sugg { margin: 8px 8px 4px; border: 1px solid color-mix(in srgb, var(--agent) 45%, var(--line)); border-radius: 4px; background: color-mix(in srgb, var(--agent) 5%, var(--pane)); }
+.sugg > header { display: flex; align-items: center; gap: 8px; padding: 5px 8px; color: var(--agent); border-bottom: 1px solid color-mix(in srgb, var(--agent) 30%, var(--line)); }
+.sugg > header .sp { flex: 1; }
+.srow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 6px 8px; border-bottom: 1px dashed var(--line); cursor: grab; }
+.srow:last-child { border-bottom: 0; }
+.srow .top { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.srow .top .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srow .why { grid-column: 1; color: var(--ink-2); font-size: 11px; line-height: 1.45; }
+.srow .acts { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 6px; align-items: start; }
+.newbadge { color: var(--agent); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; border: 1px dashed var(--agent); border-radius: 3px; padding: 0 4px; flex: none; }
+
+.srow.on { background: var(--sel); }
+.srow:hover { background: var(--title); }
+.sbanner { display: grid; gap: 8px; padding: 10px; border: 1px solid color-mix(in srgb, var(--agent) 45%, var(--line)); border-radius: 4px; background: color-mix(in srgb, var(--agent) 6%, var(--pane)); }
+.sbanner b { color: var(--agent); font-weight: 600; }
+.sbanner p { margin: 0; color: var(--ink-2); line-height: 1.5; }
+.draft-title { width: 100%; background: var(--pane); border: 1px solid var(--line); border-radius: 3px; padding: 4px 6px; font-weight: 600; color: var(--ink); }
+.draft-title:focus { border-color: var(--accent); outline: none; }
+
+/* drag constraints */
+.dragging-on [data-drop].valid { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.dragging-on [data-drop].valid.over { background: color-mix(in srgb, var(--accent) 20%, transparent); outline: 1px dashed var(--accent); outline-offset: -3px; }
+
+/* changes */
+.changes { display: grid; grid-template-columns: 320px minmax(0, 1fr); height: 100%; }
+.crow { display: grid; gap: 2px; width: 100%; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 8px 12px; cursor: pointer; text-align: left; }
+.crow:hover { background: var(--title); }
+.crow.on { background: var(--sel); }
+.crow .br { color: var(--ok); }
+.crow .meta { color: var(--muted); }
+.add-n { color: var(--ok); } .del-n { color: var(--danger); }
+.files { display: grid; border: 1px solid var(--line); border-radius: 4px; }
+.files div { display: flex; gap: 10px; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+.files div:last-child { border-bottom: 0; }
+.files .path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diffstub { border: 1px dashed var(--line); border-radius: 4px; padding: 16px; color: var(--muted); text-align: center; }
+
+/* toast */
+#toast { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 9; display: flex; gap: 12px; align-items: center; background: var(--title); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; font-size: 12px; box-shadow: 0 6px 24px rgb(0 0 0 / .4); animation: rise-t 180ms ease-out; max-width: 90%; }
+#toast.err { border-color: var(--danger); }
+#toast.err::before { content: "✕"; color: var(--danger); }
+#toast.ok::before { content: "✓"; color: var(--ok); }
+#toast button { background: none; border: 0; color: var(--accent); cursor: pointer; font-weight: 600; padding: 0; }
+@keyframes rise { from { opacity: 0; transform: translateY(4px); } }
+@keyframes rise-t { from { opacity: 0; transform: translate(-50%, 4px); } to { transform: translate(-50%, 0); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="page">
+  <header>
+    <h1>Sprint planning in Studio</h1>
+    <p class="lede">A working mockup with example data. Plan and Changes are fixed tabs at the start of the tab strip. In a sprint's Plan view, you work through one epic at a time: open the epics you want to plan as tabs, and close each one when you're done with it. The flow has three steps. First, set goals on a sprint in the Sprints list. Next, an agent looks for stories that fit them in the background. Then you plan, and the agent's suggestions are waiting in the backlog. Nothing joins the sprint until you accept it.</p>
+  </header>
+
+  <div class="controls">
+    <label><input type="checkbox" id="fail"> Fail the next save</label>
+    <label><input type="checkbox" id="failAgent"> Fail the next agent run</label>
+    <button type="button" id="reset">Reset example data</button>
+    <span><kbd>⌥ ]</kbd> / <kbd>⌥ [</kbd> next / previous epic · <kbd>Alt ↑↓</kbd> on a row moves it between Backlog and sprint</span>
+  </div>
+
+  <div class="stagewrap"><div id="stage"></div></div>
+
+  <section class="notes">
+    <div>
+      <h2>Epic tabs</h2>
+      <ul>
+        <li>You plan one epic at a time. The epic tabs work like the module tabs: open epics with <b>+ Add epic</b>, switch with <kbd>⌥ ]</kbd>, and close with ×.</li>
+        <li><b>Done with this epic</b> closes the current tab and moves to the next one, so you can work through the list in order.</li>
+        <li>Closing a tab doesn't remove anything from the sprint. If suggestions are still waiting, the toast says so, and the + Add epic menu shows the count so you can find them again.</li>
+        <li>The sprint pane always shows the whole sprint. Stories from other epics stay visible but dimmed.</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Goals, then agents, then planning</h2>
+      <ul>
+        <li><b>1. Goals.</b> Each sprint card in the Sprints list has its own goals (G1, G2…). You set them before planning.</li>
+        <li><b>2. Agent.</b> <b>✦ Find stories</b> starts an agent in the background, and you can leave while it works. It reads the goals and the backlog and returns suggestions only. It never changes what's in the sprint.</li>
+        <li><b>3. Plan.</b> When it finishes, the sprint card says how many suggestions are ready and links to <b>Review in Plan</b>. In Plan, suggestions sit at the top of each epic's backlog. Each names its goal and says why it fits. Use ✓ to add one, × to dismiss it, and Undo to reverse either.</li>
+        <li>The Plan header stays one line. It shows the goal count (hover for the goals) and how many suggestions are left to review.</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Removed for now</h2>
+      <ul>
+        <li>Story Map.</li>
+        <li>Sprint length buttons (1w–4w). Sprints keep their dates, and setting length can come back later.</li>
+        <li>The modules sidebar. Modules are reached only through the top tabs.</li>
+        <li>Selecting several epics at once. One epic tab is active at a time.</li>
+      </ul>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Agent state</th><th>What you see</th><th>What you can do</th></tr></thead>
+        <tbody>
+          <tr><td>No goals</td><td>“Add goals, then an agent can look for stories that fit them.”</td><td>Type a goal and press Enter.</td></tr>
+          <tr><td>Ready</td><td>✦ Find stories for these goals</td><td>Start a run.</td></tr>
+          <tr><td>Running</td><td>“An agent is looking for stories…” with a progress bar on the sprint card. Plan shows “Agent still working…”.</td><td>Cancel, or keep planning.</td></tr>
+          <tr><td>Suggestions ready</td><td>“✦ N suggestions ready” and Review in Plan → on the card. In Plan: “✦ N to review” plus ✦ counts on epic tabs and the + Add epic menu</td><td>✓ add to sprint, × dismiss, or add all for the current epic.</td></tr>
+          <tr><td>Out of date</td><td>“● Goals changed since the agent ran”</td><td>Run again. The old suggestions stay until then.</td></tr>
+          <tr><td>Failed</td><td>“✕ The agent couldn’t finish”, with the reason</td><td>Retry. Your goals and existing suggestions are kept.</td></tr>
+          <tr><td>Accepted / dismissed</td><td>The story moves into the sprint with a goal chip (G1), or the suggestion disappears</td><td>Undo from the toast.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+const EPICS0 = [
+  { id: "E1", name: "Plan voice", key: "CODING-2340" },
+  { id: "E2", name: "Plan view", key: "CODING-2300" },
+  { id: "E3", name: "Sprint lifecycle", key: "CODING-2310" },
+  { id: "E4", name: "Terminal renderer", key: "CODING-1480" },
+];
+const MODULES = ["roadmap", "studio", "tauri-shell", "graphql"];
+const STATES = { prog: ["In progress", "#7dcfff"], review: ["In review", "#e0af68"], todo: ["Todo", "#7a8599"], done: ["Done", "#9ece6a"] };
+const STORIES0 = [
+  ["CODING-2361", "Show Plan epic focus as a horizontal tab", "E2", "S12", "done", "roadmap"],
+  ["CODING-2305", "Drag a story between Backlog and sprint", "E2", "S12", "review", "studio"],
+  ["CODING-2312", "Roll sub-tasks up into a row count", "E2", "S13", "todo", "studio"],
+  ["CODING-2309", "Recent window filter on the Backlog", "E2", "BL", "todo", "studio"],
+  ["CODING-2347", "Preflight the realtime voice runtime", "E1", "S12", "done", "tauri-shell"],
+  ["CODING-2391", "Development evaluation setup", "E1", "S12", "review", "roadmap"],
+  ["CODING-2403", "Retained evaluation recency clock", "E1", "S12", "prog", "roadmap"],
+  ["CODING-2404", "Shared SQLite logical reader", "E1", "S13", "todo", "roadmap"],
+  ["CODING-2411", "Voice: create a Story under an epic", "E1", "BL", "todo", "roadmap"],
+  ["CODING-2412", "Judge verdict schema for evaluations", "E1", "BL", "todo", "roadmap"],
+  ["CODING-2413", "Seeded voice execution harness", "E1", "BL", "todo", "roadmap"],
+  ["CODING-2414", "Mute and End controls for voice", "E1", "BL", "todo", "studio"],
+  ["CODING-2322", "Start a sprint from the Sprints list", "E3", "S12", "done", "graphql"],
+  ["CODING-2318", "Carry unfinished work on sprint complete", "E3", "S12", "prog", "graphql"],
+  ["CODING-2330", "Completed sprint history", "E3", "S13", "todo", "studio"],
+  ["CODING-2335", "Plan a sprint from the Backlog in one pass", "E3", "BL", "todo", "studio"],
+  ["CODING-2415", "Carry-over picker remembers the last choice", "E3", "BL", "todo", "studio"],
+  ["CODING-2416", "Warn when starting a sprint with no goals", "E3", "BL", "todo", "studio"],
+  ["CODING-1486", "Embed native libghostty renderer", "E4", "S12", "done", "tauri-shell"],
+  ["CODING-1490", "xterm fallback when the native view fails", "E4", "BL", "todo", "tauri-shell"],
+].map(([id, t, e, sp, st, m]) => ({ id, t, e, sp, st, m, goal: null }));
+const CHANGES = {
+  "CODING-2391": { branch: "coding-2391-eval-setup", files: [["scripts/evaluate.mjs", 212, 0], ["scripts/evaluation/snapshot.mjs", 148, 0], ["docs/evaluation-setup.md", 64, 0]] },
+  "CODING-2403": { branch: "coding-2403-recency-clock", files: [["scripts/evaluation/clock.mjs", 87, 0], ["studio/src/features/planning-filters/recency.ts", 19, 6]] },
+  "CODING-2305": { branch: "coding-2305-drag-to-sprint", files: [["studio/src/features/sprints/SprintItemRow.tsx", 41, 8], ["studio/src/shared/dragDrop/useAxisDragAndDrop.ts", 12, 3]] },
+  "CODING-2318": { branch: "coding-2318-carry-over", files: [["crates/worktracking/ticketry-work-management/src/sprint_complete.rs", 96, 14], ["crates/surfaces/ticketry-graphql-schema/tests/sprint_complete.rs", 58, 0]] },
+};
+// Hand-written reasons for the first agent run, so the example reads like a real one.
+const WHY = {
+  "CODING-2412": "The judge needs a fixed verdict format before two runs can be compared.",
+  "CODING-2413": "Repeatable runs need seeded execution. Nothing in the sprint covers it yet.",
+  "CODING-2415": "A small follow-up to CODING-2318, which is finishing in Sprint 12.",
+  "CODING-2416": "Goals only help if every sprint has them. This closes that gap.",
+};
+
+let EPICS, S, toast = null, toastTimer = null, agentTimer = null;
+function fresh() {
+  EPICS = EPICS0.map((e) => ({ ...e }));
+  return {
+    stories: STORIES0.map((s) => ({ ...s })),
+    sprints: [
+      { id: "S12", name: "Sprint 12", dates: "Sep 28 – Oct 11", status: "active" },
+      { id: "S13", name: "Sprint 13", dates: "Oct 12 – Oct 25", status: "planned" },
+    ],
+    goals: {
+      S12: [{ id: "g0", text: "Ship the sprint lifecycle end to end" }],
+      S13: [{ id: "g1", text: "Make Plan voice evaluations repeatable", epics: ["E1"] }, { id: "g2", text: "Finish sprint carry-over and goals", epics: ["E3"] }],
+    },
+    suggestions: [
+      { id: "s1", sp: "S13", story: "CODING-2412", epic: "E1", goal: "g1", status: "waiting" },
+      { id: "s2", sp: "S13", story: "CODING-2413", epic: "E1", goal: "g1", status: "waiting" },
+      { id: "s3", sp: "S13", story: null, title: "Store the evaluation clock in each run's evidence", epic: "E1", goal: "g1", status: "waiting", why: "No story covers this. CODING-2403 adds the clock, but nothing saves it with the evidence." },
+      { id: "s4", sp: "S13", story: "CODING-2415", epic: "E3", goal: "g2", status: "waiting" },
+      { id: "s5", sp: "S13", story: "CODING-2416", epic: "E3", goal: "g2", status: "waiting" },
+    ],
+    agents: { S13: { state: "done", goalsAtRun: "g1,g2", error: "" } },
+    tab: "plan",
+    module: "roadmap",
+    planSprint: "S13",
+    goalAdding: null,
+    epicTabs: { S13: ["E1", "E3"], S12: [] },
+    activeEpic: { S13: "E1", S12: null },
+    addOpen: false,
+    open: null,
+    pending: new Set(),
+    voice: "idle",
+    completing: false,
+    carry: "BL",
+    change: null,
+    seq: 2420,
+  };
+}
+S = fresh();
+
+const stage = document.getElementById("stage");
+const story = (id) => S.stories.find((s) => s.id === id);
+const epic = (id) => EPICS.find((e) => e.id === id);
+const sprintName = (id) => (id === "BL" ? "Backlog" : S.sprints.find((s) => s.id === id)?.name ?? id);
+const lanes = () => [...S.sprints.filter((s) => s.status !== "done").map((s) => s.id), "BL"];
+const goalsOf = (sp) => (S.goals[sp] ??= []);
+const goalIndex = (sp, gid) => goalsOf(sp).findIndex((g) => g.id === gid) + 1;
+const waiting = (filter = () => true, sp = S.planSprint) => S.suggestions.filter((x) => x.status === "waiting" && x.sp === sp && filter(x));
+const ag = (sp) => (S.agents[sp] ??= { state: "idle", goalsAtRun: "", error: "" });
+const stateDot = (st) => `<span class="dot" style="--c:${STATES[st][1]}" title="${STATES[st][0]}"></span>`;
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+/* ---------- writes: optimistic, with rollback ---------- */
+// opts.after runs on success, opts.revert on failure, opts.undo replaces the plain move-back.
+function moveStory(id, sp, opts = {}) {
+  const s = story(id);
+  if (!s || s.sp === sp) return;
+  const prev = s.sp;
+  s.sp = sp;
+  S.pending.add(id);
+  render();
+  const failBox = document.getElementById("fail");
+  const fail = failBox.checked;
+  setTimeout(() => {
+    S.pending.delete(id);
+    if (fail) {
+      failBox.checked = false;
+      s.sp = prev;
+      opts.revert?.();
+      showToast("err", `Couldn't move ${id} to ${sprintName(sp)}. The server rejected the change, so it's back where it was.`, "Retry", () => opts.retry ? opts.retry() : moveStory(id, sp, opts));
+    } else {
+      opts.after?.();
+      showToast("ok", `Moved ${id} to ${sprintName(sp)}`, "Undo", opts.undo ?? (() => moveStory(id, prev)));
+    }
+    render();
+  }, 600);
+}
+function showToast(kind, text, label, fn) {
+  toast = { kind, text, label, fn };
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast = null; render(); }, 5500);
+}
+
+/* ---------- agent ---------- */
+const goalsKey = (sp) => goalsOf(sp).map((g) => g.id).join(",");
+const agentTimers = {};
+function runAgent(sp) {
+  const before = { ...ag(sp) };
+  S.agents[sp] = { state: "running", goalsAtRun: goalsKey(sp), error: "", before };
+  const failBox = document.getElementById("failAgent");
+  const fail = failBox.checked;
+  clearTimeout(agentTimers[sp]);
+  agentTimers[sp] = setTimeout(() => {
+    if (fail) {
+      failBox.checked = false;
+      S.agents[sp] = { ...before, state: "error", error: "The agent session ended before it answered." };
+      render();
+      return;
+    }
+    let added = 0;
+    const known = new Set(S.suggestions.filter((x) => x.status !== "dismissed").map((x) => x.story).filter(Boolean));
+    for (const g of goalsOf(sp)) {
+      const words = g.text.toLowerCase().split(/\W+/).filter((w) => w.length > 3);
+      const hits = S.stories.filter((s) => s.sp === "BL" && !known.has(s.id) &&
+        ((g.epics ?? []).includes(s.e) || words.some((w) => s.t.toLowerCase().includes(w) || epic(s.e).name.toLowerCase().includes(w))));
+      for (const s of hits.slice(0, 2)) {
+        const w = words.find((x) => s.t.toLowerCase().includes(x));
+        S.suggestions.push({ id: `s${Date.now()}${added}`, sp, story: s.id, epic: s.e, goal: g.id, status: "waiting",
+          why: w ? `Its title mentions “${w}”, which is in this goal.` : `It's in ${epic(s.e).name}, the epic this goal is about.` });
+        known.add(s.id);
+        added++;
+      }
+      if (!hits.length && !S.suggestions.some((x) => x.goal === g.id)) {
+        const e0 = S.stories.find((s) => (g.epics ?? []).includes(s.e))?.e;
+        S.suggestions.push({ id: `s${Date.now()}n${added}`, sp, story: null, title: `First step toward: ${g.text}`, epic: e0 ?? S.activeEpic[sp] ?? "E1", goal: g.id, status: "waiting",
+          why: "Nothing in the backlog matches this goal, so the agent drafted a starting story for you to edit." });
+        added++;
+      }
+    }
+    S.agents[sp] = { state: "done", goalsAtRun: goalsKey(sp), error: "" };
+    showToast("ok", added ? `The agent found ${added} suggestion${added > 1 ? "s" : ""} for ${sprintName(sp)}. They're waiting in Plan.` : "The agent found nothing new for these goals.", "Dismiss", () => {});
+    render();
+  }, 2200);
+}
+function accept(sid) {
+  const x = S.suggestions.find((y) => y.id === sid);
+  if (!x || x.status !== "waiting") return;
+  x.status = "accepting";
+  if (x.story) {
+    const s = story(x.story);
+    moveStory(x.story, S.planSprint, {
+      after: () => { x.status = "accepted"; s.goal = x.goal; if (S.open === `sugg:${sid}`) S.open = s.id; },
+      revert: () => { x.status = "waiting"; },
+      retry: () => accept(sid),
+      undo: () => moveStory(x.story, "BL", { after: () => { x.status = "waiting"; s.goal = null; } }),
+    });
+  } else {
+    const id = `CODING-${++S.seq}`;
+    S.stories.push({ id, t: x.title, e: x.epic, sp: S.planSprint, st: "todo", m: "roadmap", goal: x.goal });
+    x.status = "accepted";
+    if (S.open === `sugg:${sid}`) S.open = id;
+    showToast("ok", `Created ${id} in ${sprintName(S.planSprint)}`, "Undo", () => { S.stories = S.stories.filter((s) => s.id !== id); x.status = "waiting"; });
+  }
+}
+function dismiss(sid) {
+  const x = S.suggestions.find((y) => y.id === sid);
+  x.status = "dismissed";
+  if (S.open === `sugg:${sid}`) S.open = null;
+  showToast("ok", "Dismissed the suggestion", "Undo", () => { x.status = "waiting"; });
+}
+
+/* ---------- pieces ---------- */
+function row(s) {
+  return `<button class="row ${S.open === s.id ? "on" : ""}" data-act="open" data-id="${s.id}">${stateDot(s.st)}<span class="k">${s.id}</span><span class="t">${esc(s.t)}</span><span class="chip sp">${sprintName(s.sp)}</span></button>`;
+}
+function detail(s, banner = "") {
+  if (!s) return `<div class="empty">Select a story to see its details.</div>`;
+  const g = s.goal && goalsOf(s.sp).find((x) => x.id === s.goal);
+  return `<div class="detail"><div class="dhead"><span>${s.id}</span><button class="x" data-act="close" aria-label="Close details">×</button></div>
+    <h3>${esc(s.t)}</h3>${banner}
+    <div class="fields">
+      <label>State</label><span class="chip">${stateDot(s.st)}${STATES[s.st][0]}</span>
+      <label>Epic</label><span>${esc(epic(s.e).name)}</span>
+      <label>Sprint</label><span><select data-change="sprint" data-id="${s.id}" aria-label="Sprint">${lanes().map((id) => `<option value="${id}" ${s.sp === id ? "selected" : ""}>${sprintName(id)}</option>`).join("")}</select></span>
+      ${g ? `<label>Goal</label><span class="chip goal">G${goalIndex(s.sp, g.id)} · ${esc(g.text)}</span>` : ""}
+      <label>Module</label><span>${s.m}</span>
+    </div>
+    <div class="dtabs"><span class="on">Details</span><span>Docs</span><span>Terminals</span></div>
+    <div class="actions"><button class="btn primary" data-act="run" data-id="${s.id}">Run now</button><button class="btn">Open terminal</button>${S.tab === "plan" ? `<button class="btn" data-act="voice">Discuss Story</button>` : ""}</div>
+    <p class="hint">This is Studio's own Selected ticket pane, so Run, Docs and Terminals work here too.</p></div>`;
+}
+// The right-hand pane: a story, or an agent suggestion opened from the backlog.
+function openDetail() {
+  if (!S.open?.startsWith("sugg:")) return detail(story(S.open));
+  const x = S.suggestions.find((y) => `sugg:${y.id}` === S.open);
+  if (!x) return detail(null);
+  const s = x.story && story(x.story);
+  const g = goalsOf(x.sp).find((y) => y.id === x.goal);
+  const banner = `<div class="sbanner" role="note"><b>✦ Suggested by the agent${g ? ` for G${goalIndex(x.sp, g.id)}` : ""}</b>${g ? `<span class="chip goal" style="justify-self:start">${esc(g.text)}</span>` : ""}
+    <p>${esc(x.why ?? WHY[x.story] ?? "")}</p>
+    <div class="actions"><button class="btn primary" data-act="accept" data-id="${x.id}">✓ ${s ? `Add to ${sprintName(x.sp)}` : `Create in ${sprintName(x.sp)}`}</button><button class="btn" data-act="dismiss" data-id="${x.id}">Dismiss</button></div>
+    ${s ? `<p class="hint">It stays in the Backlog until you add it.</p>` : `<p class="hint">This story doesn't exist yet. Edit the title, then Create.</p>`}</div>`;
+  if (s) return detail(s, banner);
+  return `<div class="detail"><div class="dhead"><span><span class="newbadge">new story</span> draft</span><button class="x" data-act="close" aria-label="Close details">×</button></div>
+    <input class="draft-title" data-change="sugg-title" data-id="${x.id}" value="${esc(x.title)}" aria-label="Story title">${banner}
+    <div class="fields"><label>Epic</label><span>${esc(epic(x.epic).name)}</span><label>Sprint</label><span class="hint">Set when you create it</span></div></div>`;
+}
+function voiceBtn() {
+  const v = S.voice;
+  return `<button class="fbtn ${v === "live" ? "live" : v === "connecting" ? "wait" : ""}" data-act="voice">${v === "idle" ? "◉ Plan voice" : v === "connecting" ? "◌ Connecting…" : "● Listening · End"}</button>`;
+}
+function tabStrip() {
+  const nChanges = S.stories.filter((s) => s.m === S.module && CHANGES[s.id]).length;
+  return `<div class="tabs" role="tablist">
+    <button class="tab plan ${S.tab === "plan" ? "on" : ""}" data-act="tab" data-id="plan">◆ Plan<small>all modules</small></button>
+    <button class="tab chg ${S.tab === "changes" ? "on" : ""}" data-act="tab" data-id="changes">⑂ Changes<small>${S.module} · ${nChanges}</small></button>
+    <span class="tabsep" aria-hidden="true"></span>
+    ${MODULES.map((m) => `<button class="tab ${S.tab === m ? "on" : ""}" data-act="tab" data-id="${m}">${m}</button>`).join("")}</div>`;
+}
+
+/* ---------- surfaces ---------- */
+function moduleView(m) {
+  const list = S.stories.filter((s) => s.m === m);
+  const groups = Object.keys(STATES).map((st) => {
+    const l = list.filter((s) => s.st === st);
+    return l.length ? `<div class="group"><div class="ghead">${stateDot(st)}${STATES[st][0]}<span class="n">${l.length}</span></div>${l.map(row).join("")}</div>` : "";
+  }).join("");
+  return `<div class="split tasks"><div class="pane left"><div class="tasks-head"><span>${m} · stories</span></div>${groups}</div><div class="pane">${detail(story(S.open))}</div></div>`;
+}
+function changesView() {
+  const m = S.module;
+  const picker = `<select class="chg-mod" data-change="module" aria-label="Module">${MODULES.map((x) => `<option ${x === m ? "selected" : ""}>${x}</option>`).join("")}</select>`;
+  const list = S.stories.filter((s) => s.m === m && CHANGES[s.id]);
+  if (!list.length) return `<div class="empty"><div><b>No changes in ${m}</b><span>When an agent works on a ${m} story in a worktree, its branch and diff show up here.</span>${picker}</div></div>`;
+  const sel = list.find((s) => s.id === S.change) ?? list[0];
+  const c = CHANGES[sel.id];
+  const sum = (s) => CHANGES[s.id].files.reduce((t, f) => [t[0] + f[1], t[1] + f[2]], [0, 0]);
+  return `<div class="changes"><div class="pane left"><div class="tasks-head"><span>${list.length} worktrees in</span>${picker}</div>${list.map((s) => { const [p, n] = sum(s); return `
+    <button class="crow ${s.id === sel.id ? "on" : ""}" data-act="change" data-id="${s.id}"><span class="br">⑂ ${CHANGES[s.id].branch}</span><span>${s.id} · ${esc(s.t)}</span>
+      <span class="meta">${CHANGES[s.id].files.length} files · <span class="add-n">+${p}</span> <span class="del-n">−${n}</span> · ${STATES[s.st][0]}</span></button>`; }).join("")}</div>
+    <div class="pane"><div class="detail"><div class="dhead"><span>⑂ ${c.branch}</span></div><h3>${sel.id} · ${esc(sel.t)}</h3>
+      <div class="actions"><button class="btn" data-act="open-story" data-id="${sel.id}">Open story</button><button class="btn">Open terminal</button><button class="btn primary">Commit…</button></div>
+      <div class="files">${c.files.map(([f, p, n]) => `<div><span class="path" title="${f}">${f}</span><span class="add-n">+${p}</span><span class="del-n">−${n}</span></div>`).join("")}</div>
+      <div class="diffstub">The diff viewer goes here. It's today's Changes workspace, unchanged. Only the way you open it moves, from the footer button to this tab.</div></div></div></div>`;
+}
+function sprintsView() {
+  const active = S.sprints.find((s) => s.status === "active");
+  const planned = S.sprints.filter((s) => s.status === "planned");
+  const done = S.sprints.filter((s) => s.status === "done");
+  const list = (stories) => stories.map(row).join("") || `<p class="hint" style="padding:6px 10px">Nothing here yet.</p>`;
+  let html = "";
+  if (active) {
+    const st = S.stories.filter((s) => s.sp === active.id);
+    const d = st.filter((s) => s.st === "done").length;
+    const unfinished = st.length - d;
+    html += `<section class="sbox"><header><b>${active.name}</b><span class="pill active">active</span><span class="d">${active.dates}</span><span class="sp"></span>
+      <span class="d">${d}/${st.length} done</span><span class="bar"><i style="width:${st.length ? (d / st.length) * 100 : 0}%"></i></span>
+      <button class="btn" data-act="plan-sprint" data-id="${active.id}">Plan</button><button class="btn" data-act="complete-open">Complete sprint</button></header>
+      ${goalsBlock(active)}
+      ${S.completing ? `<div class="dialog" role="group" aria-label="Complete ${active.name}"><b>Complete ${active.name}? Move ${unfinished} unfinished ${unfinished === 1 ? "story" : "stories"} to:</b>
+        ${[...planned.map((p) => p.id), "BL"].map((id) => `<label><input type="radio" name="carry" value="${id}" ${S.carry === id ? "checked" : ""} data-change="carry"> ${sprintName(id)}</label>`).join("")}
+        <div class="actions"><button class="btn primary" data-act="complete">Complete and move ${unfinished}</button><button class="btn" data-act="complete-cancel">Cancel</button></div></div>` : ""}
+      <div class="list">${list(st)}</div></section>`;
+  }
+  for (const p of planned) {
+    html += `<section class="sbox"><header><b>${p.name}</b><span class="pill planned">planned</span><span class="d">${p.dates}</span><span class="sp"></span>
+      <button class="btn" data-act="plan-sprint" data-id="${p.id}">Plan</button>
+      ${active ? "" : `<button class="btn" data-act="start" data-id="${p.id}">Start sprint</button>`}</header>
+      ${goalsBlock(p)}<div class="list">${list(S.stories.filter((s) => s.sp === p.id))}</div></section>`;
+  }
+  html += `<section class="sbox"><header><b>Backlog</b><span class="d">${S.stories.filter((s) => s.sp === "BL").length} stories</span><span class="sp"></span><button class="btn" data-act="new-sprint">New sprint</button></header></section>`;
+  if (done.length) html += `<section class="sbox"><header><b>Completed</b><span class="d">${done.map((s) => s.name).join(", ")}</span></header></section>`;
+  return `<div class="sprints">${html}</div>`;
+}
+function prow(s, to, dim) {
+  const into = to !== "BL";
+  const g = s.goal ? goalIndex(s.sp, s.goal) : 0;
+  return `<div class="prow ${S.pending.has(s.id) ? "pending" : ""} ${S.open === s.id ? "on" : ""} ${dim ? "dim" : ""}" draggable="true" tabindex="0" role="button"
+    data-story="${s.id}" data-act="open" data-id="${s.id}" aria-label="${s.id} ${esc(s.t)}">${stateDot(s.st)}<span class="k">${s.id}</span><span class="t">${esc(s.t)}</span>
+    <span>${g ? `<span class="chip goal" title="Serves goal ${g}">G${g}</span>` : ""}</span>
+    <button class="pm" data-act="move" data-id="${s.id}" data-to="${to}" aria-label="${into ? `Add ${s.id} to the sprint` : `Return ${s.id} to the backlog`}" title="${into ? "Add to sprint" : "Return to backlog"}">${into ? "+" : "−"}</button></div>`;
+}
+function goalsBlock(sp) {
+  const goals = goalsOf(sp.id);
+  const a = ag(sp.id);
+  const stale = a.state === "done" && a.goalsAtRun !== goalsKey(sp.id);
+  const w = waiting(undefined, sp.id).length;
+  const n = goals.length;
+  const rows = goals.map((g, i) => {
+    const inSprint = S.stories.filter((s) => s.sp === sp.id && s.goal === g.id).length;
+    const sug = waiting((x) => x.goal === g.id, sp.id).length;
+    return `<li><span class="gnum">G${i + 1}</span><span class="gt" title="${esc(g.text)}">${esc(g.text)}</span><span class="gm">${inSprint} in sprint${sug ? ` · <span style="color:var(--agent)">✦ ${sug} suggested</span>` : ""}</span><button class="x" data-act="goal-remove" data-id="${g.id}" data-sp="${sp.id}" aria-label="Remove goal ${i + 1}">×</button></li>`;
+  }).join("");
+  const add = S.goalAdding === sp.id
+    ? `<input class="goalinput" id="goal-input-${sp.id}" data-enter="goal" data-id="${sp.id}" placeholder="Goal, then Enter · Esc to stop" aria-label="Add a goal for ${sp.name}">`
+    : `<button class="gadd" data-act="goal-add" data-id="${sp.id}" style="justify-self:start">+ Goal</button>`;
+  let box;
+  if (!n) box = `<span class="hint">Add goals, then an agent can look for stories that fit them.</span>`;
+  else if (a.state === "running") box = `<span class="agentstate">✦ An agent is looking for stories for ${n} goal${n > 1 ? "s" : ""}…</span><span class="indet" role="progressbar" aria-label="Agent working"><i></i></span><button class="btn" data-act="agent-cancel" data-id="${sp.id}">Cancel</button><span class="hint">You can leave this page. Its suggestions will be waiting in Plan.</span>`;
+  else if (a.state === "error") box = `<span class="agentstate err">✕ The agent couldn't finish. ${esc(a.error)}</span><button class="btn agent" data-act="agent-run" data-id="${sp.id}">Retry</button><span class="hint">Your goals and earlier suggestions are kept.</span>`;
+  else if (stale) box = `<span class="agentstate stale">● Goals changed since the agent ran</span><button class="btn agent" data-act="agent-run" data-id="${sp.id}">✦ Ask again</button>${w ? `<span class="hint">${w} earlier suggestions are still waiting in Plan.</span>` : ""}`;
+  else if (a.state === "done") box = w
+    ? `<span class="agentstate">✦ ${w} suggestion${w > 1 ? "s" : ""} ready</span><div class="actions"><button class="btn agent" data-act="agent-run" data-id="${sp.id}">Ask again</button><button class="btn primary" data-act="plan-sprint" data-id="${sp.id}">Review in Plan →</button></div><span class="hint">Nothing joins the sprint until you accept it.</span>`
+    : `<span class="hint">No suggestions waiting.</span><button class="btn agent" data-act="agent-run" data-id="${sp.id}">✦ Ask again</button>`;
+  else box = `<button class="btn agent" data-act="agent-run" data-id="${sp.id}">✦ Find stories for ${n === 1 ? "this goal" : "these goals"}</button><span class="hint">The agent works in the background and only suggests. You decide in Plan.</span>`;
+  return `<section class="goals" aria-label="Goals for ${sp.name}"><div style="display:grid;gap:6px;min-width:0"><span class="eyebrow">Goals</span>${n ? `<ol>${rows}</ol>` : ""}${add}</div><div class="agentbox">${box}</div></section>`;
+}
+function epicTabs(sp) {
+  const tabs = (S.epicTabs[sp.id] ??= []);
+  const act = S.activeEpic[sp.id];
+  const tabHtml = tabs.map((eid) => {
+    const e = epic(eid);
+    const n = S.stories.filter((s) => s.e === eid && s.sp === "BL").length;
+    const sg = waiting((x) => x.epic === eid).length;
+    return `<div class="etab ${eid === act ? "on" : ""}"><button class="sel" role="tab" aria-selected="${eid === act}" data-act="epic" data-id="${eid}" title="${esc(e.name)}: ${n} in backlog${sg ? `, ${sg} suggested` : ""}">
+      <span class="nm">${esc(e.name)}</span><span class="ct">${n}</span>${sg ? `<span class="sg">✦${sg}</span>` : ""}</button>
+      <button class="cls" data-act="epic-close" data-id="${eid}" aria-label="Close ${esc(e.name)}">×</button></div>`;
+  }).join("");
+  const closed = EPICS.filter((e) => !tabs.includes(e.id));
+  const menu = !S.addOpen ? "" : `<div class="menu" role="menu" style="left:${Math.min(tabs.length * 170, 560)}px">${closed.length ? closed.map((e) => {
+      const n = S.stories.filter((s) => s.e === e.id && s.sp === "BL").length;
+      const sg = waiting((x) => x.epic === e.id).length;
+      return `<button role="menuitem" data-act="epic-add" data-id="${e.id}"><span>${esc(e.name)}</span><span class="m">${n} in backlog</span><span class="sg">${sg ? `✦${sg}` : ""}</span></button>`;
+    }).join("") : `<span class="hint" style="padding:6px 8px">Every epic is already open.</span>`}
+    <button role="menuitem" data-act="epic-new"><span style="color:var(--accent)">+ New epic</span><span></span><span></span></button></div>`;
+  const i = tabs.indexOf(act);
+  return `<div class="etabs"><div class="estrip" role="tablist" aria-label="Epics being planned">${tabHtml}</div>
+    <button class="etab-add" data-act="add-toggle" aria-expanded="${S.addOpen}" aria-haspopup="menu">+ Add epic</button>
+    <span class="spacer"></span>
+    <span class="nav">${tabs.length ? `${i + 1} of ${tabs.length}` : ""}
+      <button class="btn" data-act="epic-step" data-id="1" ${tabs.length < 2 ? "disabled" : ""} title="Next epic (⌥])">Next epic →</button></span>${menu}</div>`;
+}
+function planView() {
+  const sp = S.sprints.find((x) => x.id === S.planSprint);
+  const inSprint = S.stories.filter((s) => s.sp === sp.id);
+  const act = S.activeEpic[sp.id];
+  const head = `<div class="planhead"><button class="crumb" data-act="plan-back" aria-label="Back to Sprints">←</button><b>Plan ${sp.name}</b>
+    <span class="d" title="${sp.dates}">${inSprint.length} stories</span><span class="vsep"></span>
+    <span class="d" title="${esc(goalsOf(sp.id).map((g, i) => `G${i + 1} ${g.text}`).join("\n"))}">${goalsOf(sp.id).length} goals</span>
+    ${ag(sp.id).state === "running" ? `<span class="agentstate">✦ Agent still working…</span>` : waiting().length ? `<span class="agentstate">✦ ${waiting().length} to review</span>` : ""}
+    <span style="flex:1"></span>
+    <button class="btn primary" data-act="plan-back">Done</button></div>`;
+  let left;
+  if (!act) {
+    left = `<section class="ppane" data-drop data-drop-sprint="BL" aria-label="Backlog"><header><span>Backlog</span></header>
+      <p class="hint" style="padding:12px">No epic open. Use + Add epic to plan another one.</p></section>`;
+  } else {
+    const e = epic(act);
+    const sugg = waiting((x) => x.epic === act);
+    const suggestedIds = new Set(sugg.map((x) => x.story).filter(Boolean));
+    const backlog = S.stories.filter((s) => s.e === act && s.sp === "BL" && !suggestedIds.has(s.id));
+    const suggHtml = !sugg.length ? "" : `<div class="sugg" role="group" aria-label="Agent suggestions for ${esc(e.name)}">
+      <header><span>✦ Suggested by the agent · ${sugg.length}</span><span class="sp"></span><button class="btn" data-act="accept-all" data-id="${act}">Add all ${sugg.length} to sprint</button></header>
+      ${sugg.map((x) => {
+        const s = x.story && story(x.story);
+        const g = goalIndex(sp.id, x.goal);
+        return `<div class="srow ${S.open === `sugg:${x.id}` ? "on" : ""}" tabindex="0" role="button" data-act="open" data-id="sugg:${x.id}" aria-label="Suggestion: ${esc(s ? s.t : x.title)}" ${s ? `draggable="true" data-story="${s.id}"` : ""}><div class="top">${s ? `${stateDot(s.st)}<span style="color:var(--muted)">${s.id}</span>` : `<span class="newbadge">new story</span>`}<span class="t">${esc(s ? s.t : x.title)}</span>${g ? `<span class="chip goal">G${g}</span>` : ""}</div>
+          <div class="why">${esc(x.why ?? WHY[x.story] ?? "")}</div>
+          <div class="acts"><button class="btn" data-act="accept" data-id="${x.id}" title="${s ? "Add to sprint" : "Create in sprint"}">✓ ${s ? "Add" : "Create"}</button><button class="x" data-act="dismiss" data-id="${x.id}" aria-label="Dismiss suggestion">×</button></div></div>`;
+      }).join("")}</div>`;
+    const tabs = S.epicTabs[sp.id] ?? [];
+    left = `<section class="ppane" data-drop data-drop-sprint="BL" aria-label="Backlog for ${esc(e.name)}">
+      <header><span>Backlog · ${esc(e.name)}</span><span class="sp"></span><span>${backlog.length + sugg.filter((x) => x.story).length}</span></header>
+      ${suggHtml}
+      ${backlog.length ? `<div class="egroup">Rest of the backlog</div>${backlog.map((s) => prow(s, sp.id)).join("")}` : `<p class="hint" style="padding:10px 12px">No other ${esc(e.name)} stories in the backlog.</p>`}
+      <input class="newissue" id="ni-${act}" data-enter="issue" data-id="${act}" placeholder="+ New issue in ${esc(e.name)}" aria-label="New issue in ${esc(e.name)}">
+      <div class="actions" style="padding:4px 12px"><button class="btn" data-act="epic-done">Done with ${esc(e.name)}${tabs.length > 1 ? " → next" : ""}</button>
+      ${sugg.length ? `<span class="hint warn">${sugg.length} suggestion${sugg.length > 1 ? "s are" : " is"} still waiting</span>` : ""}</div></section>`;
+  }
+  {
+    const order = act ? [act, ...EPICS.map((x) => x.id).filter((id) => id !== act)] : EPICS.map((x) => x.id);
+    const right = `<section class="ppane" data-drop data-drop-sprint="${sp.id}" aria-label="${sp.name}">
+      <header><span>${sp.name}</span><span class="sp"></span><span>${inSprint.length}</span></header>
+      ${order.map((eid) => {
+        const items = inSprint.filter((s) => s.e === eid);
+        if (!items.length && eid !== act) return "";
+        return `<div class="egroup"><span>${esc(epic(eid).name)}${eid === act ? " · planning now" : ""}</span><span class="sp"></span><span>${items.length}</span></div>
+          ${items.map((s) => prow(s, "BL", act && eid !== act)).join("") || `<p class="hint" style="padding:2px 12px 8px">Nothing from ${esc(epic(eid).name)} yet. Add stories with +, ✓, or by dragging.</p>`}`;
+      }).join("")}</section>`;
+    return `<div class="planview">${head}${epicTabs(sp)}<div class="planpanes">${left}${right}</div></div>`;
+  }
+}
+
+function render() {
+  const focused = document.activeElement?.dataset?.story;
+  let body;
+  if (S.tab === "plan") {
+    const surf = S.planSprint ? planView() : sprintsView();
+    body = S.open ? `<div class="split">${surf}<div class="pane right">${openDetail()}</div></div>` : surf;
+  } else if (S.tab === "changes") body = changesView();
+  else body = moduleView(S.tab);
+  stage.innerHTML = `<div class="win">
+    <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="wtitle">Ticketry</span></div>
+    ${tabStrip()}<div class="workarea">${body}</div>
+    <div class="footer"><span>tmux · 3 terminals</span><span class="spacer"></span>${S.tab === "plan" ? voiceBtn() : ""}</div></div>`
+    + (toast ? `<div id="toast" class="${toast.kind}" role="status"><span>${esc(toast.text)}</span><button data-act="toast">${toast.label}</button></div>` : "");
+  if (focused) stage.querySelector(`[data-story="${focused}"]`)?.focus();
+}
+
+// Entering a sprint's Plan opens tabs for the epics it already touches, so planning starts at once.
+function seedTabs(sp) {
+  if ((S.epicTabs[sp] ?? []).length) return;
+  const touched = EPICS.filter((e) => S.stories.some((s) => s.e === e.id && s.sp === sp) || waiting((x) => x.epic === e.id, sp).length).map((e) => e.id);
+  S.epicTabs[sp] = touched.length ? touched : EPICS.map((e) => e.id);
+  S.activeEpic[sp] = S.epicTabs[sp][0];
+}
+function closeEpic(id) {
+  const tabs = S.epicTabs[S.planSprint];
+  const i = tabs.indexOf(id);
+  if (i < 0) return;
+  tabs.splice(i, 1);
+  if (S.activeEpic[S.planSprint] === id) S.activeEpic[S.planSprint] = tabs[Math.min(i, tabs.length - 1)] ?? null;
+  const w = waiting((x) => x.epic === id).length;
+  showToast("ok", `Closed ${epic(id).name}.${w ? ` ${w} suggestion${w > 1 ? "s are" : " is"} still waiting. Reopen it from + Add epic.` : ""}`, "Reopen", () => ACTIONS["epic-add"](id));
+}
+function stepEpic(d) {
+  const tabs = S.epicTabs[S.planSprint] ?? [];
+  if (tabs.length < 2) return;
+  const i = tabs.indexOf(S.activeEpic[S.planSprint]);
+  S.activeEpic[S.planSprint] = tabs[(i + d + tabs.length) % tabs.length];
+}
+const ACTIONS = {
+  tab: (id) => {
+    S.tab = id; S.open = null; S.addOpen = false;
+    if (MODULES.includes(id)) S.module = id;
+    // The Plan tab lands in the next sprint's Plan view; ← Sprints is one click away.
+    if (id === "plan" && !S.planSprint) ACTIONS["plan-sprint"]((S.sprints.find((x) => x.status === "planned") ?? S.sprints.find((x) => x.status === "active")).id);
+  },
+  open: (id) => { S.open = S.open === id ? null : id; },
+  close: () => { S.open = null; },
+  change: (id) => { S.change = id; },
+  "open-story": (id) => { S.tab = story(id).m; S.module = S.tab; S.open = id; },
+  "plan-sprint": (id) => { S.planSprint = id; S.open = null; S.addOpen = false; seedTabs(id); },
+  "plan-back": () => { S.planSprint = null; S.addOpen = false; },
+  move: (id, el) => moveStory(id, el.dataset.to),
+  epic: (id) => { S.activeEpic[S.planSprint] = id; S.addOpen = false; },
+  "epic-close": (id) => closeEpic(id),
+  "epic-done": () => closeEpic(S.activeEpic[S.planSprint]),
+  "epic-step": (d) => stepEpic(+d),
+  "add-toggle": () => { S.addOpen = !S.addOpen; if (S.addOpen) setTimeout(() => stage.querySelector(".menu button")?.focus()); },
+  "epic-add": (id) => {
+    const tabs = (S.epicTabs[S.planSprint] ??= []);
+    if (!tabs.includes(id)) tabs.push(id);
+    S.activeEpic[S.planSprint] = id;
+    S.addOpen = false;
+  },
+  "epic-new": () => {
+    const id = `E${EPICS.length + 1}`;
+    EPICS.push({ id, name: `New epic ${EPICS.length - 3}`, key: `CODING-${++S.seq}` });
+    ACTIONS["epic-add"](id);
+    showToast("ok", `Created ${epic(id).name}. Rename it from its details.`, "Dismiss", () => {});
+  },
+  accept: (id) => accept(id),
+  dismiss: (id) => dismiss(id),
+  "accept-all": (eid) => waiting((x) => x.epic === eid).forEach((x) => accept(x.id)),
+  "agent-run": (sp) => runAgent(sp),
+  "agent-cancel": (sp) => {
+    clearTimeout(agentTimers[sp]);
+    S.agents[sp] = ag(sp).before ?? { state: "idle", goalsAtRun: "", error: "" };
+    showToast("ok", "Stopped the agent. Existing suggestions are kept.", "Dismiss", () => {});
+  },
+  "goal-add": (sp) => { S.goalAdding = sp; setTimeout(() => document.getElementById(`goal-input-${sp}`)?.focus()); },
+  "goal-remove": (gid, el) => {
+    const goals = goalsOf(el.dataset.sp);
+    const i = goals.findIndex((g) => g.id === gid);
+    const [g] = goals.splice(i, 1);
+    showToast("ok", `Removed goal “${g.text}”`, "Undo", () => goals.splice(i, 0, g));
+  },
+  voice: () => {
+    if (S.voice !== "idle") { S.voice = "idle"; return; }
+    S.voice = "connecting";
+    setTimeout(() => { if (S.voice === "connecting") { S.voice = "live"; render(); } }, 900);
+  },
+  run: (id) => showToast("ok", `Started an agent on ${id} in a new terminal tab`, "Dismiss", () => {}),
+  "complete-open": () => { S.completing = true; S.carry = S.sprints.find((s) => s.status === "planned")?.id ?? "BL"; },
+  "complete-cancel": () => { S.completing = false; },
+  complete: () => {
+    const active = S.sprints.find((s) => s.status === "active");
+    const moved = S.stories.filter((s) => s.sp === active.id && s.st !== "done");
+    moved.forEach((s) => (s.sp = S.carry));
+    active.status = "done";
+    S.completing = false;
+    showToast("ok", `Completed ${active.name}. Moved ${moved.length} unfinished to ${sprintName(S.carry)}`, "Dismiss", () => {});
+  },
+  start: (id) => { S.sprints.find((s) => s.id === id).status = "active"; },
+  "new-sprint": () => { const n = 12 + S.sprints.length; S.sprints.push({ id: `S${n}`, name: `Sprint ${n}`, dates: "Oct 26 – Nov 8", status: "planned" }); },
+  toast: () => { const t = toast; toast = null; t?.fn(); },
+};
+
+stage.addEventListener("click", (ev) => {
+  const el = ev.target.closest("[data-act]");
+  const closeMenu = S.addOpen && !ev.target.closest(".menu") && el?.dataset.act !== "add-toggle";
+  if (closeMenu) S.addOpen = false;
+  if (!el || el.disabled) { if (closeMenu) render(); return; }
+  ACTIONS[el.dataset.act]?.(el.dataset.id, el);
+  render();
+});
+stage.addEventListener("change", (ev) => {
+  const el = ev.target;
+  if (el.dataset.change === "sprint") moveStory(el.dataset.id, el.value);
+  if (el.dataset.change === "sugg-title") { const x = S.suggestions.find((y) => y.id === el.dataset.id); if (x && el.value.trim()) x.title = el.value.trim(); render(); }
+  if (el.dataset.change === "carry") { S.carry = el.value; render(); }
+  if (el.dataset.change === "module") { S.module = el.value; S.change = null; render(); }
+});
+document.getElementById("reset").addEventListener("click", () => { Object.values(agentTimers).forEach(clearTimeout); S = fresh(); toast = null; render(); });
+
+/* drag and drop between Backlog and sprint; dropping a suggestion into the sprint accepts it */
+let dragId = null;
+stage.addEventListener("dragstart", (ev) => {
+  const el = ev.target.closest?.("[data-story]");
+  if (!el) return;
+  dragId = el.dataset.story;
+  ev.dataTransfer.effectAllowed = "move";
+  ev.dataTransfer.setData("text/plain", dragId);
+  stage.classList.add("dragging-on");
+  const s = story(dragId);
+  stage.querySelectorAll("[data-drop]").forEach((d) => d.classList.toggle("valid", d.dataset.dropSprint !== s.sp));
+});
+stage.addEventListener("dragover", (ev) => {
+  const d = ev.target.closest?.("[data-drop].valid");
+  if (!d) return;
+  ev.preventDefault();
+  d.classList.add("over");
+});
+stage.addEventListener("dragleave", (ev) => {
+  const d = ev.target.closest?.("[data-drop]");
+  if (d && !d.contains(ev.relatedTarget)) d.classList.remove("over");
+});
+stage.addEventListener("drop", (ev) => {
+  const d = ev.target.closest?.("[data-drop].valid");
+  if (!d || !dragId) return;
+  ev.preventDefault();
+  const id = dragId;
+  dragId = null;
+  stage.classList.remove("dragging-on");
+  const x = waiting((y) => y.story === id)[0];
+  if (x && d.dataset.dropSprint !== "BL") accept(x.id); else moveStory(id, d.dataset.dropSprint);
+});
+stage.addEventListener("dragend", () => {
+  dragId = null;
+  stage.classList.remove("dragging-on");
+  stage.querySelectorAll(".valid,.over").forEach((d) => d.classList.remove("valid", "over"));
+});
+
+/* keyboard */
+document.addEventListener("keydown", (ev) => {
+  const el = document.activeElement;
+  if (el?.dataset?.enter && ev.key === "Enter") {
+    const text = el.value.trim();
+    if (!text) return;
+    if (el.dataset.enter === "goal") {
+      goalsOf(el.dataset.id).push({ id: `g${Date.now()}`, text });
+      render();
+      document.getElementById(`goal-input-${el.dataset.id}`)?.focus();
+    } else {
+      const id = `CODING-${++S.seq}`;
+      S.stories.push({ id, t: text, e: el.dataset.id, sp: "BL", st: "todo", m: "roadmap", goal: null });
+      showToast("ok", `Created ${id} in the Backlog`, "Dismiss", () => {});
+      const inputId = el.id;
+      render();
+      document.getElementById(inputId)?.focus();
+    }
+    return;
+  }
+  const typing = el && ["INPUT", "SELECT", "TEXTAREA"].includes(el.tagName);
+  if (!typing && ev.altKey && (ev.code === "BracketRight" || ev.code === "BracketLeft") && S.tab === "plan" && S.planSprint) {
+    ev.preventDefault();
+    stepEpic(ev.code === "BracketRight" ? 1 : -1);
+    render();
+    return;
+  }
+  const sid = el?.dataset?.story;
+  if (sid && ev.altKey && (ev.key === "ArrowUp" || ev.key === "ArrowDown") && S.planSprint) {
+    ev.preventDefault();
+    moveStory(sid, story(sid).sp === "BL" ? S.planSprint : "BL");
+    return;
+  }
+  if ((sid || el?.classList.contains("srow")) && (el.classList.contains("prow") || el.classList.contains("srow")) && ev.target === el && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); el.click(); return; }
+  if (ev.key === "Escape") {
+    if (S.goalAdding && el?.dataset?.enter === "goal") S.goalAdding = null;
+    else if (S.addOpen) S.addOpen = false;
+    else if (S.open) S.open = null;
+    else return;
+    render();
+  }
+});
+
+render();
+</script>

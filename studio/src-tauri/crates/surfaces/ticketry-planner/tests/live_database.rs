@@ -64,7 +64,7 @@ async fn desktop_composition_and_planner_share_live_planning_data_across_restart
         &ticketry_settings::Slice2Readiness::complete(),
     )
     .unwrap();
-    let runtime = PlannerService::start(api.clone(), 0, |error| panic!("{error}"))
+    let runtime = PlannerService::start(api.clone(), 0, None, |error| panic!("{error}"))
         .await
         .unwrap();
     let endpoint = runtime.endpoint().clone();
@@ -124,7 +124,7 @@ async fn desktop_composition_and_planner_share_live_planning_data_across_restart
         &ticketry_settings::Slice2Readiness::complete(),
     )
     .unwrap();
-    let runtime = PlannerService::start(api.clone(), 0, |error| panic!("{error}"))
+    let runtime = PlannerService::start(api.clone(), 0, None, |error| panic!("{error}"))
         .await
         .unwrap();
     assert_ne!(runtime.endpoint().bearer_token, endpoint.bearer_token);

@@ -36,7 +36,7 @@ pub use work_management::{
     launch_binding_profile_migration, launch_binding_stage_skills_migration, launch_policy,
     module_presentation_migration, open, open_established, open_for_commands,
     ownership_manifest as work_management_ownership_manifest, project_onboarding_migration,
-    read_queries, read_types, sprint_migration, state_database_path, tag_migration,
+    read_queries, read_types, record_in, install_sprint_execution_schema, sprint_migration, state_database_path, tag_migration,
     workflow_color_migration, workflow_handoff_migration, workspace_tab_order_migration,
     ReadDatabaseError,
 };

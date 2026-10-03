@@ -1,12 +1,12 @@
 import { OWNER_ID, TASK_ID, activeCleanWorktree, cumulativeChanges } from "./taskWorktreeChangesFixtures";
 import { isValidElement } from "react";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { StudioLayout } from "../app/shell/StudioLayout";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { SelectedTicket } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicket";
-import { FooterChangesToggle } from "../app/shell/FooterChangesToggle";
+import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import { ChangesWorkspace } from "../features/agents/worktrees";
 import {
   readStudioWorkspaceTarget,
@@ -43,16 +43,15 @@ function mountStudio(options: Parameters<typeof mountStudioSeam>[0]) {
     children: (
       <>
         {options.children}
-        {isValidElement(options.children) && options.children.type === StudioLayout ? null : <ChangesWorkspace />}
-        <FooterChangesToggle />
+        {isValidElement(options.children) && options.children.type === StudioLayout ? null : <><ChangesWorkspace /><ModuleTabStrip /></>}
       </>
     ),
   });
 }
 
 describe("overhaul acceptance - task worktree Changes", () => {
+  beforeEach(() => { Element.prototype.scrollIntoView = vi.fn(); });
   it("[overhaul-184] keeps cumulative committed work in a labeled, accessible Changes tab", async () => {
-    Element.prototype.scrollIntoView = vi.fn();
     const http = fixture();
     let changesRequests = 0;
     const savedTabOrders: unknown[] = [];
@@ -156,7 +155,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     expect(screen.getByText("7 cumulative changes")).toBeVisible();
     expect(screen.getByText("Includes committed work from the recorded base.")).toBeVisible();
 
-    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Module 1" }));
     expect(within(tabs).getByRole("tab", { name: "Changes" })).toBeVisible();
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
     await openBranchInspector();
@@ -327,7 +326,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
       await screen.findByText("No cumulative changes from the recorded base."),
     ).toBeVisible();
 
-    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Module 1" }));
     await waitFor(() =>
       expect(within(tabs).getByRole("tab", { name: "Details" })).toHaveAttribute(
         "aria-selected",
@@ -340,7 +339,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     const truncationNotice = await screen.findByText("The changed-file limit was reached.");
     expect(truncationNotice).toHaveTextContent("The changed-file limit was reached.");
 
-    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Module 1" }));
     await waitFor(() =>
       expect(within(tabs).getByRole("tab", { name: "Details" })).toHaveAttribute(
         "aria-selected",
@@ -742,7 +741,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
           reason: state === "unavailable" ? "GitHub pull-request status is unavailable." : null,
         },
       };
-      fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
+      fireEvent.click(screen.getByRole("tab", { name: "Module 1" }));
       fireEvent.click(changesTab);
       await waitFor(() =>
         expect(screen.getByLabelText("Pull request status")).toHaveTextContent(label),
@@ -773,7 +772,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
         reason: null,
       },
     };
-    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Module 1" }));
     fireEvent.click(changesTab);
     expect(await screen.findByRole("button", { name: "Create follow-up PR" })).toBeEnabled();
   });
@@ -879,7 +878,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     await openBranchInspector();
     expect(await screen.findByLabelText("Pull request state")).toHaveTextContent("Closed without merge");
     // Reopening Changes reads the persisted verdict and keeps replacement available.
-    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Module 1" }));
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
     await openBranchInspector();
     expect(await screen.findByLabelText("Pull request state")).toHaveTextContent("Closed without merge");
@@ -900,7 +899,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
         follow_up_eligible: true,
       },
     };
-    fireEvent.click(screen.getByRole("button", { name: "Back to planning workspace" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Module 1" }));
     fireEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
     await openBranchInspector();
     fireEvent.click(await screen.findByRole("button", { name: "Create follow-up PR" }));

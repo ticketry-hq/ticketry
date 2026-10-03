@@ -1,0 +1,26 @@
+{
+  "ticket": "CODING-2520",
+  "changes": [
+    "Integrated PlanSprintView and PlanHeader retain one-epic backlog focus, whole-sprint visibility, normal moves and unchanged detail callback.",
+    "Done with epic now follows backlog rows and shows the next cue when other tabs remain.",
+    "Closed-all empty state explicitly directs the planner to + Add epic.",
+    "Header stays on one row, truncates long sprint names with a title and scrolls horizontally on narrow screens.",
+    "Updated acceptance cases 439, 440 and 457 and existing gate documentation."
+  ],
+  "verification": {
+    "tdd": "Backlog action and empty-state failures reproduced before fixes.",
+    "focused_plan": "7 passed across PlanSprintView and PlanPanes acceptance.",
+    "typecheck": "passed",
+    "architecture_lint": "passed",
+    "full_overhaul": "679 passed, 3 failed across 181 files",
+    "failures": [
+      "121 terminal maximize/restore: 5 second timeout",
+      "386 onboarding Story to Details: 5 second timeout",
+      "373 Story workflow guide: missing dialog; focused suite passes all 13 tests"
+    ],
+    "log": "/tmp/ticketry-2520-final-overhaul.log"
+  },
+  "cross_story": "CODING-2515 notified that StudioLayout.tsx:27 still displays the modules sidebar in Plan when sidebarVisible=true. Shell files were not changed by this task.",
+  "excluded_sibling_scope": "Proposal editing, Add all, suggestion-specific Undo and inline story creation remain with their owners.",
+  "git": "Shared campaign has pre-existing changes. No commit created."
+}

@@ -1,6 +1,8 @@
 import { useEffect, type RefObject } from "react";
 import { Panel, PanelGroup } from "react-resizable-panels";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
+import { SprintsWorkspace, usePlanWorkspace } from "../../../features/sprints";
+import IssueDetail from "./selected-ticket/details/IssueDetail";
 import { ModuleTabStrip } from "./ModuleTabStrip";
 import { TasksPane } from "./tasks/TasksPane";
 import { SelectedTicket } from "./selected-ticket/SelectedTicket";
@@ -36,7 +38,9 @@ export function TicketWorkspace({
   changesActive: _legacyChangesActive = false,
 }: TicketWorkspaceProps) {
   void _legacyChangesActive;
+  const planActive = usePlanWorkspace((state) => state.active);
   const changesActive = useChangesWorkspace((state) => state.active);
+  const surfaceActive = planActive || changesActive;
   const changesModuleId = useChangesWorkspace((state) => state.moduleId);
   const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
   const modulesQuery = useModulesQuery(selectedProjectId);
@@ -63,18 +67,25 @@ export function TicketWorkspace({
     >
       <ModuleTabStrip />
       <div className="min-h-0 flex-1">
-        {noModules || allHidden ? (
-          <EmptyModuleWorkspace
-            kind={noModules ? "no-modules" : "all-hidden"}
-            sidebarVisible={sidebarVisible}
-            onCreate={() => pushModal({ type: "add-module" })}
+        {planActive && selectedProjectId ? (
+          <SprintsWorkspace
+            renderWorkItemDetail={(id) => <IssueDetail issueId={id} detailsVisible />}
           />
+        ) : null}
+        {noModules || allHidden ? (
+          <div hidden={planActive}>
+            <EmptyModuleWorkspace
+              kind={noModules ? "no-modules" : "all-hidden"}
+              sidebarVisible={sidebarVisible}
+              onCreate={() => pushModal({ type: "add-module" })}
+            />
+          </div>
         ) : (
           <>
             <div
-              aria-hidden={changesActive || undefined}
+              aria-hidden={surfaceActive || undefined}
               className="h-full"
-              hidden={changesActive}
+              hidden={surfaceActive}
             >
               <PanelGroup
                 ref={groupRef}
@@ -88,7 +99,7 @@ export function TicketWorkspace({
                 <PaneResizeHandle />
                 <Panel defaultSize={workspaceSize} minSize={15} order={2}>
                   {/* Kept mounted so terminal and document state survives review. */}
-                  <SelectedTicket active={!changesActive} />
+                  <SelectedTicket active={!surfaceActive} />
                 </Panel>
               </PanelGroup>
             </div>
@@ -107,9 +118,9 @@ export function TicketWorkspace({
           extent matches its module scope; the sidebar stays full height. */}
       {!noModules && !allHidden ? (
         <div
-          aria-hidden={changesActive || undefined}
-          className="contents"
-          hidden={changesActive}
+          aria-hidden={surfaceActive || undefined}
+          className={surfaceActive ? "hidden" : "contents"}
+          hidden={surfaceActive}
         >
           <TerminalPanel />
         </div>

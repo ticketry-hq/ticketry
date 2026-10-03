@@ -147,6 +147,14 @@ pub(crate) async fn prepare_sprint_update(
     if let Some(run_id) =
         validated_suggestion_run(transaction, input.suggestion_run_id, &current.project_id).await?
     {
+        if let Some(previous) = &current.suggestion_run_id {
+            ticketry_runs::restrict_sprint_suggestion_run_in(transaction, previous).await?;
+        }
+        if let Some(next) = &run_id {
+            if current.suggestion_run_id.as_ref() != Some(next) {
+                ticketry_runs::restrict_sprint_suggestion_run_in(transaction, next).await?;
+            }
+        }
         if current.suggestion_run_id != run_id {
             sprint_suggestion::Entity::delete_many()
                 .filter(sprint_suggestion::Column::SprintId.eq(&current.id))

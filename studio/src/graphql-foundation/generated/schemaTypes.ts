@@ -10,6 +10,70 @@ export type Scalars = {
   Json: { input: unknown; output: unknown; }
 };
 
+export type AgentExecutions = {
+  __typename?: 'AgentExecutions';
+  agentRun?: Maybe<AgentRuns>;
+  agentRunId: Scalars['String']['output'];
+  cancelRequested: Scalars['Boolean']['output'];
+  createdAt: Scalars['String']['output'];
+  error?: Maybe<Scalars['String']['output']>;
+  goalsRevision?: Maybe<Scalars['String']['output']>;
+  id: Scalars['String']['output'];
+  outputType: Scalars['String']['output'];
+  sprint?: Maybe<WorktrackerSprint>;
+  sprintId: Scalars['String']['output'];
+  state: Scalars['String']['output'];
+  updatedAt: Scalars['String']['output'];
+};
+
+export type AgentExecutionsConnection = {
+  __typename?: 'AgentExecutionsConnection';
+  edges: Array<AgentExecutionsEdge>;
+  nodes: Array<AgentExecutions>;
+  pageInfo: PageInfo;
+  paginationInfo?: Maybe<PaginationInfo>;
+};
+
+export type AgentExecutionsEdge = {
+  __typename?: 'AgentExecutionsEdge';
+  cursor: Scalars['String']['output'];
+  node: AgentExecutions;
+};
+
+export type AgentExecutionsFilterInput = {
+  agentRunId?: InputMaybe<StringFilterInput>;
+  and?: InputMaybe<Array<AgentExecutionsFilterInput>>;
+  cancelRequested?: InputMaybe<BooleanFilterInput>;
+  createdAt?: InputMaybe<TextFilterInput>;
+  error?: InputMaybe<StringFilterInput>;
+  goalsRevision?: InputMaybe<TextFilterInput>;
+  id?: InputMaybe<StringFilterInput>;
+  not?: InputMaybe<AgentExecutionsFilterInput>;
+  or?: InputMaybe<Array<AgentExecutionsFilterInput>>;
+  outputType?: InputMaybe<StringFilterInput>;
+  sprintId?: InputMaybe<StringFilterInput>;
+  state?: InputMaybe<StringFilterInput>;
+  updatedAt?: InputMaybe<TextFilterInput>;
+};
+
+export type AgentExecutionsHavingInput = {
+  agentRun?: InputMaybe<AgentRunsFilterInput>;
+  sprint?: InputMaybe<WorktrackerSprintFilterInput>;
+};
+
+export type AgentExecutionsOrderInput = {
+  agentRunId?: InputMaybe<OrderByEnum>;
+  cancelRequested?: InputMaybe<OrderByEnum>;
+  createdAt?: InputMaybe<OrderByEnum>;
+  error?: InputMaybe<OrderByEnum>;
+  goalsRevision?: InputMaybe<OrderByEnum>;
+  id?: InputMaybe<OrderByEnum>;
+  outputType?: InputMaybe<OrderByEnum>;
+  sprintId?: InputMaybe<OrderByEnum>;
+  state?: InputMaybe<OrderByEnum>;
+  updatedAt?: InputMaybe<OrderByEnum>;
+};
+
 export type AgentRunHolding = {
   __typename?: 'AgentRunHolding';
   agent?: Maybe<Scalars['String']['output']>;
@@ -661,6 +725,8 @@ export type ModuleVersionControlView = {
 export type Mutation = {
   __typename?: 'Mutation';
   acknowledge_onboarding: WorktrackerProject;
+  agent_execution_create: AgentExecutions;
+  agent_execution_update: AgentExecutions;
   clear_module_link: Scalars['Boolean']['output'];
   create_issue_type_transition: WorktrackerIssuetypetransition;
   create_project: WorktrackerProject;
@@ -732,6 +798,20 @@ export type Mutation = {
 
 
 export type MutationAcknowledge_OnboardingArgs = {
+  project_id: Scalars['String']['input'];
+};
+
+
+export type MutationAgent_Execution_CreateArgs = {
+  client_request_id: Scalars['String']['input'];
+  project_id: Scalars['String']['input'];
+  sprint_id: Scalars['String']['input'];
+};
+
+
+export type MutationAgent_Execution_UpdateArgs = {
+  cancel_requested: Scalars['Boolean']['input'];
+  id: Scalars['String']['input'];
   project_id: Scalars['String']['input'];
 };
 
@@ -1281,6 +1361,7 @@ export type PullRequestStatusView = {
 
 export type Query = {
   __typename?: 'Query';
+  agentExecutions: AgentExecutionsConnection;
   agentRunViewerLeases: AgentRunViewerLeasesConnection;
   agentRuns: AgentRunsConnection;
   agentTerminalSessions: AgentTerminalSessionsConnection;
@@ -1325,6 +1406,14 @@ export type Query = {
   worktree_merge_recovery?: Maybe<WorktreeMergeResult>;
   worktree_status: WorktreeStatusView;
   worktrees: WorktreesConnection;
+};
+
+
+export type QueryAgentExecutionsArgs = {
+  filters?: InputMaybe<AgentExecutionsFilterInput>;
+  having?: InputMaybe<AgentExecutionsHavingInput>;
+  orderBy?: InputMaybe<AgentExecutionsOrderInput>;
+  pagination?: InputMaybe<PaginationInput>;
 };
 
 

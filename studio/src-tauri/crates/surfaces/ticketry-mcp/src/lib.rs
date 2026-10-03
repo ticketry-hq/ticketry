@@ -18,20 +18,27 @@
 //! it sits above the slices it dispatches into, which is why the schema is
 //! assembled out of this crate rather than underneath it.
 
+mod attachment_tools;
 mod codex_thread_rename;
 mod connection_handshake;
 mod dependency_tools;
 mod dispatch;
+mod launch_tools;
 mod operation_registry;
 mod projection;
+mod public_id;
+mod read_tools;
 mod registry;
 mod run_termination;
 mod scope;
 mod service;
 mod socket_path;
+mod sprint_tools;
 mod termination_eligibility;
 #[cfg(any(test, feature = "test-support"))]
 mod test_support;
+mod work_facts;
+mod work_item_tools;
 mod workflow_tools;
 
 use std::path::PathBuf;

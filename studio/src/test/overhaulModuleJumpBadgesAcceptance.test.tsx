@@ -118,7 +118,7 @@ describe("overhaul acceptance - module jump badges", () => {
 
   it("[overhaul-179] routes WebView and native position chords through the visible badge order", async () => {
     render(<ModuleJumpSurface />);
-    await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(11));
+    await waitFor(() => expect(screen.getAllByRole("tab").filter((tab) => tab.hasAttribute("data-module-id"))).toHaveLength(11));
 
     const firstTab = screen.getByRole("tab", { name: "Module 1" });
     const firstTabClass = firstTab.className;
@@ -139,7 +139,7 @@ describe("overhaul acceptance - module jump badges", () => {
     expect(firstTab.className).toBe(firstTabClass);
     const visibleTabs = within(
       screen.getByRole("tablist", { name: "Project module tabs" }),
-    ).getAllByRole("tab");
+    ).getAllByRole("tab").filter((tab) => tab.hasAttribute("data-module-id"));
     expect(
       visibleTabs.every((tab) => tab.parentElement?.classList.contains("w-max")),
     ).toBe(true);
@@ -180,7 +180,7 @@ describe("overhaul acceptance - module jump badges", () => {
 
   it("clears stale modifier state at every keyboard ownership boundary", async () => {
     render(<ModuleJumpSurface />);
-    await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(11));
+    await waitFor(() => expect(screen.getAllByRole("tab").filter((tab) => tab.hasAttribute("data-module-id"))).toHaveLength(11));
 
     const reveal = () => {
       fireEvent.keyDown(window, { key: "Meta", metaKey: true });

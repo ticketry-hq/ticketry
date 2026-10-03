@@ -67,6 +67,7 @@ pub(super) fn builder_context() -> BuilderContext {
             entities::issue::Column::SprintId,
         ],
     );
+    add_uuid_columns::<entities::agent_execution::Entity>(&mut context, [entities::agent_execution::Column::SprintId]);
     add_uuid_columns::<entities::sprint::Entity>(
         &mut context,
         [

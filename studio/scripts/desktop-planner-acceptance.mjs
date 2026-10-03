@@ -71,6 +71,7 @@ async function start(extraEnvironment = {}, expectFailure = false) {
     MUXED_DEVELOPMENT_LOG_PATH: path.join(root, "ticketry.log"),
     TAURI_WEBDRIVER_PORT: String(port),
     TICKETRY_PLANNER_PORT: "0",
+    MUXED_DESKTOP_ORIGIN: "http://127.0.0.1:5176",
     ...extraEnvironment,
   }, stdout, stderr);
   browser = await connectToStudio(port, child);
@@ -88,7 +89,13 @@ async function closeCleanly() {
   const exited = once(child, "exit");
   // WebDriver closes only this session's main window. Ticketry then executes
   // its normal RunEvent::Exit teardown before releasing directory ownership.
-  await browser.closeWindow().catch(() => {});
+  // Send the close protocol directly. WebDriverIO's closeWindow hook tries
+  // switching back to a window after Ticketry has exited.
+  const response = await fetch(
+    `http://127.0.0.1:${browser.options.port}/session/${encodeURIComponent(browser.sessionId)}/window`,
+    { method: "DELETE" },
+  );
+  assert.equal(response.status, 200, "the desktop main window closes");
   await Promise.race([exited, new Promise((_, reject) => {
     const timer = setTimeout(() => reject(new Error("Ticketry did not shut down cleanly")), 10_000);
     timer.unref();
@@ -108,6 +115,20 @@ try {
   await start();
   const firstEndpoint = (await configuration()).plannerEndpoint;
   assert.deepEqual((await configuration()).plannerEndpoint, firstEndpoint, "one listener per app instance");
+  for (const origin of ["http://127.0.0.1:5176", "http://127.0.0.1:5175"]) {
+    const allowed = origin.endsWith(":5176");
+    const preflight = await fetch(firstEndpoint.graphqlUrl, { method: "OPTIONS", headers: {
+      Origin: origin, "Access-Control-Request-Method": "POST",
+      "Access-Control-Request-Headers": "authorization,content-type",
+    } });
+    assert.equal(preflight.status, allowed ? 204 : 403);
+    assert.equal(preflight.headers.get("access-control-allow-origin"), allowed ? origin : null);
+    const response = await fetch(firstEndpoint.graphqlUrl, { method: "POST", headers: {
+      Origin: origin, "Content-Type": "application/json", Authorization: `Bearer ${firstEndpoint.bearerToken}`,
+    }, body: JSON.stringify({ query: "{ __typename }" }) });
+    assert.equal(response.status, allowed ? 200 : 403);
+    if (allowed) assert.equal((await response.json()).errors, undefined);
+  }
   const project = (await native('mutation { create_project(name: "Live planner", slug: "LIV") { id } }')).create_project.id;
   const variables = { project };
   assert.equal((await planner(read, variables)).worktrackerProject.nodes[0].name, "Live planner");
@@ -140,6 +161,14 @@ try {
   const failed = await configuration();
   assert.equal(failed.plannerEndpoint, null);
   assert.ok(failed.serviceHealth.message.includes(`Ticketry planner could not bind 127.0.0.1:${blockedPort}`));
+  await browser.waitUntil(async () => {
+    const text = await browser.$("body").getText();
+    return text.includes(`Ticketry planner could not bind 127.0.0.1:${blockedPort}`)
+      && text.includes("quit and reopen Ticketry to retry startup")
+      && text.includes(failed.serviceHealth.logPointer);
+  }, { timeout: 10_000, timeoutMsg: "Planner failure guidance was not visible" });
+  assert.equal(await browser.$("button=Retry").isExisting(), false, "restart-only runtime has no ineffective Retry");
+  assert.equal(await browser.$('button[aria-label="Open Settings"]').isDisplayed(), true, "Settings remains reachable after bind failure");
   await closeCleanly();
   console.log("Planner desktop acceptance passed: shared live writes, WKWebView endpoint, restart persistence, clean shutdown, and bind failure.");
 } catch (error) {

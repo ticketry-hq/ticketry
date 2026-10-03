@@ -66,7 +66,7 @@ export function layoutRows(): Map<string, HTMLElement> {
 /** Give the rendered tabs a real horizontal layout so midpoints can resolve. */
 export function layoutTabs(): Map<string, HTMLElement> {
   const byId = new Map<string, HTMLElement>();
-  screen.getAllByRole("tab").forEach((tab, index) => {
+  screen.getAllByRole("tab").filter((tab) => tab.hasAttribute("data-module-id")).forEach((tab, index) => {
     const left = index * TAB_WIDTH;
     Object.defineProperty(tab, "getBoundingClientRect", {
       configurable: true,

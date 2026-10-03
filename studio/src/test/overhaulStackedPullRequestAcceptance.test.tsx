@@ -1,14 +1,16 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { ChangesWorkspace } from "../features/agents/worktrees";
-import { FooterChangesToggle } from "../app/shell/FooterChangesToggle";
+import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { studioApolloClient } from "../shared/apollo/client";
 import { WorktreeChangesDocument } from "../features/agents/worktrees/generated/worktreeChanges.documents";
 import { fixture, mountStudio as mountStudioSeam, workItem } from "./seam";
 import { openBranchInspector } from "./changesSurface";
 import { TASK_ID, activeCleanWorktree, cumulativeChanges } from "./taskWorktreeChangesFixtures";
+
+beforeEach(() => { Element.prototype.scrollIntoView = vi.fn(); });
 
 vi.mock("../app/shell/layout/useStudioPanelLayout", () => ({
   useStudioPanelLayout: () => ({
@@ -20,7 +22,7 @@ vi.mock("../app/shell/layout/useStudioPanelLayout", () => ({
 function mountStudio(options: Parameters<typeof mountStudioSeam>[0]) {
   return mountStudioSeam({
     ...options,
-    children: <>{options.children}<ChangesWorkspace /><FooterChangesToggle /></>,
+    children: <>{options.children}<ChangesWorkspace /><ModuleTabStrip /></>,
   });
 }
 

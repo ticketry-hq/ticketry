@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { FooterChangesToggle } from "../app/shell/FooterChangesToggle";
+import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import {
   ChangesWorkspace,
   useChangesWorkspace,
@@ -18,6 +18,8 @@ import { studioApolloClient } from "../shared/apollo/client";
 import { FoundationGraphQlError } from "../shared/apollo/errorLink";
 import { useClientStore } from "../state/clientStore";
 import { fixture, mountStudio, workItem } from "./seam";
+
+beforeEach(() => { Element.prototype.scrollIntoView = vi.fn(); });
 
 const MODULE_ID = "module-1";
 const ORIGIN_TASK_ID = "removed-origin";
@@ -51,7 +53,7 @@ describe("overhaul acceptance, Changes workspace recovery", () => {
     mountStudio({
       http,
       selectedTaskId: ORIGIN_TASK_ID,
-      children: <FooterChangesToggle />,
+      children: <ModuleTabStrip />,
     });
     await waitFor(() =>
       expect(getModuleTreeSnapshot("project-1", MODULE_ID).order).toContain(
@@ -59,7 +61,7 @@ describe("overhaul acceptance, Changes workspace recovery", () => {
       ),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+    fireEvent.click(screen.getByTestId("workspace-tab-changes"));
     http.tree(MODULE_ID, {
       rootIds: [SURVIVING_TASK_ID],
       children: { [SURVIVING_TASK_ID]: [] },
@@ -74,7 +76,7 @@ describe("overhaul acceptance, Changes workspace recovery", () => {
     });
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Back to planning workspace" }),
+      screen.getByRole("tab", { name: "Module 1" }),
     );
 
     const scratchBucket = scratchBucketId(MODULE_ID);
@@ -101,7 +103,7 @@ describe("overhaul acceptance, Changes workspace recovery", () => {
         children: (
           <>
             <ChangesWorkspace />
-            <FooterChangesToggle />
+            <ModuleTabStrip />
           </>
         ),
         graphQlExecute: async (document, variables) => {
@@ -116,7 +118,7 @@ describe("overhaul acceptance, Changes workspace recovery", () => {
         },
       });
 
-      fireEvent.click(screen.getByRole("button", { name: "Open module Changes" }));
+      fireEvent.click(screen.getByTestId("workspace-tab-changes"));
       if (result === "loading") {
         expect(await screen.findByText("Loading changes...")).toBeVisible();
       } else {
@@ -129,14 +131,14 @@ describe("overhaul acceptance, Changes workspace recovery", () => {
           screen.getByRole("button", { name: "Choose checkout" }),
         ).toHaveFocus(),
       );
-      const back = screen.getByRole("button", {
-        name: "Back to planning workspace",
+      const back = screen.getByRole("tab", {
+        name: "Module 1",
       });
       expect(back).toBeEnabled();
 
       fireEvent.click(back);
       expect(screen.queryByTestId("independent-changes-workspace")).toBeNull();
-      expect(screen.getByRole("button", { name: "Open module Changes" }))
+      expect(screen.getByTestId("workspace-tab-changes"))
         .toBeEnabled();
     },
   );

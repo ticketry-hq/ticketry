@@ -175,7 +175,7 @@ describe("overhaul acceptance, Plan workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open proposal" }));
     fireEvent.keyDown(document.body, { key: "Escape", shiftKey: true });
     expect(screen.getByLabelText("Open Plan detail")).toBeVisible();
-    fireEvent.keyDown(document.body, { key: "Escape" });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Plan typing" }), { key: "Escape" });
     expect(screen.queryByLabelText("Open Plan detail")).not.toBeInTheDocument();
     expect(screen.getByRole("tablist", { name: "Plan epic tabs" })).toBeVisible();
     fireEvent.keyDown(document.body, { key: "Escape" });

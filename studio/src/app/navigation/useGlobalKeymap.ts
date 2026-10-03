@@ -140,7 +140,14 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
       const ui = useClientStore.getState();
       const sidebarVisible = ui.sidebarVisible;
       if (usePlanWorkspace.getState().active) {
-        if (hasOpenModal() || isTypingTarget(event.target) || event.defaultPrevented) return;
+        if (hasOpenModal() || event.defaultPrevented) return;
+        // Bare Escape belongs to the Plan workspace even when focus is in an
+        // editable field: first close its ticket detail, then leave Plan.
+        if (event.key === "Escape" && !hasModifier(event)) {
+          routePlanKeyboardNavigation(event);
+          return;
+        }
+        if (isTypingTarget(event.target)) return;
         routePlanKeyboardNavigation(event);
         const globalAction = studioKeymapRegistry.resolve("global", event);
         if (globalAction === "settings") routeSharedNavigation(event, taskRowsRef.current, globalAction);

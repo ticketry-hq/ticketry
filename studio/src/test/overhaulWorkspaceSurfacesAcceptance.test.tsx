@@ -130,4 +130,18 @@ describe("overhaul acceptance - workspace surfaces", () => {
     await waitFor(() => expect(plan).toHaveFocus());
   });
 
+  it("does not show module-workspace keyboard hints while Plan owns the work area", async () => {
+    const http = fixture();
+    http.tree("module-1", { rootIds: [], children: {}, order: [] });
+    mountStudio({ http, children: <><KeyboardTabs /><StudioFooter /></> });
+    await screen.findByRole("tab", { name: "Module 1" });
+    act(() => {
+      useClientStore.setState({ sidebarVisible: false, editViewZone: "stories" });
+      cacheEmptyPlan();
+    });
+    expect(screen.getByText(/Next Zone/)).toBeVisible();
+    fireEvent.click(screen.getByRole("tab", { name: "Plan" }));
+    expect(screen.queryByText(/Next Zone/)).not.toBeInTheDocument();
+  });
+
 });

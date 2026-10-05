@@ -746,6 +746,7 @@ export type Mutation = {
   graph_run_delete: GraphRunDeletePayload;
   graph_run_update: GraphRunMutationPayload;
   ingest_agent_lifecycle: LifecycleAccepted;
+  instant_run_ticket_update: Scalars['String']['output'];
   migrationProbesCreateOne: MigrationProbesBasic;
   module_checkout_commit: RepositoryCommandResult;
   module_checkout_commit_push: RepositoryCommandResult;
@@ -937,6 +938,12 @@ export type MutationIngest_Agent_LifecycleArgs = {
   kind: Scalars['String']['input'];
   occurred_at: Scalars['String']['input'];
   provider_session_id?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type MutationInstant_Run_Ticket_UpdateArgs = {
+  agent_run_id: Scalars['String']['input'];
+  title: Scalars['String']['input'];
 };
 
 

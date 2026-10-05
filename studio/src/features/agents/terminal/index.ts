@@ -104,6 +104,7 @@ export {
 export { launchInstantConversation } from "./instantConversationLaunch";
 export { useInstantRunTickets } from "./instantRunTickets";
 export { useInstantRunTicketTitle } from "./instantRunTicketTitle";
+export { useRenameInstantRunTicket } from "./renameInstantRunTicket";
 
 // Shared terminal-create launcher (CODIN-839): folder gate → optional prompt →
 // required agent → scratch planning launch. Studio create surfaces consume the

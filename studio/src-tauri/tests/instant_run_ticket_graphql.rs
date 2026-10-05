@@ -122,6 +122,50 @@ impl CodexThreadTitles for UnavailableTitleReader {
     }
 }
 
+#[derive(Clone)]
+struct RecordingTitleWriter(Arc<Mutex<Vec<(String, String)>>>);
+
+#[async_trait]
+impl CodexThreadTitles for RecordingTitleWriter {
+    async fn read_thread_title(
+        &self,
+        _thread_id: &str,
+    ) -> Result<Option<String>, CodexAppServerError> {
+        Ok(None)
+    }
+
+    async fn set_thread_title(
+        &self,
+        thread_id: &str,
+        name: &str,
+    ) -> Result<(), CodexAppServerError> {
+        self.0
+            .lock()
+            .unwrap()
+            .push((thread_id.to_owned(), name.to_owned()));
+        Ok(())
+    }
+}
+
+async fn rename_schema(calls: Arc<Mutex<Vec<(String, String)>>>) -> GraphQlEndpoint {
+    let database = database().await;
+    let context = Box::leak(Box::new(BuilderContext::default()));
+    let builder = ticketry_terminal::register_instant_run_ticket_graphql(Builder::new(
+        context,
+        database.clone(),
+    ));
+    let schema = builder
+        .schema_builder()
+        .data(database.clone())
+        .data(ticketry_terminal::InstantRunTicketTitleService::new(
+            database,
+            Arc::new(RecordingTitleWriter(calls)),
+        ))
+        .finish()
+        .expect("build Instant ticket rename schema");
+    GraphQlEndpoint::new(schema)
+}
+
 async fn title_schema(reader: ScriptedTitleReader) -> GraphQlEndpoint {
     title_schema_with_database(database().await, reader).await.0
 }
@@ -228,6 +272,43 @@ async fn accepted_codex_thread_name_is_returned_for_eligible_agent_run() {
         serde_json::json!({"title": "Rename the selected conversation"})
     );
     assert_eq!(*calls.lock().unwrap(), ["thread-active"]);
+}
+
+#[tokio::test]
+async fn active_instant_conversation_can_be_renamed_by_agent_run_identity() {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let endpoint = rename_schema(calls.clone()).await;
+    let request = serde_json::json!({
+        "query": "mutation Rename($run: String!, $title: String!) { instant_run_ticket_update(agent_run_id: $run, title: $title) }",
+        "variables": { "run": "run-active", "title": "  Clear title  " }
+    });
+    let response: serde_json::Value =
+        serde_json::from_str(&endpoint.execute_json(&request.to_string()).await).unwrap();
+
+    assert_eq!(response["errors"], serde_json::Value::Null);
+    assert_eq!(response["data"]["instant_run_ticket_update"], "Clear title");
+    assert_eq!(
+        *calls.lock().unwrap(),
+        [("thread-active".to_owned(), "Clear title".to_owned())]
+    );
+}
+
+#[tokio::test]
+async fn rename_rejects_non_instant_or_unknown_agent_runs() {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let endpoint = rename_schema(calls.clone()).await;
+    for run in ["run-plan", "run-ended", "missing"] {
+        let request = serde_json::json!({
+            "query": "mutation { instant_run_ticket_update(agent_run_id: \"PLACEHOLDER\", title: \"Name\") }".replace("PLACEHOLDER", run)
+        });
+        let response: serde_json::Value =
+            serde_json::from_str(&endpoint.execute_json(&request.to_string()).await).unwrap();
+        assert_eq!(
+            response["errors"][0]["extensions"]["code"],
+            "instant_run_ticket_not_found"
+        );
+    }
+    assert!(calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

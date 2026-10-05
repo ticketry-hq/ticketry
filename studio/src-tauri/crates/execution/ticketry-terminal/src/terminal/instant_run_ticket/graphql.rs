@@ -10,9 +10,14 @@ use seaography::{
     CustomFields,
 };
 
-use super::{InstantRunTicket, InstantRunTicketQuery, InstantRunTicketTitleService};
+use super::{
+    thread_title::InstantRunTicketRenameError, InstantRunTicket, InstantRunTicketQuery,
+    InstantRunTicketTitleService,
+};
 
 pub struct InstantRunTicketQueries;
+
+pub struct InstantRunTicketMutations;
 
 #[CustomFields]
 impl InstantRunTicketQueries {
@@ -43,9 +48,30 @@ impl InstantRunTicketQueries {
     }
 }
 
+#[CustomFields]
+impl InstantRunTicketMutations {
+    /// Rename the Codex thread behind one active Instant conversation.
+    async fn instant_run_ticket_update(
+        ctx: &Context<'_>,
+        agent_run_id: String,
+        title: String,
+    ) -> Result<String> {
+        let title = title.trim();
+        if title.is_empty() {
+            return Err(typed("instant_run_ticket_title_invalid", "Enter a conversation name."));
+        }
+        let service = ctx.data::<InstantRunTicketTitleService>().map_err(|_| {
+            typed("instant_run_ticket_unavailable", "Instant chats are unavailable.")
+        })?;
+        service.rename_run(&agent_run_id, title).await.map_err(rename_error)?;
+        Ok(title.to_owned())
+    }
+}
+
 pub(super) fn register(mut builder: seaography::Builder) -> seaography::Builder {
     builder.register_custom_output::<InstantRunTicket>();
     builder.register_custom_query::<InstantRunTicketQueries>();
+    builder.register_custom_mutation::<InstantRunTicketMutations>();
     builder.register_subscription_field(SubscriptionField::new(
         "instant_run_ticket_title_restarted",
         TypeRef::named_nn(TypeRef::BOOLEAN),
@@ -73,6 +99,32 @@ pub(super) fn register(mut builder: seaography::Builder) -> seaography::Builder 
         },
     ));
     builder
+}
+
+fn rename_error(error: InstantRunTicketRenameError) -> Error {
+    match error {
+        InstantRunTicketRenameError::RunNotFound => typed(
+            "instant_run_ticket_not_found",
+            "That active Instant conversation was not found.",
+        ),
+        InstantRunTicketRenameError::Provider(error) if error.is_unavailable() => typed(
+            "instant_run_ticket_unavailable",
+            "The conversation provider is unavailable.",
+        ),
+        InstantRunTicketRenameError::Provider(_) => typed(
+            "instant_run_ticket_rename_failed",
+            "The conversation could not be renamed.",
+        ),
+        InstantRunTicketRenameError::Database(error) => Error::new(
+            "The conversation could not be renamed.",
+        )
+        .extend_with(|_, extension| extension.set("code", "instant_run_ticket_rename_failed"))
+        .extend_with(|_, extension| extension.set("detail", error.to_string())),
+    }
+}
+
+fn typed(code: &'static str, message: &'static str) -> Error {
+    Error::new(message).extend_with(|_, extension| extension.set("code", code))
 }
 
 fn database<'a>(ctx: &'a Context<'a>) -> Result<&'a DatabaseConnection> {

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { type InstantRunRow, type ScratchRow } from "../TasksPane";
 import {
   isLiveAgentRunState,
@@ -7,6 +8,7 @@ import {
 import {
   LifecycleBadge,
   providerToneClasses,
+  useRenameInstantRunTicket,
 } from "../../../../../features/agents/terminal";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
 import { openConversationComposer } from "../../../../../features/conversations";
@@ -49,6 +51,20 @@ export function InstantRunPlanningRow({
   const live = isLiveAgentRunState(runState);
   const untitled = row.name === FALLBACK_TITLE;
   const started = startedAtLabel(row.startedAt);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(row.name);
+  const [rename, renameState] = useRenameInstantRunTicket();
+  const save = () => {
+    const title = draft.trim();
+    if (!title || title === row.name) {
+      setDraft(row.name);
+      setEditing(false);
+      return;
+    }
+    setEditing(false);
+    void rename({ variables: { agentRunId: row.runId, title } })
+      .catch(() => setEditing(true));
+  };
   return (
     <PlanningRowView
       id={id}
@@ -79,12 +95,44 @@ export function InstantRunPlanningRow({
               selected: true,
             })}`}
           />
-          <span
-            data-task-name
-            className={`truncate ${untitled ? "italic text-text-secondary" : ""}`}
-          >
-            {row.name}
-          </span>
+          {editing ? (
+            <input
+              aria-label="Conversation name"
+              value={draft}
+              autoFocus
+              disabled={renameState.loading}
+              aria-invalid={renameState.error ? true : undefined}
+              title={renameState.error?.message}
+              onChange={(event) => setDraft(event.target.value)}
+              onClick={(event) => event.stopPropagation()}
+              onBlur={save}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  save();
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  setDraft(row.name);
+                  setEditing(false);
+                }
+              }}
+              className="min-w-0 flex-1 border border-focus-accent bg-pane-bg px-1 text-text-primary outline-none"
+            />
+          ) : (
+            <span
+              data-task-name
+              title={isSelected ? "Click to rename conversation" : undefined}
+              onClick={(event) => {
+                if (!isSelected) return;
+                event.stopPropagation();
+                setDraft(row.name);
+                setEditing(true);
+              }}
+              className={`truncate ${untitled ? "italic text-text-secondary" : ""}`}
+            >
+              {row.name}
+            </span>
+          )}
         </span>
       }
       trailing={

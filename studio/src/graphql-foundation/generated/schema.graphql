@@ -720,6 +720,7 @@ type Mutation {
 	retry_automation_attempt(attempt_id: String!): AutomationAttemptProjection!
 	dismiss_automation_attempt(attempt_id: String!): AutomationAttemptProjection!
 	ingest_agent_lifecycle(agent_run_id: String!, kind: String!, occurred_at: String!, provider_session_id: String): LifecycleAccepted!
+	instant_run_ticket_update(agent_run_id: String!, title: String!): String!
 	terminal_session_create(client_request_id: String!, project_id: String, issue_id: String, module_id: String!, target_id: String, kind: String!, provider: String, working_directory_identity: String, columns: Int!, rows: Int!, model: String, reasoning: String, policy_reference: String, prompt: String, resume_from_agent_run_id: String, automation_attempt_id: String, required_skills: [String!], design_directory_identity: String, document_relative_path: String): AgentTerminalSessions!
 	terminal_session_update(agent_run_id: String!, termination_request_id: String): AgentTerminalSessions!
 	terminal_output_observe(agent_run_id: String!): TerminalOutputObservation!

@@ -10,6 +10,13 @@ use ticketry_launch::{provider_contract, Provider};
 use ticketry_tool_discovery::SupportedTool;
 use tokio::sync::broadcast;
 
+#[derive(Debug)]
+pub(super) enum InstantRunTicketRenameError {
+    RunNotFound,
+    Provider(CodexAppServerError),
+    Database(sea_orm::DbErr),
+}
+
 #[derive(Clone)]
 pub struct InstantRunTicketTitleService {
     database: DatabaseConnection,
@@ -83,6 +90,32 @@ impl InstantRunTicketTitleService {
             ));
         };
         titles.set_thread_title(thread_id, name).await
+    }
+
+    /// Rename the provider thread owned by one active Instant Agent Run. The
+    /// caller supplies the Ticketry identity, never the private provider id.
+    pub(super) async fn rename_run(
+        &self,
+        agent_run_id: &str,
+        name: &str,
+    ) -> Result<(), InstantRunTicketRenameError> {
+        let run = agent_run::Entity::find_by_id(agent_run_id)
+            .filter(agent_run::Column::Agent.eq(provider_contract(Provider::Codex).slug))
+            .filter(agent_run::Column::Scope.eq("instant"))
+            .filter(agent_run::Column::EndedAt.is_null())
+            .one(&self.database)
+            .await
+            .map_err(InstantRunTicketRenameError::Database)?
+            .ok_or(InstantRunTicketRenameError::RunNotFound)?;
+        let thread_id = run
+            .provider_session_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|thread_id| !thread_id.is_empty())
+            .ok_or(InstantRunTicketRenameError::RunNotFound)?;
+        self.rename_thread(thread_id, name)
+            .await
+            .map_err(InstantRunTicketRenameError::Provider)
     }
 
     pub(super) fn subscribe_restarts(&self) -> Option<tokio::sync::broadcast::Receiver<()>> {

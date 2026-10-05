@@ -194,6 +194,56 @@ describe("overhaul acceptance — Conversations", () => {
     seedModuleOpenFixture("module-1", []);
   });
 
+  it("[overhaul-438] renames a selected Instant conversation by clicking its title", async () => {
+    const terminalExecutor = terminalSessionReadExecutor(emptyTerminalReads);
+    const renames: unknown[] = [];
+    installDesktopGraphQlRuntime(async (document, variables) => {
+      const operation = documentOperationName(document);
+      if (operation === "InstantRunTickets") {
+        return {
+          tickets: [{
+            __typename: "InstantRunTicket",
+            agent_run_id: "instant-run-2",
+            title: "Tighten the launch prompt",
+            started_at: "2026-08-30T11:00:00Z",
+          }],
+        } as never;
+      }
+      if (operation === "RenameInstantRunTicket") {
+        renames.push(variables);
+        return { title: "A clearer conversation name" } as never;
+      }
+      if (operation === "WorkTrackerModuleOpen") {
+        return {
+          module: { __typename: "WorktrackerIssueConnection", nodes: [] },
+          work_items: { __typename: "WorktrackerIssueConnection", nodes: [] },
+        } as never;
+      }
+      return terminalExecutor(document, variables);
+    });
+
+    render(
+      <StudioApolloProvider>
+        <TasksPane />
+      </StudioApolloProvider>,
+    );
+
+    const row = await screen.findByRole("treeitem", {
+      name: /Tighten the launch prompt/,
+    });
+    fireEvent.click(row);
+    fireEvent.click(within(row).getByText("Tighten the launch prompt"));
+    const input = screen.getByRole("textbox", { name: "Conversation name" });
+    fireEvent.change(input, { target: { value: "A clearer conversation name" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await screen.findByText("A clearer conversation name");
+    expect(renames).toEqual([{
+      agentRunId: "instant-run-2",
+      title: "A clearer conversation name",
+    }]);
+  });
+
   it("[overhaul-202] replaces Scratch with Conversations and selects each conversation's exact terminal", async () => {
     render(
       <StudioApolloProvider>

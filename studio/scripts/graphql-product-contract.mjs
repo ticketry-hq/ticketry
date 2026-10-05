@@ -58,6 +58,7 @@ const PRODUCT_MUTATIONS = [
   "graph_run_delete",
   "graph_run_update",
   "ingest_agent_lifecycle",
+  "instant_run_ticket_update",
   ...Object.keys(WORKTREE_GIT_OPERATION_EXCEPTIONS),
   "refresh_scratch_document_registry",
   "refresh_task_document_registry",

@@ -35,6 +35,15 @@ pub const CUSTOM_SUBSCRIPTIONS: &[CustomReadRegistration] = &[CustomReadRegistra
     bounded_test: "instant_run_ticket_graphql::a_restarted_title_reader_notifies_graphql_then_returns_the_recovered_title",
 }];
 
+pub const CUSTOM_MUTATIONS: &[CustomReadRegistration] = &[CustomReadRegistration {
+    field: "instant_run_ticket_update",
+    reason: "A Codex thread title is provider-owned state outside Ticketry's database, so generated Seaography model CRUD cannot perform the write.",
+    implementation: "SeaORM Agent Run identity lookup followed by the resident Codex app-server title capability",
+    parity_test: "instant_run_ticket_graphql::active_instant_conversation_can_be_renamed_by_agent_run_identity",
+    safety_test: "instant_run_ticket_graphql::rename_rejects_non_instant_or_unknown_agent_runs",
+    bounded_test: "instant_run_ticket_graphql::rename_accepts_one_concrete_agent_run_identity_and_one_title",
+}];
+
 pub fn assert_complete() {
     debug_assert_eq!(
         CUSTOM_QUERIES
@@ -56,6 +65,10 @@ pub fn assert_complete() {
             .map(|registration| registration.field)
             .collect::<Vec<_>>(),
         ["instant_run_ticket_title_restarted"]
+    );
+    debug_assert_eq!(
+        CUSTOM_MUTATIONS.iter().map(|registration| registration.field).collect::<Vec<_>>(),
+        ["instant_run_ticket_update"]
     );
 }
 

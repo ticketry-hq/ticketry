@@ -1,0 +1,3 @@
+mutation RenameInstantRunTicket($agentRunId: String!, $title: String!) {
+  title: instant_run_ticket_update(agent_run_id: $agentRunId, title: $title)
+}

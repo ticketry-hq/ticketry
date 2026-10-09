@@ -47,12 +47,13 @@ describe("native terminal default renderer acceptance", () => {
 
     // The frontend default only matters if ordinary builds link the library
     // and ship its runtime resources.
-    const [packageSource, cargoSource, tauriConfigurationSource, buildScript] =
+    const [packageSource, cargoSource, tauriConfigurationSource, buildScript, ghosttyConfiguration] =
       await Promise.all([
         readFile(`${process.cwd()}/package.json`, "utf8"),
         readFile(`${process.cwd()}/src-tauri/Cargo.toml`, "utf8"),
         readFile(`${process.cwd()}/src-tauri/tauri.conf.json`, "utf8"),
         readFile(`${process.cwd()}/src-tauri/build.rs`, "utf8"),
+        readFile(`${process.cwd()}/src-tauri/native/ticketry-ghostty.conf`, "utf8"),
       ]);
     const packageJson = JSON.parse(packageSource) as {
       scripts: Record<string, string>;
@@ -71,9 +72,16 @@ describe("native terminal default renderer acceptance", () => {
       expect(script).not.toContain("ghostty-vt");
     }
     expect(tauriConfiguration.bundle.resources["vendor/libghostty/resources/"]).toBe("");
+    // The native prompt binding sends the same ESC CR bytes as xterm.
+    expect(ghosttyConfiguration.split(/\r?\n/).filter((line) => line.startsWith("keybind =")))
+      .toEqual([String.raw`keybind = shift+enter=text:\x1b\r`]);
+    expect(tauriConfiguration.bundle.resources["native/ticketry-ghostty.conf"])
+      .toBe("ticketry-ghostty.conf");
     // A development build runs an unbundled binary, so the same resources are
     // staged beside it; otherwise native initialization fails and the desktop
     // silently renders with the xterm fallback.
     expect(buildScript).toContain("stage_unbundled_ghostty_resources");
+    expect(buildScript).toContain('println!("cargo:rerun-if-changed={}", configuration.display())');
+    expect(buildScript).toContain('fs::copy(&configuration, profile.join("ticketry-ghostty.conf"))');
   });
 });

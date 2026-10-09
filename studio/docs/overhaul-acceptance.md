@@ -223,7 +223,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 238 | An authoritative snapshot that reports an agent run exited closes its mounted terminal tab and clears the local terminal session. |
 | 239 | Module Changes appears in the top strip with a version-control symbol, stays disabled without a selected Module, and is absent from the footer. |
 | 240 | A newly captured Story appears first in its issue type's initial workflow state while creation is pending and remains first after the authoritative persisted result replaces it. |
-| 241 | Normal desktop development and packaged builds select embedded native libghostty by default and link and ship the pinned library; browser development selects xterm; development-only renderer overrides remain, and packaged builds ignore them. |
+| 241 | Normal desktop development and packaged builds select embedded native libghostty by default and link and ship the pinned library and ESC CR Shift+Enter prompt binding; browser development selects xterm; development-only renderer overrides remain, and packaged builds ignore them. |
 | 242 | Development builds can compare three Conversations designs in the real Stories pane; each makes New chat obvious, caps the initial list at ten, and expands or hides the remaining chats. |
 | 243 | A workflow launch binding accepts free-form Stage skill tags on Enter or blur, ignores blank and duplicate normalized names without splitting spaces or commas, reloads saved tags, and uses accessible removal to persist each resulting list, including empty after the final tag is removed, through the existing binding upsert and save-error handling. |
 | 244 | Incoming and outgoing workflow transition rows show and save each edge's handoff setting. |

@@ -152,6 +152,7 @@ fn stage_unbundled_ghostty_resources(manifest: &Path, vendor: &Path) {
     };
 
     let configuration = manifest.join("native/ticketry-ghostty.conf");
+    println!("cargo:rerun-if-changed={}", configuration.display());
     if let Err(error) = fs::copy(&configuration, profile.join("ticketry-ghostty.conf")) {
         println!("cargo:warning=could not stage ticketry-ghostty.conf: {error}");
         return;

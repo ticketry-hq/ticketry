@@ -154,7 +154,7 @@ describe("overhaul acceptance — documents and persisted layout", () => {
     vi.resetModules();
     const first = await import("../state/clientStore");
 
-    first.useClientStore.getState().toggleSidebar();
+    localStorage.setItem("studio.sidebarVisible:v2", "true");
     first.useClientStore.getState().setPanelLayout([18, 32, 50]);
     first.useClientStore.getState().toggleExpanded("module-1", "story-1");
     first.useClientStore.getState().toggleStateCollapsed("review");
@@ -168,7 +168,9 @@ describe("overhaul acceptance — documents and persisted layout", () => {
     const state = reloaded.useClientStore.getState();
 
     expect(state.sidebarVisible).toBe(false);
-    expect(state.panelLayout).toEqual([18, 32, 50]);
+    expect(state.panelLayout).toHaveLength(2);
+    expect(state.panelLayout?.[0]).toBeCloseTo(39.0243902439);
+    expect(state.panelLayout?.[1]).toBeCloseTo(60.9756097561);
     expect(state.expandedIdsByModule).toEqual({ "module-1": ["story-1"] });
     expect(state.collapsedStateIds).toEqual(new Set(["review"]));
     expect(persistence.readTaskSelections()).toEqual({

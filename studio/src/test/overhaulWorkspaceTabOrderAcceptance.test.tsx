@@ -39,7 +39,7 @@ const saves = vi.hoisted(() => vi.fn());
 vi.mock("../features/documents/documentRegistry", () => documentRegistry);
 
 vi.mock(
-  "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
+  "../features/task-workspace/terminals/SelectedTicketTerminal",
   () => ({ SelectedTicketTerminal: () => <div /> }),
 );
 

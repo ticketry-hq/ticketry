@@ -152,9 +152,10 @@ impl LifecycleService {
         } else {
             run.attention_reason
         };
-        let effective_state = run_holding_in(transaction, &fact.agent_run_id, &occurred_at)
-            .await?
-            .map(|holding| holding.effective_state)
+        let resulting_run = run_holding_in(transaction, &fact.agent_run_id, &occurred_at).await?;
+        let effective_state = resulting_run
+            .as_ref()
+            .map(|holding| holding.effective_state.clone())
             .unwrap_or_else(|| resulting_state.clone());
         let event_id = uuid::Uuid::new_v4().simple().to_string();
         let payload = json!({
@@ -163,6 +164,7 @@ impl LifecycleService {
             "effectiveState": effective_state,
             "occurredAt": occurred_at,
             "providerSessionCaptured": provider_changed,
+            "run": resulting_run,
             "launchState": run.launch_state,
             "launchModel": run.launch_model,
             "attentionReason": resulting_attention_reason,

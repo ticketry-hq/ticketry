@@ -9,10 +9,10 @@
 use super::schema::OPERATION_COLUMNS;
 
 /// Version of the checked ownership contract.
-pub const VERSION: i32 = 1;
+pub(crate) const VERSION: i32 = 1;
 
 /// The tables this capability authors outright, at their checked column shape.
-pub const OWNED_TABLES: &[(&str, &[&str])] = &[
+pub(crate) const OWNED_TABLES: &[(&str, &[&str])] = &[
     ("workspace_operations", OPERATION_COLUMNS),
     (
         "ticketry_workspace_operations_schema",
@@ -21,14 +21,14 @@ pub const OWNED_TABLES: &[(&str, &[&str])] = &[
 ];
 
 /// Every table whose production writer is Rust.
-pub fn owned_tables() -> Vec<&'static str> {
+pub(crate) fn owned_tables() -> Vec<&'static str> {
     OWNED_TABLES.iter().map(|(table, _)| *table).collect()
 }
 
 /// The journal is an internal entity: it has generated SeaORM code but no
 /// public generated query or mutation bundle. This is the checked name a
 /// schema-surface test asserts against.
-pub const PRIVATE_GRAPHQL_TYPE_PREFIX: &str = "WorkspaceOperation";
+pub(crate) const PRIVATE_GRAPHQL_TYPE_PREFIX: &str = "WorkspaceOperation";
 
 #[cfg(test)]
 mod tests {

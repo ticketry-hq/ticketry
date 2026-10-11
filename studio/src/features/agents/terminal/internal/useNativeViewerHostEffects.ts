@@ -12,21 +12,33 @@ import { registerTerminalFocus } from "./terminalRegistry";
 import type { NativeTerminalStatus } from "./nativeViewerFailure";
 import { selectNativeTerminalInput } from "./useNativeWebViewSiblingInteraction";
 
-async function focusNativeInput(handle: string): Promise<void> {
-  await selectNativeTerminalInput(handle);
-  await invoke("native_terminal_focus", { handle });
+async function focusNativeInput(
+  handle: string,
+  authorized: () => boolean,
+): Promise<void> {
+  if (!authorized()) return;
+  const ownership = selectNativeTerminalInput(handle);
+  if (!ownership) return;
+  await ownership;
+  // Ownership transfer is asynchronous. The originating host may have been
+  // hidden, covered or replaced while native input was being selected.
+  if (authorized()) await invoke("native_terminal_focus", { handle });
 }
 
 // `native_terminal_focus` rejects a viewer whose reveal has not committed, and
 // hides/shows are serialized through the presentation queue while focus is not.
 // Both focus paths therefore wait for presentation rather than racing it.
 export function useNativeViewerFocusRegistration({
+  canFocus,
+  hostRef,
   sessionId,
   handle,
   presented,
   visible,
   modalOpen,
 }: {
+  canFocus?: (target?: HTMLElement | null) => boolean;
+  hostRef: RefObject<HTMLDivElement | null>;
   sessionId: string;
   handle: string | null;
   presented: boolean;
@@ -35,17 +47,23 @@ export function useNativeViewerFocusRegistration({
 }): void {
   useEffect(() => {
     if (!handle || !presented || !visible || modalOpen) return;
-    return registerTerminalFocus(sessionId, () => {
+    let authorized = true;
+    const unregister = registerTerminalFocus(sessionId, () => {
+      if (!(canFocus?.(hostRef.current) ?? true)) return;
       traceViewerFocus("focus requested by registry", { session: sessionId });
       notifyNativeTerminalKeyboardEngaged();
-      void focusNativeInput(handle).catch((error) => {
+      void focusNativeInput(handle, () => authorized && (canFocus?.(hostRef.current) ?? true)).catch((error) => {
         traceViewerFocus("focus request FAILED", {
           session: sessionId,
           error: String(error),
         });
       });
     });
-  }, [handle, modalOpen, presented, sessionId, visible]);
+    return () => {
+      authorized = false;
+      unregister();
+    };
+  }, [canFocus, handle, hostRef, modalOpen, presented, sessionId, visible]);
 }
 
 export function useNativeViewerKeyboardOwnership({
@@ -146,6 +164,8 @@ export function useNativeViewerFrameSync({
 }
 
 export function useNativeViewerFocusSignal({
+  canFocus,
+  hostRef,
   sessionId,
   handle,
   focusSignal,
@@ -153,6 +173,8 @@ export function useNativeViewerFocusSignal({
   visible,
   modalOpen,
 }: {
+  canFocus?: (target?: HTMLElement | null) => boolean;
+  hostRef: RefObject<HTMLDivElement | null>;
   sessionId: string;
   handle: string | null;
   focusSignal?: number;
@@ -168,14 +190,15 @@ export function useNativeViewerFocusSignal({
       focusSignal !== undefined &&
       focusSignal !== 0 &&
       focusSignal !== handledFocusSignalRef.current;
-    if (!pendingSignal) return;
+    if (!pendingSignal || !(canFocus?.(hostRef.current) ?? true)) return;
+    let authorized = true;
     handledFocusSignalRef.current = focusSignal;
     traceViewerFocus("focus requested by signal", {
       session: sessionId,
       focusSignal,
     });
     notifyNativeTerminalKeyboardEngaged();
-    void focusNativeInput(handle).catch((error) => {
+    void focusNativeInput(handle, () => authorized && (canFocus?.(hostRef.current) ?? true)).catch((error) => {
       // A refused request must not spend the signal: releasing it lets the next
       // reveal of this viewer carry the same request through.
       if (handledFocusSignalRef.current === focusSignal) {
@@ -187,5 +210,8 @@ export function useNativeViewerFocusSignal({
         error: String(error),
       });
     });
-  }, [focusSignal, handle, modalOpen, presented, sessionId, visible]);
+    return () => {
+      authorized = false;
+    };
+  }, [canFocus, focusSignal, handle, hostRef, modalOpen, presented, sessionId, visible]);
 }

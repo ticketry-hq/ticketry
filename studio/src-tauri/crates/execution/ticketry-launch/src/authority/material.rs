@@ -15,6 +15,7 @@ pub struct ResolvedLaunchMaterial {
     pub policy_reference: Option<String>,
     pub prompt: Option<String>,
     pub required_skills: Vec<String>,
+    pub stage_skills: Vec<String>,
     pub design_directory_identity: Option<String>,
     pub document_relative_path: Option<String>,
 }
@@ -31,6 +32,7 @@ impl ResolvedLaunchMaterial {
         request.policy_reference = self.policy_reference;
         request.prompt = self.prompt;
         request.required_skills = self.required_skills;
+        request.stage_skills = self.stage_skills;
         request.design_directory_identity = self.design_directory_identity;
         request.document_relative_path = self.document_relative_path;
     }

@@ -1,10 +1,5 @@
 // NSTextInputClient composition forwarding for the hosted Ghostty view.
 
-@interface MuxedGhosttyView (TextInput) <NSTextInputClient>
-@end
-
-@implementation MuxedGhosttyView (TextInput)
-
 static NSString *muxed_ghostty_input_string(id value) {
   return [value isKindOfClass:[NSAttributedString class]]
              ? [(NSAttributedString *)value string]
@@ -31,6 +26,7 @@ static NSString *muxed_ghostty_input_string(id value) {
   (void)replacementRange;
   if (!_acceptsInput || _surface == NULL) return;
 
+  if (_keyTextAccumulator != nil) _keyInputOwned = YES;
   NSString *text = muxed_ghostty_input_string(value);
   [_markedText release];
   _markedText = [[NSMutableAttributedString alloc] initWithString:text];
@@ -42,6 +38,7 @@ static NSString *muxed_ghostty_input_string(id value) {
 }
 
 - (void)unmarkText {
+  if (_keyTextAccumulator != nil) _keyInputOwned = YES;
   [_markedText release];
   _markedText = nil;
   _markedSelectedRange = NSMakeRange(NSNotFound, 0);
@@ -104,6 +101,5 @@ static NSString *muxed_ghostty_input_string(id value) {
 
 - (void)doCommandBySelector:(SEL)selector {
   (void)selector;
+  _keyCommandRequested = YES;
 }
-
-@end

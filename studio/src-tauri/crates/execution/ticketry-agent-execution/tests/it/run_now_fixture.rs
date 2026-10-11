@@ -8,14 +8,11 @@ use std::sync::{
 
 use async_trait::async_trait;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, EntityTrait, PaginatorTrait};
-use ticketry_agent_execution::run_now::{
+use ticketry_agent_execution::{
     RunNowCaller, RunNowLauncher, RunNowRefusal, RunNowRequest, RunNowRun, RunNowService,
 };
 use ticketry_entities::{issue, launch_policy_decision, transition_occurrence};
-use ticketry_work_management::{
-    launch_policy::{LaunchPolicyDecision, LaunchPolicyResolver},
-    open_for_commands,
-};
+use ticketry_work_management::{open_for_commands, LaunchPolicyDecision, LaunchPolicyResolver};
 
 pub(crate) const PROJECT: &str = "20000000000000000000000000000000";
 pub(crate) const STORY: &str = "30000000000000000000000000000000";
@@ -54,7 +51,10 @@ impl RunNowLauncher for RecordingLauncher {
             .unwrap()
             .unwrap();
         assert_eq!(task.state_id.as_deref(), Some(IMPLEMENT));
-        assert_eq!(task.issue_type_id, IMPLEMENTATION, "conversion commits before launch");
+        assert_eq!(
+            task.issue_type_id, IMPLEMENTATION,
+            "conversion commits before launch"
+        );
         let mut settled_runs = self.settled.lock().unwrap();
         if let Some(settled) = settled_runs.get(&decision.decision_id).cloned() {
             return Ok(settled);
@@ -251,7 +251,7 @@ pub(crate) async fn fixture(failure: Option<&str>) -> Fixture {
 
 /// Point the fixture module at one local folder, through the one write seam.
 pub(crate) async fn link_module(database: &DatabaseConnection, folder: &str) {
-    ticketry_work_management::schema::install(database)
+    ticketry_work_management::install_module_links_schema(database)
         .await
         .expect("install the Module Link schema");
     ticketry_work_management::ModuleLinkStore::new(database.clone())

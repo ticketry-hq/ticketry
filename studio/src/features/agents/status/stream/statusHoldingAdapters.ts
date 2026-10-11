@@ -71,6 +71,7 @@ export function toRunRecord(payload: RunHoldingPayload): RunRecord {
     scope: payload.scope as AgentRunScope,
     launch_state: payload.launch_state,
     launch_model: payload.launch_model,
+    stage_skill_availability: payload.stage_skill_availability ?? null,
     provider_session_id: payload.provider_session_id,
     started_at: payload.started_at,
     state: payload.state as RawLifecycleState,

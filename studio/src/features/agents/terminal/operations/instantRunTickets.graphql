@@ -5,6 +5,7 @@ query InstantRunTickets($projectId: String!, $moduleId: String!) {
   ) {
     agent_run_id
     title
+    user_title
     started_at
   }
 }

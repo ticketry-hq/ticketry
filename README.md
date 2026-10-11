@@ -30,12 +30,14 @@ spec/     Application design history
 
 ## Development
 
+Use Bun 1.4.2 for packages and scripts. Node.js 22 remains the runtime for
+Node-based tooling and tests; desktop builds also require Rust.
 Install dependencies, then launch the canonical desktop application:
 
 ```bash
-npm install
-npm run desktop:dev
-# or: pnpm run dev
+bun install
+bun run desktop:dev
+# or: bun run dev
 ```
 
 The launcher rebuilds the Rust application as `Ticketry Dev`, with its own app
@@ -43,18 +45,20 @@ identifier and a per-worktree development profile. It can run beside an
 installed `Ticketry` app without sharing data, tmux sessions, frontend ports,
 or MCP listeners. MCP binds `mcp.sock` inside the owned data directory;
 providers connect through the packaged `ticketry-hook mcp` stdio bridge.
+Development builds never register a global provider server, even when using
+production data.
 Frontend, Rust runtime, and MCP output is written to
 `.ticketry-dev/logs/ticketry.log`.
 Every launch is also a startup measurement: once the desktop and the frontend
 finish booting, the launcher prints their startup times against the median of
 the last ten launches and shouts `STARTUP TIME REGRESSION` when one is more
-than 1.25x slower. `npm run logs:startup` prints the same comparison.
+than 1.25x slower. `bun run logs:startup` prints the same comparison.
 
 To run that development build as the main app against the writable production
 data and product tmux sessions, close the installed app first, then run:
 
 ```bash
-npm run desktop:dev:prod
+bun run desktop:dev:prod
 ```
 
 The production data-directory lock still applies, so a second Ticketry process
@@ -62,12 +66,13 @@ will refuse to start. The command respects `TICKETRY_DATA_DIR` and
 `TICKETRY_DATA_DIR_NAME`, and keeps development diagnostics in
 `.ticketry-dev/logs/ticketry.log` for agent inspection.
 
-The production-data web launcher uses a small Rust GraphQL adapter. It shares
+The web launcher and Vite run on Bun; a small Rust adapter supplies GraphQL.
+The production-data launcher shares
 `~/.config/ticketry/state.db` and the product tmux namespace with the installed
 app:
 
 ```bash
-npm run web
+bun run web
 ```
 
 Both web launchers also start the planner listener against the same in-process
@@ -79,14 +84,14 @@ For browser development with the same per-worktree isolation as
 `desktop:dev`, use:
 
 ```bash
-npm run web:dev
+bun run web:dev
 ```
 
 Add `--log-to-file` to mirror browser console records and Rust story-move
 diagnostics into `.ticketry-dev/logs/ticketry.log`:
 
 ```bash
-npm run web -- --log-to-file
+bun run web -- --log-to-file
 ```
 
 The production web launcher and installed app use the same product database
@@ -126,17 +131,52 @@ same path shown by the startup failure screen. Story moves record drop
 resolution, state transition, rank allocation, GraphQL errors, and the final
 module refresh.
 
+## Global MCP for Claude and Codex
+
+On startup, installed, packaged Ticketry registers a user-level `ticketry`
+stdio server for Claude Code and Codex, using its packaged `ticketry-hook` and
+product data directory. Plain `claude` and `codex` sessions started afterwards
+can access WorkTracker from any folder. Global authority covers all projects:
+agents can read and update work items, manage dependencies, and launch work. Workflow gates and agent-allowed transition permissions still apply;
+`terminate_current_run` and other run-only controls are refused.
+
+Ticketry-launched agents instead use their credentialed, run-scoped `ticketry`
+server, which takes precedence over the global entry and preserves project
+scope and run controls. Registration persists after Ticketry quits; calls
+return `service_unavailable` while the app is offline and CLI sessions keep
+running. Restart Ticketry and reconnect through the CLI's MCP controls (Claude
+`/mcp`) to restore access.
+
+Development builds, the GraphQL development adapter, and any launch with
+`TICKETRY_DATA_DIR`, `TICKETRY_PRODUCT_DATA_DIR`, `MUXED_DATA_DIR`, or
+`TICKETRY_DATA_DIR_NAME` set never register globally. To register by hand, add
+a user-level stdio server named `ticketry` whose command is the absolute path
+to the packaged `ticketry-hook` and whose arguments are:
+
+```text
+mcp --data-dir <absolute-data-directory> --global
+```
+
+The complete bridge invocation is
+`ticketry-hook mcp --data-dir <absolute-data-directory> --global`; it runs the
+server rather than editing provider configuration. Global mode requires no
+authorization secret. Run mode requires `--agent-run-id` and authorization,
+cannot be combined with `--global`, and never falls back to global authority.
+
+See the [global MCP specification](docs/plans/CODING-2533-global-mcp-spec.md)
+for registration ownership, provider configuration paths, and acceptance steps.
+
 ## Validation
 
 For Codex Cloud setup, see [the checked-in installer, start skill, and Linux
 reproduction instructions](scripts/codex-cloud/README.md).
 
 ```bash
-npm run caller:check
-npm run typecheck
-npm run test:overhaul --workspace @worktracker/studio
-npm run test --workspace @worktracker/studio
-npm run build --workspace @worktracker/studio
+bun run caller:check
+bun run typecheck
+bun run --cwd studio test:overhaul
+bun run --cwd studio test
+bun run --cwd studio build
 cargo check --locked --manifest-path studio/src-tauri/Cargo.toml
 ```
 

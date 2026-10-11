@@ -7,10 +7,15 @@ use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statemen
 use tauri_graphql::TransportApiImpl;
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 use ticketry_installation as provisioning;
-use ticketry_work_management::project_onboarding_migration::{
-    install, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT, VERSION,
+use ticketry_work_management::open_for_commands;
+use ticketry_work_management::{acknowledge_onboarding, create_project, CreateProject};
+use ticketry_work_management::{
+    install_project_onboarding_schema as install,
+    PROJECT_ONBOARDING_MIGRATION_LEDGER_TABLE as LEDGER_TABLE,
+    PROJECT_ONBOARDING_MIGRATION_MIGRATION_ID as MIGRATION_ID,
+    PROJECT_ONBOARDING_MIGRATION_SOURCE_COMMIT as SOURCE_COMMIT,
+    PROJECT_ONBOARDING_MIGRATION_VERSION as VERSION,
 };
-use ticketry_work_management::{commands::catalog, open_for_commands};
 
 const WORKSPACE_SHAPED_SCHEMA: &str = "
     CREATE TABLE worktracker_workspace (
@@ -410,7 +415,7 @@ async fn a_repeated_startup_is_a_no_op_over_a_durable_migration_identity() {
 
     // Acknowledging first proves the repeat run reads the ledger instead of
     // re-transferring a Workspace value that no longer exists.
-    catalog::acknowledge_onboarding(&database, INSTALLATION)
+    acknowledge_onboarding(&database, INSTALLATION)
         .await
         .expect("acknowledge the migrated onboarding");
     install(&database).await.expect("repeat the startup");
@@ -538,7 +543,7 @@ async fn a_fresh_installation_starts_up_project_only_and_owns_its_onboarding() {
 
     // Rust and MCP must name that same project.
     assert_eq!(
-        ticketry_work_management::read_queries::installation_project(&database)
+        ticketry_work_management::installation_project(&database)
             .await
             .expect("resolve the installation project")
             .expect("a first launch has an installation project")
@@ -546,9 +551,9 @@ async fn a_fresh_installation_starts_up_project_only_and_owns_its_onboarding() {
         "CDN"
     );
 
-    catalog::create_project(
+    create_project(
         &database,
-        catalog::CreateProject {
+        CreateProject {
             name: "Duplicate".to_owned(),
             slug: "CDN".to_owned(),
             description: None,
@@ -573,7 +578,7 @@ async fn acknowledging_a_first_launch_clears_onboarding_and_survives_a_reload() 
         .expect("open the migrated installation");
     let (project_id, _, _) = projects(&database).await.remove(0);
 
-    catalog::acknowledge_onboarding(&database, &project_id)
+    acknowledge_onboarding(&database, &project_id)
         .await
         .expect("acknowledge the welcome the first launch showed");
     assert_eq!(

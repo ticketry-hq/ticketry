@@ -8,7 +8,7 @@ import test from "node:test";
 // recorder, its lines reach the development log through the harness capture the
 // desktop development run uses, the backend half is appended in the exact shape
 // the Rust file log writes, and the report is built by the reader behind
-// `npm run logs:trace`.
+// `bun run logs:trace`.
 import { createLaunchDiscoveryRecorder } from "../studio/src/features/agents/status/launchDiscoveryTrace.ts";
 import { createDevelopmentLogCapture } from "./dev-log-capture.mjs";
 import { recentLogLines } from "./dev-logs.mjs";

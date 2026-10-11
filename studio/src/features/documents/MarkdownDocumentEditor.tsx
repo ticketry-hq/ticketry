@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, useEffect, useRef } from "react";
 
 import type { DesignDoc } from "./types";
 
@@ -24,6 +24,8 @@ export function MarkdownDocumentEditor({
   onParseError,
   onReload,
   onSave,
+  focusSignal = 0,
+  canFocus,
 }: {
   doc: DesignDoc;
   digest: string;
@@ -44,7 +46,13 @@ export function MarkdownDocumentEditor({
   onParseError: (source: string) => void;
   onReload: () => void;
   onSave: () => void;
+  focusSignal?: number;
+  canFocus?: (target?: HTMLElement | null) => boolean;
 }) {
+  const sourceRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (sourceMode && focusSignal > 0 && (canFocus?.(sourceRef.current) ?? true)) sourceRef.current?.focus();
+  }, [sourceMode, focusSignal, canFocus]);
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-pane-bg">
       <div
@@ -172,6 +180,7 @@ export function MarkdownDocumentEditor({
                 </p>
               ) : null}
               <textarea
+                ref={sourceRef}
                 aria-label="Document source"
                 className="min-h-[60vh] w-full resize-y border border-pane-border bg-pane-panel p-4 font-mono text-sm text-text-primary focus:border-focus-accent focus:outline-none"
                 value={draft}
@@ -187,6 +196,8 @@ export function MarkdownDocumentEditor({
               }
             >
               <RichMarkdownEditor
+                focusSignal={focusSignal}
+                canFocus={canFocus}
                 key={`${doc.id}:${doc.rel_path}:${digest}`}
                 markdown={draft}
                 onChange={onDraftChange}

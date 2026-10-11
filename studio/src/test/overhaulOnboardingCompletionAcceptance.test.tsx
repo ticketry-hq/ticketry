@@ -190,6 +190,7 @@ class DurableOnboardingBoundary {
       rank: "a",
       project_id: PROJECT_ID,
       sequence_id: 1,
+      state_revision: 1,
       is_archived: false,
       issue_type: MODULE_TYPE_ID,
       project: {
@@ -455,11 +456,10 @@ async function reachStoryCoachMark(choice: ProviderChoice): Promise<HTMLElement>
   if (choice === "codex") fireEvent.click(codex);
   fireEvent.click(screen.getByRole("button", { name: "Get started" }));
 
-  const modulesPane = await screen.findByTestId("pane-modules");
-  fireEvent.click(within(modulesPane).getByRole("button", {
-    name: "+ Add Module",
-  }));
-  const dialog = await screen.findByRole("dialog", { name: "Add Module" });
+  fireEvent.click(await screen.findByRole("button", { name: "Open Module Manager" }));
+  const manager = await screen.findByRole("region", { name: "Module Manager" });
+  fireEvent.click(within(manager.querySelector("header")!).getByRole("button", { name: "New module" }));
+  const dialog = await screen.findByRole("form", { name: "Create module" });
   fireEvent.change(within(dialog).getByRole("textbox", { name: "Module name" }), {
     target: { value: "Onboarding module" },
   });

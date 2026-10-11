@@ -60,7 +60,7 @@ The implementation-only gates completed successfully:
   persistence/adoption, transition occurrences, recovery, supervisor, and tmux
   integration);
 * the seven targeted Django ownership/occurrence tests;
-* `npm run test:overhaul --workspace @worktracker/studio` (38 files, 93 tests,
+* `bun run --cwd studio test:overhaul` (38 files, 93 tests,
   including `overhaul-74`);
 * Studio typecheck, production build, and GraphQL generation drift check; and
 * Rust formatting plus `git diff --check`.

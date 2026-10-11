@@ -3,14 +3,10 @@ use std::collections::{HashMap, HashSet};
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Value};
 
-use ticketry_work_management::{
-    commands::attachments,
-    launch_policy, read_queries,
-    read_types::{IssueType, IssueTypeTransition, State, WorkItem},
-};
+use ticketry_work_management::{list_attachments, IssueType, IssueTypeTransition, State, WorkItem};
 
 pub async fn resolve_project(database: &DatabaseConnection, id_or_name: &str) -> Option<String> {
-    read_queries::projects(database)
+    ticketry_work_management::projects(database)
         .await
         .ok()?
         .into_iter()
@@ -23,7 +19,7 @@ pub async fn resolve_project(database: &DatabaseConnection, id_or_name: &str) ->
 }
 
 pub async fn resolve_task(database: &DatabaseConnection, id_or_key: &str) -> Option<WorkItem> {
-    read_queries::work_item(database, id_or_key)
+    ticketry_work_management::work_item(database, id_or_key)
         .await
         .ok()
         .flatten()
@@ -34,7 +30,7 @@ pub async fn resolve_issue_type(
     project_id: &str,
     id_or_name: &str,
 ) -> Option<IssueType> {
-    read_queries::issue_types(database, project_id)
+    ticketry_work_management::issue_types(database, project_id)
         .await
         .ok()?
         .into_iter()
@@ -46,7 +42,7 @@ pub async fn resolve_state(
     project_id: &str,
     name: &str,
 ) -> Option<State> {
-    read_queries::states(database, project_id)
+    ticketry_work_management::states(database, project_id)
         .await
         .ok()?
         .into_iter()
@@ -62,10 +58,11 @@ pub async fn resolve_state(
 /// leading with that one would point MCP at a different project than startup
 /// and onboarding resolved.
 pub async fn list_projects(database: &DatabaseConnection) -> Value {
-    let mut rows = read_queries::projects(database).await.unwrap_or_default();
+    let mut rows = ticketry_work_management::projects(database)
+        .await
+        .unwrap_or_default();
     if let Ok(Some(installation)) =
-        ticketry_work_management::project_onboarding_migration::installation_project_id(database)
-            .await
+        ticketry_work_management::installation_project_id(database).await
     {
         if let Some(position) = rows.iter().position(|row| same_id(&row.id, &installation)) {
             rows[..=position].rotate_right(1);
@@ -86,7 +83,7 @@ pub async fn list_projects(database: &DatabaseConnection) -> Value {
 }
 
 pub async fn list_issue_types(database: &DatabaseConnection, project_id: &str) -> Value {
-    let rows = read_queries::issue_types(database, project_id)
+    let rows = ticketry_work_management::issue_types(database, project_id)
         .await
         .unwrap_or_default();
     Value::Array(rows.iter().map(issue_type_json).collect())
@@ -94,7 +91,7 @@ pub async fn list_issue_types(database: &DatabaseConnection, project_id: &str) -
 
 pub async fn list_modules(database: &DatabaseConnection, project_id: &str) -> Value {
     let kinds = issue_types_by_id(database, project_id).await;
-    let rows = read_queries::modules(database, project_id, false)
+    let rows = ticketry_work_management::modules(database, project_id, false)
         .await
         .unwrap_or_default();
     Value::Array(
@@ -123,9 +120,10 @@ pub async fn list_tasks(
     include_description: bool,
 ) -> Value {
     let kinds = issue_types_by_id(database, project_id).await;
-    let rows = read_queries::work_items(database, Some(project_id), module_id, state_id)
-        .await
-        .unwrap_or_default();
+    let rows =
+        ticketry_work_management::work_items(database, Some(project_id), module_id, state_id)
+            .await
+            .unwrap_or_default();
     Value::Array(
         rows.into_iter()
             .filter_map(|row| task_json(&row, &kinds, include_description))
@@ -139,14 +137,15 @@ pub async fn task_details(database: &DatabaseConnection, task: &WorkItem) -> Val
         Some(Value::Object(object)) => object,
         _ => return Value::Null,
     };
-    let children = read_queries::work_items(database, Some(&task.project_id), None, None)
-        .await
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|row| row.parent_id.as_deref() == Some(&task.id))
-        .filter_map(|row| task_json(&row, &kinds, false))
-        .collect();
-    let attachments = attachments::list(database, &task.id)
+    let children =
+        ticketry_work_management::work_items(database, Some(&task.project_id), None, None)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|row| row.parent_id.as_deref() == Some(&task.id))
+            .filter_map(|row| task_json(&row, &kinds, false))
+            .collect();
+    let attachments = list_attachments(database, &task.id)
         .await
         .unwrap_or_default()
         .into_iter()
@@ -173,23 +172,24 @@ pub async fn task_details(database: &DatabaseConnection, task: &WorkItem) -> Val
 /// this the ledger is invisible: the item moves into an auto-start state and
 /// then nothing observable happens.
 async fn launch_policy_rejections(database: &DatabaseConnection, work_item_id: &str) -> Value {
-    let rows = launch_policy::rejections_for_work_item(database, work_item_id)
+    let rows = ticketry_work_management::rejections_for_work_item(database, work_item_id)
         .await
         .unwrap_or_default();
     serde_json::to_value(rows).unwrap_or(Value::Array(Vec::new()))
 }
 
 pub async fn scope_context(database: &DatabaseConnection, task: &WorkItem) -> Value {
-    let all = read_queries::work_items(database, Some(&task.project_id), None, None)
+    let all = ticketry_work_management::work_items(database, Some(&task.project_id), None, None)
         .await
         .unwrap_or_default();
     let by_id: HashMap<&str, &WorkItem> = all.iter().map(|item| (item.id.as_str(), item)).collect();
-    let states: HashMap<String, State> = read_queries::states(database, &task.project_id)
-        .await
-        .unwrap_or_default()
-        .into_iter()
-        .map(|state| (state.id.clone(), state))
-        .collect();
+    let states: HashMap<String, State> =
+        ticketry_work_management::states(database, &task.project_id)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(|state| (state.id.clone(), state))
+            .collect();
     let as_ref = |item: &WorkItem| {
         let state = item.state.as_ref().and_then(|id| states.get(id));
         json!({
@@ -233,27 +233,29 @@ pub async fn scope_context(database: &DatabaseConnection, task: &WorkItem) -> Va
 }
 
 pub async fn workflow_settings(database: &DatabaseConnection, type_id: &str) -> Value {
-    let Some(kind) = read_queries::issue_type(database, type_id)
+    let Some(kind) = ticketry_work_management::issue_type(database, type_id)
         .await
         .ok()
         .flatten()
     else {
         return json!({"ok": false, "code": "not_found", "detail": "Work-item type not found."});
     };
-    let transitions = read_queries::transitions(database, type_id)
+    let transitions = ticketry_work_management::transitions(database, type_id)
         .await
         .unwrap_or_default();
-    let states = read_queries::states(database, &kind.project)
+    let states = ticketry_work_management::states(database, &kind.project)
         .await
         .unwrap_or_default();
-    let bindings = read_queries::launch_bindings(database, &kind.project)
+    let bindings = ticketry_work_management::launch_bindings(database, &kind.project)
         .await
         .unwrap_or_default();
-    let providers = read_queries::providers(database).await.unwrap_or_default();
-    let models = read_queries::agent_models(database)
+    let providers = ticketry_work_management::providers(database)
         .await
         .unwrap_or_default();
-    let reasoning = read_queries::reasoning_levels(database)
+    let models = ticketry_work_management::agent_models(database)
+        .await
+        .unwrap_or_default();
+    let reasoning = ticketry_work_management::reasoning_levels(database)
         .await
         .unwrap_or_default();
     let model_map: HashMap<_, _> = models.iter().map(|row| (row.id.as_str(), row)).collect();
@@ -340,7 +342,7 @@ async fn issue_types_by_id(
     database: &DatabaseConnection,
     project_id: &str,
 ) -> HashMap<String, IssueType> {
-    read_queries::issue_types(database, project_id)
+    ticketry_work_management::issue_types(database, project_id)
         .await
         .unwrap_or_default()
         .into_iter()

@@ -12,9 +12,9 @@ use serde::Serialize;
 use super::live_facts::LiveFacts;
 use super::owner::WorktreeOwner;
 
-pub const KIND_NONE: &str = "none";
-pub const KIND_NO_REPO: &str = "no_repo";
-pub const KIND_WORKTREE: &str = "worktree";
+pub(crate) const KIND_NONE: &str = "none";
+pub(crate) const KIND_NO_REPO: &str = "no_repo";
+pub(crate) const KIND_WORKTREE: &str = "worktree";
 
 #[derive(Clone, Debug, PartialEq, Serialize, CustomOutputType)]
 pub struct WorktreeStatusView {

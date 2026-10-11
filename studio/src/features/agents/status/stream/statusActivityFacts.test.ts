@@ -52,6 +52,7 @@ describe("durable terminal activity facts", () => {
         scope: "task",
         launch_state: "Implement",
         launch_model: "gpt-5.6",
+        stage_skill_availability: null,
         started_at: "2026-08-15T12:00:00.000Z",
         state: "working",
         effective_state: "working",
@@ -61,6 +62,21 @@ describe("durable terminal activity facts", () => {
         last_output_at: "2026-08-15T12:01:00.000Z",
         attention_reason: null,
       },
+    });
+  });
+
+  it("carries published stage-skill availability with the activity fact", () => {
+    const availability = '{"status":"checked","skills":[]}';
+    const fact = readStatusFact({
+      ...activity,
+      payload: {
+        ...activity.payload,
+        run: { ...activity.payload.run, stage_skill_availability: availability },
+      },
+    });
+    expect(fact).toMatchObject({
+      family: "agent_run_activity",
+      run: { stage_skill_availability: availability, output_sequence: 2 },
     });
   });
 

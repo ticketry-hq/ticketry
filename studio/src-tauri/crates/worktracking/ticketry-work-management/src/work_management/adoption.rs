@@ -418,6 +418,8 @@ async fn effective_owned_tables(
         table_exists(database, super::workflow_handoff_migration::LEDGER_TABLE).await?;
     let tags_installed = table_exists(database, super::tag_migration::LEDGER_TABLE).await?;
     let sprints_installed = table_exists(database, super::sprint_migration::LEDGER_TABLE).await?;
+    let sprint_rank_installed =
+        table_exists(database, super::sprint_rank_migration::LEDGER_TABLE).await?;
     let mut tables = owned_tables(generation)
         .into_iter()
         .map(|(table, columns)| {
@@ -457,7 +459,11 @@ async fn effective_owned_tables(
             super::ownership_manifest::SPRINT_GOAL,
             super::ownership_manifest::SPRINT_SUGGESTION,
         ] {
-            tables.push((table, columns.to_vec()));
+            let mut columns = columns.to_vec();
+            if table == super::ownership_manifest::SPRINT.0 && sprint_rank_installed {
+                columns.push("rank");
+            }
+            tables.push((table, columns));
         }
     }
     Ok(tables)

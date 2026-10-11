@@ -10,6 +10,11 @@ mod atomic_exchange;
 mod claude;
 mod codex;
 
+pub(crate) use codex::{
+    config_file as codex_config_file, read_document as read_codex_document,
+    write_configuration as write_codex_configuration, DirectoryLock as CodexDirectoryLock,
+};
+
 #[derive(Clone, Copy, Debug)]
 pub struct DirectoryTrustContext<'a> {
     pub directory: &'a Path,

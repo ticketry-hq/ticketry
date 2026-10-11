@@ -110,6 +110,7 @@ export interface WorkItem {
   readonly state: string | null;
   readonly description: string;
   readonly parent_id: string | null;
+  readonly sprint_id: string | null;
   readonly sub_issues_count: number;
   /** Any direct child, including archived and completed ones. */
   readonly has_children: boolean;
@@ -147,6 +148,7 @@ export interface WorkItemDetail {
 }
 
 export interface WorkItemCreate {
+  sprint_id?: string | null;
   name: string;
   description?: string | null;
   issue_type_id?: string | null;

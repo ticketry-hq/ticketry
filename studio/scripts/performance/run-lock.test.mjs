@@ -101,7 +101,7 @@ test("a changed source fingerprint makes the prepared bundle stale", () => {
   });
   assert.equal(assessment.current, false);
   assert.ok(assessment.reasons.some((reason) => reason.includes("fingerprint changed")));
-  assert.match(stalePreparationMessage(assessment.reasons), /npm run perf:prepare/);
+  assert.match(stalePreparationMessage(assessment.reasons), /bun run --cwd studio perf:prepare/);
 });
 
 test("an adapter rebuilt after preparation makes the run stale", () => {

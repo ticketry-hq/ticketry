@@ -18,12 +18,9 @@ use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_documents::DocumentFactRecorder;
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 use ticketry_runs::RunsServices;
-use ticketry_workspace_runtime::document_save::{
-    staging_file_name, DocumentSaveService, STAGING_PREFIX,
-};
-use ticketry_workspace_runtime::workspace_operations::{
-    schema as journal_schema, WorkspaceOperationIntent, WorkspaceOperationJournal,
-    WorkspaceOperationKind,
+use ticketry_workspace_runtime::{
+    install_workspace_operations, staging_file_name, DocumentSaveService, WorkspaceOperationIntent,
+    WorkspaceOperationJournal, WorkspaceOperationKind, STAGING_PREFIX,
 };
 
 const PROJECT: &str = "11111111111111111111111111111111";
@@ -159,7 +156,7 @@ async fn fixture() -> Fixture {
         ))
         .await
         .expect("create the save fixture schema");
-    journal_schema::install(&database)
+    install_workspace_operations(&database)
         .await
         .expect("install the Workspace Operation journal");
     Fixture {

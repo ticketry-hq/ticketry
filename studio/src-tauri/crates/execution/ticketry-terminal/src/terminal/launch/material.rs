@@ -19,6 +19,7 @@ const MATERIAL_VERSION: i32 = 1;
 pub(super) struct PreparedMaterial {
     request: CreateTerminalSession,
     launch_state: Option<String>,
+    stage_skill_availability: Option<String>,
     pub(super) effect_id: String,
     pub(super) agent_run_id: String,
 }
@@ -29,10 +30,15 @@ pub(super) struct CombinedPreparation<'a> {
 }
 
 impl PreparedMaterial {
-    pub(super) fn new(request: &CreateTerminalSession, launch_state: Option<String>) -> Self {
+    pub(super) fn new(
+        request: &CreateTerminalSession,
+        launch_state: Option<String>,
+        stage_skill_availability: Option<String>,
+    ) -> Self {
         Self {
             request: request.clone(),
             launch_state,
+            stage_skill_availability,
             effect_id: request.effect_id(),
             agent_run_id: request.agent_run_id(),
         }
@@ -54,6 +60,7 @@ impl PreparedMaterial {
                 policy_reference: self.request.policy_reference.clone(),
             },
             snapshot: RunSnapshot {
+                stage_skill_availability: self.stage_skill_availability.clone(),
                 model: self.request.model.clone(),
                 reasoning: self.request.reasoning.clone(),
                 initial_prompt: self.request.prompt.clone(),

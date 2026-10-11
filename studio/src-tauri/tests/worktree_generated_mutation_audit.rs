@@ -14,9 +14,8 @@ use seaography::{
 use std::sync::LazyLock;
 use ticketry_entities::worktree;
 use ticketry_graphql_schema::generated_schema_sdl;
-use ticketry_workspace_runtime::persistence::column_policy;
-use ticketry_workspace_runtime::persistence::ownership_manifest::{
-    GENERATED_MUTATION_GAPS, PROTECTED_COLUMNS,
+use ticketry_workspace_runtime::{
+    apply_worktree_column_policy, GENERATED_MUTATION_GAPS, PROTECTED_COLUMNS,
 };
 
 /// The unprotected context: what Seaography installs with no Ticketry policy.
@@ -25,7 +24,7 @@ static AUDIT_CONTEXT: LazyLock<BuilderContext> = LazyLock::new(BuilderContext::d
 /// The shipping column policy, applied to an otherwise default context.
 static PROTECTED_CONTEXT: LazyLock<BuilderContext> = LazyLock::new(|| {
     let mut context = BuilderContext::default();
-    column_policy::apply(&mut context);
+    apply_worktree_column_policy(&mut context);
     context
 });
 

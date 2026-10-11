@@ -1,3 +1,4 @@
+import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../../../shared/navigation/bodyEngagement";
 import type { TreeRow } from "../../shell/ticket-workspace/tasks/TasksPane";
 import { isEngageableZone, useClientStore } from "../../../state/clientStore";
 import { useTerminalPanelStore } from "../../../features/terminal-panel/panelStore";
@@ -12,16 +13,10 @@ import {
   moveTaskSelection,
 } from "../navigationContext";
 
-export const EDIT_VIEW_BODY_DISENGAGE_CHORD = {
-  key: "Escape",
-  alt: false,
-  control: false,
-  meta: true,
-  shift: false,
-} as const;
+export { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../../../shared/navigation/bodyEngagement";
 
 /**
- * Routes the modal, three-zone keyboard model used while the sidebar is hidden.
+ * Routes the workspace navigation zones.
  */
 export function routeThreeZoneNavigation(
   event: KeyboardEvent,

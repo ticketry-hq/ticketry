@@ -1,7 +1,7 @@
 use super::*;
 
 use sha2::{Digest, Sha256};
-use ticketry_workspace_runtime::workspace_operations::{
+use ticketry_workspace_runtime::{
     WorkspaceOperationIntent, WorkspaceOperationJournal, WorkspaceOperationKind,
 };
 

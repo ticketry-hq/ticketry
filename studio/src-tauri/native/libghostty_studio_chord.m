@@ -1,5 +1,16 @@
 // Exact Studio chord recognition for a focused native Ghostty view.
 
+// Changed only on AppKit's main thread; the keymap remains the action owner.
+static NSString *kMuxedManagerKey = @"m";
+static uint64_t kMuxedManagerModifiers = NSEventModifierFlagCommand | NSEventModifierFlagShift;
+
+void muxed_ghostty_set_module_manager_shortcut(const char *key, uint64_t modifier_flags) {
+  NSString *next = [[NSString stringWithUTF8String:key] lowercaseString];
+  [kMuxedManagerKey release];
+  kMuxedManagerKey = [next copy];
+  kMuxedManagerModifiers = modifier_flags;
+}
+
 static const uint16_t kMuxedEscapeKeyCode = 0x35;
 static const uint16_t kMuxedGraveKeyCode = 0x32;
 static const uint16_t kMuxedEKeyCode = 0x0E;
@@ -47,4 +58,37 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags,
     }
   }
   return MUXED_GHOSTTY_CHORD_NONE;
+}
+
+static NSString *muxed_ghostty_logical_key(NSEvent *event) {
+  NSString *characters = event.charactersIgnoringModifiers.lowercaseString;
+  if (characters.length != 1) return characters;
+  unichar key = [characters characterAtIndex:0];
+  if (key >= NSF1FunctionKey && key <= NSF35FunctionKey)
+    return [NSString stringWithFormat:@"f%d", key - NSF1FunctionKey + 1];
+  switch ([characters characterAtIndex:0]) {
+    case NSUpArrowFunctionKey: return @"arrowup";
+    case NSDownArrowFunctionKey: return @"arrowdown";
+    case NSLeftArrowFunctionKey: return @"arrowleft";
+    case NSRightArrowFunctionKey: return @"arrowright";
+    case NSHomeFunctionKey: return @"home";
+    case NSEndFunctionKey: return @"end";
+    case NSPageUpFunctionKey: return @"pageup";
+    case NSPageDownFunctionKey: return @"pagedown";
+    case NSDeleteFunctionKey: return @"delete";
+    case 0x7F: return @"backspace";
+    case 0x1B: return @"escape";
+    case 0x09: return @"tab";
+    case 0x0D: return @"enter";
+    default: return characters;
+  }
+}
+
+uint8_t muxed_ghostty_event_studio_chord(NSEvent *event) {
+  uint64_t modifiers = event.modifierFlags & (NSEventModifierFlagControl |
+    NSEventModifierFlagCommand | NSEventModifierFlagOption | NSEventModifierFlagShift);
+  if (modifiers == kMuxedManagerModifiers &&
+      [muxed_ghostty_logical_key(event) isEqualToString:kMuxedManagerKey])
+    return MUXED_GHOSTTY_CHORD_MODULE_MANAGER;
+  return muxed_ghostty_studio_chord(event.modifierFlags, event.keyCode);
 }

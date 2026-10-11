@@ -1,8 +1,9 @@
-import { leavePlanWorkspace, setPlanVisit, usePlanWorkspace } from "../planWorkspaceState";
+import { leavePlanWorkspace, selectPlanWorkspaceActive, setPlanVisit, usePlanWorkspace } from "../planWorkspaceState";
 import { stepEpicTab } from "./epicTabs";
 
 export function routePlanKeyboardNavigation(event: KeyboardEvent): void {
   const workspace = usePlanWorkspace.getState();
+  if (!selectPlanWorkspaceActive(workspace)) return;
   if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey &&
     (event.code === "BracketRight" || event.code === "BracketLeft")) {
     const visit = workspace.sprintId ? workspace.visits[workspace.sprintId] : null;

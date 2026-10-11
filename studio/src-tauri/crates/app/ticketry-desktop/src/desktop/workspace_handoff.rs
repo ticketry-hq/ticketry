@@ -1,7 +1,7 @@
 //! The one-way Slice 4 Documents and Worktrees handoff.
 //!
 //! Adoption already happened: the write lease moved inside
-//! [`ticketry_workspace_runtime::handoff::adopt`], before the schema was composed and while
+//! [`ticketry_workspace_runtime::adopt_workspace`], before the schema was composed and while
 //! the sidecar was still stopped. What remains is proving that the runtime built
 //! on top of it can actually serve — and saying so once, in one record, so no
 //! surface has to guess.
@@ -21,12 +21,14 @@ use tauri_graphql::TransportApi;
 
 use crate::desktop::document_protocol;
 use ticketry_graphql_schema::ComposedCommandRuntime;
-use ticketry_workspace_runtime::handoff::{self, manifest, Slice4Readiness, WorkspaceHandoffError};
+use ticketry_workspace_runtime::{
+    publish_readiness, validate_schema, Slice4Readiness, WorkspaceHandoffError,
+};
 
 /// Publish the closed gate. Called at startup, at every backend launch, and at
 /// shutdown, so a stale `ready: true` record can never outlive its runtime.
 pub fn close_gate(data_directory: &Path) -> Result<(), WorkspaceHandoffError> {
-    handoff::publish_readiness(data_directory, &Slice4Readiness::unavailable())
+    publish_readiness(data_directory, &Slice4Readiness::unavailable())
 }
 
 /// Open the gate once the composed runtime proves every part of the capability.
@@ -39,7 +41,7 @@ pub async fn open_gate<R: tauri::Runtime>(
     application: &tauri::AppHandle<R>,
 ) -> Result<(), String> {
     let readiness = evaluate(runtime, api, application).await?;
-    handoff::publish_readiness(data_directory, &readiness)
+    publish_readiness(data_directory, &readiness)
         .map_err(|error| format!("could not publish Slice 4 readiness: {error}"))
 }
 
@@ -57,21 +59,20 @@ async fn evaluate<R: tauri::Runtime>(
     let mut readiness = Slice4Readiness::unavailable();
 
     readiness.documents_ownership = ticketry_documents::documents_adopted(database).await;
-    readiness.worktree_ownership =
-        ticketry_workspace_runtime::persistence::worktrees_adopted(database).await;
+    readiness.worktree_ownership = ticketry_workspace_runtime::worktrees_adopted(database).await;
     // The journal has never had a Django writer, so its ownership is simply
     // whether the installed shape is the one this build authored. Without it no
     // filesystem or Git effect has a recovery record at all.
     readiness.operation_journal_ownership =
-        ticketry_workspace_runtime::workspace_operations::schema::verify(database)
+        ticketry_workspace_runtime::verify_workspace_operations(database)
             .await
             .is_ok();
-    readiness.ownership_validated = manifest::validate_schema(database).await.is_ok();
+    readiness.ownership_validated = validate_schema(database).await.is_ok();
     readiness.status_outbox = documents.publishes_durable_facts();
     readiness.operation_reconciliation = runtime.workspace_reconciled();
     // An authorized root is now resolved from the module's typed link, so what
     // this asks is whether the link schema this build authored is installed.
-    readiness.authorized_roots = ticketry_work_management::schema::verify(database)
+    readiness.authorized_roots = ticketry_work_management::verify_module_links_schema(database)
         .await
         .is_ok();
     readiness.graphql_workspace = verify_workspace_surface(api).await?;

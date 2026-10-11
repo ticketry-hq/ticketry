@@ -27,6 +27,7 @@ pub enum StudioChord {
     ZoomOut,
     ZoomReset,
     CloseTab,
+    ModuleManager,
 }
 
 impl StudioChord {
@@ -43,6 +44,7 @@ impl StudioChord {
             15 => Some(Self::ZoomOut),
             16 => Some(Self::ZoomReset),
             17 => Some(Self::CloseTab),
+            18 => Some(Self::ModuleManager),
             _ => None,
         }
     }
@@ -68,6 +70,7 @@ impl StudioChord {
             Self::ZoomOut => "zoom-out",
             Self::ZoomReset => "zoom-reset",
             Self::CloseTab => "close-tab",
+            Self::ModuleManager => "module-manager",
         }
     }
 }
@@ -157,7 +160,11 @@ mod tests {
         assert_eq!(StudioChord::from_native(15), Some(StudioChord::ZoomOut));
         assert_eq!(StudioChord::from_native(16), Some(StudioChord::ZoomReset));
         assert_eq!(StudioChord::from_native(17), Some(StudioChord::CloseTab));
-        assert_eq!(StudioChord::from_native(18), None);
+        assert_eq!(
+            StudioChord::from_native(18),
+            Some(StudioChord::ModuleManager)
+        );
+        assert_eq!(StudioChord::from_native(19), None);
     }
 
     #[test]

@@ -1,6 +1,10 @@
 use sea_orm::{ConnectionTrait, Database, EntityTrait, PaginatorTrait};
 use ticketry_entities::{issue_type, launch_binding};
-use ticketry_work_management::{commands::workflow, open_for_commands, read_queries};
+use ticketry_work_management::launch_bindings;
+use ticketry_work_management::open_for_commands;
+use ticketry_work_management::{
+    delete_launch_binding, patch_launch_binding, PatchLaunchBinding, PatchValue, RevisionedState,
+};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const FOREIGN_PROJECT: &str = "10000000000000000000000000000001";
@@ -117,19 +121,19 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
     (directory, database)
 }
 
-fn patch(state_id: &str) -> workflow::PatchLaunchBinding {
-    workflow::PatchLaunchBinding {
+fn patch(state_id: &str) -> PatchLaunchBinding {
+    PatchLaunchBinding {
         issue_type_id: STORY.to_owned(),
         state_id: state_id.to_owned(),
         workflow_revision: 1,
-        prompt: workflow::PatchValue::Value("Implement it.".to_owned()),
-        required_skills: workflow::PatchValue::Value(vec!["tdd".to_owned()]),
-        stage_skills: workflow::PatchValue::Value(vec!["tdd".to_owned()]),
-        profile: workflow::PatchValue::Unset,
-        model_id: workflow::PatchValue::Value(GPT.to_owned()),
-        reasoning_id: workflow::PatchValue::Value(HIGH.to_owned()),
-        auto_start: workflow::PatchValue::Value(true),
-        subtree_run_enabled: workflow::PatchValue::Value(true),
+        prompt: PatchValue::Value("Implement it.".to_owned()),
+        required_skills: PatchValue::Value(vec!["tdd".to_owned()]),
+        stage_skills: PatchValue::Value(vec!["tdd".to_owned()]),
+        profile: PatchValue::Unset,
+        model_id: PatchValue::Value(GPT.to_owned()),
+        reasoning_id: PatchValue::Value(HIGH.to_owned()),
+        auto_start: PatchValue::Value(true),
+        subtree_run_enabled: PatchValue::Value(true),
     }
 }
 
@@ -155,12 +159,8 @@ async fn assert_no_effect(database: &sea_orm::DatabaseConnection) {
 #[tokio::test]
 async fn binding_create_normalizes_and_round_trips_the_complete_policy() {
     let (_directory, database) = fixture().await;
-    let id = workflow::patch_launch_binding(&database, patch(BUILD))
-        .await
-        .unwrap();
-    let rows = read_queries::launch_bindings(&database, PROJECT)
-        .await
-        .unwrap();
+    let id = patch_launch_binding(&database, patch(BUILD)).await.unwrap();
+    let rows = launch_bindings(&database, PROJECT).await.unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].id, id);
     assert_eq!(rows[0].required_skills.0, ["tdd"]);
@@ -186,13 +186,8 @@ async fn binding_create_normalizes_and_round_trips_the_complete_policy() {
 
     let mut update = patch(BUILD);
     update.workflow_revision = 2;
-    update.prompt = workflow::PatchValue::Value("Implement the revised policy.".to_owned());
-    assert_eq!(
-        workflow::patch_launch_binding(&database, update)
-            .await
-            .unwrap(),
-        id
-    );
+    update.prompt = PatchValue::Value("Implement the revised policy.".to_owned());
+    assert_eq!(patch_launch_binding(&database, update).await.unwrap(), id);
     assert_eq!(
         launch_binding::Entity::find()
             .count(&database)
@@ -224,12 +219,10 @@ async fn binding_create_normalizes_and_round_trips_the_complete_policy() {
 async fn binding_profile_round_trips_and_rejects_model_combinations() {
     let (_directory, database) = fixture().await;
     let mut input = patch(BUILD);
-    input.profile = workflow::PatchValue::Value("careful".to_owned());
-    input.model_id = workflow::PatchValue::Null;
-    input.reasoning_id = workflow::PatchValue::Null;
-    let id = workflow::patch_launch_binding(&database, input)
-        .await
-        .unwrap();
+    input.profile = PatchValue::Value("careful".to_owned());
+    input.model_id = PatchValue::Null;
+    input.reasoning_id = PatchValue::Null;
+    let id = patch_launch_binding(&database, input).await.unwrap();
     assert_eq!(
         launch_binding::Entity::find_by_id(id)
             .one(&database)
@@ -243,18 +236,16 @@ async fn binding_profile_round_trips_and_rejects_model_combinations() {
 
     let mut invalid = patch(REVIEW);
     invalid.workflow_revision = 2;
-    invalid.profile = workflow::PatchValue::Value("fast".to_owned());
-    let error = workflow::patch_launch_binding(&database, invalid)
-        .await
-        .unwrap_err();
+    invalid.profile = PatchValue::Value("fast".to_owned());
+    let error = patch_launch_binding(&database, invalid).await.unwrap_err();
     assert_eq!(error.code(), "profile_conflicts_with_model");
 
     let mut unregistered = patch(REVIEW);
     unregistered.workflow_revision = 2;
-    unregistered.profile = workflow::PatchValue::Value("missing".to_owned());
-    unregistered.model_id = workflow::PatchValue::Null;
-    unregistered.reasoning_id = workflow::PatchValue::Null;
-    let error = workflow::patch_launch_binding(&database, unregistered)
+    unregistered.profile = PatchValue::Value("missing".to_owned());
+    unregistered.model_id = PatchValue::Null;
+    unregistered.reasoning_id = PatchValue::Null;
+    let error = patch_launch_binding(&database, unregistered)
         .await
         .unwrap_err();
     assert_eq!(error.code(), "profile_not_registered");
@@ -264,12 +255,10 @@ async fn binding_profile_round_trips_and_rejects_model_combinations() {
 async fn binding_profile_is_trimmed_and_blank_clears_it() {
     let (_directory, database) = fixture().await;
     let mut padded = patch(BUILD);
-    padded.profile = workflow::PatchValue::Value("  careful  ".to_owned());
-    padded.model_id = workflow::PatchValue::Null;
-    padded.reasoning_id = workflow::PatchValue::Null;
-    let id = workflow::patch_launch_binding(&database, padded)
-        .await
-        .unwrap();
+    padded.profile = PatchValue::Value("  careful  ".to_owned());
+    padded.model_id = PatchValue::Null;
+    padded.reasoning_id = PatchValue::Null;
+    let id = patch_launch_binding(&database, padded).await.unwrap();
     assert_eq!(
         launch_binding::Entity::find_by_id(id)
             .one(&database)
@@ -283,12 +272,10 @@ async fn binding_profile_is_trimmed_and_blank_clears_it() {
 
     let mut blank = patch(BUILD);
     blank.workflow_revision = 2;
-    blank.profile = workflow::PatchValue::Value("  ".to_owned());
-    blank.model_id = workflow::PatchValue::Null;
-    blank.reasoning_id = workflow::PatchValue::Null;
-    workflow::patch_launch_binding(&database, blank)
-        .await
-        .unwrap();
+    blank.profile = PatchValue::Value("  ".to_owned());
+    blank.model_id = PatchValue::Null;
+    blank.reasoning_id = PatchValue::Null;
+    patch_launch_binding(&database, blank).await.unwrap();
     assert_eq!(
         launch_binding::Entity::find_by_id(id)
             .one(&database)
@@ -313,10 +300,10 @@ async fn profile_only_automation_is_validated_against_codex() {
         .await
         .unwrap();
     let mut input = patch(BUILD);
-    input.profile = workflow::PatchValue::Value("careful".to_owned());
-    input.model_id = workflow::PatchValue::Null;
-    input.reasoning_id = workflow::PatchValue::Null;
-    workflow::patch_launch_binding(&database, input)
+    input.profile = PatchValue::Value("careful".to_owned());
+    input.model_id = PatchValue::Null;
+    input.reasoning_id = PatchValue::Null;
+    patch_launch_binding(&database, input)
         .await
         .expect("a profile-only binding launches as Codex");
 
@@ -326,10 +313,10 @@ async fn profile_only_automation_is_validated_against_codex() {
         .await
         .unwrap();
     let mut deactivated = patch(BUILD);
-    deactivated.profile = workflow::PatchValue::Value("careful".to_owned());
-    deactivated.model_id = workflow::PatchValue::Null;
-    deactivated.reasoning_id = workflow::PatchValue::Null;
-    let error = workflow::patch_launch_binding(&database, deactivated)
+    deactivated.profile = PatchValue::Value("careful".to_owned());
+    deactivated.model_id = PatchValue::Null;
+    deactivated.reasoning_id = PatchValue::Null;
+    let error = patch_launch_binding(&database, deactivated)
         .await
         .unwrap_err();
     assert_eq!(error.code(), "provider_not_activated");
@@ -346,7 +333,7 @@ async fn automation_capability_comes_from_the_provider_contract() {
         .await
         .unwrap();
 
-    workflow::patch_launch_binding(&database, patch(BUILD))
+    patch_launch_binding(&database, patch(BUILD))
         .await
         .expect("the registered Codex adapter supports unattended launches");
 }
@@ -354,25 +341,18 @@ async fn automation_capability_comes_from_the_provider_contract() {
 #[tokio::test]
 async fn binding_clears_stage_skills_without_clearing_required_skills() {
     let (_directory, database) = fixture().await;
-    let id = workflow::patch_launch_binding(&database, patch(BUILD))
-        .await
-        .unwrap();
+    let id = patch_launch_binding(&database, patch(BUILD)).await.unwrap();
     let mut clear = patch(BUILD);
     clear.workflow_revision = 2;
-    clear.prompt = workflow::PatchValue::Unset;
-    clear.required_skills = workflow::PatchValue::Unset;
-    clear.stage_skills = workflow::PatchValue::Null;
-    clear.model_id = workflow::PatchValue::Unset;
-    clear.reasoning_id = workflow::PatchValue::Unset;
-    clear.auto_start = workflow::PatchValue::Unset;
-    clear.subtree_run_enabled = workflow::PatchValue::Unset;
+    clear.prompt = PatchValue::Unset;
+    clear.required_skills = PatchValue::Unset;
+    clear.stage_skills = PatchValue::Null;
+    clear.model_id = PatchValue::Unset;
+    clear.reasoning_id = PatchValue::Unset;
+    clear.auto_start = PatchValue::Unset;
+    clear.subtree_run_enabled = PatchValue::Unset;
 
-    assert_eq!(
-        workflow::patch_launch_binding(&database, clear)
-            .await
-            .unwrap(),
-        id
-    );
+    assert_eq!(patch_launch_binding(&database, clear).await.unwrap(), id);
     let row = launch_binding::Entity::find_by_id(id)
         .one(&database)
         .await
@@ -386,17 +366,15 @@ async fn binding_clears_stage_skills_without_clearing_required_skills() {
 async fn stage_skills_normalize_round_trip_and_remain_separate_from_required_skills() {
     let (_directory, database) = fixture().await;
     let mut input = patch(BUILD);
-    input.required_skills = workflow::PatchValue::Value(vec!["tdd".to_owned()]);
-    input.stage_skills = workflow::PatchValue::Value(vec![
+    input.required_skills = PatchValue::Value(vec!["tdd".to_owned()]);
+    input.stage_skills = PatchValue::Value(vec![
         "  future-skill  ".to_owned(),
         "".to_owned(),
         "Future-Skill".to_owned(),
         "future-skill".to_owned(),
     ]);
 
-    let id = workflow::patch_launch_binding(&database, input)
-        .await
-        .unwrap();
+    let id = patch_launch_binding(&database, input).await.unwrap();
     let row = launch_binding::Entity::find_by_id(id)
         .one(&database)
         .await
@@ -408,9 +386,7 @@ async fn stage_skills_normalize_round_trip_and_remain_separate_from_required_ski
     );
     assert_eq!(row.required_skills, serde_json::json!(["tdd"]));
 
-    let projected = read_queries::launch_bindings(&database, PROJECT)
-        .await
-        .unwrap();
+    let projected = launch_bindings(&database, PROJECT).await.unwrap();
     assert_eq!(
         projected[0].stage_skills.0,
         ["future-skill", "Future-Skill"]
@@ -421,18 +397,14 @@ async fn stage_skills_normalize_round_trip_and_remain_separate_from_required_ski
 async fn stage_skill_patch_preserves_omission_and_clears_null() {
     let (_directory, database) = fixture().await;
     let mut create = patch(BUILD);
-    create.stage_skills = workflow::PatchValue::Value(vec!["one".to_owned(), "two".to_owned()]);
-    let id = workflow::patch_launch_binding(&database, create)
-        .await
-        .unwrap();
+    create.stage_skills = PatchValue::Value(vec!["one".to_owned(), "two".to_owned()]);
+    let id = patch_launch_binding(&database, create).await.unwrap();
 
     let mut preserve = patch(BUILD);
     preserve.workflow_revision = 2;
-    preserve.stage_skills = workflow::PatchValue::Unset;
-    preserve.prompt = workflow::PatchValue::Value("Changed.".to_owned());
-    workflow::patch_launch_binding(&database, preserve)
-        .await
-        .unwrap();
+    preserve.stage_skills = PatchValue::Unset;
+    preserve.prompt = PatchValue::Value("Changed.".to_owned());
+    patch_launch_binding(&database, preserve).await.unwrap();
     assert_eq!(
         launch_binding::Entity::find_by_id(id)
             .one(&database)
@@ -445,10 +417,8 @@ async fn stage_skill_patch_preserves_omission_and_clears_null() {
 
     let mut clear = patch(BUILD);
     clear.workflow_revision = 3;
-    clear.stage_skills = workflow::PatchValue::Null;
-    workflow::patch_launch_binding(&database, clear)
-        .await
-        .unwrap();
+    clear.stage_skills = PatchValue::Null;
+    patch_launch_binding(&database, clear).await.unwrap();
     let row = launch_binding::Entity::find_by_id(id)
         .one(&database)
         .await
@@ -466,21 +436,21 @@ async fn invalid_candidates_reject_without_a_row_or_revision_change() {
             0 => candidate.state_id = FOREIGN_STATE.to_owned(),
             1 => {
                 candidate.model_id =
-                    workflow::PatchValue::Value("ffffffffffffffffffffffffffffffff".to_owned())
+                    PatchValue::Value("ffffffffffffffffffffffffffffffff".to_owned())
             }
-            2 => candidate.model_id = workflow::PatchValue::Value(DISABLED_MODEL.to_owned()),
-            3 => candidate.reasoning_id = workflow::PatchValue::Value(LOW.to_owned()),
-            4 => candidate.model_id = workflow::PatchValue::Null,
-            5 => candidate.required_skills = workflow::PatchValue::Value(vec!["future".to_owned()]),
+            2 => candidate.model_id = PatchValue::Value(DISABLED_MODEL.to_owned()),
+            3 => candidate.reasoning_id = PatchValue::Value(LOW.to_owned()),
+            4 => candidate.model_id = PatchValue::Null,
+            5 => candidate.required_skills = PatchValue::Value(vec!["future".to_owned()]),
             6 => {
                 candidate.required_skills =
-                    workflow::PatchValue::Value(vec!["tdd".to_owned(), "tdd".to_owned()])
+                    PatchValue::Value(vec!["tdd".to_owned(), "tdd".to_owned()])
             }
-            7 => candidate.prompt = workflow::PatchValue::Value(String::new()),
-            8 => candidate.model_id = workflow::PatchValue::Value(INTERACTIVE_MODEL.to_owned()),
+            7 => candidate.prompt = PatchValue::Value(String::new()),
+            8 => candidate.model_id = PatchValue::Value(INTERACTIVE_MODEL.to_owned()),
             _ => unreachable!(),
         }
-        workflow::patch_launch_binding(&database, candidate)
+        patch_launch_binding(&database, candidate)
             .await
             .expect_err("invalid launch policy must be rejected");
         assert_no_effect(&database).await;
@@ -492,9 +462,7 @@ async fn concurrent_updates_have_one_revision_winner() {
     let (_directory, database) = fixture().await;
     let writes = [BUILD, REVIEW].map(|state_id| {
         let database = database.clone();
-        tokio::spawn(
-            async move { workflow::patch_launch_binding(&database, patch(state_id)).await },
-        )
+        tokio::spawn(async move { patch_launch_binding(&database, patch(state_id)).await })
     });
     let [first, second] = writes;
     let (first, second) = tokio::join!(first, second);
@@ -521,9 +489,7 @@ async fn concurrent_updates_have_one_revision_winner() {
 #[tokio::test]
 async fn clear_survives_restart_and_atomically_advances_revision() {
     let (directory, database) = fixture().await;
-    workflow::patch_launch_binding(&database, patch(BUILD))
-        .await
-        .unwrap();
+    patch_launch_binding(&database, patch(BUILD)).await.unwrap();
     database.close().await.unwrap();
     let reopened = open_for_commands(&directory.path().join("state.db"))
         .await
@@ -535,9 +501,9 @@ async fn clear_survives_restart_and_atomically_advances_revision() {
             .unwrap(),
         1
     );
-    workflow::delete_launch_binding(
+    delete_launch_binding(
         &reopened,
-        workflow::RevisionedState {
+        RevisionedState {
             issue_type_id: STORY.to_owned(),
             state_id: BUILD.to_owned(),
             workflow_revision: 2,

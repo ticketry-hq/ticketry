@@ -70,6 +70,15 @@ export function useResumableTerminalSessions(
   projectId: string | null,
   moduleId: string | null,
 ): ResumableTerminalSession[] {
+  return useResumableTerminalSessionRead(taskId, projectId, moduleId).sessions;
+}
+
+/** Query readiness belongs to Apollo; errors cannot establish a missing run. */
+export function useResumableTerminalSessionRead(
+  taskId: string | null,
+  projectId: string | null,
+  moduleId: string | null,
+) {
   const taskQuery = useQuery(
     TaskResumableTerminalSessionsDocument,
     {
@@ -86,9 +95,11 @@ export function useResumableTerminalSessions(
       skip: Boolean(taskId) || !projectId || !moduleId,
     },
   );
-  const data = taskQuery.data?.resumable_sessions
-    ?? scratchQuery.data?.resumable_sessions;
-  return data
-    ? adaptResumableTerminalSessions(data)
-    : EMPTY_RESUMABLE_SESSIONS;
+  const query = taskId ? taskQuery : scratchQuery;
+  const enabled = Boolean(taskId || (projectId && moduleId));
+  const data = enabled ? query.data?.resumable_sessions : undefined;
+  return {
+    sessions: data ? adaptResumableTerminalSessions(data) : EMPTY_RESUMABLE_SESSIONS,
+    isResolved: enabled && !query.loading && !query.error && data !== undefined,
+  };
 }

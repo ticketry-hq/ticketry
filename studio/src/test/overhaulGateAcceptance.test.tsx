@@ -22,6 +22,10 @@ function markedFiles(): string[] {
   ];
 }
 
+// Keep the integrated allocation contiguous: missing or unexpected cases fail.
+const acceptanceIds = Array.from({ length: 831 }, (_, index) =>
+  String(index + 1).padStart(2, "0"));
+
 describe("overhaul acceptance gate", () => {
   it("keeps one executable acceptance case for each formerly manual behavior", () => {
     const counts = new Map<string, number>();
@@ -36,11 +40,14 @@ describe("overhaul acceptance gate", () => {
 
     expect(Object.fromEntries(counts)).toEqual(
       Object.fromEntries(
-        Array.from({ length: 465 }, (_, index) => [
-          String(index + 1).padStart(2, "0"),
-          1,
-        ]),
+        acceptanceIds.map((id) => [id, 1]),
       ),
     );
+  });
+
+  it("documents each allocated executable case once in the acceptance matrix", () => {
+    const matrix = readFileSync(join(process.cwd(), "docs", "overhaul-acceptance.md"), "utf8");
+    const ids = [...matrix.matchAll(/^\| (\d{2,}) \|/gm)].map((match) => match[1]);
+    expect(ids).toEqual(acceptanceIds);
   });
 });

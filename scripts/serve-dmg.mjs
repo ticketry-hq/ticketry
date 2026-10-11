@@ -10,7 +10,7 @@ const repositoryRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const defaultReleaseDirectory = join(repositoryRoot, "studio", "release-output");
 
 function usage() {
-  return `Usage: npm run serve:dmg -- [path/to/file.dmg] [--host ADDRESS] [--port PORT]
+  return `Usage: bun run serve:dmg -- [path/to/file.dmg] [--host ADDRESS] [--port PORT]
 
 Serves exactly one DMG over the local network. If no path is supplied, the
 newest DMG under studio/release-output is selected automatically.

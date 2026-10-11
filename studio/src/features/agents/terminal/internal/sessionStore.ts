@@ -12,6 +12,7 @@ import {
 import { useClientStore as useWorkspaceTabsStore } from "../../../../state/clientStore";
 import { readVersionedItem } from "../../../../shared/storage/versioned";
 import { readAgentRun } from "../../status/apolloHolding";
+import { isWorkItemShellRun } from "../../status/runScopes";
 import type { RunRecord } from "../../status";
 import { rekeyTerminalFocus } from "./terminalRegistry";
 import { isTerminalProvider } from "../presentation/providerPresentation";
@@ -173,6 +174,8 @@ export interface SessionMeta {
   // finished creating tmux. Keep the selected tab visible, but do not attach
   // a viewer until that command acknowledges the runtime is ready.
   viewerAttachmentDeferred?: boolean;
+  /** The original tab id retained by the existing temporary-to-server rekey. */
+  initialSessionId?: string;
 }
 
 export interface OpenSessionArgs {
@@ -183,6 +186,7 @@ export interface OpenSessionArgs {
   initialPrompt?: string | null;
   isPlanning?: boolean;
   isInstant?: boolean;
+  isShell?: boolean;
   agentRunId?: string | null;
   select?: boolean;
   viewerAttachmentDeferred?: boolean;
@@ -296,6 +300,7 @@ export const useTerminalStore = createApolloStore<TerminalStoreState>("terminal-
       transport: "connecting",
       isPlanning: args.isPlanning ?? false,
       isInstant: args.isInstant ?? false,
+      ...(args.isShell ? { isShell: true } : {}),
       initialPrompt: args.initialPrompt ?? null,
       agentRunId: args.agentRunId ?? null,
       viewerAttachmentDeferred: args.viewerAttachmentDeferred,
@@ -346,6 +351,7 @@ export const useTerminalStore = createApolloStore<TerminalStoreState>("terminal-
       const updated: SessionMeta = {
         ...existing,
         sessionId,
+        initialSessionId: existing.initialSessionId ?? tempId,
         status: "ready",
         transport: "ready",
         agentRunId: agentRunId ?? existing.agentRunId,
@@ -646,9 +652,10 @@ export const useTerminalStore = createApolloStore<TerminalStoreState>("terminal-
         removeDismissedRun(taskId, run.agent_run_id);
         continue;
       }
-      // A run with no provider is not an agent run. It has its own surface and
-      // must never be restored as an agent terminal tab (#665).
-      if (!isTerminalProvider(run.agent)) continue;
+      // A run with no provider is not an agent run. A module shell has its own
+      // surface and must never be restored as a workspace tab (#665); only a
+      // Work Item's own shell belongs beside that Work Item's agent terminals.
+      if (!isTerminalProvider(run.agent) && !isWorkItemShellRun(run)) continue;
       if (attached.has(run.agent_run_id)) continue;
       if (dismissed.has(run.agent_run_id)) continue;
       if (hasUnboundSpawn && !sessionByRun[run.agent_run_id]) continue;
@@ -663,10 +670,12 @@ export const useTerminalStore = createApolloStore<TerminalStoreState>("terminal-
     if (!run) {
       throw new Error(`run projection missing for terminal ${agentRunId}`);
     }
-    if (!isTerminalProvider(run.agent)) {
+    const workItemShell = isWorkItemShellRun(run);
+    if (!isTerminalProvider(run.agent) && !workItemShell) {
       // Refused rather than papered over with a substitute provider: an agent
       // terminal tab is labelled, spawned and resumed by its provider, so a run
-      // that has none cannot be represented as one (#665).
+      // that has none cannot be represented as one (#665). A Work Item shell
+      // is the one agentless run a workspace tab views, as a shell.
       throw new Error(`run ${agentRunId} has no agent to attach`);
     }
     const { sessions } = get();
@@ -687,12 +696,13 @@ export const useTerminalStore = createApolloStore<TerminalStoreState>("terminal-
     }
     // Scratch rows carry the backend sentinel task id; fold them back into the
     // local scratch bucket (taskId null) and restore their plan/instant label.
-    const isScratch = run.scope !== "task";
+    const isScratch = run.scope !== "task" && !workItemShell;
     return get().openSession({
       taskId: isScratch ? null : run.task_id,
       projectId: run.project_id ?? "",
       moduleId: run.module_id,
-      agent: run.agent,
+      agent: isTerminalProvider(run.agent) ? run.agent : null,
+      isShell: workItemShell,
       agentRunId,
       isPlanning: run.scope === "plan",
       isInstant: run.scope === "instant",

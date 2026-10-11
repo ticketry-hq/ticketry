@@ -3,6 +3,18 @@ use std::{env, fs, path::PathBuf};
 const GHOSTTY_REVISION: &str = "332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28";
 
 fn main() {
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        let microphone_permission = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap())
+            .join("native/microphone_permission.m");
+        println!("cargo:rerun-if-changed={}", microphone_permission.display());
+        cc::Build::new()
+            .file(microphone_permission)
+            .flag("-fobjc-arc")
+            .flag("-fblocks")
+            .compile("ticketry_microphone_permission");
+        println!("cargo:rustc-link-lib=framework=AVFoundation");
+    }
+
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_NATIVE_LIBGHOSTTY");
     if env::var_os("CARGO_FEATURE_NATIVE_LIBGHOSTTY").is_none()
         || env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos")
@@ -15,7 +27,7 @@ fn main() {
     let vendor = root.join("vendor/libghostty");
     let revision = fs::read_to_string(vendor.join("REVISION")).unwrap_or_else(|_| {
         panic!(
-            "native-libghostty requires `npm run libghostty:prepare` from {}",
+            "native-libghostty requires `bun run libghostty:prepare` from {}",
             root.parent().unwrap().display()
         )
     });
@@ -62,6 +74,8 @@ fn main() {
         "libghostty_surface_owner.m",
         "libghostty_runtime.m",
         "libghostty_key_event.m",
+        "libghostty_key_input.m",
+        "libghostty_text_input.m",
         "libghostty_studio_chord.m",
         "libghostty_webview_composition.m",
         "libghostty_view.m",

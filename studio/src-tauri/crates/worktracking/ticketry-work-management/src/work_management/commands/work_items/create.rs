@@ -168,6 +168,15 @@ pub(crate) async fn create_in(
         },
     )
     .await?;
+    if let Some(sprint_id) = input.sprint_id {
+        super::super::sprints::assign_work_item_sprint(
+            transaction,
+            &id,
+            super::super::workflow::PatchValue::Value(sprint_id),
+            facts,
+        )
+        .await?;
+    }
     Ok(id)
 }
 

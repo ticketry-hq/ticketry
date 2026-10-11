@@ -14,14 +14,14 @@ use super::git::GitPort;
 
 /// One entry of the repository's worktree registry.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RegisteredCheckout {
+pub(crate) struct RegisteredCheckout {
     pub path: String,
     pub branch: Option<String>,
 }
 
 /// Every checkout Git currently tracks for this repository, with the branch
 /// each one holds.
-pub async fn checkouts(
+pub(crate) async fn checkouts(
     git: &GitPort,
     repository: &Path,
 ) -> Result<Vec<RegisteredCheckout>, WorktreeStatusError> {
@@ -56,7 +56,7 @@ pub async fn checkouts(
 }
 
 /// Whether a local branch exists in this repository.
-pub async fn branch_exists(
+pub(crate) async fn branch_exists(
     git: &GitPort,
     repository: &Path,
     branch: &str,
@@ -77,7 +77,7 @@ pub async fn branch_exists(
 /// A checkout that has been deleted out of band still has to be recognised —
 /// that is exactly the case where Git holds a stale administrative record for
 /// it — so resolution falls back to the deepest ancestor that does exist.
-pub fn same_path(registered: &str, checkout: &Path) -> bool {
+pub(crate) fn same_path(registered: &str, checkout: &Path) -> bool {
     let registered = Path::new(registered);
     registered == checkout || resolved(registered) == resolved(checkout)
 }

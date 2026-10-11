@@ -8,16 +8,14 @@ use super::{
 };
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
-use ticketry_agent_execution::graph::GraphAccess;
-use ticketry_agent_execution::run_now::{RunNowCaller, RunNowRequest, RunNowService};
+use ticketry_agent_execution::GraphAccess;
 use ticketry_agent_execution::{
     GraphRunRequest, GraphRunResult, GraphRunService, GraphRunServiceError,
 };
+use ticketry_agent_execution::{RunNowCaller, RunNowRequest, RunNowService};
 use ticketry_terminal::{TerminalCleanupService, TerminalLaunchService};
-use ticketry_work_management::commands::CommandError;
-use ticketry_work_management::launch_policy::{
-    self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
-};
+use ticketry_work_management::CommandError;
+use ticketry_work_management::{CallerScope, LaunchPolicyRequest, LaunchPolicyResolver};
 
 pub(super) async fn dispatch(
     database: &DatabaseConnection,
@@ -107,15 +105,13 @@ pub(super) async fn dispatch(
                 })
                 .await
             {
-                Ok(decision) => {
-                    launch_policy::record(database, &decision)
-                        .await
-                        .map_err(|error| CommandError::Rejected {
-                            message: error.to_string(),
-                            code: error.code(),
-                            field: None,
-                        })?
-                }
+                Ok(decision) => ticketry_work_management::record(database, &decision)
+                    .await
+                    .map_err(|error| CommandError::Rejected {
+                        message: error.to_string(),
+                        code: error.code(),
+                        field: None,
+                    })?,
                 Err(error) => {
                     return Ok(DispatchOutput::direct(json!({
                         "target_id": task.id,

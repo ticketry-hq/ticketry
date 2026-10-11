@@ -1,4 +1,7 @@
-//! Hand-authored SeaORM mappings for tables owned and migrated by Django.
+//! SeaORM WorkTracker mappings; sprint is generated from its Rust migrations.
+
+mod sprint_behavior;
+pub(crate) mod sprint_status;
 
 pub mod agent_model;
 pub mod agent_model_reasoning_level;

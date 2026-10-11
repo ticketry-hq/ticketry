@@ -6,7 +6,7 @@
  * blocks the renderer, which long tasks fire, every in-app probe point
  * (`recordSelectionProfilePoint`), and every GraphQL round-trip with its
  * queue and server time. The report lands in the test attachments and on
- * stdout. Run with `npx playwright test e2e/arrow-hold-profile.spec.ts`.
+ * stdout. Run with `bunx playwright test e2e/arrow-hold-profile.spec.ts`.
  */
 import { expect, test, type Page, type Request } from "@playwright/test";
 import {

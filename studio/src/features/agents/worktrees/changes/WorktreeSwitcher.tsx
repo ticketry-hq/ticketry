@@ -41,7 +41,12 @@ export function WorktreeSwitcher({ moduleId, selectedTaskId, onOpenModule, onOpe
   const taskRows = rows.filter((row) => row.taskId !== null);
   const rowIds = rows.map((row) => rowId(row.taskId)).join("\u0000");
   useEffect(() => {
-    const frame = requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
+    const frame = requestAnimationFrame(() => {
+      // Roving selects Changes before focusing its tab. Keep that focus owner;
+      // explicit Enter/Space entry is handled by the Changes workspace tab.
+      if (document.activeElement?.matches('[data-workspace-tablist] [role="tab"]')) return;
+      triggerRef.current?.focus({ preventScroll: true });
+    });
     return () => cancelAnimationFrame(frame);
   }, [selectedTaskId]);
   const close = (restore = true) => {

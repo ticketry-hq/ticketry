@@ -57,7 +57,7 @@ const terminalReads = vi.hoisted(() => {
 });
 
 vi.mock(
-  "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
+  "../features/task-workspace/terminals/SelectedTicketTerminal",
   () => ({
     SelectedTicketTerminal: ({ bucket, active, focusSignal }: { bucket: string; active: boolean; focusSignal: number }) => {
       const input = useRef<HTMLTextAreaElement>(null);

@@ -39,7 +39,7 @@ test("arm64 acceptance builds use the shipping renderer feature selection", () =
   const configIndex = build.args.indexOf("--config");
   const config = JSON.parse(build.args[configIndex + 1]);
 
-  assert.equal(build.command, "npm");
+  assert.equal(build.command, "bun");
   assert.deepEqual(build.args.slice(0, configIndex), [
     "run",
     "tauri",
@@ -257,7 +257,7 @@ test("wrong-key signing uses the injected command runner and a separate archive"
   });
 
   assert.deepEqual(commands, [{
-    command: "npm",
+    command: "bun",
     args: [
       "run",
       "tauri",

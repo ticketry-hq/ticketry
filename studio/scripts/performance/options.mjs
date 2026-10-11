@@ -188,7 +188,7 @@ function validateRunOptions(options) {
 }
 
 export function runUsage() {
-  return "usage: npm run perf:run --workspace @worktracker/studio -- "
+  return "usage: bun run --cwd studio perf:run "
     + `[--engine ${ENGINES.join("|")}] [--scenario ${Object.keys(SCENARIOS).join("|")}] `
     + `[--dataset ${DATASETS.join("|")}] [--capture ${CAPTURES.join("|")}] `
     + "[--repetitions N] [--adapter-profile debug|release] [--run-id ID] "
@@ -206,8 +206,8 @@ export function parsePerformancePrepareOptions(argv = []) {
       index += 1;
     } else {
       throw new Error(
-        `Unsupported option ${flag}. usage: npm run perf:prepare `
-        + "--workspace @worktracker/studio -- [--adapter-profile debug|release]",
+        `Unsupported option ${flag}. usage: bun run --cwd studio perf:prepare `
+        + "[--adapter-profile debug|release]",
       );
     }
   }
@@ -241,7 +241,7 @@ export function parsePerformanceCompareOptions(argv = []) {
 }
 
 export function compareUsage() {
-  return "usage: npm run perf:compare --workspace @worktracker/studio -- "
+  return "usage: bun run --cwd studio perf:compare "
     + "--baseline <run-dir> --candidate <run-dir> [--informational]";
 }
 
@@ -283,6 +283,6 @@ export function parsePerformanceDesktopOptions(argv = []) {
 }
 
 export function desktopUsage() {
-  return "usage: npm run perf:desktop --workspace @worktracker/studio -- "
+  return "usage: bun run --cwd studio perf:desktop "
     + `[--scenario ${DESKTOP_SCENARIOS.join("|")}] [--run-id ID] [--skip-build]`;
 }

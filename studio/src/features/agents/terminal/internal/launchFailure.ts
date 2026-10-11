@@ -63,7 +63,10 @@ function requiredSkillFailure(body: unknown): RequiredSkillFailure | null {
 
 function errorDetailFrom(body: unknown): { code: string | null; message: string | null } {
   if (!body || typeof body !== "object") return { code: null, message: null };
-  const bodyCode = (body as { code?: unknown }).code;
+  // `unknown` is the GraphQL foundation's "no domain code" fallback; the
+  // refusal's own message (carried as `detail`) is the readable reason.
+  const rawCode = (body as { code?: unknown }).code;
+  const bodyCode = rawCode === "unknown" ? null : rawCode;
   const detail = (body as { detail?: unknown }).detail;
   if (!detail || typeof detail !== "object") {
     return {

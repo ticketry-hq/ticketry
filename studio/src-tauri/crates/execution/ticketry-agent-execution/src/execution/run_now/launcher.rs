@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
 
 use ticketry_terminal::TerminalLaunchService;
-use ticketry_work_management::launch_policy::LaunchPolicyDecision;
+use ticketry_work_management::LaunchPolicyDecision;
 
 use super::RunNowRun;
 

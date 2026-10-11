@@ -6,7 +6,6 @@ use seaography::CustomOutputType;
 use serde::Serialize;
 
 use crate::worktree::status;
-use ticketry_entities::ship_record;
 use ticketry_entities::worktree;
 
 use super::{
@@ -169,9 +168,9 @@ impl WorktreeChangesService {
         updated.update(self.status().work_items()).await?;
 
         if let Some(module_id) = row.module_id.as_deref() {
-            let _ = ship_record::append(
+            let _ = ticketry_entities::append_ship_receipt(
                 self.status().work_items(),
-                ship_record::AppendReceipt {
+                ticketry_entities::AppendReceipt {
                     module_id: module_id.to_owned(),
                     task_id: Some(owner.top_level_row_id().to_owned()),
                     checkout_kind: "task_worktree".to_owned(),

@@ -1,6 +1,6 @@
 use std::{path::Path, sync::Arc, time::Duration};
 
-use ticketry_agent_execution::reconciliation::{
+use ticketry_agent_execution::{
     ExecutionReconciliationConfig, ExecutionReconciliationRuntime, ExecutionReconciliationService,
 };
 use ticketry_graphql_schema::ComposedCommandRuntime;
@@ -46,9 +46,7 @@ impl RecoveryRuntimes {
         let execution = match ExecutionReconciliationRuntime::start(
             ExecutionReconciliationService::new(
                 database.clone(),
-                ticketry_work_management::launch_policy::LaunchPolicyResolver::new(
-                    database.clone(),
-                ),
+                ticketry_work_management::LaunchPolicyResolver::new(database.clone()),
                 TerminalLaunchService::new(
                     database.clone(),
                     Arc::new(composed.terminal_runtime().clone()),
@@ -99,7 +97,7 @@ async fn stop_terminal(terminal: &TerminalLifecycleRuntime) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ticketry_agent_execution::{graph::GraphAccess, GraphRunRequest, GraphRunService};
+    use ticketry_agent_execution::{GraphAccess, GraphRunRequest, GraphRunService};
 
     #[tokio::test]
     async fn browser_recovery_opens_graph_run_mutations_and_closes_them_on_shutdown() {
@@ -124,7 +122,7 @@ mod tests {
         let database = adopted.runtime.commands().clone();
         let service = GraphRunService::production(
             database.clone(),
-            ticketry_work_management::launch_policy::LaunchPolicyResolver::new(database.clone()),
+            ticketry_work_management::LaunchPolicyResolver::new(database.clone()),
             TerminalLaunchService::new(
                 database,
                 Arc::new(adopted.runtime.terminal_runtime().clone()),

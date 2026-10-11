@@ -82,18 +82,9 @@ test.describe("project lifecycle", () => {
     }
   });
 
-  /**
-   * `delete_project` is currently broken for every project, including an empty
-   * one: it clears the project's issues and then deletes the project row, but
-   * the provisioned catalogue still references it, so the write is refused with
-   * `worktracker_storage_failed`. The assertions below are what deletion should
-   * do. When the cascade is fixed this test starts passing, Playwright reports
-   * the stale `fail` annotation, and the annotation should then be removed.
-   */
   test("deletes a project and cascades its whole aggregate", async ({
     request,
   }) => {
-    test.fail();
     const project = await createProject(request, {
       name: "E2E Cascade",
       slug: "eld",

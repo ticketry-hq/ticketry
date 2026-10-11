@@ -104,19 +104,19 @@ Automated implementation gate completed 2026-08-12:
   worktracker/tests/test_write_ownership.py -q` — 245 passed.
 * Focused packaged sidecar startup/readiness and secret-preserving restart tests
   — 2 passed.
-* `npm run contract:check` — OpenAPI, TypeScript/Python SDK, and wire contract
+* `bun run contract:check` — OpenAPI, TypeScript/Python SDK, and wire contract
   artifacts are current after regeneration.
-* `npm run graphql:drift --workspace @worktracker/studio` — generated GraphQL
+* `bun run --cwd studio graphql:drift` — generated GraphQL
   schema and operations are deterministic and drift-free.
-* `npm run typecheck --workspace @worktracker/studio` — passed.
-* `npm run test:overhaul --workspace @worktracker/studio` — full numbered gate
+* `bun run --cwd studio typecheck` — passed.
+* `bun run --cwd studio test:overhaul` — full numbered gate
   passed (43 files, 100 tests).
-* `npm run build --workspace @worktracker/studio` — passed.
-* `npm run release:build --workspace @worktracker/studio -- --allow-unsigned`
+* `bun run --cwd studio build` — passed.
+* `bun run --cwd studio release:build --allow-unsigned`
   — corrected full app and DMG build passed, including architecture, embedded
   sidecar/hook, native resource, signing-integrity, and staging checks.
-* `npm run release:test --workspace @worktracker/studio` — 53 passed.
-* `npm run release:acceptance --workspace @worktracker/studio` — real isolated
+* `bun run --cwd studio release:test` — 53 passed.
+* `bun run --cwd studio release:acceptance` — real isolated
   installed-artifact clean-install, upgrade, restart/recovery, durable terminal,
   skill, diagnostic, and uninstall-preservation gate passed.
 * `git diff --check` — passed.

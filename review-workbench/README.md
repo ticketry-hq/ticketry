@@ -8,7 +8,7 @@ graphs.
 Run:
 
 ```bash
-npm run dev
+bun run dev
 ```
 
 Open `http://127.0.0.1:4174`.

@@ -8,7 +8,7 @@ use std::path::Path;
 use std::process::Command;
 
 /// Run one Git command in a fixture, failing the test if Git refuses.
-pub fn git(arguments: &[&str], working_directory: &Path) -> String {
+pub(crate) fn git(arguments: &[&str], working_directory: &Path) -> String {
     let output = Command::new("git")
         .arg("-C")
         .arg(working_directory)
@@ -28,7 +28,7 @@ pub fn git(arguments: &[&str], working_directory: &Path) -> String {
 }
 
 /// A repository on `main` with one commit. Returns its committed HEAD.
-pub fn repository(root: &Path) -> String {
+pub(crate) fn repository(root: &Path) -> String {
     std::fs::create_dir_all(root).expect("create the repository directory");
     git(&["init", "-b", "main"], root);
     git(&["config", "user.email", "test@ticketry.invalid"], root);

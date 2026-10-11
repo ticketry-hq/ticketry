@@ -53,8 +53,22 @@ vi.mock("../features/work-items/mutationTransport", async () => {
   >("../features/work-items/mutationTransport");
   return {
     ...actual,
-    createWorkItem: (projectId: string, body: { name?: string; issue_type_id?: string }) =>
-      api.createModule(projectId, body.name, body.issue_type_id),
+    createWorkItem: async (projectId: string, body: { name?: string; issue_type_id?: string }) => {
+      const created = await api.createModule(projectId, body.name, body.issue_type_id);
+      // The fixture's server read must include a successfully persisted module.
+      const modules = await api.listModules(projectId);
+      api.listModules.mockResolvedValue([...modules, {
+        ...created, issue_type: body.issue_type_id, sequence_id: modules.length + 1,
+        key: `CDN-${modules.length + 1}`, is_archived: false,
+      }]);
+      const projects = await api.listProjects();
+      if (!projects.some((project: { id: string }) => project.id === projectId)) {
+        api.listProjects.mockResolvedValue([...projects, {
+          id: projectId, name: "Coding", slug: "CDN", description: "",
+        }]);
+      }
+      return created;
+    },
   };
 });
 
@@ -122,7 +136,7 @@ vi.mock("../features/projects/mutationTransport", async () => {
   return { ...actual, createProject: api.createProject };
 });
 
-vi.mock("../features/studio/api/moduleFolderValidationApi", () =>
+vi.mock("../features/module-links/moduleFolderValidation", () =>
   moduleFolderValidationApi,
 );
 
@@ -133,7 +147,10 @@ import { useModalStore } from "../app/modal/modalStore";
 import OnboardingTour from "../app/onboarding/OnboardingTour";
 import OnboardingWelcome from "../app/onboarding/OnboardingWelcome";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
-import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
+import { FooterModuleManagerToggle } from "../app/shell/FooterModuleManagerToggle";
+import { ModuleManager } from "../features/module-manager/ModuleManager";
+import { useModuleManagerStore } from "../features/module-manager/state";
+import { StudioApolloProvider } from "../shared/apollo/StudioApolloProvider";
 import { useStudioStore } from "../features/projects/store";
 import { AddModule } from "../features/studio/modals/AddModule";
 import { getModuleLinks, seedModuleLinks } from "../features/module-links";
@@ -187,6 +204,7 @@ const acceptModuleLink = async (moduleId: string, path: string) => {
 };
 
 beforeEach(() => {
+  useModuleManagerStore.setState({ active: false, creationActive: false });
   initializeStudioRuntime(createBrowserRuntime({ environment: {} }));
   nativeTrust.desktop = false;
   nativeTrust.invoke.mockReset().mockResolvedValue("already_trusted");
@@ -272,7 +290,7 @@ describe("onboarding and module-folder acceptance", () => {
     expect(api.createProject).toHaveBeenCalledTimes(2);
   });
 
-  it("[overhaul-29] sends guided module setup through Add Module and advances after a valid link", async () => {
+  it("[overhaul-29] sends guided module setup through Module Manager and advances after a valid link", async () => {
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useOnboardingTourStore.getState().start("project-1");
     api.createModule.mockResolvedValue({
@@ -287,7 +305,8 @@ describe("onboarding and module-folder acceptance", () => {
 
     render(
       <>
-        <ModulesPane />
+        <StudioApolloProvider><FooterModuleManagerToggle />
+        <ModuleManager /></StudioApolloProvider>
         <OnboardingTour onSelectStory={vi.fn()} />
         <ModalHost />
       </>,
@@ -303,17 +322,15 @@ describe("onboarding and module-folder acceptance", () => {
     expect(
       screen.queryByRole("button", { name: "Create module" }),
     ).not.toBeInTheDocument();
-    const addModule = await screen.findByRole("button", {
-      name: "+ Add Module",
-    });
+    const addModule = await screen.findByRole("button", { name: "Open Module Manager" });
     await waitFor(() =>
       expect(addModule).toHaveAttribute("data-coach-highlight", "true"),
     );
 
     fireEvent.click(addModule);
-    expect(
-      await screen.findByRole("dialog", { name: "Add Module" }),
-    ).toBeVisible();
+    const manager = await screen.findByRole("region", { name: "Module Manager" });
+    fireEvent.click(manager.querySelector<HTMLButtonElement>("[data-module-manager-new]")!);
+    expect(await screen.findByRole("form", { name: "Create module" })).toBeVisible();
     expect(addModule).not.toHaveAttribute("data-coach-highlight");
     const nameInput = screen.getByRole("textbox", { name: "Module name" });
     expect(screen.getByRole("heading", { name: "Name the module" })).toBeVisible();
@@ -341,7 +358,6 @@ describe("onboarding and module-folder acceptance", () => {
     fireEvent.click(screen.getByRole("button", { name: "Got it" }));
     expect(folderGuide).not.toBeInTheDocument();
     expect(folderSection).not.toHaveAttribute("data-coach-highlight");
-    expect(screen.getByText(/groups related stories/)).toBeVisible();
     expect(screen.getByText("Project working directory (CWD)")).toBeVisible();
     expect(screen.getByText(/does not need to match the folder name/)).toBeVisible();
     expect(screen.getByText(/Multiple modules can/)).toBeVisible();

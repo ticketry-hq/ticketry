@@ -30,6 +30,7 @@ struct HoldingRow {
     launch_state: Option<String>,
     launch_model: Option<String>,
     attention_reason: Option<String>,
+    stage_skill_availability: Option<String>,
     output_sequence: i64,
     last_output_at: Option<String>,
 }
@@ -216,8 +217,11 @@ fn project(
             launch_state: row.launch_state,
             launch_model: row.launch_model,
             attention_reason: row.attention_reason,
+            stage_skill_availability: row.stage_skill_availability,
             output_sequence: row.output_sequence,
-            last_output_at: row.last_output_at,
+            // Published normalized: the stored baseline may be a zone-less SQLite
+            // `datetime`, and clients re-derive the stall deadline from it.
+            last_output_at: output.map(timestamp::format),
         },
         ended_at: row.ended_at,
     })
@@ -254,6 +258,7 @@ fn holding_row(
         launch_state: run.launch_state,
         launch_model: run.launch_model,
         attention_reason: run.attention_reason,
+        stage_skill_availability: run.stage_skill_availability,
         output_sequence: terminal.map(|row| row.output_sequence).unwrap_or(0),
         last_output_at: terminal.and_then(|row| row.last_output_at.clone()),
     }

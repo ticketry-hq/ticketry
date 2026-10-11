@@ -21,6 +21,7 @@ vi.mock("../features/work-items/queries/readTransport", async () => ({
   readModuleTreeRecords: vi.fn(),
 }));
 
+import { setStorySprintFilterIntent } from "../features/work-items";
 import { ModuleFolderRequired } from "../features/terminal-panel/ModuleFolderRequired";
 import { DialogHost } from "../app/shell/DialogHost";
 import { useDialogStore } from "../app/shell/dialogStore";
@@ -95,7 +96,7 @@ describe("module-folder selection acceptance", () => {
         type: "module-folder",
         payload: {
           moduleId: "module-new",
-          resumeModuleSelection: true,
+          onSaved: expect.any(Function),
         },
       },
     ]);
@@ -234,4 +235,21 @@ describe("module-folder selection acceptance", () => {
     expect(getModuleFolder("module-current")).toBe("/repos/replacement");
   });
 
+});
+
+it("[overhaul-495] rejects stale module restoration after changing away from and back to the same sprint", async () => {
+  useStudioStore.setState({ selectedProjectId: "project-1" });
+  seedModuleLinks([{ id: "guarded-link", moduleId: "guarded-module", path: "/repos/guarded" }]);
+  useClientStore.setState({ selectedModuleId: "module-current", selectedTaskId: "current-story" });
+  let release!: (tree: { rootIds: string[]; children: {}; order: string[]; states: []; workItems: [] }) => void;
+  getTasks.mockReset().mockImplementation(() => new Promise((resolve) => { release = resolve; }));
+  setStorySprintFilterIntent("project-1", { mode: "id", sprintId: "sprint-a" });
+  const attempt = useClientStore.getState().selectModule("guarded-module");
+  await waitFor(() => expect(getTasks).toHaveBeenCalled());
+  setStorySprintFilterIntent("project-1", { mode: "id", sprintId: "sprint-b" });
+  setStorySprintFilterIntent("project-1", { mode: "id", sprintId: "sprint-a" });
+  useClientStore.setState({ selectedTaskId: "newer-story" });
+  release({ rootIds: [], children: {}, order: [], states: [], workItems: [] });
+  await attempt;
+  expect(useClientStore.getState().selectedTaskId).toBe("newer-story");
 });

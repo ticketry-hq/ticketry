@@ -3,7 +3,7 @@
 ## Work Item create and delete
 
 - Generated capability attempted: Seaography create-one and delete.
-- Exact missing behavior: Create allocates the project sequence and revision, resolves the issue type, workflow birth state, parent and module ancestry, optionally creates module presentation state, inserts the description, and records a durable fact in one transaction. Delete rejects parents with children, advances the project revision, removes relation rows through database cascades, deletes the Work Item, and records its deletion fact in one transaction.
+- Exact missing behavior: Create allocates the project sequence and revision, resolves the issue type, workflow birth state, parent and module ancestry, optionally creates module presentation state, inserts the description, optionally assigns an open sprint in the same project through the existing internal membership seam, and records a durable fact in one transaction. Delete rejects parents with children, advances the project revision, removes relation rows through database cascades, deletes the Work Item, and records its deletion fact in one transaction.
 - Why `.graphql` selection/alias/adapter is insufficient: Selection can reshape a generated result but cannot add aggregate writes or transaction rules.
 - Why `ColumnOptions`, skips, guards, or `entity_filter` are insufficient: These tools can restrict fields and rows. They cannot allocate counters, resolve hierarchy, clean relations, or publish facts atomically.
 - Why a database constraint/default and SeaORM lifecycle hooks are insufficient: The rules span Project, Issue, State, IssueType, ModulePresentation, relation rows, and durable status facts. The pinned generated create-one has no surrounding aggregate transaction, and generated delete bypasses ActiveModel delete hooks.
@@ -15,7 +15,7 @@
 - SeaORM transaction/domain module used: `work_management::commands::work_items::{create, delete}`.
 - Protected fields excluded: IDs, sequence, rank, module ancestry, revisions, timestamps, archive state, and workspace tab order are not caller-writable during create. Delete accepts only one required Work Item identity.
 - Identity/scope binding: Create requires one concrete Project and IssueType identity. Delete requires one concrete Work Item identity.
-- Drift/regression test: Nested-view SDL and authorization tests plus the existing Work Management creation, hierarchy, deletion, relation-cleanup, rollback, and status-fact integration tests.
+- Drift/regression test: Nested-view SDL and authorization tests plus the existing Work Management creation, hierarchy, deletion, relation-cleanup, rollback, and status-fact integration tests. `sprint_relations_graphql::story_creation_and_sprint_membership_commit_or_roll_back_together` proves create membership and rollback for closed, missing, and foreign sprints.
 - Registry entry, if this is genuinely non-CRUD: None. These are restricted model CRUD seams, not named domain operations.
 
 ## Work Item update

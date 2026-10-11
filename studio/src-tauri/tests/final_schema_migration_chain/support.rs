@@ -1,15 +1,24 @@
 use std::collections::{BTreeMap, BTreeSet};
+use ticketry_work_management::{
+    LAUNCH_BINDING_ENTRY_SKILL_MIGRATION_LEDGER_TABLE,
+    LAUNCH_BINDING_ENTRY_SKILL_MIGRATION_MIGRATION_ID,
+    LAUNCH_BINDING_PROFILE_MIGRATION_LEDGER_TABLE, LAUNCH_BINDING_PROFILE_MIGRATION_MIGRATION_ID,
+    LAUNCH_BINDING_STAGE_SKILLS_MIGRATION_LEDGER_TABLE,
+    LAUNCH_BINDING_STAGE_SKILLS_MIGRATION_MIGRATION_ID, MODULE_PRESENTATION_MIGRATION_LEDGER_TABLE,
+    MODULE_PRESENTATION_MIGRATION_MIGRATION_ID, PROJECT_ONBOARDING_MIGRATION_LEDGER_TABLE,
+    PROJECT_ONBOARDING_MIGRATION_MIGRATION_ID, WORKFLOW_COLOR_MIGRATION_LEDGER_TABLE,
+    WORKFLOW_COLOR_MIGRATION_MIGRATION_ID, WORKFLOW_HANDOFF_MIGRATION_LEDGER_TABLE,
+    WORKFLOW_HANDOFF_MIGRATION_MIGRATION_ID, WORKSPACE_TAB_ORDER_MIGRATION_LEDGER_TABLE,
+    WORKSPACE_TAB_ORDER_MIGRATION_MIGRATION_ID,
+};
 
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use ticketry_settings as provider_catalog_migrations;
-use ticketry_work_management::{
-    launch_binding_entry_skill_migration, launch_binding_profile_migration,
-    launch_binding_stage_skills_migration, module_presentation_migration,
-    project_onboarding_migration, workflow_color_migration, workflow_handoff_migration,
-    workspace_tab_order_migration,
+
+use ticketry_workspace_runtime::{
+    PULL_REQUEST_URL_LEDGER_TABLE, PULL_REQUEST_URL_MIGRATION_ID, SHIP_RECORD_LEDGER_TABLE,
+    SHIP_RECORD_MIGRATION_ID,
 };
-use ticketry_workspace_runtime::persistence::pull_request_url_migration;
-use ticketry_workspace_runtime::persistence::ship_record_migration;
 
 const PROJECT: &str = "00000000000000000000000000001001";
 const GRILL: &str = "00000000000000000000000000001002";
@@ -278,36 +287,33 @@ pub async fn assert_final(database: &DatabaseConnection) {
             provider_catalog_migrations::CODEX_5_6_MIGRATION_ID,
         ),
         (
-            project_onboarding_migration::LEDGER_TABLE,
-            project_onboarding_migration::MIGRATION_ID,
+            PROJECT_ONBOARDING_MIGRATION_LEDGER_TABLE,
+            PROJECT_ONBOARDING_MIGRATION_MIGRATION_ID,
         ),
         (
-            launch_binding_entry_skill_migration::LEDGER_TABLE,
-            launch_binding_entry_skill_migration::MIGRATION_ID,
+            LAUNCH_BINDING_ENTRY_SKILL_MIGRATION_LEDGER_TABLE,
+            LAUNCH_BINDING_ENTRY_SKILL_MIGRATION_MIGRATION_ID,
         ),
         (
-            workflow_color_migration::LEDGER_TABLE,
-            workflow_color_migration::MIGRATION_ID,
+            WORKFLOW_COLOR_MIGRATION_LEDGER_TABLE,
+            WORKFLOW_COLOR_MIGRATION_MIGRATION_ID,
         ),
         (
-            workspace_tab_order_migration::LEDGER_TABLE,
-            workspace_tab_order_migration::MIGRATION_ID,
+            WORKSPACE_TAB_ORDER_MIGRATION_LEDGER_TABLE,
+            WORKSPACE_TAB_ORDER_MIGRATION_MIGRATION_ID,
         ),
         (
-            module_presentation_migration::LEDGER_TABLE,
-            module_presentation_migration::MIGRATION_ID,
+            MODULE_PRESENTATION_MIGRATION_LEDGER_TABLE,
+            MODULE_PRESENTATION_MIGRATION_MIGRATION_ID,
         ),
         (
             provider_catalog_migrations::CODEX_SPARK_LEDGER,
             provider_catalog_migrations::CODEX_SPARK_MIGRATION_ID,
         ),
+        (PULL_REQUEST_URL_LEDGER_TABLE, PULL_REQUEST_URL_MIGRATION_ID),
         (
-            pull_request_url_migration::LEDGER_TABLE,
-            pull_request_url_migration::MIGRATION_ID,
-        ),
-        (
-            workflow_handoff_migration::LEDGER_TABLE,
-            workflow_handoff_migration::MIGRATION_ID,
+            WORKFLOW_HANDOFF_MIGRATION_LEDGER_TABLE,
+            WORKFLOW_HANDOFF_MIGRATION_MIGRATION_ID,
         ),
         (
             provider_catalog_migrations::CODEX_ASTRA_LEDGER,
@@ -318,8 +324,8 @@ pub async fn assert_final(database: &DatabaseConnection) {
             provider_catalog_migrations::CODEX_6_ASTRA_MIGRATION_ID,
         ),
         (
-            launch_binding_profile_migration::LEDGER_TABLE,
-            launch_binding_profile_migration::MIGRATION_ID,
+            LAUNCH_BINDING_PROFILE_MIGRATION_LEDGER_TABLE,
+            LAUNCH_BINDING_PROFILE_MIGRATION_MIGRATION_ID,
         ),
         (
             provider_catalog_migrations::CODEX_GLM_5_3_FLASH_LEDGER,
@@ -333,13 +339,10 @@ pub async fn assert_final(database: &DatabaseConnection) {
             provider_catalog_migrations::CODEX_6_SOL_LUNA_LEDGER,
             provider_catalog_migrations::CODEX_6_SOL_LUNA_MIGRATION_ID,
         ),
+        (SHIP_RECORD_LEDGER_TABLE, SHIP_RECORD_MIGRATION_ID),
         (
-            ship_record_migration::LEDGER_TABLE,
-            ship_record_migration::MIGRATION_ID,
-        ),
-        (
-            launch_binding_stage_skills_migration::LEDGER_TABLE,
-            launch_binding_stage_skills_migration::MIGRATION_ID,
+            LAUNCH_BINDING_STAGE_SKILLS_MIGRATION_LEDGER_TABLE,
+            LAUNCH_BINDING_STAGE_SKILLS_MIGRATION_MIGRATION_ID,
         ),
     ] {
         let row = database

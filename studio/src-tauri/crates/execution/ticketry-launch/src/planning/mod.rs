@@ -7,12 +7,18 @@
 mod error;
 #[cfg(test)]
 mod golden_tests;
+mod instant_naming;
 mod materialize;
 #[cfg(test)]
 mod mcp_golden_tests;
+mod mcp_profile;
+#[cfg(test)]
+mod mcp_profile_golden_tests;
 mod prompt;
 mod provider;
 mod types;
+
+pub(crate) use instant_naming::source_reference as codex_instant_source_reference;
 
 pub use error::{LaunchPlanningError, LaunchPlanningErrorCode};
 pub use materialize::{materialize, ExecutionAuthority};

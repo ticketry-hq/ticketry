@@ -32,8 +32,7 @@ automatically. [Official OpenAI documentation](https://learn.chatgpt.com/docs/en
 
 ## Dependencies and access
 
-- Node 22 matches desktop CI. npm and `package-lock.json` are used here to
-  match CI; the repository's pnpm declaration and workflow are unchanged.
+- Node 22 and Bun 1.4.2 match desktop CI. Install Bun before running the setup script; dependencies use `bun.lock` with a frozen install.
 - Rust and SeaORM CLI versions come from the checked-in toolchain and Cargo
   lockfile. The installer prepares rustfmt and clippy, the SQLite code generator,
   Chromium, tmux, and [Tauri's Linux prerequisites](https://v2.tauri.app/start/prerequisites/).
@@ -45,9 +44,7 @@ automatically. [Official OpenAI documentation](https://learn.chatgpt.com/docs/en
 - No application secrets, production database, Postgres server, signing keys,
   or personal provider logins are part of the base environment. Private Git
   dependencies require separately configured GitHub access.
-- npm's SSH GitHub dependency URL is rewritten to HTTPS only for installation
-  and child processes. The installer preserves inherited Git authentication
-  settings and does not change global Git configuration or either lockfile.
+- The Git dependency stays pinned to its commit in `bun.lock`.
 
 ## Work and validation
 

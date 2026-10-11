@@ -57,7 +57,7 @@ test("updater key generation returns the plan metadata without production creden
     password: "acceptance-password",
   });
   assert.deepEqual(commands[0].slice(0, 3), [
-    "npm",
+    "bun",
     [
       "run", "tauri", "--", "signer", "generate", "--ci",
       "--password", "acceptance-password", "--write-keys", key.privateKeyPath,

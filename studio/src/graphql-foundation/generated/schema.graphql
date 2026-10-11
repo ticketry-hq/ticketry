@@ -76,6 +76,11 @@ type AgentRunHolding {
 	output_sequence: Int!
 	last_output_at: String
 	attention_reason: String
+	stage_skill_availability: String
+}
+
+input AgentRunUpdateInput {
+	conversationTitle: String!
 }
 
 type AgentRunViewerLeases {
@@ -145,6 +150,8 @@ type AgentRuns {
 	initialPrompt: String
 	launchReasoning: String
 	launchUnattended: Boolean!
+	conversationTitle: String
+	stageSkillAvailability: String
 	issue: WorktrackerIssue
 	terminalSession(filters: AgentTerminalSessionsFilterInput, orderBy: AgentTerminalSessionsOrderInput, pagination: PaginationInput): AgentTerminalSessionsConnection!
 }
@@ -181,6 +188,8 @@ input AgentRunsFilterInput {
 	initialPrompt: StringFilterInput
 	launchReasoning: StringFilterInput
 	launchUnattended: BooleanFilterInput
+	conversationTitle: StringFilterInput
+	stageSkillAvailability: StringFilterInput
 	and: [AgentRunsFilterInput!]
 	or: [AgentRunsFilterInput!]
 	not: AgentRunsFilterInput
@@ -211,6 +220,8 @@ input AgentRunsOrderInput {
 	initialPrompt: OrderByEnum
 	launchReasoning: OrderByEnum
 	launchUnattended: OrderByEnum
+	conversationTitle: OrderByEnum
+	stageSkillAvailability: OrderByEnum
 }
 
 type AgentTerminalSessions {
@@ -493,6 +504,7 @@ input IdentityFilterInput {
 type InstantRunTicket {
 	agent_run_id: String!
 	title: String!
+	user_title: String
 	started_at: String!
 }
 
@@ -522,6 +534,23 @@ type KeybindingSetting {
 	key: String!
 	value: Json!
 	updated_at: String!
+}
+
+type LaunchSkillAvailabilityEntry {
+	requested: String!
+	status: String!
+	installed_name: String
+	location: String
+	reason: String
+}
+
+type LaunchSkillAvailabilityPayload {
+	status: String!
+	code: String
+	message: String
+	provider: String
+	searched_roots: [String!]!
+	skills: [LaunchSkillAvailabilityEntry!]!
 }
 
 type LifecycleAccepted {
@@ -676,7 +705,8 @@ type Mutation {
 	update_state(id: String!, name: String, group: String, color: String, sort_order: Int): WorktrackerState!
 	delete_state(state_id: String!): Boolean!
 	reorder_states(project_id: String!, ordered_ids: [String!]!): [WorktrackerState!]!
-	worktrackerSprintCreateOne(data: WorktrackerSprintInsertInput!): WorktrackerSprintBasic!
+	worktrackerSprintCreateOne(data: WorktrackerSprintInsertInput!): WorktrackerSprint!
+	reorder_sprint(sprint_id: String!, before_id: String, after_id: String): WorktrackerSprint!
 	update_sprint(id: String!, name: String, suggestion_run_id: String, status: String, carryover_sprint_id: String): WorktrackerSprint!
 	create_sprint_goal(sprint_id: String!, text: String!): WorktrackerSprintGoal!
 	update_sprint_goal(id: String!, text: String!): WorktrackerSprintGoal!
@@ -705,7 +735,7 @@ type Mutation {
 	delete_project(id: String!): Boolean!
 	delete_issue_type(id: String!, reassign_to: String): Boolean!
 	reorder_module_presentation(module_id: String!, before_id: String, after_id: String, initial_order_ids: [String!]): WorktrackerModulepresentation!
-	create_work_item(project_id: String!, name: String!, issue_type_id: String!, description: String, state_id: String, parent_id: String): WorktrackerIssue!
+	create_work_item(project_id: String!, name: String!, issue_type_id: String!, description: String, state_id: String, parent_id: String, sprint_id: String): WorktrackerIssue!
 	update_work_item(id: String!, name: String, description: String, issue_type_id: String, state_id: String, parent_id: String, sprint_id: String, blocked_by_ids: [String!], tag_names: [String!], is_archived: Boolean, workspace_tab_order: Json): WorktrackerIssue!
 	reorder_work_item(id: String!, before_id: String, after_id: String, initial_order_ids: [String!]): WorktrackerIssue!
 	delete_work_item(id: String!): Boolean!
@@ -720,6 +750,7 @@ type Mutation {
 	retry_automation_attempt(attempt_id: String!): AutomationAttemptProjection!
 	dismiss_automation_attempt(attempt_id: String!): AutomationAttemptProjection!
 	ingest_agent_lifecycle(agent_run_id: String!, kind: String!, occurred_at: String!, provider_session_id: String): LifecycleAccepted!
+	update_agent_run(id: String!, input: AgentRunUpdateInput!): AgentRuns!
 	terminal_session_create(client_request_id: String!, project_id: String, issue_id: String, module_id: String!, target_id: String, kind: String!, provider: String, working_directory_identity: String, columns: Int!, rows: Int!, model: String, reasoning: String, policy_reference: String, prompt: String, resume_from_agent_run_id: String, automation_attempt_id: String, required_skills: [String!], design_directory_identity: String, document_relative_path: String): AgentTerminalSessions!
 	terminal_session_update(agent_run_id: String!, termination_request_id: String): AgentTerminalSessions!
 	terminal_output_observe(agent_run_id: String!): TerminalOutputObservation!
@@ -839,6 +870,7 @@ type Query {
 	module_file_diff(module_id: String!, path: String!): FileDiffView!
 	worktree_merge_preview(task_id: String!, destination_branch: String): WorktreeMergePreviewView!
 	worktree_merge_recovery(task_id: String!): WorktreeMergeResult
+	launch_skill_availability(module_id: String!, agent: String, profile: String, names: [String!]!): LaunchSkillAvailabilityPayload!
 	keybinding_setting: KeybindingSetting
 	instant_launch_setting: KeybindingSetting
 	provider_catalog: ProviderCatalog!
@@ -1818,30 +1850,20 @@ input WorktrackerReasoninglevelOrderInput {
 }
 
 type WorktrackerSprint {
+	rank: String!
 	id: String!
-	projectId: String!
 	name: String!
 	status: String!
 	suggestionRunId: String
 	goalsRevisedAt: String
 	createdAt: String!
 	updatedAt: String!
+	projectId: String!
 	project: WorktrackerProject
 	issues(filters: WorktrackerIssueFilterInput, orderBy: WorktrackerIssueOrderInput, pagination: PaginationInput): WorktrackerIssueConnection!
 	suggestionRun: AgentRuns
 	goals(filters: WorktrackerSprintGoalFilterInput, orderBy: WorktrackerSprintGoalOrderInput, pagination: PaginationInput): WorktrackerSprintGoalConnection!
 	suggestions(filters: WorktrackerSprintSuggestionFilterInput, orderBy: WorktrackerSprintSuggestionOrderInput, pagination: PaginationInput): WorktrackerSprintSuggestionConnection!
-}
-
-type WorktrackerSprintBasic {
-	id: String!
-	projectId: String!
-	name: String!
-	status: String!
-	suggestionRunId: String
-	goalsRevisedAt: String
-	createdAt: String!
-	updatedAt: String!
 }
 
 type WorktrackerSprintConnection {
@@ -1857,14 +1879,15 @@ type WorktrackerSprintEdge {
 }
 
 input WorktrackerSprintFilterInput {
+	rank: StringFilterInput
 	id: StringFilterInput
-	projectId: StringFilterInput
 	name: StringFilterInput
 	status: StringFilterInput
 	suggestionRunId: StringFilterInput
 	goalsRevisedAt: TextFilterInput
 	createdAt: TextFilterInput
 	updatedAt: TextFilterInput
+	projectId: StringFilterInput
 	and: [WorktrackerSprintFilterInput!]
 	or: [WorktrackerSprintFilterInput!]
 	not: WorktrackerSprintFilterInput
@@ -1926,19 +1949,20 @@ input WorktrackerSprintHavingInput {
 }
 
 input WorktrackerSprintInsertInput {
-	projectId: String!
 	name: String!
+	projectId: String!
 }
 
 input WorktrackerSprintOrderInput {
+	rank: OrderByEnum
 	id: OrderByEnum
-	projectId: OrderByEnum
 	name: OrderByEnum
 	status: OrderByEnum
 	suggestionRunId: OrderByEnum
 	goalsRevisedAt: OrderByEnum
 	createdAt: OrderByEnum
 	updatedAt: OrderByEnum
+	projectId: OrderByEnum
 }
 
 type WorktrackerSprintSuggestion {

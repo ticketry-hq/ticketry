@@ -61,6 +61,17 @@ async fn migration_probes_are_only_composed_into_the_isolated_foundation_schema(
     }
     assert!(!probe_schema.contains("MigrationProbesUpdateInput"));
     assert!(!probe_schema.contains("worktrackerIssuetypeCreateOne"));
+    assert!(probe_schema.contains("type AgentExecutions {"));
+    for schema in [&probe_schema, &product_schema] {
+        for entity in ["agentExecutions", "graphRuns", "launchClaims"] {
+            for operation in ["CreateOne", "CreateBatch", "Update", "Delete"] {
+                assert!(
+                    !schema.contains(&format!("{entity}{operation}(")),
+                    "execution graph exposed unaudited {entity}{operation}"
+                );
+            }
+        }
+    }
     assert!(!product_schema.contains("migrationProbes"));
     assert!(product_schema.contains("worktrackerIssuetypeCreateOne"));
 }

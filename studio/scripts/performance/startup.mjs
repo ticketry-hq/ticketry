@@ -7,7 +7,7 @@ import { webkit } from "playwright";
 // sample, existing dependency prebundle retained, no product database access.
 // Playwright WebKit is a proxy for WKWebView, not a desktop paint measurement.
 const root = fileURLToPath(new URL("../..", import.meta.url));
-// Match npm's Studio workspace cwd (Tailwind resolves its config from cwd).
+// Match Bun's Studio workspace cwd (Tailwind resolves its config from cwd).
 process.chdir(root);
 const output = fileURLToPath(new URL("../../../.ticketry-dev/performance/startup.json", import.meta.url));
 const leadMs = 5_000;

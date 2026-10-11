@@ -7,7 +7,10 @@ use async_trait::async_trait;
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, PROJECT_ID, TASK_ID, TASK_RUN_ID,
 };
-use sea_orm::{sea_query::Expr, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
+use sea_orm::{
+    sea_query::Expr, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter,
+    SqliteTransactionMode, TransactionOptions, TransactionTrait,
+};
 use ticketry_entities::{
     agent_run, {cleanup_effect, session},
 };
@@ -350,4 +353,44 @@ async fn every_cleanup_crash_boundary_replays_without_reviving_or_duplicating_th
             .unwrap();
         assert_eq!(terminal_events, 1, "checkpoint {checkpoint:?}");
     }
+}
+
+#[tokio::test]
+async fn explicit_termination_waits_for_a_concurrent_writer_instead_of_failing_storage() {
+    // A shell that is still starting keeps other connections writing. Closing
+    // it then must queue behind that writer, not refuse with a storage error.
+    let harness = TerminalLifecycleHarness::start().await;
+    let concurrent = harness.database().await;
+    let writer = concurrent
+        .begin_with_options(TransactionOptions {
+            sqlite_transaction_mode: Some(SqliteTransactionMode::Immediate),
+            ..TransactionOptions::default()
+        })
+        .await
+        .unwrap();
+    writer
+        .execute_unprepared(
+            "UPDATE agent_terminal_sessions SET output_sequence = output_sequence + 1 \
+             WHERE agent_run_id = 'terminal-harness-document'",
+        )
+        .await
+        .unwrap();
+    let release = tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        writer.commit().await.unwrap();
+    });
+    let runtime = Arc::new(ScriptedRuntime::new([CleanupRuntimeObservation::Missing]));
+    let service = TerminalCleanupService::new(harness.database().await, runtime);
+
+    let terminal = service
+        .update_terminal_session(
+            TASK_RUN_ID,
+            TerminationPatch::Request("close-while-starting".to_owned()),
+        )
+        .await
+        .unwrap_or_else(|error| panic!("{}: {error}", error.code_str()));
+
+    release.await.unwrap();
+    assert!(terminal.terminated_at.is_some());
+    assert!(!terminal.runtime_cleanup_pending);
 }

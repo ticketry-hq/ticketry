@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useLayoutEffect, useRef } from "react";
 
 import { useModalOcclusionActive } from "./internal/modalOcclusion";
+import { useModuleManagerStore } from "../../module-manager/state";
 import {
   foregroundKey,
   useTerminalForegroundStore,
@@ -49,6 +50,7 @@ export function NativeGhosttyTerminal({
   sessionId,
   owner,
   focusSignal,
+  canFocus,
   active = true,
   manageForegroundHost = true,
   onReady,
@@ -58,6 +60,7 @@ export function NativeGhosttyTerminal({
   sessionId: string;
   owner: ForegroundOwner;
   focusSignal?: number;
+  canFocus?: (target?: HTMLElement | null) => boolean;
   active?: boolean;
   manageForegroundHost?: boolean;
   onReady?: () => void;
@@ -68,10 +71,10 @@ export function NativeGhosttyTerminal({
   const registerHost = useTerminalForegroundStore((state) => state.registerHost);
   const unregisterHost = useTerminalForegroundStore((state) => state.unregisterHost);
   const hostRef = useRef<HTMLDivElement | null>(null);
-  // Any window-level overlay — modal stack or DialogHost confirm — takes
-  // focus and keyboard ownership. The viewer stays presented beneath it as a
-  // WebView sibling; only hide/show for surface ownership changes.
+  // Dialogs surrender input while preserving their native sibling. The full
+  // Module Manager also hides the native viewer, retaining its attachment.
   const modalOpen = useModalOcclusionActive();
+  const managerOpen = useModuleManagerStore((state) => state.active);
   const activeRef = useRef(active);
   const visibleRef = useRef(false);
   const openedRunRef = useRef<string | null>(null);
@@ -94,7 +97,7 @@ export function NativeGhosttyTerminal({
     failureReason,
     presentedHere,
   } = useNativeViewerMount(runId, retained);
-  const visible = retained && active && resolvedOwner === owner;
+  const visible = retained && active && resolvedOwner === owner && !managerOpen;
   visibleRef.current = visible;
   const presentedHandleRef = useRef<string | null>(sharedHandle);
   presentedHandleRef.current = sharedHandle;
@@ -137,6 +140,8 @@ export function NativeGhosttyTerminal({
   );
 
   useNativeViewerFocusRegistration({
+    canFocus,
+    hostRef,
     sessionId,
     handle: sharedHandle,
     presented: presentedHere,
@@ -167,6 +172,8 @@ export function NativeGhosttyTerminal({
     },
   });
   useNativeViewerFocusSignal({
+    canFocus,
+    hostRef,
     sessionId,
     handle: sharedHandle,
     focusSignal,
@@ -191,8 +198,8 @@ export function NativeGhosttyTerminal({
     });
     // The destination host moves the one shared view. The prior host must not
     // race that move with a hide merely because foreground ownership changed.
-    // A modal never hides: the viewer presents beneath it as a WebView sibling
-    // and only surrenders focus and keyboard ownership.
+    // Dialogs only surrender input; the manager's visibility gate hides the
+    // retained viewer while the workspace is covered.
     if (hidden && resolvedOwner !== owner) return;
     if (hidden && !presentedHere) return;
     if (!hidden && presentedHere) return;

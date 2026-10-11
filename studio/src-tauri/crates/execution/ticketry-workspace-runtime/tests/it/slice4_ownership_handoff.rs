@@ -10,10 +10,9 @@
 use std::path::Path;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
-use ticketry_workspace_runtime::handoff;
-use ticketry_workspace_runtime::handoff::{
-    manifest, publish_readiness, published_readiness_is_complete, Slice4Readiness,
-    WorkspaceReadinessGate,
+use ticketry_workspace_runtime::{
+    adopt_workspace, owned_tables, publish_readiness, published_readiness_is_complete,
+    validate_schema, Slice4Readiness, WorkspaceReadinessGate,
 };
 
 /// A Django-shaped store at the current leaf, built by the real migrations so
@@ -39,12 +38,12 @@ async fn the_manifest_names_exactly_the_tables_the_handoff_installs() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
     django_fixture(&path).await;
-    handoff::adopt(directory.path())
+    adopt_workspace(directory.path())
         .await
         .expect("adopt the workspace schema");
     let database = open(&path).await;
 
-    for table in manifest::owned_tables() {
+    for table in owned_tables() {
         let row = database
             .query_one_raw(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
@@ -63,7 +62,7 @@ async fn the_manifest_names_exactly_the_tables_the_handoff_installs() {
 
     // The column shapes are part of the cutover contract, not a comment about
     // it: the same check runs at startup and refuses an unknown shape.
-    manifest::validate_schema(&database)
+    validate_schema(&database)
         .await
         .expect("the adopted store must match the manifest it was validated against");
     database.close().await.unwrap();
@@ -86,7 +85,7 @@ async fn adoption_preserves_every_existing_document_and_worktree_row() {
     django_fixture(&path).await;
     seed_workspace_rows(&path).await;
 
-    let evidence = handoff::adopt(directory.path())
+    let evidence = adopt_workspace(directory.path())
         .await
         .expect("adopt the workspace schema");
 
@@ -151,12 +150,12 @@ async fn adoption_is_repeatable_across_a_restart() {
     let path = directory.path().join("state.db");
     django_fixture(&path).await;
 
-    let first = handoff::adopt(directory.path())
+    let first = adopt_workspace(directory.path())
         .await
         .expect("adopt the workspace schema");
     // Reopening an already-adopted store must converge rather than re-bridge:
     // a restart is the ordinary case, not a second migration.
-    let second = handoff::adopt(directory.path())
+    let second = adopt_workspace(directory.path())
         .await
         .expect("re-adopt an already-owned store");
 
@@ -179,7 +178,7 @@ async fn adoption_refuses_an_unknown_documents_schema_before_the_lease_changes_h
         .unwrap();
     database.close().await.unwrap();
 
-    let refusal = handoff::adopt(directory.path())
+    let refusal = adopt_workspace(directory.path())
         .await
         .expect_err("an unknown Documents schema must be refused");
 
@@ -194,7 +193,7 @@ async fn a_drifted_owned_table_is_refused_rather_than_written_through() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
     django_fixture(&path).await;
-    handoff::adopt(directory.path())
+    adopt_workspace(directory.path())
         .await
         .expect("adopt the workspace schema");
 
@@ -207,7 +206,7 @@ async fn a_drifted_owned_table_is_refused_rather_than_written_through() {
         .await
         .unwrap();
 
-    let refusal = manifest::validate_schema(&database)
+    let refusal = validate_schema(&database)
         .await
         .expect_err("a table this build does not own must be refused");
 

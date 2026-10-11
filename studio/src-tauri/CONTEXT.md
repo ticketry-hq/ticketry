@@ -111,7 +111,7 @@ for the application's lifetime. Only an owned backend may be supervised.
 _Avoid_: Local backend, our backend
 
 **Development stack**:
-An already-running `pnpm dev` backend that the desktop shell deliberately
+An already-running `bun run web` adapter that the desktop shell deliberately
 attaches to instead of spawning its own. The shell holds no lock, owns no
 process, and performs no supervision against it.
 _Avoid_: Attached backend, dev mode, connect backend

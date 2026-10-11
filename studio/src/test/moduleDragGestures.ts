@@ -38,7 +38,7 @@ const TAB_WIDTH = 100;
 
 function moduleRows(): HTMLElement[] {
   return Array.from(
-    document.querySelectorAll<HTMLElement>("li[data-module-id]"),
+    document.querySelectorAll<HTMLElement>("li[data-module-manager-row]"),
   );
 }
 
@@ -58,7 +58,7 @@ export function layoutRows(): Map<string, HTMLElement> {
         width: 200,
       }),
     });
-    byId.set(row.dataset.moduleId ?? "", row);
+    byId.set(row.dataset.moduleManagerRow ?? "", row);
   });
   return byId;
 }
@@ -84,7 +84,7 @@ export function layoutTabs(): Map<string, HTMLElement> {
   return byId;
 }
 
-/** Drag one sidebar module onto the near (top) or far (bottom) half of another. */
+/** Drag one manager module onto the near (top) or far (bottom) half of another. */
 export function dragModule(
   sourceId: string,
   targetId: string,

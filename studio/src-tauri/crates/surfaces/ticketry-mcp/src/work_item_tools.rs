@@ -1,14 +1,19 @@
 use super::{
     dispatch::DispatchOutput,
     projection, scope,
+    work_item_sprint_tools::{assigned_sprint, sprint_patch},
     workflow_tools::{self, optional_string, string},
     RunPrincipal,
 };
 use super::{public_id::hyphenate, work_facts::work_facts};
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
-use ticketry_work_management::commands::CommandError;
-use ticketry_work_management::commands::{tags, work_items, workflow};
+use ticketry_work_management::CommandError;
+use ticketry_work_management::{
+    add_tag, create_work_item, transition, update_work_item, AppendDescription,
+    CreateReviewFinding, CreateWorkItem, PatchValue, TransitionOrigin, TransitionWorkItem,
+    UpdateWorkItem,
+};
 
 pub(super) async fn dispatch(
     database: &DatabaseConnection,
@@ -52,7 +57,7 @@ async fn add_task_tags(
                 .ok_or_else(|| CommandError::field("tags", "tags values must be strings."))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let current_tags = tags::add(
+    let current_tags = add_tag(
         database,
         &task.id,
         names,
@@ -74,6 +79,11 @@ async fn create_task(
     parent: Option<&str>,
 ) -> Result<DispatchOutput, CommandError> {
     let project = scope::project(database, principal, string(arguments, "project_id")?).await?;
+    let selector = match sprint_patch(arguments)? {
+        PatchValue::Value(selector) => Some(selector),
+        PatchValue::Null | PatchValue::Unset => None,
+    };
+    let has_sprint = selector.is_some();
     let kind = projection::resolve_issue_type(database, &project, string(arguments, "issue_type")?)
         .await
         .ok_or_else(|| CommandError::field("issue_type", "Unknown task issue type."))?;
@@ -90,9 +100,10 @@ async fn create_task(
     if let Some(parent_id) = parent_id {
         scope::task_or_module_id(database, principal, parent_id).await?;
     }
-    let id = work_items::create(
+    let id = create_work_item(
         database,
-        work_items::CreateWorkItem {
+        CreateWorkItem {
+            sprint_id: selector,
             project_id: project,
             name: string(arguments, "name")?.to_owned(),
             issue_type_id: kind.id,
@@ -103,6 +114,13 @@ async fn create_task(
         work_facts(database).await.as_ref(),
     )
     .await?;
+    if has_sprint {
+        let task = scope::task(database, principal, &id).await?;
+        return Ok(DispatchOutput::direct(json!({
+            "ok": true, "task_id": task.id, "key": task.key,
+            "sprint": assigned_sprint(database, &id).await?,
+        })));
+    }
     Ok(DispatchOutput::result(Value::String(hyphenate(&id))))
 }
 
@@ -111,6 +129,9 @@ async fn update_task(
     principal: &RunPrincipal,
     arguments: &Map<String, Value>,
 ) -> Result<DispatchOutput, CommandError> {
+    if arguments.contains_key("sprint") {
+        return super::work_item_sprint_tools::update_sprint(database, principal, arguments).await;
+    }
     let task = scope::task(database, principal, string(arguments, "id_or_key")?).await?;
     let name = optional_string(arguments, "name").map(str::to_owned);
     let description = optional_string(arguments, "description").map(str::to_owned);
@@ -121,9 +142,9 @@ async fn update_task(
     if description.is_some() {
         fields.push("description");
     }
-    work_items::update(
+    update_work_item(
         database,
-        work_items::UpdateWorkItem {
+        UpdateWorkItem {
             id: task.id.clone(),
             name,
             description,
@@ -144,9 +165,9 @@ async fn append_description(
 ) -> Result<DispatchOutput, CommandError> {
     scope::project(database, principal, string(arguments, "project_id")?).await?;
     let task = scope::task(database, principal, string(arguments, "task_id")?).await?;
-    work_items::append_description(
+    ticketry_work_management::append_description(
         database,
-        work_items::AppendDescription {
+        AppendDescription {
             id: task.id,
             new_content: string(arguments, "new_content")?.to_owned(),
         },
@@ -168,12 +189,12 @@ async fn update_status(
             json!({"ok": false, "task_id": task.id, "error": format!("Unknown workflow state {status_name:?}.")}),
         ));
     };
-    match workflow::transition(
+    match transition(
         database,
-        workflow::TransitionWorkItem {
+        TransitionWorkItem {
             id: task.id.clone(),
             target_state_id: state.id,
-            origin: workflow::TransitionOrigin::Agent,
+            origin: TransitionOrigin::Agent,
         },
         work_facts(database).await.as_ref(),
     )
@@ -198,9 +219,9 @@ async fn create_review_finding(
     let project = scope::project(database, principal, string(arguments, "project_id")?).await?;
     let parent = scope::task(database, principal, string(arguments, "parent_id")?).await?;
     let facts = work_facts(database).await;
-    let id = work_items::create_review_finding(
+    let id = ticketry_work_management::create_review_finding(
         database,
-        work_items::CreateReviewFinding {
+        CreateReviewFinding {
             project_id: project,
             parent_id: parent.id,
             name: string(arguments, "name")?.to_owned(),

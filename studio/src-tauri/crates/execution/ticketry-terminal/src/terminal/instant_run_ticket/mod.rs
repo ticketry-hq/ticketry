@@ -9,6 +9,7 @@ mod operation_registry;
 mod query;
 mod thread_title;
 mod title;
+mod update;
 
 use seaography::CustomOutputType;
 use serde::Serialize;
@@ -20,10 +21,15 @@ pub use thread_title::InstantRunTicketTitleService;
 pub struct InstantRunTicket {
     pub agent_run_id: String,
     pub title: String,
+    pub user_title: Option<String>,
     pub started_at: String,
 }
 
 pub fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
     operation_registry::assert_complete();
     graphql::register(builder)
+}
+
+pub(crate) fn register_title_update(builder: seaography::Builder) -> seaography::Builder {
+    update::register(builder)
 }

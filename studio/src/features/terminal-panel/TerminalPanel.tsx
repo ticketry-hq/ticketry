@@ -12,7 +12,7 @@
  * and a closed panel both really do cost nothing.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
 import { Terminal, useTerminalStore } from "../agents/terminal";
@@ -24,15 +24,21 @@ import { useModuleShellStore } from "./moduleShellStore";
 import { usePanelDisplayHeight } from "./panelDisplayHeight";
 import { PanelHeader } from "./PanelHeader";
 import { PanelResizeGrip } from "./PanelResizeGrip";
-import { useTerminalPanelOpen, useTerminalPanelStore } from "./panelStore";
+import { useTerminalPanelStore } from "./panelStore";
 import { useShellExitWatch } from "./shellExitWatch";
 import { ShellTabStrip } from "./ShellTabStrip";
 import { deadShell, EMPTY_SHELL_SET } from "./shellTabSet";
 
-export function TerminalPanel() {
+export function TerminalPanel({ active = true, preserveInactiveContext = false }: { active?: boolean; preserveInactiveContext?: boolean }) {
+  const selectedModuleId = useClientStore((state) => state.selectedModuleId);
+  const projectId = useStudioStore((state) => state.selectedProjectId);
+  const dormantContext = useRef<{ projectId: string; moduleId: string } | null>(null);
+  if (projectId && selectedModuleId) dormantContext.current = { projectId, moduleId: selectedModuleId };
+  else if (dormantContext.current?.projectId !== projectId) dormantContext.current = null;
+  const moduleId = selectedModuleId ?? (preserveInactiveContext ? dormantContext.current?.moduleId ?? null : null);
   // Showing is per module: entering a module that never opened the panel
   // arrives without one, and the module that did keeps it (#730).
-  const open = useTerminalPanelOpen();
+  const open = useTerminalPanelStore((state) => moduleId ? state.openModules[moduleId] ?? false : false);
   // Maximized renders the geometry policy's current bound; ordinary renders the
   // person's own height. Hiding and reopening keeps whichever it was (#726).
   const height = usePanelDisplayHeight();
@@ -49,13 +55,12 @@ export function TerminalPanel() {
       className="flex shrink-0 flex-col border-t border-pane-border bg-pane-panel outline-none"
     >
       <PanelResizeGrip />
-      <TerminalPanelBody />
+      <TerminalPanelBody moduleId={moduleId} active={active} />
     </div>
   );
 }
 
-function TerminalPanelBody() {
-  const moduleId = useClientStore((state) => state.selectedModuleId);
+function TerminalPanelBody({ moduleId, active }: { moduleId: string | null; active: boolean }) {
   const projectId = useStudioStore((state) => state.selectedProjectId);
   const focusSignal = useTerminalPanelStore((state) => state.focusSignal);
   const shells = useModuleShellStore((state) =>
@@ -165,7 +170,7 @@ function TerminalPanelBody() {
             sessionId={sessionId}
             owner="panel"
             focusSignal={focusSignal}
-            active
+            active={active}
           />
         ) : emptied ? (
           // Closing the last tab is the one way to reach a discovered module

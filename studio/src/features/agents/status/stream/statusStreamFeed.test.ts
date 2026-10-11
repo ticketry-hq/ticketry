@@ -21,9 +21,19 @@ import { WorktreeStatusDocument } from "../../worktrees/generated/worktreeStatus
 import { CurrentWorktreesDocument } from "../../worktrees/generated/currentWorktrees.documents";
 import { WorkTrackerProjectOpenDocument } from "../../../projects/generated/projects.documents";
 import { recordLocalWorkItemConvergence } from "../../../work-items/workItemConvergence";
+import { WorkTrackerModuleOpenDocument } from "../../../work-items";
 
 const PROJECT = "11111111-1111-1111-1111-111111111111";
 const OTHER_PROJECT = "22222222-2222-2222-2222-222222222222";
+
+// Planning collection repair is independently scoped; these assertions govern
+// whether WorkItem facts trigger a broad module-tree refresh.
+function moduleCollectionRefetches(spy: { mock: { calls: readonly (readonly unknown[])[] } }) {
+  return spy.mock.calls.filter(([options]) => {
+    const include = (options as { include?: unknown })?.include;
+    return Array.isArray(include) && include.includes(WorkTrackerModuleOpenDocument);
+  });
+}
 
 interface Subscription {
   readonly id: string;
@@ -376,7 +386,7 @@ describe("WorkItem convergence", () => {
       variables: { projectId: compactWorktrackerId(PROJECT) },
       context: { queryDeduplication: false },
     }));
-    expect(refreshTaskCollection).not.toHaveBeenCalled();
+    expect(moduleCollectionRefetches(refreshTaskCollection)).toHaveLength(0);
   });
 
   it("batches the canonical entity and refreshes the collection only on membership changes", async () => {
@@ -405,7 +415,7 @@ describe("WorkItem convergence", () => {
     expect(refresh.mock.calls.map(([options]) => options?.variables)).toEqual([
       { id: "item-1" },
     ]);
-    expect(refreshCollection).not.toHaveBeenCalled();
+    expect(moduleCollectionRefetches(refreshCollection)).toHaveLength(0);
 
     refresh.mockClear();
     transport.send(
@@ -418,7 +428,7 @@ describe("WorkItem convergence", () => {
     expect(refresh.mock.calls.map(([options]) => options?.variables)).toEqual([
       { id: "item-2" },
     ]);
-    expect(refreshCollection).toHaveBeenCalledTimes(1);
+    expect(moduleCollectionRefetches(refreshCollection)).toHaveLength(1);
   });
 
   it("refreshes only the module named by a membership fact", async () => {
@@ -443,7 +453,7 @@ describe("WorkItem convergence", () => {
       { id: "item-1" },
       { moduleId: "module-1" },
     ]);
-    expect(broadRefresh).not.toHaveBeenCalled();
+    expect(moduleCollectionRefetches(broadRefresh)).toHaveLength(0);
   });
 
   it("does not repeat a refresh for the exact server version a mutation adopted", async () => {
@@ -467,7 +477,7 @@ describe("WorkItem convergence", () => {
     await vi.advanceTimersByTimeAsync(60);
 
     expect(refresh).not.toHaveBeenCalled();
-    expect(broadRefresh).not.toHaveBeenCalled();
+    expect(moduleCollectionRefetches(broadRefresh)).toHaveLength(0);
 
     transport.send(
       event(12, "work_item.changed", {
@@ -506,6 +516,49 @@ describe("WorkItem convergence", () => {
     }));
   });
 
+  it("retries a canonical refresh that failed offline once the reconnect catches up", async () => {
+    const transport = harness();
+    const refresh = vi.spyOn(studioApolloClient(), "query")
+      .mockRejectedValue(new Error("Failed to fetch"));
+    vi.spyOn(studioApolloClient(), "refetchQueries").mockResolvedValue([] as never);
+    statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
+    await vi.advanceTimersByTimeAsync(0);
+    transport.send(caughtUp(10));
+
+    // The rename lands while the browser is offline: its refresh fails.
+    transport.send(
+      event(11, "work_item.changed", {
+        workItemId: "item-1",
+        moduleId: "module-1",
+        membershipChanged: true,
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(60);
+    expect(refresh.mock.calls.map(([options]) => options?.variables)).toEqual([
+      { id: "item-1" },
+      { moduleId: "module-1" },
+    ]);
+
+    // Online again: the replacement subscription replays nothing new for the
+    // item, but the failed canonical reads are owed and run at caught-up.
+    refresh.mockReset().mockResolvedValue({} as never);
+    window.dispatchEvent(new Event("online"));
+    await vi.advanceTimersByTimeAsync(0);
+    transport.send(caughtUp(11));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(refresh.mock.calls.map(([options]) => options?.variables)).toEqual([
+      { id: "item-1" },
+      { moduleId: "module-1" },
+    ]);
+
+    // A successful retry is not repeated at the next boundary.
+    refresh.mockClear();
+    transport.send(caughtUp(11));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it("evicts a deleted identity and refreshes its collection", async () => {
     const transport = harness();
     const client = studioApolloClient();
@@ -521,7 +574,7 @@ describe("WorkItem convergence", () => {
     expect(evict).toHaveBeenCalledWith({
       id: client.cache.identify({ __typename: "WorktrackerIssue", id: "item-9" }),
     });
-    expect(refreshCollection).toHaveBeenCalledTimes(1);
+    expect(moduleCollectionRefetches(refreshCollection)).toHaveLength(1);
   });
 });
 

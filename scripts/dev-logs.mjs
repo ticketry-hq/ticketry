@@ -127,7 +127,7 @@ function main(command = "show") {
       const launchTraceIdentity = process.argv[3];
       if (!launchTraceIdentity) {
         throw new Error(
-          "usage: npm run logs:trace -- <launch-trace-identity>",
+          "usage: bun run logs:trace -- <launch-trace-identity>",
         );
       }
       process.stdout.write(`${launchTraceReportFromLog(launchTraceIdentity)}\n`);

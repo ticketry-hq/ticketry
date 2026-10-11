@@ -6,17 +6,16 @@ describe("clientStore", () => {
     vi.resetModules();
   });
 
-  it("ignores the retired disabled-build sidebar value and saves the current preference", async () => {
+  it("ignores retired sidebar visibility values and prevents the legacy setter reopening a pane", async () => {
     localStorage.setItem("studio.sidebarVisible:v1", "false");
+    localStorage.setItem("studio.sidebarVisible:v2", "true");
     const { useClientStore } = await import("../state/clientStore");
 
-    expect(useClientStore.getState().sidebarVisible).toBe(true);
-
-    useClientStore.getState().toggleSidebar();
     expect(useClientStore.getState().sidebarVisible).toBe(false);
-    expect(localStorage.getItem("studio.sidebarVisible:v2")).toBe("false");
-
     useClientStore.getState().setSidebarVisible(true);
+    expect(useClientStore.getState().sidebarVisible).toBe(false);
+    useClientStore.getState().focusLeft();
+    expect(useClientStore.getState().focusedPane).toBe("tasks");
     expect(localStorage.getItem("studio.sidebarVisible:v2")).toBe("true");
     expect(localStorage.getItem("studio.sidebarVisible:v1")).toBe("false");
   });
@@ -49,13 +48,20 @@ describe("clientStore", () => {
     );
   });
 
-  it("keeps expansion keyed by module and cursor intent keyed by id", async () => {
-    const { resolveCursorId, useClientStore } = await import(
+  it.each([{ layout: [18, 32, 50] }, { layout: [12, 18, 32, 50] }])("restores legacy layout $layout as the same Stories/workspace proportion", async ({ layout }) => {
+    localStorage.setItem("studio.panelLayout:v1", JSON.stringify(layout));
+    const { useClientStore } = await import("../state/clientStore");
+    expect(useClientStore.getState().panelLayout?.[0]).toBeCloseTo(39.0243902439);
+    expect(useClientStore.getState().panelLayout?.[1]).toBeCloseTo(60.9756097561);
+    expect(useClientStore.getState().panelLayout).toHaveLength(2);
+  });
+
+  it("keeps expansion keyed by module without restoring a retired module cursor", async () => {
+    const { useClientStore } = await import(
       "../state/clientStore"
     );
     useClientStore.setState({
       expandedIdsByModule: { first: ["remembered"] },
-      modulesCursorId: "removed",
     });
 
     useClientStore.getState().toggleExpanded("second", "branch");
@@ -66,9 +72,8 @@ describe("clientStore", () => {
     expect(JSON.parse(localStorage.getItem("studio.expandedSubtasks:v1")!))
       .toEqual({ first: ["remembered"], second: ["branch"] });
 
-    expect(resolveCursorId("removed", ["first", "second"])).toBe("first");
     useClientStore.getState().moveModulesCursor(1, ["first", "second"]);
-    expect(useClientStore.getState().modulesCursorId).toBe("first");
+    expect(useClientStore.getState().modulesCursorId).toBeNull();
   });
 
   it("migrates and updates remembered task selections by module", async () => {

@@ -7,6 +7,9 @@ use tauri::Manager;
 
 use crate::desktop::data_directory::DesktopDataDirectoryOwnership;
 use crate::desktop::environment::automated_startup_exit_requested;
+use crate::desktop::global_mcp_registration::{
+    GlobalMcpStartupContext, GlobalMcpStartupRegistration,
+};
 use crate::desktop::launch_runtime::DesktopLaunchRuntime;
 use crate::desktop::mcp_runtime::start_in_process_mcp;
 use crate::desktop::packaged_binaries::hook_runner_binary;
@@ -32,6 +35,11 @@ pub fn launch_rust_runtime(
 
     let data_directory = established_data_directory().map_err(|error| error.to_string())?;
     let hook_runner = hook_runner_binary(application)?;
+    let registration_trace = startup_trace.inner().clone();
+    application.state::<GlobalMcpStartupRegistration>().start(
+        GlobalMcpStartupContext::for_desktop(hook_runner.clone(), data_directory.clone()),
+        move |event| registration_trace.record_global_mcp_registration(event),
+    );
     let launch_runtime = application.state::<DesktopLaunchRuntime>();
     let composed = launch_runtime.composed_runtime()?.clone();
     let database = composed.commands().clone();
@@ -199,22 +207,18 @@ impl RecoveryRuntimes {
             .await
             .map_err(|error| format!("provider hook ingestion startup failed: {error}"))?;
         startup_trace.record("provider-hook-ingestion-started");
-        let execution_service =
-            ticketry_agent_execution::reconciliation::ExecutionReconciliationService::new(
-                self.database.clone(),
-                ticketry_work_management::launch_policy::LaunchPolicyResolver::new(
-                    self.database.clone(),
-                ),
-                self.terminal_launch.clone(),
-            );
-        let execution_runtime =
-            ticketry_agent_execution::reconciliation::ExecutionReconciliationRuntime::start(
-                execution_service,
-                Arc::clone(&terminal_runtime),
-                ticketry_agent_execution::reconciliation::ExecutionReconciliationConfig::default(),
-            )
-            .await
-            .map_err(|error| format!("execution reconciliation startup failed: {error}"))?;
+        let execution_service = ticketry_agent_execution::ExecutionReconciliationService::new(
+            self.database.clone(),
+            ticketry_work_management::LaunchPolicyResolver::new(self.database.clone()),
+            self.terminal_launch.clone(),
+        );
+        let execution_runtime = ticketry_agent_execution::ExecutionReconciliationRuntime::start(
+            execution_service,
+            Arc::clone(&terminal_runtime),
+            ticketry_agent_execution::ExecutionReconciliationConfig::default(),
+        )
+        .await
+        .map_err(|error| format!("execution reconciliation startup failed: {error}"))?;
         startup_trace.record("execution-reconciliation-started");
 
         let complete = ticketry_settings::Slice2Readiness::complete();

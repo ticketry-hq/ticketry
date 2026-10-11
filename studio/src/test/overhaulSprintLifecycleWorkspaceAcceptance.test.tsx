@@ -8,7 +8,7 @@ describe("Plan sprint workspace acceptance", () => {
     const onUpdateSprint = vi.fn(async () => true);
     render(<SprintsList graph={graphOf([], [sprint({ id: "planned", name: "Next delivery" })])}
       openStoryId={null} onOpenStory={vi.fn()} onOpenSprint={vi.fn()}
-      onCreateSprint={vi.fn(async () => null)} onUpdateSprint={onUpdateSprint}
+      onCreateSprint={vi.fn(async () => ({ kind: "missing" as const }))} onUpdateSprint={onUpdateSprint}
       renderSprintGoals={() => null} renderSuggestionAgentBox={() => null} />);
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     const dialog = screen.getByRole("dialog", { name: "Start Next delivery" });
@@ -25,7 +25,7 @@ describe("Plan sprint workspace acceptance", () => {
       workItem({ id: "finished", sprintId: active.id, stateId: "done" }),
       workItem({ id: "remaining", sprintId: active.id, stateId: "implement" }),
     ], [active, planned])} openStoryId={null} onOpenStory={vi.fn()}
-      onOpenSprint={vi.fn()} onCreateSprint={vi.fn(async () => null)}
+      onOpenSprint={vi.fn()} onCreateSprint={vi.fn(async () => ({ kind: "missing" as const }))}
       onUpdateSprint={onUpdateSprint} renderSprintGoals={() => null}
       renderSuggestionAgentBox={() => null} />);
     fireEvent.click(screen.getByRole("button", { name: "Complete" }));
@@ -37,7 +37,7 @@ describe("Plan sprint workspace acceptance", () => {
   });
 
   it("[overhaul-411] creates a named sprint and opens it in Plan", async () => {
-    const onCreateSprint = vi.fn(async () => "created-sprint");
+    const onCreateSprint = vi.fn(async () => ({ kind: "created" as const, id: "created-sprint" }));
     const onOpenSprint = vi.fn();
     render(<SprintsList graph={graphOf([])} openStoryId={null} onOpenStory={vi.fn()}
       onOpenSprint={onOpenSprint} onCreateSprint={onCreateSprint}
@@ -66,7 +66,7 @@ describe("Plan sprint workspace acceptance", () => {
     const onOpenSprint = vi.fn();
     const onOpenStory = vi.fn();
     render(<SprintsList graph={graph} openStoryId={null} onOpenStory={onOpenStory}
-      onOpenSprint={onOpenSprint} onCreateSprint={vi.fn(async () => null)}
+      onOpenSprint={onOpenSprint} onCreateSprint={vi.fn(async () => ({ kind: "missing" as const }))}
       onUpdateSprint={vi.fn(async () => true)}
       renderSprintGoals={(entry) => <div>{entry.name} goals</div>}
       renderSuggestionAgentBox={(entry) => <button>{entry.name} Find stories</button>} />);

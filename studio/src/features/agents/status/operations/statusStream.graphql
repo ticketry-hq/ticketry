@@ -10,6 +10,7 @@ fragment RunHoldingFields on AgentRunHolding {
   scope
   launch_state
   launch_model
+  stage_skill_availability
   started_at
   state
   effective_state

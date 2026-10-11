@@ -10,7 +10,7 @@ use seaography::{
 };
 
 use crate::work_management::{
-    commands::catalog,
+    commands::project_delete,
     graphql::{command_database, command_error},
 };
 
@@ -19,7 +19,7 @@ struct DeleteProjectView;
 #[CustomFields]
 impl DeleteProjectView {
     async fn delete_project(ctx: &Context<'_>, id: String) -> Result<bool> {
-        catalog::delete_project(command_database(ctx)?, &id)
+        project_delete::delete_project(command_database(ctx)?, &id)
             .await
             .map_err(command_error)?;
         Ok(true)

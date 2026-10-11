@@ -10,8 +10,12 @@ import {
 import { createPortal } from "react-dom";
 
 import type { Module, ModulePresentation } from "../../shared/api/types";
+import { useStudioStore } from "../projects";
+import { clearStorySprintFilter } from "../work-items";
+import { useEffectiveModuleTabs } from "./effectiveModuleTabs";
 import { hiddenModuleIds } from "./modulePresentation";
 import { useRestoreAndSelectModule } from "./useRestoreAndSelectModule";
+import { ROADMAP_ENABLED } from "../../shared/config/roadmapAvailability";
 
 interface ModulePickerProps {
   modules: readonly Module[];
@@ -34,6 +38,7 @@ export function eligibleModulePickerChoices(
   );
 }
 
+const SHOW_ALL_CHOICE_ID = "module-picker-show-all";
 const CREATE_CHOICE_ID = "module-picker-create";
 const DIALOG_ID = "module-picker-dialog";
 const CHOICES_ID = "module-picker-choices";
@@ -52,19 +57,32 @@ export function ModulePicker({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const restoreAndSelectModule = useRestoreAndSelectModule();
-  const choices = eligibleModulePickerChoices(modules, presentations, query);
-  const validActiveIndex = activeIndex <= choices.length ? activeIndex : 0;
+  const projectId = useStudioStore((state) => state.selectedProjectId);
+  const projection = useEffectiveModuleTabs(projectId, modules, presentations);
+  const restricted = ROADMAP_ENABLED && projection.restricted && projection.selection !== null;
+  const choices = projection.entries.filter(({ module, status }) => status === "hidden"
+    && module.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(({ module }) => module);
+  const choiceOffset = restricted ? 2 : 1;
+  const choiceCount = choices.length + choiceOffset;
+  const validActiveIndex = activeIndex < choiceCount ? activeIndex : 0;
   const activeChoiceId = validActiveIndex === 0
     ? CREATE_CHOICE_ID
-    : "module-picker-" + choices[validActiveIndex - 1]!.id;
+    : restricted && validActiveIndex === 1 ? SHOW_ALL_CHOICE_ID
+    : "module-picker-" + choices[validActiveIndex - choiceOffset]!.id;
 
   useEffect(() => {
     if (open) searchRef.current?.focus();
   }, [open]);
 
   useEffect(() => {
-    if (activeIndex > choices.length) setActiveIndex(0);
-  }, [activeIndex, choices.length]);
+    if (activeIndex >= choiceCount) setActiveIndex(0);
+  }, [activeIndex, choiceCount]);
+
+  useEffect(() => {
+    if (open) {
+      document.getElementById(activeChoiceId)?.scrollIntoView({ block: "nearest" });
+    }
+  }, [open, activeChoiceId]);
 
   useEffect(() => {
     if (!open) return;
@@ -89,6 +107,7 @@ export function ModulePicker({
       setDialogPosition({
         top: triggerBounds.bottom + 4,
         right: window.innerWidth - triggerBounds.right,
+        maxHeight: `min(24rem, calc(100dvh - ${triggerBounds.bottom + 12}px))`,
       });
     };
     updatePosition();
@@ -139,6 +158,11 @@ export function ModulePicker({
     onCreate();
   }
 
+  function showAllSprints() {
+    if (projectId) clearStorySprintFilter(projectId);
+    closeAndRestoreFocus();
+  }
+
   function restoreModule(moduleId: string) {
     setOpen(false);
     restoreAndSelectModule(moduleId);
@@ -153,7 +177,6 @@ export function ModulePicker({
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      const choiceCount = choices.length + 1;
       const step = event.key === "ArrowDown" ? 1 : -1;
       setActiveIndex((current) => (current + step + choiceCount) % choiceCount);
       return;
@@ -164,7 +187,8 @@ export function ModulePicker({
       createModule();
       return;
     }
-    const module = choices[validActiveIndex - 1];
+    if (restricted && validActiveIndex === 1) { showAllSprints(); return; }
+    const module = choices[validActiveIndex - choiceOffset];
     if (module) restoreModule(module.id);
   }
 
@@ -211,9 +235,9 @@ export function ModulePicker({
               setActiveIndex(0);
             }}
             placeholder="Search modules"
-            className="mb-1 w-full border border-pane-border bg-pane-bg px-2 py-1 text-base text-text-primary outline-none placeholder:text-text-muted focus:border-focus-accent"
+            className="mb-1 w-full shrink-0 border border-pane-border bg-pane-bg px-2 py-1 text-base text-text-primary outline-none placeholder:text-text-muted focus:border-focus-accent"
           />
-          <div id={CHOICES_ID} role="listbox" aria-label="Module choices">
+          <div id={CHOICES_ID} role="listbox" aria-label="Module choices" className="min-h-0 overflow-y-auto overscroll-contain">
             <button
               id={CREATE_CHOICE_ID}
               type="button"
@@ -228,6 +252,14 @@ export function ModulePicker({
             >
               Create new module
             </button>
+            {restricted ? <button
+              id={SHOW_ALL_CHOICE_ID}
+              type="button"
+              role="option"
+              aria-selected={validActiveIndex === 1}
+              onClick={showAllSprints}
+              className={"w-full px-2 py-1.5 text-left text-base text-text-primary hover:bg-pane-title " + (validActiveIndex === 1 ? "bg-pane-title" : "")}
+            >Show all sprints</button> : null}
             {choices.map((module, index) => (
               <button
                 key={module.id}
@@ -235,19 +267,22 @@ export function ModulePicker({
                 type="button"
                 role="option"
                 aria-label={"Restore " + module.name + " module tab"}
-                aria-selected={validActiveIndex === index + 1}
+                disabled={projection.loading}
+                aria-selected={validActiveIndex === index + choiceOffset}
                 onClick={() => restoreModule(module.id)}
                 className={
                   "w-full truncate px-2 py-1.5 text-left text-base "
                   + "text-text-muted hover:bg-pane-title hover:text-text-primary "
                   + (
-                    validActiveIndex === index + 1
+                    validActiveIndex === index + choiceOffset
                       ? "bg-pane-title text-text-primary"
                       : ""
                   )
                 }
               >
                 {module.name}
+                {restricted && projection.entries.find((entry) => entry.module.id === module.id)?.sprintEligible === false
+                  ? <span className="block text-xs">Clears sprint filter to show all modules</span> : null}
               </button>
             ))}
           </div>

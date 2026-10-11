@@ -44,8 +44,9 @@ vi.mock("../features/projects/queries/readTransport", async () => {
 });
 
 import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
-import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
-import { ModulesPaneToggle } from "../app/shell/ticket-workspace/ModulesPaneToggle";
+import { ModuleManager, openModuleManager } from "../features/module-manager";
+import { StudioFooter } from "../app/shell/StudioFooter";
+import { setStorySprintFilterIntent } from "../features/work-items";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import {
   getModulesSnapshot,
@@ -87,14 +88,14 @@ function project(manual_module_order: boolean): Project {
 }
 
 /**
- * Every Module surface at once. Rendering the sidebar and the Module tab strip
+ * Every Module surface at once. Rendering the manager and the Module tab strip
  * together is the point: they must never be able to disagree, because they read
  * the one cached Module collection rather than each sorting for themselves.
  */
 function ModuleSurfaces() {
   return (
     <>
-      <ModulesPane />
+      <ModuleManager />
       <ModuleTabStrip />
     </>
   );
@@ -102,19 +103,12 @@ function ModuleSurfaces() {
 
 function KeyboardModuleSurface() {
   useGlobalKeymap();
-  const sidebarVisible = useClientStore((state) => state.sidebarVisible);
-  return (
-    <>
-      <ModulesPaneToggle />
-      {sidebarVisible ? <ModulesPane /> : null}
-    </>
-  );
+  return <><StudioFooter /><ModuleManager /></>;
 }
 
-function sidebarOrder(): string[] {
-  return Array.from(document.querySelectorAll("li"))
-    .map((row) => row.textContent?.replace("📦 ", "").trim() ?? "")
-    .filter((name) => name !== "" && name !== "+ Add Module");
+function managerOrder(): string[] {
+  return screen.queryAllByRole("button", { name: /^Inspect / })
+    .map((row) => row.getAttribute("aria-label")!.slice("Inspect ".length));
 }
 
 function tabStripOrder(): string[] {
@@ -133,8 +127,9 @@ function backlogGroupOrder(): string[] {
 }
 
 async function renderModuleSurfaces(expected: string[]): Promise<void> {
+  openModuleManager();
   render(<ModuleSurfaces />);
-  await waitFor(() => expect(sidebarOrder()).toEqual(expected));
+  await waitFor(() => expect(managerOrder()).toEqual(expected));
 }
 
 describe("canonical module order acceptance", () => {
@@ -143,11 +138,10 @@ describe("canonical module order acceptance", () => {
     listModules.mockReset().mockResolvedValue(SERVER_ORDER);
     listProjects.mockReset().mockResolvedValue([project(false)]);
     useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
+    setStorySprintFilterIntent(PROJECT_ID, { mode: "all" });
     useClientStore.setState({
       selectedModuleId: null,
-      modulesCursorId: null,
-      sidebarVisible: true,
-      focusedPane: "modules",
+      focusedPane: "tasks",
     });
   });
 
@@ -158,30 +152,31 @@ describe("canonical module order acceptance", () => {
     });
     useClientStore.setState({
       selectedModuleId: "module-a",
-      modulesCursorId: "module-a",
-      sidebarVisible: false,
       focusedPane: "tasks",
       selectModule,
     });
 
     render(<KeyboardModuleSurface />);
-    fireEvent.click(screen.getByRole("button", { name: "Open Modules pane" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Module Manager" }));
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Charlie"]),
+      expect(managerOrder()).toEqual(["Alpha", "Bravo", "Charlie"]),
     );
-    expect(useClientStore.getState().focusedPane).toBe("modules");
+    expect(screen.getByRole("searchbox", { name: "Search modules" })).toHaveFocus();
+    screen.getByRole("button", { name: "Inspect Alpha" }).focus();
 
-    fireEvent.keyDown(window, { key: "ArrowDown" });
-    fireEvent.keyDown(window, { key: "Enter" });
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    fireEvent.keyDown(document.activeElement!, { key: "Enter" });
 
-    await waitFor(() => expect(selectModule).toHaveBeenCalledWith("module-b"));
+    await waitFor(() => expect(selectModule).toHaveBeenCalledWith("module-b", { isCurrent: expect.any(Function) }));
     expect(useClientStore.getState().selectedModuleId).toBe("module-b");
 
-    fireEvent.keyDown(window, { key: "ArrowUp" });
-    fireEvent.keyDown(window, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "Open Module Manager" }));
+    screen.getByRole("button", { name: "Inspect Bravo" }).focus();
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowUp" });
+    fireEvent.keyDown(document.activeElement!, { key: "Enter" });
 
     await waitFor(() =>
-      expect(selectModule).toHaveBeenLastCalledWith("module-a"),
+      expect(selectModule).toHaveBeenLastCalledWith("module-a", { isCurrent: expect.any(Function) }),
     );
     expect(useClientStore.getState().selectedModuleId).toBe("module-a");
   });
@@ -248,7 +243,7 @@ describe("canonical module order acceptance", () => {
     await loadModules(PROJECT_ID);
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Bravo", "Charlie", "Alpha"]),
+      expect(managerOrder()).toEqual(["Bravo", "Charlie", "Alpha"]),
     );
     expect(tabStripOrder()).toEqual(["Bravo", "Charlie", "Alpha"]);
     expect(keyboardShortcutOrder()).toEqual(["Bravo", "Charlie", "Alpha"]);

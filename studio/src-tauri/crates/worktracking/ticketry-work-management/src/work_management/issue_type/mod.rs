@@ -1,6 +1,6 @@
 mod column_policy;
-pub mod views;
-pub mod workflow;
+pub(crate) mod views;
+pub(crate) mod workflow;
 
 pub fn apply_generated_input_policy(context: &mut seaography::BuilderContext) {
     column_policy::apply(context);

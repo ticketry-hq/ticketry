@@ -1,16 +1,15 @@
-import { useEffect, useMemo } from "react";
-import { useModuleScratchEndedRuns } from "../../../../../features/agents/terminal";
+import { useEffect } from "react";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
 import {
   ConversationComposer,
   useConversationComposerStore,
+  useEndedConversationsToday,
 } from "../../../../../features/conversations";
+import { useStudioStore } from "../../../../../features/projects";
 import { CONVERSATIONS_SECTION_ID } from "../../../../../features/work-items";
 import { useClientStore } from "../../../../../state/clientStore";
 import { selectPlanningRowId } from "../internal/instantRunTicketNavigation";
 import { StateHeaderRow } from "./StateHeaderRow";
-
-const ENDED_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /**
  * The Conversations section header: collapses like a state header, opens the
@@ -31,13 +30,8 @@ export function ConversationsHeaderRow({
   const toggleStateCollapsed = useClientStore((s) => s.toggleStateCollapsed);
   const composerOpen = useConversationComposerStore((s) => s.open);
   const closeComposer = useConversationComposerStore((s) => s.closeComposer);
-  const endedRuns = useModuleScratchEndedRuns(selectedModuleId);
-  const endedToday = useMemo(() => {
-    const since = Date.now() - ENDED_WINDOW_MS;
-    return endedRuns.filter(
-      (run) => run.scope === "instant" && Date.parse(run.updated_at) >= since,
-    ).length;
-  }, [endedRuns]);
+  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
+  const endedToday = useEndedConversationsToday(selectedProjectId, selectedModuleId);
 
   // A composer belongs to the module it was opened in.
   useEffect(() => closeComposer, [closeComposer, selectedModuleId]);

@@ -1,6 +1,6 @@
 import { useLayoutEffect } from "react";
 
-import { useAgentStatusRuns } from "../../features/agents/status";
+import { isWorkItemShellRun, useAgentStatusRuns } from "../../features/agents/status";
 import {
   isLiveTerminalState,
   isTerminalProvider,
@@ -10,9 +10,9 @@ import {
 import type { RunRecord } from "../../features/agents/status";
 
 function bucketForRun(run: RunRecord): string | null {
-  if (!isTerminalProvider(run.agent) || !isLiveTerminalState(run.state)) {
-    return null;
-  }
+  if (!isLiveTerminalState(run.state)) return null;
+  if (isWorkItemShellRun(run)) return run.task_id;
+  if (!isTerminalProvider(run.agent)) return null;
   if (run.scope === "task") return run.task_id;
   if (!run.module_id) return null;
   return scratchBucketId(run.module_id);

@@ -16,14 +16,25 @@ import { validateLaunchBindingOptions } from "./launchBindingValidation";
 import { getCodexProfilesSnapshot } from "./providerQueries";
 import { StageSkillsField } from "./StageSkillsField";
 import {
+  canonicalSkillNames,
+  useSkillAvailability,
+  type SkillAvailabilityCheck,
+} from "./skillAvailability";
+import {
   SETTINGS_FIELD_CLASS,
   SettingsStatusLine,
 } from "../../shared/ui/SettingsPrimitives";
 
 interface LaunchConfigurationFormProps {
   binding?: ScopedWorkflowLaunchBinding;
+  /** Observes whether the stage's provider can see each configured skill. */
+  checkSkillAvailability?: SkillAvailabilityCheck;
   error?: string;
   issueType: IssueType;
+  /** Identity of the inherited global launch default; a change rechecks. */
+  launchDefaultKey?: string;
+  /** The module whose linked folder supplies module-relative skill roots. */
+  moduleId?: string | null;
   providerCapabilities: ProviderCapabilities[];
   promptRows?: number;
   save: (binding: LaunchBindingInput) => Promise<unknown>;
@@ -34,8 +45,11 @@ const optional = (value: string) => value.trim() || null;
 
 export function LaunchConfigurationForm({
   binding,
+  checkSkillAvailability,
   error,
   issueType,
+  launchDefaultKey,
+  moduleId,
   promptRows = 4,
   providerCapabilities,
   save,
@@ -46,17 +60,35 @@ export function LaunchConfigurationForm({
     identity,
     binding,
   );
-  const { prompt, stageSkills, agent, profile, model, reasoning } = fields;
+  const { prompt, stageSkills, requiredSkills, agent, profile, model, reasoning } = fields;
   const setPrompt = (next: string) => setFields({ ...fields, prompt: next });
+  const skillAvailability = useSkillAvailability({
+    check: checkSkillAvailability,
+    moduleId,
+    agent,
+    profile,
+    names: stageSkills,
+    launchDefaultKey,
+  });
+
+  const requiredAvailability = useSkillAvailability({
+    check: checkSkillAvailability,
+    moduleId,
+    agent,
+    profile,
+    names: requiredSkills,
+    launchDefaultKey,
+  });
 
   const input = useMemo<LaunchBindingInput>(() => ({
     prompt,
     stage_skills: stageSkills,
+    required_skills: requiredSkills,
     agent: optional(agent),
     profile: optional(profile),
     model: optional(model),
     reasoning: optional(reasoning),
-  }), [agent, model, profile, prompt, reasoning, stageSkills]);
+  }), [agent, model, profile, prompt, reasoning, stageSkills, requiredSkills]);
   const validationError = validateLaunchBindingOptions(input, providerCapabilities);
   const pickerValue = useMemo<LaunchDefaultPickerValue>(() => ({
     provider: agent,
@@ -69,6 +101,7 @@ export function LaunchConfigurationForm({
     markSaved({
       prompt: next.prompt ?? "",
       stageSkills: next.stage_skills ?? stageSkills,
+      requiredSkills: next.required_skills ?? requiredSkills,
       agent: next.agent ?? "",
       profile: next.profile ?? "",
       model: next.model ?? "",
@@ -93,6 +126,7 @@ export function LaunchConfigurationForm({
     void apply({
       prompt,
       stage_skills: stageSkills,
+      required_skills: requiredSkills,
       agent: optional(next.provider),
       profile: optional(next.profile),
       model: optional(next.model),
@@ -120,13 +154,30 @@ export function LaunchConfigurationForm({
       </label>
 
       <StageSkillsField
+        availability={checkSkillAvailability ? skillAvailability : undefined}
         skills={stageSkills}
-        onChange={(nextStageSkills) => {
+        onChange={(edited) => {
+          // An edit saves case-only matches under the installed spelling and
+          // collapses names that differ only in case. A status refresh alone
+          // never reaches this path, so it never writes the binding.
+          const nextStageSkills = canonicalSkillNames(edited, skillAvailability.result);
           setFields({ ...fields, stageSkills: nextStageSkills });
           void apply({
             ...input,
             stage_skills: nextStageSkills,
           });
+        }}
+      />
+
+      <StageSkillsField
+        kind="required"
+        availability={checkSkillAvailability ? requiredAvailability : undefined}
+        skills={requiredSkills}
+        onChange={(edited) => {
+          // Disk spelling is advisory: the pinned required-skill catalog uses
+          // exact identifiers, so never canonicalize these from host results.
+          setFields({ ...fields, requiredSkills: edited });
+          void apply({ ...input, required_skills: edited });
         }}
       />
 

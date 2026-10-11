@@ -17,7 +17,9 @@ use sea_orm::{
 
 use super::identity::{compact_module_id, link_id_for_module};
 use super::local_path::LocalModulePath;
-use super::{entities::module_link, ModuleLinkError};
+use ticketry_entities::module_link;
+
+use super::ModuleLinkError;
 use ticketry_entities::issue;
 
 /// The Work Item type a link may name.

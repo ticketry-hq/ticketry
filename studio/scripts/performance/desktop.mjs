@@ -84,15 +84,14 @@ export function buildDesktopArtifact() {
   if (!existsSync(path.join(performanceBuildDirectory, "index.html"))) {
     throw new Error(
       "the profiling frontend bundle is missing. Run "
-      + "npm run perf:prepare --workspace @worktracker/studio first.",
+      + "bun run --cwd studio perf:prepare first.",
     );
   }
   prepareDesktopHookRunner({ root: path.resolve(studioRoot, "..") });
-  return run("npm", [
-    "exec",
+  return run("bun", [
+    "run",
     "tauri",
     "build",
-    "--",
     "--debug",
     "--no-bundle",
     "--features",
@@ -105,9 +104,8 @@ export function buildDesktopArtifact() {
 }
 
 function seedThroughAdapter({ adapterOrigin, directory, dataset }) {
-  const child = spawnSync("npm", [
-    "exec",
-    "--",
+  const child = spawnSync("bun", [
+    "run",
     "playwright",
     "test",
     "--config",

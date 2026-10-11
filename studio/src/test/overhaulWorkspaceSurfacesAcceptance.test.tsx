@@ -7,17 +7,21 @@ import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import { TicketWorkspace } from "../app/shell/ticket-workspace/TicketWorkspace";
 import { StudioFooter } from "../app/shell/StudioFooter";
+import { StudioLayout } from "../app/shell/StudioLayout";
 import { useChangesWorkspace } from "../features/agents/worktrees";
+import { WorktreeSwitcher } from "../features/agents/worktrees/changes/WorktreeSwitcher";
 import { usePlanWorkspace } from "../features/sprints";
 import { PlanningGraphDocument } from "../features/planning-graph";
 import { studioApolloClient } from "../shared/apollo/client";
 import { useClientStore } from "../state/clientStore";
 import { fixture, mountStudio } from "./seam";
 
-function cacheEmptyPlan() {
+function cacheEmptyPlan(withModule = false) {
   const data = {
     project: { __typename: "WorktrackerProjectConnection", nodes: [{ __typename: "WorktrackerProject", id: "project-1", name: "Planner", slug: "PLAN" }] },
-    states: { __typename: "WorktrackerStateConnection", nodes: [] }, issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [] }, modules: { __typename: "WorktrackerIssueConnection", nodes: [] },
+    states: { __typename: "WorktrackerStateConnection", nodes: [] }, issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [] }, modules: { __typename: "WorktrackerIssueConnection", nodes: withModule ? [
+      { __typename: "WorktrackerIssue", id: "module-1", name: "Module 1", sequenceId: 1, presentation: { __typename: "WorktrackerModulepresentationConnection", nodes: [] } },
+    ] : [] },
     workItems: { __typename: "WorktrackerIssueConnection", nodes: [] }, sprints: { __typename: "WorktrackerSprintConnection", nodes: [] },
   };
   studioApolloClient().writeQuery({ query: PlanningGraphDocument, variables: { projectId: "project-1" }, data });
@@ -26,6 +30,20 @@ function cacheEmptyPlan() {
 function KeyboardTabs() {
   useGlobalKeymap();
   return <ModuleTabStrip />;
+}
+
+function KeyboardLayout() {
+  useGlobalKeymap();
+  return <StudioLayout />;
+}
+
+function KeyboardTabsWithCheckout() {
+  const active = useChangesWorkspace((state) => state.active);
+  const moduleId = useChangesWorkspace((state) => state.moduleId);
+  const taskId = useChangesWorkspace((state) => state.taskId);
+  return <><KeyboardTabs />{active ? <WorktreeSwitcher
+    moduleId={moduleId} selectedTaskId={taskId}
+    onOpenModule={() => {}} onOpenTask={() => {}} /> : null}</>;
 }
 
 describe("overhaul acceptance - workspace surfaces", () => {
@@ -55,27 +73,41 @@ describe("overhaul acceptance - workspace surfaces", () => {
     expect(useChangesWorkspace.getState().active).toBe(false);
     expect(document.querySelector('[data-studio-status-bar] [role="tab"]')).toBeNull();
   });
-  it("[overhaul-454] opens Plan with no selected module and keeps the module workspace mounted", async () => {
+  it("[overhaul-454] gives Plan the full width without losing the saved Stories/workspace split or mounted workspace", async () => {
     const http = fixture();
     http.tree("module-1", { rootIds: [], children: {}, order: [] });
-    mountStudio({ http, children: <TicketWorkspace tasksSize={40} workspaceSize={60}
-      groupRef={createRef<ImperativePanelGroupHandle>()} onLayout={() => {}} /> });
+    mountStudio({ http, children: <KeyboardLayout /> });
     await screen.findByRole("tab", { name: "Module 1" });
+    const workspace = screen.getByTestId("module-workspace-region").querySelector('[data-panel-group]');
     act(() => {
-      useClientStore.setState({ selectedModuleId: null });
-      cacheEmptyPlan();
+      useClientStore.setState({ selectedModuleId: null, panelLayout: [37.5, 62.5] });
+      cacheEmptyPlan(true);
     });
+    expect(screen.queryByTestId("pane-modules")).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Plan" }));
+    expect(screen.queryByTestId("pane-modules")).not.toBeInTheDocument();
+    expect(useClientStore.getState()).toMatchObject({ panelLayout: [37.5, 62.5] });
     expect(usePlanWorkspace.getState().active).toBe(true);
     expect(screen.getByRole("tab", { name: "Plan" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByTestId("module-workspace-region").querySelector('[data-panel-group]')?.parentElement).toHaveAttribute("hidden");
     expect(await screen.findByText("Sprints")).toBeVisible();
+    expect(screen.getByTestId("module-workspace-region").querySelector('[data-panel-group]')).toBe(workspace);
+    // Exit Plan without initiating new module/folder navigation: its saved
+    // origin deliberately had no module selected.
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    await waitFor(() => expect(usePlanWorkspace.getState().active).toBe(false));
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Plan" })).toHaveFocus());
+    expect(useClientStore.getState().selectedModuleId).toBeNull();
+    expect(screen.getByRole("tab", { name: "Module 1" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.queryByTestId("pane-modules")).toBeNull();
+    expect(useClientStore.getState()).toMatchObject({ panelLayout: [37.5, 62.5] });
+    expect(screen.getByTestId("module-workspace-region").querySelector('[data-panel-group]')).toBe(workspace);
   });
 
   it("[overhaul-455] roves across Plan, Changes and modules with arrows, Home and End", async () => {
     const http = fixture();
     http.tree("module-1", { rootIds: [], children: {}, order: [] });
-    mountStudio({ http, children: <KeyboardTabs /> });
+    mountStudio({ http, children: <KeyboardTabsWithCheckout /> });
     const module = await screen.findByRole("tab", { name: "Module 1" });
     const plan = screen.getByRole("tab", { name: "Plan" });
     const changes = screen.getByRole("tab", { name: "Changes · Module 1" });
@@ -84,6 +116,10 @@ describe("overhaul acceptance - workspace surfaces", () => {
     expect(plan).toHaveFocus();
     expect(plan).toHaveAttribute("aria-selected", "true");
     fireEvent.keyDown(plan, { key: "ArrowRight" });
+    await screen.findByRole("button", { name: "Choose checkout" });
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    });
     expect(changes).toHaveFocus();
     expect(changes).toHaveAttribute("aria-selected", "true");
     fireEvent.keyDown(changes, { key: "End" });

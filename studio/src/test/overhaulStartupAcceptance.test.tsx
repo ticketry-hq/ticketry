@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The two host reads startup must complete before it can prompt for anything.
 vi.mock("../features/projects/queries", async () => ({
@@ -43,6 +44,8 @@ import { RECENT_MODULE_KEY, rememberTaskSelection } from "../state/persistence";
 import { TEMP_TASK_ID, type TabKind } from "../features/agents/types";
 import { scratchBucketId } from "../features/agents/terminal";
 import { readStudioWorkspaceTarget, rememberStudioWorkspaceTarget } from "../features/workspace-state/studioWorkspaceTarget";
+import { TaskWorkspace } from "../features/task-workspace";
+import { installDeferredWorkspaceDocuments, workspaceDocument } from "./renderedTaskWorkspaceDocumentFixture";
 
 const loadProjects = projectQueries.loadProjects as ReturnType<typeof vi.fn>;
 const loadModules = projectQueries.loadModules as ReturnType<typeof vi.fn>;
@@ -92,6 +95,7 @@ function seedHost({
 }
 
 describe("startup acceptance", () => {
+  afterEach(() => cleanup());
   beforeEach(() => {
     reads = [];
     localStorage.clear();
@@ -154,7 +158,7 @@ describe("startup acceptance", () => {
     expect(useClientStore.getState().focusedPane).toBe("tasks");
   });
 
-  it("[overhaul-288] launches the restored Story or scratch workspace on Details without removing its tabs", async () => {
+  it("[overhaul-288] preserves the restored Story or scratch workspace target and tabs for rendered restoration", async () => {
     for (const taskId of ["story-1", TEMP_TASK_ID]) {
       for (const active of ["terminal", "doc", "changes"] as TabKind[]) {
         useStudioStore.setState({ selectedProjectId: null });
@@ -176,10 +180,12 @@ describe("startup acceptance", () => {
         expect(await bootstrapStudio()).toBe("ready");
         expect(useClientStore.getState().selectedTaskId).toBe(taskId);
         expect(useClientStore.getState().workspaces[bucket]).toEqual({
-          active: "details", activeDocId: "doc-1", closedDocIds: ["doc-2"],
+          active, activeDocId: "doc-1", closedDocIds: ["doc-2"],
         });
         expect(useClientStore.getState().activeByTask[bucket]).toBe("session-1");
-        expect(readStudioWorkspaceTarget(bucket)).toEqual({ kind: "details" });
+        expect(readStudioWorkspaceTarget(bucket)).toEqual(active === "terminal"
+          ? { kind: "terminal", agentRunId: "run-1" }
+          : active === "doc" ? { kind: "doc", relPath: "spec.md" } : { kind: "details" });
 
         // After startup, an explicit tab selection still works normally.
         useClientStore.getState().setActive(bucket, "terminal");
@@ -254,5 +260,30 @@ describe("startup acceptance", () => {
     loadProjects.mockRejectedValue(new Error("state.db is still adopting"));
 
     expect(await bootstrapStudio()).toBe("provisioning");
+  });
+
+  it("[overhaul-736] renders the remembered document after actual bootstrap without engaging it during hydration", async () => {
+    const documents = installDeferredWorkspaceDocuments();
+    useStudioStore.setState({ selectedProjectId: null });
+    useClientStore.setState({ selectedModuleId: null, selectedTaskId: null });
+    localStorage.setItem(RECENT_MODULE_KEY, "module-1");
+    rememberTaskSelection("module-1", "story-a");
+    readModuleTree.mockResolvedValue({
+      rootIds: ["story-a"], children: { "story-a": [] }, order: ["story-a"], states: [], workItems: [],
+    });
+    rememberStudioWorkspaceTarget("story-a", { kind: "doc", relPath: "DESIGN.html" });
+
+    expect(await bootstrapStudio()).toBe("ready");
+    const restored = useClientStore.getState();
+    render(<TaskWorkspace bucket={restored.selectedTaskId} projectId={useStudioStore.getState().selectedProjectId}
+      moduleId={restored.selectedModuleId} owner="studio" details={<div>Remembered Story details</div>} />);
+    await documents.request("story-a");
+    expect(screen.getByText("Remembered Story details")).toBeVisible();
+    expect(readStudioWorkspaceTarget("story-a")).toEqual({ kind: "doc", relPath: "DESIGN.html" });
+    await documents.deliver("story-a", [workspaceDocument("design-reloaded")]);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "DESIGN" })).toHaveAttribute("aria-selected", "true"));
+    const frame = await screen.findByTitle("DESIGN");
+    expect(frame).toHaveAttribute("src", expect.stringContaining("design-reloaded/DESIGN.html"));
+    expect(frame).not.toHaveFocus();
   });
 });

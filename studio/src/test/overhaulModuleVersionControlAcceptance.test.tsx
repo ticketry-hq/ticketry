@@ -868,7 +868,7 @@ describe("overhaul acceptance - module Changes and current worktrees", () => {
     fireEvent.click(screen.getByTestId("workspace-tab-changes"));
     await openBranchInspector();
     expect(await screen.findByRole("button", { name: "Create PR" })).toBeEnabled();
-    expect(screen.getByRole("status")).toHaveTextContent(
+    expect(screen.getByText(/Create PR follows the same rule\./, { selector: '[role="status"]' })).toHaveTextContent(
       "Create PR follows the same rule.",
     );
     fireEvent.click(screen.getByRole("button", { name: "Create PR" }));

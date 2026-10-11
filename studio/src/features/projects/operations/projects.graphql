@@ -1,3 +1,15 @@
+fragment GeneratedWorkTrackerModuleFields on WorktrackerIssue {
+  id
+  name
+  project_id: projectId
+  sequence_id: sequenceId
+  is_archived: isArchived
+  issue_type: issueTypeId
+  rank
+  project { id slug }
+  state_revision: stateRevision
+}
+
 query WorkTrackerOnboarding {
   projects: worktrackerProject(orderBy: { createdAt: ASC, id: ASC }) {
     nodes {
@@ -95,16 +107,7 @@ query WorkTrackerProjectOpen($projectId: String!) {
     }
     orderBy: { sequenceId: ASC }
   ) {
-    nodes {
-      id
-      name
-      project_id: projectId
-      sequence_id: sequenceId
-      is_archived: isArchived
-      issue_type: issueTypeId
-      rank
-      project { id slug }
-    }
+    nodes { ...GeneratedWorkTrackerModuleFields }
   }
   module_presentations: worktrackerModulepresentation(
     having: {

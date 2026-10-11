@@ -1,0 +1,286 @@
+import { useCallback, useEffect, useRef, type ReactNode, type RefObject } from "react";
+import type { DesignDoc, TabKind } from "../../agents/types";
+import {
+  isLiveTerminalState,
+  LifecycleBadge,
+  presentTerminalRuns,
+  providerToneClasses,
+  type SessionTab,
+} from "../../agents/terminal";
+import type { EditViewZone } from "../../../state/clientStore";
+import { WorkspaceTab } from "./WorkspaceTab";
+import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
+import type { WorkspaceTabReorderDrag } from "../../workspace-tabs/internal/useWorkspaceTabReorderDrag";
+import { workspaceTabIdentityKey } from "../../workspace-tabs/ordering";
+import { WorkspaceLauncher } from "./WorkspaceLauncher";
+import type { WorkspaceLauncherContext } from "../types";
+
+// A run stops being live when it ends; from then on colour is neutral grey
+// rather than a faded provider hue, which no one can identify anyway. The rule
+// itself is shared with the dormant chips so the two rows cannot disagree.
+function isLiveTerminal(tab: SessionTab): boolean {
+  return isLiveTerminalState(tab.lifecycle);
+}
+
+export function WorkspaceTabStrip({
+  tabStripRef,
+  launcherTriggerRef,
+  isEditView,
+  editViewZone,
+  showZoneChrome,
+  allowTabHoverEmphasis,
+  showTabHighlight,
+  highlightedTab,
+  activeKind,
+  activeDoc,
+  activeTerminalId,
+  documents,
+  terminalTabs,
+  orderedTabs,
+  activeTab,
+  reorderDrag,
+  bucket,
+  launchContext,
+  conversationTitle,
+  onClaimPointerZone,
+  onSetEditViewZone,
+  onSelectTab,
+  onActivateTerminal,
+  onCloseDocument,
+  onCloseTerminal,
+  onTaskAgentLaunched,
+  onTaskAgentLaunchStarted,
+  trailing,
+}: {
+  tabStripRef: RefObject<HTMLDivElement>;
+  launcherTriggerRef: RefObject<HTMLButtonElement>;
+  isEditView: boolean;
+  editViewZone: EditViewZone;
+  showZoneChrome: boolean;
+  allowTabHoverEmphasis: boolean;
+  showTabHighlight: boolean;
+  highlightedTab: TaskWorkspaceTabIdentity;
+  activeKind: TabKind;
+  activeDoc: DesignDoc | null;
+  activeTerminalId: string | null;
+  documents: readonly DesignDoc[];
+  terminalTabs: readonly SessionTab[];
+  orderedTabs: readonly TaskWorkspaceTabIdentity[];
+  activeTab: TaskWorkspaceTabIdentity;
+  reorderDrag: WorkspaceTabReorderDrag;
+  bucket: string;
+  launchContext: WorkspaceLauncherContext | null;
+  conversationTitle: string | null;
+  onClaimPointerZone: (zone: "tab-strip") => void;
+  onSetEditViewZone: (zone: "tab-strip") => void;
+  onSelectTab: (tab: TaskWorkspaceTabIdentity) => void;
+  onActivateTerminal: (sessionId: string) => void;
+  onCloseDocument: (docId: string) => void;
+  onCloseTerminal: (sessionId: string) => void;
+  onTaskAgentLaunched: (sessionId: string) => void;
+  onTaskAgentLaunchStarted: () => ((sessionId: string) => void) | void;
+  /** Pinned to the strip's right end, outside the scrolling tabs. */
+  trailing?: ReactNode;
+}) {
+  const tabRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const registerTabRef = useCallback(
+    (identity: TaskWorkspaceTabIdentity, node: HTMLDivElement | null) => {
+      tabRefs.current[workspaceTabIdentityKey(identity)] = node;
+    },
+    [],
+  );
+  const orderKey = orderedTabs.map(workspaceTabIdentityKey).join("\0");
+  const activeKey = workspaceTabIdentityKey(activeTab);
+
+  useEffect(() => {
+    tabRefs.current[activeKey]?.scrollIntoView?.({
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [activeKey, orderKey]);
+
+  const documentById = new Map(documents.map((document) => [document.id, document]));
+  const terminalPresentations = presentTerminalRuns(
+    terminalTabs.map((tab) => ({
+      key: tab.id,
+      agent: tab.meta.agent,
+      launchState: tab.launchState,
+      launchModel: tab.launchModel,
+      isPlanning: tab.meta.isPlanning,
+      isInstant: tab.meta.isInstant,
+      live: isLiveTerminal(tab),
+    })),
+  );
+  const terminalById = new Map(
+    terminalTabs.map((tab, index) => [
+      tab.id,
+      { tab, presentation: terminalPresentations[index] },
+    ]),
+  );
+
+  return (
+    <div
+      ref={tabStripRef}
+      role="tablist"
+      aria-label="Workspace tabs"
+      data-testid="workspace-tabs"
+      data-navigation-zone={isEditView ? "tab-strip" : undefined}
+      tabIndex={isEditView ? -1 : undefined}
+      onMouseDown={isEditView ? () => onClaimPointerZone("tab-strip") : undefined}
+      onFocus={isEditView ? () => onSetEditViewZone("tab-strip") : undefined}
+      className={`mb-1 flex min-w-0 shrink-0 flex-nowrap gap-1 border-b border-pane-border pb-1 outline-none transition-opacity duration-150 motion-reduce:transition-none ${
+        isEditView
+          ? `min-h-10 items-center px-1 py-1 ${
+              showZoneChrome
+                ? editViewZone === "tab-strip"
+                  ? "ring-1 ring-focus-accent ring-inset"
+                  : "opacity-[0.65]"
+                : ""
+            }`
+          : ""
+      }`}
+    >
+      <div
+        role="presentation"
+        data-testid="workspace-tab-scroll"
+        className="flex min-w-0 flex-1 flex-nowrap gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {orderedTabs.map((identity) => {
+        if (identity.kind === "details") {
+          return (
+            <WorkspaceTab
+              key="details"
+              label="Details"
+              active={activeKind === "details"}
+              highlighted={showTabHighlight && highlightedTab.kind === "details"}
+              allowHoverEmphasis={allowTabHoverEmphasis}
+              onClick={(event) => {
+                if (!reorderDrag.consumePostDropClick(event)) {
+                  onSelectTab({ kind: "details" });
+                }
+              }}
+              dropIntent={reorderDrag.dropIntentFor(identity)}
+              registerRef={(node) => registerTabRef(identity, node)}
+              dragSourceProps={reorderDrag.dragSourcePropsFor(identity)}
+              dropTargetProps={reorderDrag.dropTargetPropsFor(identity)}
+            />
+          );
+        }
+        if (identity.kind === "changes") {
+          return (
+            <WorkspaceTab
+              key="changes"
+              label="Changes"
+              active={activeKind === "changes"}
+              highlighted={showTabHighlight && highlightedTab.kind === "changes"}
+              allowHoverEmphasis={allowTabHoverEmphasis}
+              onClick={(event) => {
+                if (!reorderDrag.consumePostDropClick(event)) {
+                  onSelectTab({ kind: "changes" });
+                }
+              }}
+              dropIntent={reorderDrag.dropIntentFor(identity)}
+              registerRef={(node) => registerTabRef(identity, node)}
+              dragSourceProps={reorderDrag.dragSourcePropsFor(identity)}
+              dropTargetProps={reorderDrag.dropTargetPropsFor(identity)}
+            />
+          );
+        }
+        if (identity.kind === "doc") {
+          const document = documentById.get(identity.id);
+          if (!document) return null;
+          return (
+            <WorkspaceTab
+              key={`doc:${document.id}`}
+              label={document.label}
+              active={activeKind === "doc" && activeDoc?.id === document.id}
+              highlighted={
+                showTabHighlight &&
+                highlightedTab.kind === "doc" &&
+                highlightedTab.id === document.id
+              }
+              allowHoverEmphasis={allowTabHoverEmphasis}
+              onClick={(event) => {
+                if (!reorderDrag.consumePostDropClick(event)) {
+                  onSelectTab({ kind: "doc", id: document.id });
+                }
+              }}
+              onClose={(event) => {
+                if (!reorderDrag.consumePostDropClick(event)) {
+                  onCloseDocument(document.id);
+                }
+              }}
+              dropIntent={reorderDrag.dropIntentFor(identity)}
+              registerRef={(node) => registerTabRef(identity, node)}
+              dragSourceProps={reorderDrag.dragSourcePropsFor(identity)}
+              dropTargetProps={reorderDrag.dropTargetPropsFor(identity)}
+            />
+          );
+        }
+        const terminal = terminalById.get(identity.id);
+        if (!terminal) return null;
+        const { tab, presentation } = terminal;
+        const active = activeKind === "terminal" && activeTerminalId === tab.id;
+        const acceptedConversationTitle = tab.meta.isInstant
+          ? conversationTitle
+          : null;
+        const label = acceptedConversationTitle ?? presentation.label;
+        const accessibleName = acceptedConversationTitle
+          ? `${acceptedConversationTitle} ${tab.meta.agent ?? "agent"} terminal`
+          : presentation.accessibleName;
+        return (
+          <WorkspaceTab
+            key={tab.id}
+            label={label}
+            accessibleName={accessibleName}
+            title={presentation.hoverTitle || undefined}
+            active={active}
+            highlighted={
+              showTabHighlight &&
+              highlightedTab.kind === "terminal" &&
+              highlightedTab.id === tab.id
+            }
+            allowHoverEmphasis={allowTabHoverEmphasis}
+            tone={providerToneClasses({
+              agent: tab.meta.agent,
+              live: isLiveTerminal(tab),
+              selected: active,
+            })}
+            /* Attention axis — its own palette, independent of provider tone. */
+            badge={<LifecycleBadge state={tab.lifecycle} agent={tab.meta.agent} />}
+            onClick={(event) => {
+              if (!reorderDrag.consumePostDropClick(event)) {
+                onActivateTerminal(tab.id);
+              }
+            }}
+            onClose={(event) => {
+              if (!reorderDrag.consumePostDropClick(event)) {
+                onCloseTerminal(tab.id);
+              }
+            }}
+            closeLabel={
+              acceptedConversationTitle
+                ? `Close ${accessibleName}`
+                : presentation.closeName
+            }
+            dropIntent={reorderDrag.dropIntentFor(identity)}
+            registerRef={(node) => registerTabRef(identity, node)}
+            dragSourceProps={reorderDrag.dragSourcePropsFor(identity)}
+            dropTargetProps={reorderDrag.dropTargetPropsFor(identity)}
+          />
+        );
+        })}
+        {launchContext && (
+          <WorkspaceLauncher
+            bucket={bucket}
+            launchContext={launchContext}
+            triggerRef={launcherTriggerRef}
+            onTaskAgentLaunched={onTaskAgentLaunched}
+            onTaskAgentLaunchStarted={onTaskAgentLaunchStarted}
+          />
+        )}
+      </div>
+      {trailing}
+    </div>
+  );
+}

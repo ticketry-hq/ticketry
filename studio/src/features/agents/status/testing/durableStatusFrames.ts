@@ -90,6 +90,7 @@ export function statusRunHolding(run: RunRecord): RunHoldingPayload {
     scope: run.scope,
     launch_state: run.launch_state ?? null,
     launch_model: run.launch_model ?? null,
+    stage_skill_availability: run.stage_skill_availability ?? null,
     started_at: run.started_at,
     state: run.state,
     effective_state: run.effective_state ?? run.state,

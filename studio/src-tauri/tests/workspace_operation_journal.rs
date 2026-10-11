@@ -15,11 +15,12 @@ use std::sync::{
 use async_trait::async_trait;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use serde_json::{json, Value};
-use ticketry_workspace_runtime::workspace_operations::{
-    schema, ClaimedOperation, ExternalObservation, OperationSubject, ReconciliationDecision,
-    WorkspaceOperationError, WorkspaceOperationErrorCode, WorkspaceOperationExecutor,
-    WorkspaceOperationIntent, WorkspaceOperationJournal, WorkspaceOperationKind,
-    WorkspaceOperationOutcome, WorkspaceStateProbe, REDACTED,
+use ticketry_workspace_runtime::{
+    install_workspace_operations, verify_workspace_operations, ClaimedOperation,
+    ExternalObservation, OperationSubject, ReconciliationDecision, WorkspaceOperationError,
+    WorkspaceOperationErrorCode, WorkspaceOperationExecutor, WorkspaceOperationIntent,
+    WorkspaceOperationJournal, WorkspaceOperationKind, WorkspaceOperationOutcome,
+    WorkspaceStateProbe, REDACTED,
 };
 
 const RESOURCE: &str = "spec/rusting--cf2de16d/T756/SPEC.md";
@@ -34,7 +35,7 @@ async fn journal() -> (
     let database = Database::connect(format!("sqlite:{}?mode=rwc", path.display()))
         .await
         .unwrap();
-    schema::install(&database).await.unwrap();
+    install_workspace_operations(&database).await.unwrap();
     let journal = WorkspaceOperationJournal::new(database.clone());
     (directory, database, journal)
 }
@@ -183,9 +184,9 @@ async fn stored_json(database: &DatabaseConnection, operation_id: &str, column: 
 #[tokio::test]
 async fn schema_installation_is_repeatable_and_verified() {
     let (_directory, database, _journal) = journal().await;
-    schema::install(&database).await.unwrap();
-    schema::install(&database).await.unwrap();
-    schema::verify(&database).await.unwrap();
+    install_workspace_operations(&database).await.unwrap();
+    install_workspace_operations(&database).await.unwrap();
+    verify_workspace_operations(&database).await.unwrap();
 }
 
 #[tokio::test]

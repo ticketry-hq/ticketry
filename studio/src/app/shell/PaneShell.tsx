@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useRef } from "react";
 import type { FocusedPane } from "../../state/clientStore";
 import { useClientStore } from "../../state/clientStore";
 import { isDialogFocusTarget } from "../../shared/utilities/keyboard";
+import { useModuleManagerStore } from "../../features/module-manager";
 
 interface PaneShellProps {
   title?: string;
@@ -22,24 +23,16 @@ export const PaneShell = forwardRef<HTMLDivElement, PaneShellProps>(
     { title, titleCasing = "uppercase", pane, children },
     externalRef,
   ) {
-    const focusedPane = useClientStore((s) => s.focusedPane);
     const editViewZone = useClientStore((s) => s.editViewZone);
     const navigationModality = useClientStore((s) => s.navigationModality);
-    const sidebarVisible = useClientStore((s) => s.sidebarVisible);
     const setFocusedPane = useClientStore((s) => s.setFocusedPane);
     const setEditViewZone = useClientStore((s) => s.setEditViewZone);
     const setNavigationModality = useClientStore((s) => s.setNavigationModality);
     const innerRef = useRef<HTMLDivElement | null>(null);
 
-    const isEditView = !sidebarVisible;
-    const isStoriesZone = isEditView && pane === "tasks";
-    const isWorkspaceZoneHost =
-      isEditView && pane === "details-or-terminal";
-    const focused = isEditView
-      ? isStoriesZone
-        ? editViewZone === "stories"
-        : true
-      : focusedPane === pane;
+    const isStoriesZone = pane === "tasks";
+    const isWorkspaceZoneHost = pane === "details-or-terminal";
+    const focused = isStoriesZone ? editViewZone === "stories" : true;
     const suppressStoriesZoneChrome =
       isStoriesZone && navigationModality === "pointer";
     const emphasisClass = isWorkspaceZoneHost
@@ -52,6 +45,7 @@ export const PaneShell = forwardRef<HTMLDivElement, PaneShellProps>(
 
     // Bring DOM focus into the pane wrapper when focusedPane changes to us.
     useEffect(() => {
+      if (useModuleManagerStore.getState().active) return;
       if (focused && !isWorkspaceZoneHost && innerRef.current) {
         if (
           !isDialogFocusTarget(document.activeElement)

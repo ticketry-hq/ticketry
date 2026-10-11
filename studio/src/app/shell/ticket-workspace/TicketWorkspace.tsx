@@ -1,7 +1,8 @@
 import { useEffect, type RefObject } from "react";
 import { Panel, PanelGroup } from "react-resizable-panels";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
-import { SprintsWorkspace, usePlanWorkspace } from "../../../features/sprints";
+import { SprintsWorkspace, selectPlanWorkspaceActive, usePlanWorkspace } from "../../../features/sprints";
+import { StorySprintFilterController, SprintModuleRecovery } from "../../../features/work-items";
 import IssueDetail from "./selected-ticket/details/IssueDetail";
 import { ModuleTabStrip } from "./ModuleTabStrip";
 import { TasksPane } from "./tasks/TasksPane";
@@ -10,12 +11,13 @@ import { PaneResizeHandle } from "../../../shared/ui/PaneResizeHandle";
 import { TerminalPanel } from "../../../features/terminal-panel";
 import { useStudioStore, useModulesQuery } from "../../../features/projects";
 import {
-  useModulePresentations,
-  visibleModules,
+  useEffectiveModuleTabs,
+  useSprintModuleSelection,
 } from "../../../features/module-tabs";
 import { useClientStore } from "../../../state/clientStore";
 import { useModalStore } from "../../modal/modalStore";
 import { EmptyModuleWorkspace } from "./EmptyModuleWorkspace";
+import { beginModuleManagerCreation, openModuleManager, useModuleManagerStore } from "../../../features/module-manager/state";
 import {
   ChangesWorkspace,
   dismissChangesWorkspace,
@@ -30,7 +32,14 @@ interface TicketWorkspaceProps {
   changesActive?: boolean;
 }
 
-export function TicketWorkspace({
+export function TicketWorkspace(props: TicketWorkspaceProps) {
+  const projectId = useStudioStore((state) => state.selectedProjectId);
+  return <StorySprintFilterController projectId={projectId}>
+    <TicketWorkspaceContent {...props} />
+  </StorySprintFilterController>;
+}
+
+function TicketWorkspaceContent({
   tasksSize,
   workspaceSize,
   groupRef,
@@ -38,21 +47,24 @@ export function TicketWorkspace({
   changesActive: _legacyChangesActive = false,
 }: TicketWorkspaceProps) {
   void _legacyChangesActive;
-  const planActive = usePlanWorkspace((state) => state.active);
+  const planActive = usePlanWorkspace(selectPlanWorkspaceActive);
+  const managerActive = useModuleManagerStore((state) => state.active);
   const changesActive = useChangesWorkspace((state) => state.active);
   const surfaceActive = planActive || changesActive;
   const changesModuleId = useChangesWorkspace((state) => state.moduleId);
   const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
   const modulesQuery = useModulesQuery(selectedProjectId);
   const modules = modulesQuery.data ?? [];
-  const presentations = useModulePresentations(selectedProjectId);
+  const effective = useEffectiveModuleTabs(selectedProjectId);
+  useSprintModuleSelection(selectedProjectId, effective, surfaceActive);
   const selectedModuleId = useClientStore((state) => state.selectedModuleId);
-  const sidebarVisible = useClientStore((state) => state.sidebarVisible);
   const pushModal = useModalStore((state) => state.pushModal);
-  const visibleModuleCount = visibleModules(modules, presentations).length;
-  const noModules = !modulesQuery.isPending && modules.length === 0;
+  const visibleModuleCount = effective.modules.length;
+  const noModules = !modulesQuery.isPending && !modulesQuery.error && modules.length === 0;
   const allHidden =
-    !modulesQuery.isPending && modules.length > 0 && visibleModuleCount === 0;
+    !modulesQuery.isPending && (!effective.restricted || !effective.complete) && modules.length > 0 && visibleModuleCount === 0;
+  const filterRecovery = effective.noMatches || (!selectedModuleId && modules.length > 0 && !allHidden);
+  const workspaceInactive = surfaceActive || filterRecovery || !selectedModuleId;
 
   useEffect(() => {
     if (changesActive && selectedModuleId !== changesModuleId) {
@@ -66,26 +78,30 @@ export function TicketWorkspace({
       className="flex h-full min-w-0 flex-col"
     >
       <ModuleTabStrip />
+      <div {...(managerActive ? { inert: "" } : {})} aria-hidden={managerActive || undefined}
+        className="isolate flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1">
         {planActive && selectedProjectId ? (
           <SprintsWorkspace
             renderWorkItemDetail={(id) => <IssueDetail issueId={id} detailsVisible />}
           />
         ) : null}
+        {filterRecovery && !surfaceActive ? <SprintModuleRecovery noMatches={effective.noMatches}
+          hiddenMatches={effective.entries.some((entry) => entry.status === "hidden" && entry.sprintEligible === true)} /> : null}
         {noModules || allHidden ? (
           <div hidden={planActive}>
             <EmptyModuleWorkspace
               kind={noModules ? "no-modules" : "all-hidden"}
-              sidebarVisible={sidebarVisible}
-              onCreate={() => pushModal({ type: "add-module" })}
+              onManage={() => openModuleManager()}
+              onCreate={() => { openModuleManager(); beginModuleManagerCreation(); }}
             />
           </div>
         ) : (
           <>
             <div
-              aria-hidden={surfaceActive || undefined}
+              aria-hidden={workspaceInactive || undefined}
               className="h-full"
-              hidden={surfaceActive}
+              hidden={workspaceInactive}
             >
               <PanelGroup
                 ref={groupRef}
@@ -99,7 +115,7 @@ export function TicketWorkspace({
                 <PaneResizeHandle />
                 <Panel defaultSize={workspaceSize} minSize={15} order={2}>
                   {/* Kept mounted so terminal and document state survives review. */}
-                  <SelectedTicket active={!surfaceActive} />
+                  <SelectedTicket active={!workspaceInactive && !managerActive} />
                 </Panel>
               </PanelGroup>
             </div>
@@ -115,16 +131,17 @@ export function TicketWorkspace({
         )}
       </div>
       {/* Spans the Stories and work-item panes and stops here, so the panel's
-          extent matches its module scope; the sidebar stays full height. */}
+          extent matches its module scope. */}
       {!noModules && !allHidden ? (
         <div
-          aria-hidden={surfaceActive || undefined}
-          className={surfaceActive ? "hidden" : "contents"}
-          hidden={surfaceActive}
+          aria-hidden={workspaceInactive || undefined}
+          className={workspaceInactive ? "hidden" : "contents"}
+          hidden={workspaceInactive}
         >
-          <TerminalPanel />
+          <TerminalPanel active={!workspaceInactive && !managerActive} preserveInactiveContext={!selectedModuleId || managerActive} />
         </div>
       ) : null}
+      </div>
     </div>
   );
 }

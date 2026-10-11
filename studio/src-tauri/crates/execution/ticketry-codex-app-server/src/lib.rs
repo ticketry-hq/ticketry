@@ -10,6 +10,7 @@
 
 mod client;
 mod error;
+mod mcp_configuration;
 mod thread_titles;
 
 pub use client::CodexAppServerClient;

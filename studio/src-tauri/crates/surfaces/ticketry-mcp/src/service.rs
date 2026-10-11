@@ -12,8 +12,8 @@ use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
 
 use ticketry_terminal::TerminalCleanupService;
-use ticketry_work_management::commands::attachments::AttachmentStorage;
-use ticketry_work_management::launch_policy::LaunchPolicyResolver;
+use ticketry_work_management::AttachmentStorage;
+use ticketry_work_management::LaunchPolicyResolver;
 
 use super::connection_handshake::ConnectionAuthorization;
 use super::{dispatch, registry, RunAuthority};
@@ -88,12 +88,12 @@ pub(super) async fn execute_launch_decision(
     database: &DatabaseConnection,
     service: Option<&ticketry_terminal::TerminalLaunchService>,
     cleanup: &TerminalCleanupService,
-    decision: &ticketry_work_management::launch_policy::LaunchPolicyDecision,
+    decision: &ticketry_work_management::LaunchPolicyDecision,
 ) -> Result<ticketry_entities::session::Model, String> {
     let Some(service) = service else {
         return Err("terminal_launch_unavailable".to_owned());
     };
-    ticketry_agent_execution::launch_delivery::execute(database, service, cleanup, decision)
+    ticketry_agent_execution::execute_launch_delivery(database, service, cleanup, decision)
         .await
         .map_err(|error| {
             eprintln!(

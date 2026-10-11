@@ -26,7 +26,7 @@ function ConversationKeymapHarness() {
 let creates: Array<Record<string, unknown>> = [];
 
 function installRuntime() {
-  const tickets: Array<Record<string, string>> = [];
+  const tickets: Array<Record<string, string | null>> = [];
   const terminalExecutor = terminalSessionReadExecutor({
     readTaskTerminalSessions: async () => [],
     readScratchTerminalSessions: async () => [],
@@ -42,6 +42,7 @@ function installRuntime() {
       creates.push(variables as Record<string, unknown>);
       tickets.push({
         __typename: "InstantRunTicket",
+        user_title: null,
         agent_run_id: "instant-run-new",
         title: "Untitled instant chat",
         started_at: "2026-08-30T12:00:00Z",

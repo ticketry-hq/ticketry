@@ -20,7 +20,7 @@ use sea_orm::{ConnectionTrait, DbBackend, Statement};
 use super::{WorkspaceHandoffError, WorkspaceHandoffErrorCode};
 
 /// Version of the composed Slice 4 ownership contract.
-pub const VERSION: i32 = 1;
+pub(crate) const VERSION: i32 = 1;
 
 /// Which capability's services are the sole production writer for a table.
 ///
@@ -29,7 +29,7 @@ pub const VERSION: i32 = 1;
 /// allowed to write, which is what makes a second claim on one table a
 /// detectable error rather than a harmless duplicate.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum ProductionWriter {
+pub(crate) enum ProductionWriter {
     /// The Design Document registry services: discovery, refresh, and save.
     Documents,
     /// The Worktree services: create, discard, integrate, and status.
@@ -63,7 +63,7 @@ const ADOPTION_LEDGER_COLUMNS: &[&str] = &[
 /// The three adopted or authored data tables come first, followed by the
 /// ownership ledgers that record the handoff. The ledgers are listed because a
 /// missing ledger is exactly how a half-finished adoption looks.
-pub const OWNED_TABLES: &[(&str, ProductionWriter, &[&str])] = &[
+pub(crate) const OWNED_TABLES: &[(&str, ProductionWriter, &[&str])] = &[
     (
         "design_documents",
         ProductionWriter::Documents,
@@ -132,7 +132,7 @@ pub fn owned_tables() -> Vec<&'static str> {
 }
 
 /// The capability that owns one table's writes, if the manifest names it.
-pub fn production_writer(table: &str) -> Option<ProductionWriter> {
+pub(crate) fn production_writer(table: &str) -> Option<ProductionWriter> {
     OWNED_TABLES
         .iter()
         .find(|(name, _, _)| *name == table)
@@ -145,7 +145,7 @@ pub fn production_writer(table: &str) -> Option<ProductionWriter> {
 /// This runs at startup rather than only under `cfg(test)` because a build that
 /// shipped a malformed manifest must refuse the handoff, not validate a store
 /// against a contract that contradicts itself.
-pub fn validate_assignment() -> Result<(), WorkspaceHandoffError> {
+pub(crate) fn validate_assignment() -> Result<(), WorkspaceHandoffError> {
     let mut writers: BTreeMap<&str, ProductionWriter> = BTreeMap::new();
     for (table, writer, columns) in OWNED_TABLES {
         if columns.is_empty() {

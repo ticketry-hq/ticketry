@@ -1,0 +1,26 @@
+query LaunchSkillAvailability(
+  $moduleId: String!
+  $agent: String
+  $profile: String
+  $names: [String!]!
+) {
+  launch_skill_availability(
+    module_id: $moduleId
+    agent: $agent
+    profile: $profile
+    names: $names
+  ) {
+    status
+    code
+    message
+    provider
+    searched_roots
+    skills {
+      requested
+      status
+      installed_name
+      location
+      reason
+    }
+  }
+}

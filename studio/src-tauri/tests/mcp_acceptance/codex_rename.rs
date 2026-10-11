@@ -22,6 +22,9 @@ use ticketry_data_directory::DataDirectoryGuard;
 use ticketry_mcp::{allowed_provider_operations, McpConfiguration, McpRuntime, SocketClient};
 use ticketry_terminal::InstantRunTicketTitleService;
 
+#[path = "codex_rename_identity.rs"]
+mod identity;
+
 /// A `codex app-server` stand-in that keeps one thread name in a file. It
 /// answers `initialize`, `thread/name/set`, and `thread/read`, records every
 /// launch and every request, and answers nothing else — an ownership method
@@ -184,6 +187,8 @@ async fn authorized(runtime: &McpRuntime, tools: Vec<String>) -> SocketClient {
 async fn an_authorized_client_renames_a_thread_through_the_resident_app_server() {
     let directory = tempfile::tempdir().unwrap();
     prepare_command_database(&directory).await;
+    let database = identity::bind_existing_instant_thread(&directory).await;
+    let before = identity::snapshot(&database).await;
     let ownership = DataDirectoryGuard::acquire(directory.path()).unwrap();
     let server = ScriptedAppServer::accepting();
     let (runtime, client) = listener(&directory, &ownership, &server).await;
@@ -216,9 +221,19 @@ async fn an_authorized_client_renames_a_thread_through_the_resident_app_server()
         server.requests()[1]["params"],
         json!({"threadId": "thread-active", "name": "Ship the  rename"})
     );
+    assert_eq!(
+        server.requests()[2]["params"],
+        json!({"threadId": "thread-active", "includeTurns": false})
+    );
     assert_eq!(server.launch_count(), 1, "one resident app-server launch");
+    assert_eq!(
+        identity::snapshot(&database).await,
+        before,
+        "provider naming changes no manual title, run, provider session, terminal or tmux identity"
+    );
 
     runtime.shutdown().await;
+    database.close().await.unwrap();
 }
 
 #[tokio::test]

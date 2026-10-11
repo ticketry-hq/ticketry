@@ -18,6 +18,7 @@ function endedRun(overrides: Partial<EndedRunNode> = {}): EndedRunNode {
     exit_code: 0,
     launch_state: "Implement",
     launch_model: "opus",
+    stage_skill_availability: null,
     provider_session_id: "conversation-1",
     terminal_session: {
       nodes: [{ agent_run_id: agentRunId, terminated_at: null }],
@@ -61,6 +62,7 @@ describe("adaptStoryEndedRuns", () => {
         scope: "task",
         launch_state: "Implement",
         launch_model: "opus",
+        stage_skill_availability: null,
         provider_session_id: "conversation-1",
         started_at: "2026-01-01T00:00:00Z",
         state: "exited",

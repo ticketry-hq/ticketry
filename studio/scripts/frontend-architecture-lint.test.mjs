@@ -63,3 +63,19 @@ test("ignores comments and strings that resemble imports", () => {
     source: '// import "../../app/startup";\nconst example = `import "../../app/startup";`;'
   }]), []);
 });
+
+test("task workspace callers use the rendered or navigation public entry", () => {
+  const file = "app/shell/Workspace.tsx";
+  for (const target of ["features/task-workspace", "features/task-workspace/index.ts", "features/task-workspace/navigation"]) {
+    assert.deepEqual(architectureViolations([{ file, source: `import "@/${target}";` }]), []);
+  }
+  for (const target of ["features/task-workspace/internal/useWorkspaceTabActions", "features/task-workspace/TaskWorkspace", "features/task-workspace/types"]) {
+    assert.deepEqual(architectureViolations([{ file, source: `import "@/${target}";` }]), [
+      `${file}: task workspace callers must use its public entry`,
+    ]);
+  }
+  assert.deepEqual(architectureViolations([{
+    file: "features/task-workspace/TaskWorkspace.tsx",
+    source: 'import "./internal/useWorkspaceTabActions";',
+  }]), []);
+});

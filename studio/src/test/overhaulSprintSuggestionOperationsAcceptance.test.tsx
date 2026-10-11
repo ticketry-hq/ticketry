@@ -39,10 +39,10 @@ function cardData(row: SprintSuggestionRecordFragment) {
 }
 
 const emptyGraph = {
-  project: { __typename: "WorktrackerProjectConnection", nodes: [] },
+  project: { __typename: "WorktrackerProjectConnection", nodes: [{ __typename: "WorktrackerProject", id: "p", name: "Planner", slug: "PLAN" }] },
   states: { __typename: "WorktrackerStateConnection", nodes: [] },
   issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [] },
-  sprints: { __typename: "WorktrackerSprintConnection", nodes: [] },
+  sprints: { __typename: "WorktrackerSprintConnection", nodes: [{ __typename: "WorktrackerSprint", id: "s", name: "Release", status: "planned", rank: "V", createdAt: "2026-10-04" }] },
   modules: { __typename: "WorktrackerIssueConnection", nodes: [] },
   workItems: { __typename: "WorktrackerIssueConnection", nodes: [] },
 };
@@ -99,7 +99,9 @@ describe("suggestion operation acceptance", () => {
             await Promise.resolve();
             expect(settled).toBe(false);
             deliverCard();
-            expect((await pending)?.issue?.id).toBe(story.id);
+            const outcome = await pending;
+            expect(outcome.kind === "saved" && outcome.refreshFailed).toBe(false);
+            expect(outcome.kind === "saved" ? outcome.suggestion.issue?.id : null).toBe(story.id);
           });
           expect(requests.slice(1)).toEqual(expect.arrayContaining([
             { name: "PlanningGraph", variables: { projectId: "p" } },
@@ -124,7 +126,7 @@ describe("suggestion operation acceptance", () => {
     const client = new ApolloClient({ cache: new InMemoryCache(), link: new ApolloLink((operation) => new Observable((observer) => {
       if (operation.operationName === "UpdateSprintSuggestion") {
         if (typeof operation.variables.status !== "string") throw new Error("Missing status");
-        if (reject) observer.next({ errors: [{ message: "Sprint is completed" }] });
+        if (reject) observer.next({ errors: [{ message: "Sprint is completed", extensions: { code: "validation" } }] });
         else {
           row = { ...row, status: operation.variables.status };
           observer.next({ data: { update_sprint_suggestion: row } });
@@ -149,7 +151,7 @@ describe("suggestion operation acceptance", () => {
       }
       reject = true;
       const readsBeforeFailure = reads;
-      await act(async () => { await expect(result.current.update({ id: row.id, status: "accepted" })).rejects.toThrow("Sprint is completed"); });
+      await act(async () => { expect(await result.current.update({ id: row.id, status: "accepted" })).toEqual({ kind: "rejected" }); });
       expect(reads).toBe(readsBeforeFailure);
       expect(result.current.suggestions[0]?.status).toBe("waiting");
     } finally { unmount(); client.stop(); }

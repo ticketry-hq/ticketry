@@ -14,6 +14,7 @@ vi.mock("../features/projects/queries/readTransport", async () => ({
   readProjectOpen: projectReads.readProjectOpen,
 }));
 
+import { setStorySprintFilterIntent } from "../features/work-items";
 import { useModalStore } from "../app/modal/modalStore";
 import { StudioFooter } from "../app/shell/StudioFooter";
 import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
@@ -139,6 +140,7 @@ describe("restore-aware module picker acceptance", () => {
 
   beforeEach(async () => {
     await resetStudioApolloClient();
+    setStorySprintFilterIntent(PROJECT_ID, { mode: "all" });
     modules = [
       module("module-a", "Alpha", 0),
       module("module-b", "Bravo", 1),
@@ -169,7 +171,51 @@ describe("restore-aware module picker acceptance", () => {
     });
   });
 
-  it("[overhaul-237] scrolls module creation with the module tabs", async () => {
+  it("[overhaul-660] bounds a long picker below the top tabs while keeping search and the last choice usable", async () => {
+    modules = Array.from({ length: 40 }, (_, index) =>
+      module("module-" + index, "Module " + index, index));
+    modules.forEach((entry, index) => hide(entry.id, String(index).padStart(8, "0")));
+    render(<ModuleTabStrip />);
+    const trigger = await screen.findByRole("button", { name: "Open module picker" });
+    vi.spyOn(trigger, "getBoundingClientRect").mockReturnValue({
+      bottom: 40, right: 300,
+    } as DOMRect);
+    fireEvent.click(trigger);
+    const picker = screen.getByRole("dialog", { name: "Module picker" });
+    const listbox = within(picker).getByRole("listbox", { name: "Module choices" });
+    const search = within(picker).getByRole("combobox", { name: "Search modules" });
+
+    expect(picker).toHaveStyle({ maxHeight: "min(24rem, calc(100dvh - 52px))" });
+    expect(listbox).toHaveClass("min-h-0", "overflow-y-auto");
+    expect(listbox).not.toContainElement(search);
+    expect(search).toHaveClass("shrink-0");
+    expect(within(listbox).getAllByRole("option")).toHaveLength(41);
+    fireEvent.click(within(listbox).getByRole("option", { name: "Restore Module 39 module tab" }));
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Module 39" }))
+      .toHaveAttribute("aria-selected", "true"));
+  });
+
+  it("[overhaul-661] reveals keyboard choices in a long picker without moving search focus", async () => {
+    modules = Array.from({ length: 40 }, (_, index) =>
+      module("module-" + index, "Module " + index, index));
+    modules.forEach((entry, index) => hide(entry.id, String(index).padStart(8, "0")));
+    render(<ModuleTabStrip />);
+    const picker = await openPicker();
+    const search = within(picker).getByRole("combobox", { name: "Search modules" });
+    const last = within(picker).getByRole("option", { name: "Restore Module 39 module tab" });
+    const revealLast = vi.spyOn(last, "scrollIntoView");
+    revealLast.mockClear();
+    fireEvent.keyDown(search, { key: "ArrowUp" });
+
+    expect(search).toHaveAttribute("aria-activedescendant", last.id);
+    expect(search).toHaveFocus();
+    expect(revealLast).toHaveBeenCalledWith({ block: "nearest" });
+    fireEvent.keyDown(search, { key: "Enter" });
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Module 39" }))
+      .toHaveAttribute("aria-selected", "true"));
+  });
+
+  it("[overhaul-237] keeps the footer manager entry outside the scrolling module tabs and creation", async () => {
     render(
       <>
         <ModuleTabStrip />
@@ -179,7 +225,7 @@ describe("restore-aware module picker acceptance", () => {
 
     const strip = screen.getByLabelText("Project modules");
     const modulesToggle = screen.getByRole("button", {
-      name: /^(Open|Close) Modules pane$/,
+      name: "Open Module Manager",
     });
     const tablist = screen.getByRole("tablist", {
       name: "Project module tabs",
@@ -189,8 +235,9 @@ describe("restore-aware module picker acceptance", () => {
       name: "Open module picker",
     });
 
-    expect(strip).toContainElement(modulesToggle);
-    expect(strip.firstElementChild).toBe(modulesToggle);
+    expect(document.querySelector("[data-studio-status-bar]")).toContainElement(modulesToggle);
+    expect(strip).not.toContainElement(modulesToggle);
+    expect(strip.firstElementChild).toBe(tabScroller);
     expect(tablist.nextElementSibling).toContainElement(modulePicker);
     expect(tabScroller).toContainElement(tablist);
     expect(tabScroller).toContainElement(modulePicker);
@@ -238,7 +285,7 @@ describe("restore-aware module picker acceptance", () => {
 
     await waitFor(() =>
       expect(useClientStore.getState().selectModule).toHaveBeenCalledWith(
-        "module-c",
+        "module-c", expect.objectContaining({ isCurrent: expect.any(Function) }),
       )
     );
     expect(useClientStore.getState().selectModule).not.toHaveBeenCalledWith(
@@ -282,7 +329,7 @@ describe("restore-aware module picker acceptance", () => {
 
     await waitFor(() =>
       expect(useClientStore.getState().selectModule).toHaveBeenCalledWith(
-        "module-b",
+        "module-b", expect.objectContaining({ isCurrent: expect.any(Function) }),
       )
     );
     await waitFor(() =>
@@ -298,7 +345,7 @@ describe("restore-aware module picker acceptance", () => {
     expect(operationNames).toEqual(["UpdateWorkTrackerModulePresentation"]);
     expect(
       getModulePresentationsSnapshot(PROJECT_ID).find(
-        (presentation) => presentation.module_id === "module-b",
+        (presentation) => presentation.module_id === "module-b", expect.objectContaining({ isCurrent: expect.any(Function) }),
       ),
     ).toMatchObject({ rank: "00000001", tab_hidden: false });
   });
@@ -366,7 +413,7 @@ describe("restore-aware module picker acceptance", () => {
     expect(screen.queryByRole("dialog", { name: "Module picker" })).toBeNull();
     await waitFor(() =>
       expect(useClientStore.getState().selectModule).toHaveBeenCalledWith(
-        "module-b",
+        "module-b", expect.objectContaining({ isCurrent: expect.any(Function) }),
       )
     );
     await waitFor(() =>

@@ -215,9 +215,8 @@ describe("overhaul acceptance — work-item rows", () => {
     expect(within(stories).queryByRole("button", {
       name: "Collapse Ideas",
     })).toBeNull();
-    expect(await within(stories).findByRole("status")).toHaveTextContent(
-      'No stories match "no-matching-story-ux". The selected story remains open in Details but is outside the filtered results.',
-    );
+    expect(await within(stories).findByText('No stories match "no-matching-story-ux".')).toBeVisible();
+    expect(screen.getByText("This story is outside the current results. It stays open here.")).toBeVisible();
 
     fireEvent.click(within(stories).getByRole("button", {
       name: "Clear story search",

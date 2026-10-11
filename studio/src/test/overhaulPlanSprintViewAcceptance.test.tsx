@@ -8,6 +8,7 @@ import PlanSprintView from "../features/sprints/planning/PlanSprintView";
 import { openPlanSprint, usePlanWorkspace } from "../features/sprints/planWorkspaceState";
 import { SuggestionAgentBox } from "../features/sprints/suggestions/SuggestionAgentBox";
 import { documentOperationName, type TypedDocumentNode } from "../graphql-foundation/typedDocument";
+import { planningProjectOpenFixture } from "./planningProjectOpenFixture";
 import { fixture, mountStudio, workItem } from "./seam";
 
 const suggestion = {
@@ -36,7 +37,7 @@ describe("Plan sprint header", () => {
       states: { __typename: "WorktrackerStateConnection", nodes: [{ __typename: "WorktrackerState", id: "idea", name: "Implement", group: "backlog", color: "", sortOrder: 0 }] },
       issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [{ __typename: "WorktrackerIssuetype", id: "story-type", name: "Story", level: "task" }, { __typename: "WorktrackerIssuetype", id: "epic-type", name: "Epic", level: "module" }] },
       modules: { __typename: "WorktrackerIssueConnection", nodes: [{ __typename: "WorktrackerIssue", id: "module-1", name: "Alpha", sequenceId: 2, presentation: { __typename: "WorktrackerModulePresentationConnection", nodes: [] } }] },
-      sprints: { __typename: "WorktrackerSprintConnection", nodes: [{ __typename: "WorktrackerSprint", id: "sprint", name: "Release", status: "planned", createdAt: "2026-10-04" }] },
+      sprints: { __typename: "WorktrackerSprintConnection", nodes: [{ __typename: "WorktrackerSprint", id: "sprint", name: "Release", status: "planned", rank: "V", createdAt: "2026-10-04" }] },
       workItems: { __typename: "WorktrackerIssueConnection", nodes: [moduleless.issue] },
     };
     function Planning() {
@@ -111,13 +112,14 @@ describe("Plan sprint header", () => {
       states: { __typename: "WorktrackerStateConnection", nodes: [] },
       issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [{ __typename: "WorktrackerIssuetype", id: "epic-type", name: "Epic", level: "module" }] },
       modules: { __typename: "WorktrackerIssueConnection", nodes: ["Alpha", "Beta"].map((name, index) => ({ __typename: "WorktrackerIssue", id: `epic-${index}`, name, sequenceId: index + 1, presentation: { __typename: "WorktrackerModulePresentationConnection", nodes: [] } })) },
-      sprints: { __typename: "WorktrackerSprintConnection", nodes: [{ __typename: "WorktrackerSprint", id: "sprint", name: "Release", status: "planned", createdAt: "2026-10-04" }] },
+      sprints: { __typename: "WorktrackerSprintConnection", nodes: [{ __typename: "WorktrackerSprint", id: "sprint", name: "Release", status: "planned", rank: "V", createdAt: "2026-10-04" }] },
       workItems: { __typename: "WorktrackerIssueConnection", nodes: [] },
     };
     usePlanWorkspace.setState({ active: true, projectId: "project-1", sprintId: "sprint" });
     mountStudio({ http, children: <PlanSprintView projectId="project-1" sprintId="sprint" renderWorkItemDetail={(id) => <p>{id}</p>} />,
       graphQlExecute: async <TResult, TVariables,>(document: TypedDocumentNode<TResult, TVariables>, variables: TVariables): Promise<TResult> => {
         switch (documentOperationName(document)) {
+          case "WorkTrackerProjectOpen": return planningProjectOpenFixture(http, document, variables, graph);
           case "PlanningGraph": return graph as TResult;
           case "SprintSuggestions":
             await pendingSuggestions;
@@ -146,7 +148,7 @@ describe("Plan sprint header", () => {
     const back = vi.fn();
     const done = vi.fn();
     render(<PlanHeader sprintName="Release" storyCount={5}
-      goals={[{ id: "goal", text: "Ship planning" }]} waitingCount={2}
+      goals={[{ id: "goal", text: "Ship planning", position: 1 }]} waitingCount={2}
       agentRunning={false} onBack={back} onDone={done} />);
     expect(screen.getByText("Release")).toHaveAttribute("title", "Release");
     expect(screen.getByText("5 stories")).toBeVisible();
@@ -167,7 +169,7 @@ describe("Plan sprint header", () => {
       states: { __typename: "WorktrackerStateConnection", nodes: [{ __typename: "WorktrackerState", id: "idea", name: "Idea", group: "backlog", color: "#888", sortOrder: 0 }, { __typename: "WorktrackerState", id: "implement", name: "Implement", group: "started", color: "#888", sortOrder: 1 }] },
       issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [{ __typename: "WorktrackerIssuetype", id: "story", name: "Story", level: "task" }, { __typename: "WorktrackerIssuetype", id: "epic", name: "Epic", level: "module" }] },
       modules: { __typename: "WorktrackerIssueConnection", nodes: ["Module 1", "Module 2"].map((name, index) => ({ __typename: "WorktrackerIssue", id: `epic-${index}`, name, sequenceId: index + 1, presentation: { __typename: "WorktrackerModulePresentationConnection", nodes: [] } })) },
-      sprints: { __typename: "WorktrackerSprintConnection", nodes: [{ __typename: "WorktrackerSprint", id: "sprint", name: "Release", status: "planned", createdAt: "2026-10-04" }] },
+      sprints: { __typename: "WorktrackerSprintConnection", nodes: [{ __typename: "WorktrackerSprint", id: "sprint", name: "Release", status: "planned", rank: "V", createdAt: "2026-10-04" }] },
       workItems: { __typename: "WorktrackerIssueConnection", nodes: [0, 1, 2, 3].map((index) => ({ __typename: "WorktrackerIssue", id: `story-${index}`, name: `Story ${index}`, sequenceId: index + 3, rank: `${index}`, parentId: null, moduleId: `epic-${index % 2}`, stateId: "idea", stateRevision: 1, sprintId: index < 2 ? "sprint" : null, updatedAt: "2026-10-04", issueType: { __typename: "WorktrackerIssuetype", id: "story", name: "Story" } })) },
     };
     usePlanWorkspace.setState({ active: true, projectId: "project-1", sprintId: "sprint" });
@@ -208,7 +210,7 @@ describe("Plan sprint header", () => {
     const open = vi.fn();
     const accept = vi.fn();
     const dismiss = vi.fn();
-    render(<SuggestionRows suggestions={[suggestion]} goals={[{ id: "goal", text: "Release" }]}
+    render(<SuggestionRows suggestions={[suggestion]} goals={[{ id: "goal", text: "Release", position: 1 }]}
       openItem={null} busy={false} onOpen={open} onAccept={accept} onDismiss={dismiss} />);
     fireEvent.click(screen.getByRole("button", { name: "✦ Ship planning" }));
     expect(open).toHaveBeenCalledWith(suggestion);

@@ -6,7 +6,7 @@ use std::path::Path;
 
 use crate::worktree::status::{self, WorktreeStatusService};
 use ticketry_entities::{ship_record, worktree};
-use ticketry_work_management::commands::status_facts::WorkFactRecorder;
+use ticketry_work_management::WorkFactRecorder;
 
 use super::{git, repository, GithubPort};
 use super::{PullRequestStatusView, WorktreeChangesError, WorktreeChangesView};

@@ -9,6 +9,7 @@ import { StudioLayout } from "./StudioLayout";
 import { StoriesTreeProvider, useStoriesTree } from "../../features/work-items";
 import { statusStreamTransport } from "../../runtime";
 import { ProjectRunTerminalTabBridge } from "./ProjectRunTerminalTabBridge";
+import { synchronizeModuleManagerProject } from "../../features/module-manager/state";
 
 export function StudioShell() {
   return <StoriesTreeProvider><StudioShellContent /></StoriesTreeProvider>;
@@ -24,6 +25,8 @@ function StudioShellContent() {
   );
 
   useGlobalKeymap(rows);
+
+  useEffect(() => synchronizeModuleManagerProject(selectedProjectId), [selectedProjectId]);
 
   useEffect(() => {
     if (!selectedProjectId) return;

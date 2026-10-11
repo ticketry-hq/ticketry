@@ -1,8 +1,9 @@
 import { useContext } from "react";
 import { useClientStore } from "../../../../../state/clientStore";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
+import { SelectedStoryFilterNotice, StoriesTreeProvider } from "../../../../../features/work-items";
 import IssueDetail from "./IssueDetail";
-import { DetailsSurfaceActiveContext } from "../internal/detailsSurfaceContext";
+import { DetailsSurfaceActiveContext } from "../../../../../features/task-workspace";
 
 /**
  * Pinned, default-active tab. A normal selection renders ticket details.
@@ -21,5 +22,5 @@ export function SelectedTicketDetails() {
   // IssueDetail resolves this id from the canonical work-item owner during
   // render. Its refresh is deliberately post-paint, so selection itself never
   // waits for a request.
-  return <IssueDetail issueId={selectedTaskId} detailsVisible={detailsVisible} />;
+  return <StoriesTreeProvider><div className="flex h-full min-h-0 flex-col"><SelectedStoryFilterNotice issueId={selectedTaskId} /><div className="min-h-0 flex-1"><IssueDetail issueId={selectedTaskId} detailsVisible={detailsVisible} /></div></div></StoriesTreeProvider>;
 }

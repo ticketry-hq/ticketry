@@ -37,6 +37,7 @@ fn main() {
             "viewer_detach",
             "viewer_status",
             "native_terminal_available",
+            "native_terminal_set_module_manager_shortcut",
             "native_terminal_attach",
             "native_terminal_reconcile_frame",
             "native_terminal_set_frame",
@@ -118,7 +119,7 @@ fn build_native_libghostty() {
     let vendor = manifest.join("vendor/libghostty");
     let revision = fs::read_to_string(vendor.join("REVISION")).unwrap_or_else(|_| {
         panic!(
-            "native-libghostty requires `npm run libghostty:prepare` from {}",
+            "native-libghostty requires `bun run libghostty:prepare` from {}",
             manifest.parent().unwrap().display()
         )
     });

@@ -28,6 +28,8 @@ pub struct ExecutionAuthority {
     mcp_authorization: String,
     available_skills: BTreeSet<String>,
     registered_profiles: Vec<String>,
+    codex_instant_policy_reference: Option<String>,
+    codex_mcp_profile: Option<String>,
 }
 
 impl std::fmt::Debug for ExecutionAuthority {
@@ -57,7 +59,24 @@ impl ExecutionAuthority {
             mcp_authorization,
             available_skills,
             registered_profiles,
+            codex_instant_policy_reference: None,
+            codex_mcp_profile: None,
         }
+    }
+
+    /// Supply the trusted, persisted Codex Instant source marker. It carries
+    /// only a version and byte position; no prompt or global settings override.
+    /// Materialization ignores it outside a fresh Codex Instant launch.
+    pub fn with_codex_instant_policy_reference(mut self, reference: Option<&str>) -> Self {
+        self.codex_instant_policy_reference = reference.map(str::to_owned);
+        self
+    }
+
+    /// Supply the prepared run profile that isolates Codex's MCP configuration.
+    /// The durable user profile is still validated before this profile is used.
+    pub fn with_codex_mcp_profile(mut self, profile_name: impl Into<String>) -> Self {
+        self.codex_mcp_profile = Some(profile_name.into());
+        self
     }
 }
 
@@ -115,7 +134,7 @@ fn materialize_inner(
         },
         _ => ProviderLaunchKind::Fresh,
     };
-    let launch = ticketry_provider::provider_contract(durable.provider)
+    let mut launch = ticketry_provider::provider_contract(durable.provider)
         .construct_launch(&LaunchConstructionRequest {
             executable: &authority.executable,
             working_directory: &authority.working_directory,
@@ -132,6 +151,17 @@ fn materialize_inner(
             mcp_server: mcp_server(durable.provider, &durable.agent_run_id, authority),
         })
         .map_err(map_provider_error)?;
+    super::mcp_profile::apply(
+        durable,
+        authority.codex_mcp_profile.as_deref(),
+        &mut launch.argv,
+    );
+    super::instant_naming::add_context(
+        durable,
+        &hook,
+        authority.codex_instant_policy_reference.as_deref(),
+        &mut launch.argv,
+    );
     trace::admitted(trace::PROVIDER_VALIDATED)
         .with("providerSlug", provider_contract(durable.provider).slug)
         .record();

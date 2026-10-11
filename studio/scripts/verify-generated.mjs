@@ -21,6 +21,8 @@ async function files(directory, prefix = "") {
     if (entry.name === "raw-terminal-entities") continue;
     if (entry.name === "execution-generation.sqlite3") continue;
     if (entry.name === "raw-execution-entities") continue;
+    if (entry.name === "sprint-generation.sqlite3") continue;
+    if (entry.name === "raw-sprint-entities") continue;
     if (entry.isDirectory()) {
       found.push(...await files(join(directory, entry.name), relative));
     } else {
@@ -76,6 +78,11 @@ try {
     join(first, "terminal-entities/session.rs"),
     join(studioRoot, "src-tauri/crates/foundation/ticketry-entities/src/terminals/session.rs"),
     "Terminal Session entity drift",
+  );
+  await assertSameFile(
+    join(first, "sprint-entities/sprint.rs"),
+    join(studioRoot, "src-tauri/crates/foundation/ticketry-entities/src/work_management/sprint.rs"),
+    "Sprint entity drift",
   );
   const generatedDirectory = join(studioRoot, "src/graphql-foundation/generated");
   for (const name of ["schema.graphql", "taurpc.ts"]) {

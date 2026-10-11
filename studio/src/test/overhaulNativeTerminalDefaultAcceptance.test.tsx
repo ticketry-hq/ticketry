@@ -63,9 +63,9 @@ describe("native terminal default renderer acceptance", () => {
     };
 
     expect(cargoSource).toMatch(/^default = \["native-libghostty"\]$/m);
-    expect(packageJson.scripts["predesktop:build"]).toBe("npm run libghostty:prepare");
-    expect(packageJson.scripts["predesktop:dev"]).toBe("npm run libghostty:prepare");
-    expect(packageJson.scripts["prerelease:build"]).toBe("npm run libghostty:prepare");
+    expect(packageJson.scripts["predesktop:build"]).toBe("bun run libghostty:prepare");
+    expect(packageJson.scripts["predesktop:dev"]).toBe("bun run libghostty:prepare");
+    expect(packageJson.scripts["prerelease:build"]).toBe("bun run libghostty:prepare");
     // CODING-1487 archived the WASM renderer, so no build hook prepares its
     // ghostty-vt artifact any more.
     for (const script of Object.values(packageJson.scripts)) {

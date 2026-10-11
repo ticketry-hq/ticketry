@@ -94,6 +94,7 @@ export function useInstantRunTicketTitle(
     runId: agentRunId,
     requested: false,
     eligible: false,
+    refreshAfterPending: false,
   });
   const queuedRead = useRef<{
     runId: string;
@@ -101,7 +102,9 @@ export function useInstantRunTicketTitle(
   } | null>(null);
   const mounted = useRef(true);
   if (selection.current.runId !== agentRunId) {
-    selection.current = { runId: agentRunId, requested: false, eligible: false };
+    selection.current = {
+      runId: agentRunId, requested: false, eligible: false, refreshAfterPending: false,
+    };
   }
   selection.current.eligible = eligibleRunId === agentRunId && hasCachedTicket;
 
@@ -170,6 +173,7 @@ export function useInstantRunTicketTitle(
   const lastRunState = useRef(runState);
   if (lastRunState.current !== runState) {
     lastRunState.current = runState;
+    selection.current.refreshAfterPending ||= selection.current.requested;
     selection.current.requested = false;
   }
 
@@ -182,7 +186,12 @@ export function useInstantRunTicketTitle(
     ) {
       return;
     }
-    queueTitleRead(agentRunId);
+    // A lifecycle refresh or reselection may overlap a read made before the
+    // first request. Read again after that snapshot settles so its neutral
+    // response cannot consume the refresh that delivers the new provider name.
+    const afterPending = selection.current.refreshAfterPending || pendingTitleReads.has(agentRunId);
+    selection.current.refreshAfterPending = false;
+    queueTitleRead(agentRunId, afterPending);
 
     return () => {
       if (queuedRead.current?.runId !== agentRunId) return;

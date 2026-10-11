@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use super::{mark_delivered, record, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver};
 
 /// Resolve, durably record, and submit one desktop interactive request.
-pub async fn submit_interactive(
+pub(crate) async fn submit_interactive(
     database: &DatabaseConnection,
     backend_base_url: &str,
     api_key: &str,

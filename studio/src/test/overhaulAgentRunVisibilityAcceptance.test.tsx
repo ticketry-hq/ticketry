@@ -10,7 +10,7 @@ import { studioApolloClient } from "../shared/apollo/client";
 import { fixture, mountStudio, workItem } from "./seam";
 
 vi.mock(
-  "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
+  "../features/task-workspace/terminals/SelectedTicketTerminal",
   () => ({
     SelectedTicketTerminal: () => <div data-testid="selected-ticket-terminal" />,
   }),

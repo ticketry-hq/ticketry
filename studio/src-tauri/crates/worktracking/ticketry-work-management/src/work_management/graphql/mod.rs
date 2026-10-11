@@ -21,12 +21,11 @@ pub fn register_model_mutations(builder: seaography::Builder) -> seaography::Bui
     super::sprint_suggestion::register_mutations(builder)
 }
 
-pub use patch_input::{
-    GraphqlPatchBool, GraphqlPatchBoolNullAsUnset, GraphqlPatchJson, GraphqlPatchJsonNullAsUnset,
-    GraphqlPatchString, GraphqlPatchStringList, GraphqlPatchStringListNullAsUnset,
-    GraphqlPatchStringNullAsUnset,
+pub(crate) use patch_input::{
+    GraphqlPatchBool, GraphqlPatchBoolNullAsUnset, GraphqlPatchJsonNullAsUnset, GraphqlPatchString,
+    GraphqlPatchStringList, GraphqlPatchStringListNullAsUnset, GraphqlPatchStringNullAsUnset,
 };
-pub use support::{
+pub(crate) use support::{
     authoritative_launch_binding, authoritative_project, authoritative_transition,
     authoritative_work_item, command_database, command_error, require_command_database, work_facts,
 };

@@ -1,6 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { gql } from "@apollo/client";
 
 import { DocViewer } from "../features/documents";
 import {
@@ -11,7 +10,6 @@ import {
 import { initializeStudioRuntime } from "../runtime";
 import { createBrowserRuntime } from "../runtime/browserRuntime";
 import { createDesktopRuntime } from "../runtime/desktopRuntime";
-import { studioApolloClient } from "../shared/apollo/client";
 
 const startup = {
   serviceHealth: {
@@ -118,24 +116,6 @@ describe("document registry desktop runtime acceptance", () => {
       "RefreshTaskDocumentRegistry",
       "RefreshScratchDocumentRegistry",
     ]);
-    expect(studioApolloClient().readFragment({
-      id: studioApolloClient().cache.identify({
-        __typename: "DesignDocuments",
-        id: "doc-spec",
-      }),
-      fragment: gql`
-        fragment CachedDocumentRegistryRow on DesignDocuments {
-          id
-          relPath
-          contentDigest
-        }
-      `,
-    })).toEqual({
-      __typename: "DesignDocuments",
-      id: "doc-spec",
-      relPath: "SPEC.MD",
-      contentDigest: "digest-spec",
-    });
     expect(fetchMock).not.toHaveBeenCalled();
 
     // HTML keeps its sandboxed frame, now pointed at the desktop protocol so

@@ -1,4 +1,4 @@
-import { skipToken, useQuery } from "@apollo/client/react";
+import { useQuery } from "@apollo/client/react";
 
 import {
   compactWorktrackerId,
@@ -34,7 +34,7 @@ export function useModulePresentations(
           fetchPolicy: "cache-only",
           variables: { projectId: compactWorktrackerId(projectId) },
         }
-      : skipToken,
+      : { client: studioApolloClient(), skip: true, variables: { projectId: "" } },
   );
   return query.data
     ? presentationsFromRows(query.data.module_presentations.nodes)

@@ -43,6 +43,7 @@ fragment WorkItemEndedRunFields on AgentRuns {
   exit_code: exitCode
   launch_state: launchState
   launch_model: launchModel
+  stage_skill_availability: stageSkillAvailability
   provider_session_id: providerSessionId
   terminal_session: terminalSession {
     nodes {

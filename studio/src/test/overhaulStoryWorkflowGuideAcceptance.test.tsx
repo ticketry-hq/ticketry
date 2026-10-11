@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ModalHost } from "../app/modal/ModalHost";
 import { useModalStore } from "../app/modal/modalStore";
 import type { WorkTrackerProjectOpenQuery } from "../features/projects";
@@ -222,7 +222,10 @@ describe("overhaul acceptance — Story workflow guide", () => {
     const trigger = await within(details).findByRole("button", { name: "Story workflow guide" });
     expect(trigger).toHaveTextContent("Story workflow guide");
     trigger.focus();
-    fireEvent.click(trigger);
+    await act(async () => {
+      fireEvent.click(trigger);
+      await vi.dynamicImportSettled();
+    });
     const dialog = await screen.findByRole("dialog", { name: "Story workflow guide" });
     expect(dialog).toBeVisible();
     expect(screen.getAllByText("Search saved notes").length).toBeGreaterThan(0);

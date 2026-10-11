@@ -1,4 +1,4 @@
-import type { AgentStatusData, RunRecord } from "../status";
+import { isWorkItemShellRun, type AgentStatusData, type RunRecord } from "../status";
 import { isTerminalProvider } from "./presentation/providerPresentation";
 import { isScratchBucket } from "./internal/sessionStore";
 
@@ -22,10 +22,16 @@ export function selectWorkspaceTerminalRuns(
   if (!bucket || !projectId || holding.projectId !== projectId) return [];
   const scratch = isScratchBucket(bucket);
   return Object.values(holding.runs)
-    .filter((run) => isTerminalProvider(run.agent))
     .filter((run) => {
-      if (!scratch) return run.task_id === bucket && run.scope === "task";
-      return run.project_id === projectId &&
+      // A Work Item's own shell sits beside its agent terminals; a module
+      // shell belongs to the terminal panel and never reaches a workspace.
+      if (!scratch) {
+        return run.task_id === bucket &&
+          ((run.scope === "task" && isTerminalProvider(run.agent)) ||
+            isWorkItemShellRun(run));
+      }
+      return isTerminalProvider(run.agent) &&
+        run.project_id === projectId &&
         run.module_id === moduleId &&
         (run.scope === "plan" || run.scope === "instant");
     })

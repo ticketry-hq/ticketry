@@ -114,7 +114,7 @@ async fn install(database: &DatabaseConnection) -> Result<(), AdoptionFailure> {
                 "the provisioned schema could not reach the Rust leaf: {error}"
             ))
         })?;
-    ticketry_work_management::commands::default_project_catalog::seed(database, &project_id)
+    ticketry_work_management::seed_default_project_catalog(database, &project_id)
         .await
         .map_err(|error| {
             let detail = std::error::Error::source(&error)

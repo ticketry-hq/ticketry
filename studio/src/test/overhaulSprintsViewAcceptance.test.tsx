@@ -7,7 +7,7 @@ import { usePlanWorkspace } from "../features/sprints/planWorkspaceState";
 import { fixture, mountStudio } from "./seam";
 
 const createdSprint: PlanningGraphQuery["sprints"]["nodes"][number] = {
-  id: "created-sprint", name: "Release", status: "planned", createdAt: "2026-10-03",
+  id: "created-sprint", name: "Release", status: "planned", rank: "V", createdAt: "2026-10-03",
 };
 const emptyGraph: PlanningGraphQuery = {
   project: { nodes: [{ id: "project-1", name: "Planner", slug: "PLAN" }] },
@@ -46,7 +46,7 @@ describe("SprintsView operation and navigation acceptance", () => {
       }
       if (operation === "CreateSprint") {
         creationVariables = variables;
-        return { worktrackerSprintCreateOne: { ...createdSprint, __typename: "WorktrackerSprintBasic" } } as TResult;
+        return { worktrackerSprintCreateOne: { ...createdSprint, __typename: "WorktrackerSprint" } } as TResult;
       }
       return http.executeGraphQl(document, variables);
     } });

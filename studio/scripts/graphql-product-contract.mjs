@@ -64,6 +64,7 @@ const PRODUCT_MUTATIONS = [
   "remove_state_from_issue_type_workflow",
   "reorder_issue_types",
   "reorder_module_presentation",
+  "reorder_sprint",
   "reorder_states",
   "reorder_work_item",
   "retry_automation_attempt",
@@ -73,6 +74,7 @@ const PRODUCT_MUTATIONS = [
   "terminal_output_observe",
   "terminal_session_create",
   "terminal_session_update",
+  "update_agent_run",
   "update_issue_type",
   "update_issue_type_transition",
   "update_instant_launch_setting",
@@ -136,6 +138,7 @@ const AUTHORED_QUERIES = [
   "instant_run_ticket_title",
   "instant_launch_setting",
   "keybinding_setting",
+  "launch_skill_availability",
   "module_file_diff",
   "module_version_control",
   "provider_catalog",
@@ -191,7 +194,7 @@ export async function assertGraphqlProductContract({ schemaPath, sourceRoot }) {
   // Apollo handles this cache directive locally; the server SDL does not own it.
   const validationSchema = extendSchema(
     schema,
-    parse("directive @nonreactive on FRAGMENT_SPREAD"),
+    parse("directive @nonreactive on FIELD | FRAGMENT_SPREAD"),
   );
   for (const target of await typedDocumentTargets(sourceRoot)) {
     const document = parse(await readFile(target.sourcePath, "utf8"));

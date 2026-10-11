@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
+import { StudioApolloProvider } from "../shared/apollo/StudioApolloProvider";
+import { StoryActiveSprintDocument } from "../features/sprints";
+import { studioApolloClient } from "../shared/apollo/client";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { seedModuleOpenFixture } from "./projectOpenFixture";
 import { workItem } from "./seam";
@@ -92,7 +95,8 @@ describe("overhaul acceptance - agent run actions", () => {
     });
     const scroll = vi.fn();
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scroll });
-    const pane = render(<TasksPane />);
+    studioApolloClient().writeQuery({ query: StoryActiveSprintDocument, variables: { projectId: "project-1" }, data: { sprints: { __typename: "WorktrackerSprintConnection", nodes: [] } } });
+    const pane = render(<StudioApolloProvider><TasksPane /></StudioApolloProvider>);
     expect(screen.queryByText("Pad target")).not.toBeInTheDocument();
     const terminal = document.createElement("button");
     document.body.appendChild(terminal);

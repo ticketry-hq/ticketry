@@ -8,7 +8,7 @@ use super::WorktreePersistenceError;
 pub const VERSION: i32 = 1;
 
 /// The only Django migration history this adoption bridges from.
-pub const CURRENT_DJANGO_LEAF: &str = "0001_initial";
+pub(crate) const CURRENT_DJANGO_LEAF: &str = "0001_initial";
 
 /// Every Django `worktrees` migration, in applied order.
 pub const DJANGO_MIGRATIONS: [&str; 1] = [CURRENT_DJANGO_LEAF];
@@ -16,7 +16,7 @@ pub const DJANGO_MIGRATIONS: [&str; 1] = [CURRENT_DJANGO_LEAF];
 /// The adopted table, at the column shape both Django and Rust observe. The
 /// Worktree schema has never needed a bridge: the initial migration is still
 /// the leaf, so adoption only installs the ownership ledger beside it.
-pub const ADOPTED_TABLE: &str = "worktrees";
+pub(crate) const ADOPTED_TABLE: &str = "worktrees";
 
 /// The ownership ledger this slice authors. It has never had a Django writer.
 pub const LEDGER_TABLE: &str = "ticketry_worktrees_adoption";

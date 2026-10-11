@@ -7,7 +7,6 @@ import {
   CONVERSATIONS_SECTION_ID,
   LOADING_PLACEHOLDER,
   orderedTaskSections,
-  searchHits,
   STATE_HEADER,
   visibleRows,
 } from "../selectors";
@@ -16,6 +15,8 @@ import { stateColor } from "../../../shared/utilities/display";
 import { useModuleOpen } from ".";
 import { useInstantRunTickets } from "../../agents/terminal";
 import { recordSelectionProfilePoint } from "../../../shared/utilities/selectionProfile";
+import { useStorySprintFilter } from "../filter/StorySprintFilterController";
+import { selectStorySprintResults } from "../selectors/storySprintFilter";
 
 import { moduleLoadPoint, moduleLoadProbeActive } from "../../../shared/utilities/moduleLoadProbe";
 
@@ -25,6 +26,8 @@ export function useDerivedStoriesTree() {
   recordSelectionProfilePoint("stories-tree-render");
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
+  const selectedTaskId = useClientStore((s) => s.selectedTaskId);
+  const sprintFilter = useStorySprintFilter(selectedProjectId);
   const { tree, items, loading: queryLoading } = useModuleOpen(selectedModuleId);
   const states = useCachedStates(selectedProjectId);
   const instantRunTickets = useInstantRunTickets(
@@ -58,6 +61,13 @@ export function useDerivedStoriesTree() {
     recordSelectionProfilePoint("expanded-ids-build");
     return new Set(rememberedExpandedIds);
   }, [rememberedExpandedIds]);
+  // A failed initial lookup may show ordinary cached rows, without resolving
+  // unknown Active intent to All or claiming an authoritative result summary.
+  const results = useMemo(() => selectStorySprintResults(
+    tree, itemsById, sprintFilter.selection ?? (sprintFilter.status === "error" ? { mode: "all" } : null), normalizedQuery,
+  ), [tree, itemsById, sprintFilter.selection, sprintFilter.status, normalizedQuery]);
+  const isSprintRestricted = sprintFilter.restricted;
+  const isResultFilterActive = isSprintRestricted || isSearchActive;
 
   useLayoutEffect(() => {
     migrateCollapsedStateNames(states);
@@ -90,11 +100,9 @@ export function useDerivedStoriesTree() {
       }
     }
 
-    const hits = isSearchActive
-      ? searchHits(tree, itemsById, normalizedQuery)
-      : null;
+    const hits = results.hits;
     for (const section of orderedTaskSections(
-      tree.rootIds,
+      results.eligibleRootIds,
       itemsById,
       states,
       tree.order,
@@ -103,7 +111,7 @@ export function useDerivedStoriesTree() {
       const visibleRootIds = hits
         ? section.ids.filter((id) => hits.has(id))
         : section.ids;
-      if (isSearchActive && visibleRootIds.length === 0) continue;
+      if ((!sprintFilter.selection || isResultFilterActive) && visibleRootIds.length === 0) continue;
 
       out.push({
         kind: STATE_HEADER,
@@ -111,7 +119,7 @@ export function useDerivedStoriesTree() {
         stateId: section.state.id,
         stateName: section.state.name,
         stateColor: stateColor(section.state),
-        count: section.ids.length,
+        count: visibleRootIds.length,
       });
       if (
         !isSearchActive &&
@@ -151,6 +159,9 @@ export function useDerivedStoriesTree() {
     collapsedStateIds,
     normalizedQuery,
     isSearchActive,
+    results,
+    isResultFilterActive,
+    sprintFilter.selection,
   ]);
 
   useLayoutEffect(() => {
@@ -175,7 +186,17 @@ export function useDerivedStoriesTree() {
     tree,
     itemsById,
     sectionIdsByState: derived.sectionIdsByState,
-    loadingTasks: loadingTasks || loadingRecords,
+    loadingTasks: loadingTasks || loadingRecords || (queryLoading && tree.order.length === 0),
     isSearchActive,
+    sprintFilter,
+    isSprintRestricted,
+    isResultFilterActive,
+    matchingRootIds: results.matchingRootIds,
+    matchingRootCount: results.matchingRootIds.length,
+    totalRootCount: tree.rootIds.length,
+    resultIds: results.resultIds,
+    selectedStoryOutsideFilter: !!selectedTaskId && !!itemsById[selectedTaskId] &&
+      sprintFilter.selection !== null && !loadingRecords && isResultFilterActive &&
+      !results.resultIds.has(selectedTaskId),
   };
 }

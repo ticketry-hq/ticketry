@@ -41,6 +41,21 @@ describe("adaptPlanningGraph", () => {
     expect(graph.workItems[0].key).toBe("PLAN-42");
   });
 
+  it("carries sprint rank and orders the sequence by base-62 rank then id instead of creation time", () => {
+    const graph = adaptPlanningGraph({
+      project: { nodes: [] }, states: { nodes: [] }, issueTypes: { nodes: [] },
+      modules: { nodes: [] }, workItems: { nodes: [] },
+      sprints: { nodes: [
+        { id: "later", name: "Later", status: "planned", rank: "a0", createdAt: "2026-01-01" },
+        { id: "b", name: "Tied second", status: "planned", rank: "Z0", createdAt: "2026-01-02" },
+        { id: "a", name: "Tied first", status: "completed", rank: "Z0", createdAt: "2026-01-03" },
+      ] },
+    } satisfies PlanningGraphQuery);
+    expect(graph.sprints.map(({ id, rank }) => ({ id, rank }))).toEqual([
+      { id: "a", rank: "Z0" }, { id: "b", rank: "Z0" }, { id: "later", rank: "a0" },
+    ]);
+  });
+
   const typed = (types: Array<{ id: string; name: string; level: string }>) =>
     adaptPlanningGraph({
       project: { nodes: [] },
@@ -79,7 +94,7 @@ describe("project planning read contracts", () => {
   it("reads sprint identity and membership without importing deferred sprint fields", () => {
     const sprintId = "f7e76bd0-b778-4539-824a-6e04b881a11a";
     const legacySprint = {
-      id: sprintId, name: "Sprint one", status: "planned",
+      id: sprintId, name: "Sprint one", status: "planned", rank: "V",
       createdAt: "2026-09-01 00:00:00",
       startDate: null, endDate: null, goal: "Legacy source goal",
     };
@@ -96,7 +111,7 @@ describe("project planning read contracts", () => {
       }] },
     } satisfies PlanningGraphQuery);
     expect(graph.sprints).toEqual([{
-      id: sprintId, name: "Sprint one", status: "planned", createdAt: "2026-09-01 00:00:00",
+      id: sprintId, name: "Sprint one", status: "planned", rank: "V", createdAt: "2026-09-01 00:00:00",
     }]);
     expect(graph.workItems[0].sprintId).toBe(sprintId);
   });

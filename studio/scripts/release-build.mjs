@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { inspectReleaseBundle } from "./release-bundle-inspection.mjs";
 import { resolveReleaseCommit } from "./release-provenance.mjs";
+import { resolveRoadmapAvailability } from "./roadmap-build-policy.mjs";
 
 // The update feed manifest keeps its own module; this re-export keeps one
 // release-script entry point for callers.
@@ -702,27 +703,35 @@ export async function stageTarget(
 export async function buildRelease(
   manifest,
   targets,
-  { allowUnsigned = false, allowDirty = false, execute = run, capture = runCapture } = {},
+  {
+    allowUnsigned = false, allowDirty = false, execute = run, capture = runCapture,
+    environment = process.env, root = studioRoot, log = console.log,
+  } = {},
 ) {
-  validateMacOSReleaseEnvironment(process.env, { allowUnsigned });
-  const tauriEnvironment = await releaseTauriBuildEnvironment(process.env, {
+  validateMacOSReleaseEnvironment(environment, { allowUnsigned });
+  const roadmapEnabled = resolveRoadmapAvailability(environment, { signedRelease: !allowUnsigned });
+  const buildEnvironment = { ...environment, TICKETRY_ROADMAP_ENABLED: String(roadmapEnabled) };
+  const context = allowUnsigned ? "unsigned release" : "signed release";
+  const source = environment.TICKETRY_ROADMAP_ENABLED === undefined ? `${context} default` : "explicit override";
+  log(`Roadmap compiled availability: ${roadmapEnabled ? "ON" : "OFF"} (${source}).`);
+  const tauriEnvironment = await releaseTauriBuildEnvironment(buildEnvironment, {
     allowUnsigned,
     allowDirty,
     capture,
   });
-  await validateReleaseInputs(manifest, studioRoot, {
+  await validateReleaseInputs(manifest, root, {
     includeFrontendOutputs: false,
     allowUnsigned,
   });
   const [frontendCommand, ...frontendArgs] = manifest.artifacts.frontend.command;
-  await execute(frontendCommand, frontendArgs, "frontend build");
-  await validateFrontendOutputs(manifest);
+  await execute(frontendCommand, frontendArgs, "frontend build", { environment: buildEnvironment });
+  await validateFrontendOutputs(manifest, root);
   for (const target of targets) {
     await rm(
-      path.join(studioRoot, "src-tauri", "target", target.rust_target, "release", "bundle"),
+      path.join(root, "src-tauri", "target", target.rust_target, "release", "bundle"),
       { recursive: true, force: true },
     );
-    const hookRunner = hookRunnerBuild(target);
+    const hookRunner = hookRunnerBuild(target, root);
     await mkdir(path.dirname(hookRunner.output), { recursive: true });
     await execute(
       hookRunner.command,
@@ -733,18 +742,18 @@ export async function buildRelease(
     const [tauriCommand] = manifest.artifacts.tauri.command;
     await execute(
       tauriCommand,
-      tauriBuildArguments(manifest, target, process.env, { allowUnsigned }),
+      tauriBuildArguments(manifest, target, environment, { allowUnsigned }),
       `Tauri build for ${target.id}`,
       { environment: tauriEnvironment },
     );
-    const artifacts = await bundleArtifacts(manifest, target, { allowUnsigned });
+    const artifacts = await bundleArtifacts(manifest, target, { allowUnsigned, root });
     await verifyMacOSBundle(manifest, target, artifacts, { allowUnsigned });
     if (allowUnsigned) {
       // Ad-hoc signing mutates the app after Tauri has already created its
       // DMG. Recreate the installer so it contains the exact verified app.
       await rebuildUnsignedDmg(artifacts);
     }
-    await stageTarget(manifest, target, artifacts, { allowUnsigned });
+    await stageTarget(manifest, target, artifacts, { allowUnsigned, root });
   }
 }
 

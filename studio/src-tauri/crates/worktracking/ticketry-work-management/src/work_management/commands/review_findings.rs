@@ -1,6 +1,6 @@
 use sea_orm::{
-    sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
-    QueryFilter, QueryOrder, Set, TransactionTrait,
+    sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
+    QueryOrder, Set, TransactionTrait,
 };
 
 use super::identifiers::database_uuid;
@@ -107,6 +107,7 @@ pub async fn create_review_finding(
     let id = work_items::create_in(
         &transaction,
         work_items::CreateWorkItem {
+            sprint_id: None,
             project_id,
             name,
             issue_type_id: implementation.id,

@@ -3,7 +3,7 @@
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
 use ticketry_entities::{issue, state};
-use ticketry_work_management::commands::workflow::{self, TransitionOrigin, TransitionWorkItem};
+use ticketry_work_management::{transition, TransitionOrigin, TransitionWorkItem};
 
 use super::{
     PullRequestStatusView, WorkItemClosureFailureView, WorktreeChangesService,
@@ -52,7 +52,7 @@ impl WorktreeChangesService {
         if pull_request.integrated && !work_item_done {
             match done {
                 Some(done) => {
-                    let transition = workflow::transition(
+                    let transition = transition(
                         self.status().work_items(),
                         TransitionWorkItem {
                             id: work_item.id.clone(),

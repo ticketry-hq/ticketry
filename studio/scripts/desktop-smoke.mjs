@@ -28,7 +28,7 @@ if (process.platform === "darwin" && process.arch !== "arm64") {
 const developmentPort = process.env.MUXED_DESKTOP_SMOKE_PORT ?? "15174";
 const developmentConfig = JSON.stringify({
   build: {
-    beforeDevCommand: `npm run dev -- --host 127.0.0.1 --port ${developmentPort} --strictPort`,
+    beforeDevCommand: `bun run dev -- --host 127.0.0.1 --port ${developmentPort} --strictPort`,
     devUrl: `http://127.0.0.1:${developmentPort}`,
   },
 });

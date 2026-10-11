@@ -65,26 +65,29 @@ async fn a_failed_replacement_kill_reports_previous_agent_not_ended() {
         .execute_unprepared("ALTER TABLE worktrees ADD COLUMN pull_request_url varchar NULL")
         .await
         .unwrap();
-    ticketry_work_management::schema::install(&database)
+    ticketry_work_management::install_module_links_schema(&database)
         .await
         .unwrap();
-    ticketry_work_management::workspace_tab_order_migration::install(&database)
+    ticketry_work_management::install_workspace_tab_order_schema(&database)
         .await
         .unwrap();
-    ticketry_work_management::project_onboarding_migration::install(&database)
+    ticketry_work_management::install_project_onboarding_schema(&database)
         .await
         .unwrap();
-    ticketry_work_management::launch_binding_stage_skills_migration::install(&database)
+    ticketry_work_management::install_launch_binding_stage_skills_schema(&database)
         .await
         .unwrap();
-    ticketry_work_management::launch_binding_profile_migration::install(&database)
+    ticketry_work_management::install_launch_binding_profile_schema(&database)
         .await
         .unwrap();
     // The run grant resolves its project through this catalog entry.
-    ticketry_work_management::module_presentation_migration::install(&database)
+    ticketry_work_management::install_module_presentation_schema(&database)
         .await
         .unwrap();
-    ticketry_work_management::sprint_migration::install(&database)
+    ticketry_work_management::install_sprint_schema(&database)
+        .await
+        .unwrap();
+    ticketry_work_management::install_sprint_rank_schema(&database)
         .await
         .unwrap();
     ticketry_work_management::ModuleLinkStore::new(database.clone())

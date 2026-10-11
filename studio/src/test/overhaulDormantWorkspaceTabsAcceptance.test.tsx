@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { DormantWorkspaceTabs } from "../app/shell/ticket-workspace/selected-ticket/internal/DormantWorkspaceTabs";
+import { DormantWorkspaceTabs } from "../features/task-workspace/internal/DormantWorkspaceTabs";
 
 describe("overhaul acceptance - dormant workspace tabs", () => {
   it("[overhaul-274] folds dormant chips into one bounded dropdown at the tab strip end", () => {

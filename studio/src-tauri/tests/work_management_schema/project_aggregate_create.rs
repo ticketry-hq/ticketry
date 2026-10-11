@@ -1,6 +1,6 @@
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement};
 
-use ticketry_work_management::commands::CommandDatabase;
+use ticketry_work_management::CommandDatabase;
 
 async fn fixture() -> sea_orm::DatabaseConnection {
     let mut options = ConnectOptions::new("sqlite::memory:");

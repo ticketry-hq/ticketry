@@ -12,7 +12,7 @@ Generate the production pair once on a secured release-operator machine. Write
 the private key outside the repository:
 
 ```bash
-npm run tauri -- signer generate -w /secure/path/ticketry-updater.key
+bun run tauri -- signer generate -w /secure/path/ticketry-updater.key
 ```
 
 This invokes `tauri signer generate`. Install the private key contents in CI as
@@ -42,7 +42,7 @@ Run these commands from `studio/` on a macOS arm64 host with the
 For a local unsigned acceptance artifact:
 
 ```bash
-npm run release:build -- --target macos-aarch64 --allow-unsigned
+bun run release:build -- --target macos-aarch64 --allow-unsigned
 ```
 
 Unsigned output is for local acceptance only. The public publisher must refuse
@@ -56,7 +56,7 @@ provide `TAURI_SIGNING_PRIVATE_KEY` and
 signing; they do not replace Apple signing or notarization.
 
 ```bash
-npm run release:build -- --target macos-aarch64
+bun run release:build -- --target macos-aarch64
 ```
 
 The build validates version agreement, builds Studio and the Rust desktop,
@@ -64,6 +64,51 @@ checks the app and hook architectures, and enforces signing and notarization.
 It stages the `.app`, `.dmg`, signed `.app.tar.gz` updater archive, matching
 `.app.tar.gz.sig`, and `release-metadata.json` under
 `release-output/0.2.0/macos-aarch64/`.
+
+## Choose compiled Roadmap availability
+
+`TICKETRY_ROADMAP_ENABLED` accepts exactly `true` or `false`. An unset variable
+uses the build-context default; an empty value, other spelling, whitespace, or
+numeric value fails the build with an actionable error. The explicit override
+always wins.
+
+| Build context | Unset override | `true` | `false` |
+| --- | --- | --- | --- |
+| Validated signed release | OFF | ON | OFF |
+| Explicit unsigned release / local acceptance artifact | ON | ON | OFF |
+| Desktop development | ON | ON | OFF |
+| Supporting browser development / direct frontend build | ON | ON | OFF |
+
+Signing credentials in the environment alone do not select the signed default.
+The release orchestrator first validates the selected signed/unsigned policy,
+then resolves one choice and passes it to both the initial frontend build and
+Tauri's packaging frontend rebuild. `desktop:build` uses this same orchestrator
+and policy as `release:build`. Resolution is reported in build logs.
+
+Run from `studio/` (signed examples require the credentials described above):
+
+```bash
+# Signed release default: Roadmap OFF.
+bun run release:build -- --target macos-aarch64
+# Explicitly enable Roadmap in a signed release.
+TICKETRY_ROADMAP_ENABLED=true bun run desktop:build -- --target macos-aarch64
+# Unsigned acceptance default: Roadmap ON.
+bun run release:build -- --target macos-aarch64 --allow-unsigned
+# Compile an unsigned OFF artifact for acceptance.
+TICKETRY_ROADMAP_ENABLED=false bun run release:build -- --target macos-aarch64 --allow-unsigned
+# Rebuild and launch desktop development with Roadmap OFF.
+TICKETRY_ROADMAP_ENABLED=false bun run desktop:dev
+# Supporting direct frontend build: ON by default, OFF with an override.
+bun run build
+TICKETRY_ROADMAP_ENABLED=false bun run build
+```
+
+The resulting frontend choice is immutable. Changing the override requires
+rebuilding the frontend/app (and restarting a development frontend server).
+Runtime environment variables, installation settings, and existing planning
+records cannot change an artifact's availability. OFF hides Roadmap workspace
+controls while preserving planning services/data, module workspaces, and the
+separate agent Plan conversation and Plan a feature commands.
 
 ## Publish the stable update feed
 
@@ -108,7 +153,7 @@ directory before retrying.
 Run the arm64 updater acceptance on a macOS arm64 host from `studio/`:
 
 ```bash
-npm run release:acceptance:update
+bun run release:acceptance:update
 ```
 
 The script builds packaged versions A and B with the `desktop-acceptance`

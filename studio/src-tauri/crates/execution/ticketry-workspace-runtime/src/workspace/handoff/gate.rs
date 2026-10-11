@@ -30,14 +30,14 @@ impl WorkspaceReadinessGate {
 }
 
 /// True when this schema has no gate installed, or the installed gate is open.
-pub fn open(ctx: &Context<'_>) -> bool {
+pub(crate) fn open(ctx: &Context<'_>) -> bool {
     ctx.data_opt::<WorkspaceReadinessGate>()
         .is_none_or(WorkspaceReadinessGate::is_ready)
 }
 
 /// The one structured refusal every gated workspace surface returns. It names no
 /// database, absolute path, credential, prompt, or command line.
-pub fn unavailable() -> Error {
+pub(crate) fn unavailable() -> Error {
     Error::new("The workspace runtime is not ready.")
         .extend_with(|_, extension| extension.set("code", "workspace_unavailable"))
 }

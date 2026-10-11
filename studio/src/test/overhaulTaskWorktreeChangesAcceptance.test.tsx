@@ -546,7 +546,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     const push = screen.getByRole("button", { name: "Push" });
     expect(commit).toBeEnabled();
     expect(push).toBeEnabled();
-    expect(screen.getByRole("status")).toHaveTextContent(
+    expect(screen.getByText(/Push sends committed work only\./, { selector: '[role="status"]' })).toHaveTextContent(
       "Push sends committed work only. Uncommitted changes stay local.",
     );
 
@@ -1002,7 +1002,7 @@ describe("overhaul acceptance - task worktree Changes", () => {
     fireEvent.click(action);
     await waitFor(() => expect(operations).toHaveLength(1));
     expect(operations[0]?.taskId).toBe(TASK_ID);
-    expect(await screen.findByRole("status")).toHaveTextContent(
+    expect(await screen.findByText("Merge-preparation agent started.", { selector: '[role="status"]' })).toHaveTextContent(
       "Merge-preparation agent started.",
     );
 

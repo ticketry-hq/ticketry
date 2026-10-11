@@ -638,7 +638,7 @@ async fn seed_fixture(database: &DatabaseConnection) {
                 initial_prompt text,
                 launch_reasoning varchar,
                 launch_unattended bool NOT NULL DEFAULT 0,
-                attention_reason text
+                attention_reason text, conversation_title text, stage_skill_availability text
             );
             CREATE TABLE worktracker_project (id varchar PRIMARY KEY);
             CREATE TABLE agent_terminal_sessions (

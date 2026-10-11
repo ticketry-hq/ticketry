@@ -21,11 +21,13 @@ import {
   createNavigationContext,
   type NavigationContext,
 } from "./navigationContext";
-import { getVisibleModulesSnapshot } from "../../features/module-tabs";
+import { getEffectiveModuleTabsSnapshot } from "../../features/module-tabs";
 import { useStudioStore } from "../../features/projects";
 import { useClientStore } from "../../state/clientStore";
 import { useChangesWorkspace } from "../../features/agents/worktrees";
+import { selectPlanWorkspaceActive, usePlanWorkspace } from "../../features/sprints";
 import { openConversationComposer } from "../../features/conversations";
+import { toggleModuleManager } from "../../features/module-manager/state";
 import {
   startNormalRunForSelectedItem,
   startRunNowForSelectedItem,
@@ -69,10 +71,15 @@ export function routeModulePositionNavigation(
 function selectModuleAtPosition(position: ModulePosition): boolean {
   const projectId = useStudioStore.getState().selectedProjectId;
   const ui = useClientStore.getState();
-  const module = getVisibleModulesSnapshot(projectId)[position - 1];
+  const projection = getEffectiveModuleTabsSnapshot(projectId);
+  const module = projection.modules[position - 1];
   if (!module || module.id === ui.selectedModuleId) return false;
 
-  void ui.selectModule(module.id);
+  if (projection.restricted && projection.complete) {
+    void ui.selectModule(module.id, { isCurrent: () =>
+      useStudioStore.getState().selectedProjectId === projectId
+      && getEffectiveModuleTabsSnapshot(projectId).generation === projection.generation });
+  } else void ui.selectModule(module.id);
   return true;
 }
 
@@ -93,7 +100,8 @@ export function routeSharedNavigation(
       event.preventDefault();
       return;
     case "toggle-sidebar":
-      ctx.ui.toggleSidebar();
+    case "toggle-module-manager":
+      toggleModuleManager();
       event.preventDefault();
       return;
     case "focus-left":
@@ -176,6 +184,7 @@ function openModuleFolder(ctx: NavigationContext): void {
 }
 
 function closeActiveWorkspaceTab(ctx: NavigationContext): void {
+  if (selectPlanWorkspaceActive(usePlanWorkspace.getState())) return;
   const taskId = ctx.tasks.selectedTaskId;
   if (!taskId) return;
   const bucket = bucketFor(
@@ -202,6 +211,7 @@ function closeActiveWorkspaceTab(ctx: NavigationContext): void {
 
 /** Closes the selected terminal, optionally only for a reported native run. */
 export function closeActiveWorkspaceTerminal(expectedRunId?: string): boolean {
+  if (selectPlanWorkspaceActive(usePlanWorkspace.getState())) return false;
   if (useChangesWorkspace.getState().active) return false;
   const ui = useClientStore.getState();
   const taskId = ui.selectedTaskId;

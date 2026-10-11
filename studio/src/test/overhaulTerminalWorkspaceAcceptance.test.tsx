@@ -69,7 +69,7 @@ const terminalReads = vi.hoisted(() => {
 });
 
 vi.mock(
-  "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
+  "../features/task-workspace/terminals/SelectedTicketTerminal",
   () => ({
     SelectedTicketTerminal: ({ bucket, active }: { bucket: string; active: boolean }) => (
       <div data-testid="selected-ticket-terminal" data-active={String(active)}>{bucket}</div>

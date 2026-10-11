@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use ticketry_entities::{
     agent_run, app_settings, issue, project, session, sprint, sprint_goal, sprint_suggestion,
 };
-use ticketry_work_management::commands::CommandDatabase;
+use ticketry_work_management::CommandDatabase;
 
 const RUN_ID: &str = "ab34cd56ef78901234567890abcdef12";
 const SPRINT_ID: &str = "10000000-0000-0000-0000-000000000001";
@@ -62,8 +62,8 @@ async fn opaque_run_ids_round_trip_and_reset_preserves_waiting_suggestions() {
          (id, name, slug, description, seq_counter, state_revision, created_at, updated_at, onboarding_required) VALUES
          ('20000000000000000000000000000001', 'Project', 'project', '', 1, 1, '2026-10-03 00:00:00', '2026-10-03 00:00:00', 0);
          INSERT INTO worktracker_sprint
-         (id, project_id, name, status, created_at, updated_at) VALUES
-         ('10000000000000000000000000000001', '20000000000000000000000000000001', 'Planning', 'planned', '2026-10-03 00:00:00', '2026-10-03 00:00:00');
+         (id, project_id, name, status, rank, created_at, updated_at) VALUES
+         ('10000000000000000000000000000001', '20000000000000000000000000000001', 'Planning', 'planned', 'V', '2026-10-03 00:00:00', '2026-10-03 00:00:00');
          INSERT INTO worktracker_sprint_goal
          (id, sprint_id, position, text, created_at, updated_at) VALUES
          ('30000000000000000000000000000001', '10000000000000000000000000000001', 1, 'Ship planning', '2026-10-03 00:00:00', '2026-10-03 00:00:00');

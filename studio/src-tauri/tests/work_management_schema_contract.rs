@@ -27,7 +27,7 @@ mod work_item_aggregate {
             .expect("build generated contract");
 
         assert!(sdl.contains(
-            "create_work_item(project_id: String!, name: String!, issue_type_id: String!, description: String, state_id: String, parent_id: String): WorktrackerIssue!"
+            "create_work_item(project_id: String!, name: String!, issue_type_id: String!, description: String, state_id: String, parent_id: String, sprint_id: String): WorktrackerIssue!"
         ));
         assert!(sdl.contains("delete_work_item(id: String!): Boolean!"));
     }

@@ -26,6 +26,7 @@
 mod authority;
 mod paths;
 mod planning;
+mod stage_skill_warning;
 mod terminal_session;
 mod trace_reasons;
 
@@ -45,6 +46,7 @@ pub use planning::{
     RuntimeSettings, StartupScreen, TaskPromptFacts, TaskPromptInput, TaskSummary, TimeoutUnit,
     WorkspaceIdentity,
 };
+pub use stage_skill_warning::stage_skill_warning;
 pub use terminal_session::{
     CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode, TerminalLaunchKind,
 };

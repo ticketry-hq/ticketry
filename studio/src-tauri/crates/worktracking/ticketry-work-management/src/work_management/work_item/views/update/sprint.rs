@@ -12,5 +12,11 @@ pub(super) async fn apply(
     sprint_id: PatchValue<String>,
     facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
-    sprints::plan_work_item(database, &id, sprint_id, facts).await
+    sprints::plan_work_item(
+        database,
+        &id,
+        sprint_id.map(crate::SprintSelector::Explicit),
+        facts,
+    )
+    .await
 }

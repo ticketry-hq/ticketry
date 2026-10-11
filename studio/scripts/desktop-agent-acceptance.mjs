@@ -25,6 +25,7 @@ import {
 } from "./desktop-webdriver-session.mjs";
 import { proveDescriptionSaveAndStorySwitch } from "./desktop-description-acceptance.mjs";
 import { verifyLiveMcpRecovery } from "./desktop-mcp-recovery-acceptance.mjs";
+import { prepareStageSkillWorkspace, proveStageSkillLaunch } from "./desktop-stage-skill-acceptance.mjs";
 import { callSocketMcpTool } from "./mcp-socket-client.mjs";
 import { captureIdea, click, expectResumableRun, openExistingStory } from "./desktop-studio-ui.mjs";
 
@@ -139,13 +140,17 @@ async function createStoryThroughStudio(browser, workspaceDirectory) {
   await click(codex);
   await click(await browser.$("aria/Get started"));
 
-  await click(await browser.$("aria/+ Add Module"));
+  await click(await browser.$("aria/Open Module Manager"));
+  await click(await browser.$("[data-module-manager-new]"));
   await click(await browser.$("aria/Next"));
   await click(await browser.$("aria/Got it"));
-  const moduleName = await browser.$('input[placeholder="Module name"]');
+  const moduleName = await browser.$("aria/Module name");
   await moduleName.setValue("Acceptance Module");
   await (await browser.$("aria/Module folder")).setValue(workspaceDirectory);
-  await click(await browser.$("aria/Create module"));
+  const createModule = await browser.$("aria/Create module");
+  await createModule.waitForEnabled({ timeout: 20_000 });
+  // Use the folder field's supported keyboard submission route.
+  await browser.keys("Enter");
   await click(await browser.$("aria/Trust folder"));
 
   const skipTour = await browser.$('[data-testid="onboarding-skip-tour"]');
@@ -267,12 +272,11 @@ async function main() {
   if (process.env.TICKETRY_DESKTOP_ACCEPTANCE_SKIP_BUILD !== "1") {
     // CODING-1486 — the acceptance shell renders with native libghostty, a
     // default Cargo feature, so the pinned static library must exist first.
-    run("npm", ["run", "libghostty:prepare"], { cwd: studioRoot });
-    run("npm", [
-      "exec",
+    run("bun", ["run", "libghostty:prepare"], { cwd: studioRoot });
+    run("bun", [
+      "run",
       "tauri",
       "build",
-      "--",
       "--debug",
       "--no-bundle",
       "--features",
@@ -316,6 +320,7 @@ async function main() {
     mkdirSync(workspaceDirectory);
     mkdirSync(tmuxDirectory);
     mkdirSync(runtimeTempDirectory);
+    if (process.argv.includes("--stage-skills")) prepareStageSkillWorkspace(workspaceDirectory);
     const binary = path.join(applicationDirectory, "ticketry");
     const hook = path.join(applicationDirectory, "ticketry-hook");
     copyFileSync(builtBinary, binary, fsConstants.COPYFILE_FICLONE);
@@ -356,6 +361,16 @@ async function main() {
     }
     const story = await createStoryThroughStudio(browser, workspaceDirectory);
     await waitForState(browser, "Ideas");
+    if (process.argv.includes("--stage-skills")) {
+      await proveStageSkillLaunch({
+        browser, root, workspaceDirectory, taskId: story.taskId,
+        codexHome: applicationEnvironment.CODEX_HOME, marker: tools.marker,
+        inventory: () => tmuxInventory(root),
+        capture: () => tmuxCapture(root),
+        assertRenderer: () => assertNativeRendererOwnsTheRun(browser),
+      });
+      return;
+    }
     // CODING-1528: prove the description seam in WebKit before any run exists.
     if (!process.argv.includes("--mcp-recovery")) {
       await proveDescriptionSaveAndStorySwitch(browser, story.taskId);

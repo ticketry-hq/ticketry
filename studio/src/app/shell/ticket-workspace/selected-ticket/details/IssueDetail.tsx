@@ -409,7 +409,7 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
 
           {hasFindingsPanel(task, states, issueTypes) && (
             <FindingsPanel
-              children={displayedChildren}
+              parentId={task.id}
               projectId={task.project_id}
               onCancel={cancelChild}
             />

@@ -4,9 +4,7 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
 use crate::worktree::status;
 use ticketry_entities::worktree;
-use ticketry_work_management::launch_policy::{
-    CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
-};
+use ticketry_work_management::{CallerScope, LaunchPolicyRequest, LaunchPolicyResolver};
 
 use super::super::{
     command, command_git, repository, PullRequestStatusView, WorktreeChangesService,

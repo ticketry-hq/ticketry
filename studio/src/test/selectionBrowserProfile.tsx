@@ -94,6 +94,7 @@ const moduleData = {
       project_id: "project-1",
       sequence_id: 1,
       is_archived: false,
+      state_revision: 1,
       issue_type: "module",
       rank: "0",
       presentation: null,

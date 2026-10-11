@@ -71,7 +71,9 @@ export {
 // scratch workspace each read their own through the generated WorkItem model.
 export {
   useModuleScratchEndedRuns,
+  useModuleScratchEndedRunRead,
   useStoryEndedRuns,
+  useStoryEndedRunRead,
 } from "./workItemRunRestoration";
 export {
   presentDormantTerminalChips,
@@ -80,6 +82,7 @@ export {
 export {
   usePersistedTerminalSessions,
   useResumableTerminalSessions,
+  useResumableTerminalSessionRead,
   useScratchTerminalSessions,
 } from "./queries";
 
@@ -104,6 +107,7 @@ export {
 export { launchInstantConversation } from "./instantConversationLaunch";
 export { useInstantRunTickets } from "./instantRunTickets";
 export { useInstantRunTicketTitle } from "./instantRunTicketTitle";
+export { UpdateInstantConversationTitleDocument } from "./generated/updateInstantConversationTitle.documents";
 
 // Shared terminal-create launcher (CODIN-839): folder gate → optional prompt →
 // required agent → scratch planning launch. Studio create surfaces consume the
@@ -143,3 +147,4 @@ export {
   ModuleShellSessionsDocument,
 } from "./generated/terminalSessions.documents";
 export { TEMP_TASK_ID } from "../types";
+export { modalOcclusionActive, useModalOcclusionActive } from "./internal/modalOcclusion";

@@ -26,7 +26,7 @@ use std::time::Duration;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use serde_json::{json, Value};
 use tauri_graphql::{TransportApi, TransportApiImpl};
-use ticketry_agent_execution::reconciliation::{
+use ticketry_agent_execution::{
     ExecutionReconciliationConfig, ExecutionReconciliationRuntime, ExecutionReconciliationService,
 };
 use ticketry_data_directory::DataDirectoryGuard;
@@ -40,7 +40,7 @@ use ticketry_terminal::{
     TerminalRuntimeAuthority,
 };
 use ticketry_terminal::{TerminalLaunchBoundary, TerminalLaunchService};
-use ticketry_work_management::launch_policy::LaunchPolicyResolver;
+use ticketry_work_management::LaunchPolicyResolver;
 
 use super::execution_authorization::{Authorization, CALLER_RUN_ID};
 use super::execution_fixture as fixture;
@@ -220,9 +220,9 @@ impl ExecutionHarness {
         .expect("open the local settings gate");
         publish_readiness(&data_directory, &Slice3Readiness::complete())
             .expect("open the Runs GraphQL gate");
-        ticketry_workspace_runtime::handoff::publish_readiness(
+        ticketry_workspace_runtime::publish_readiness(
             &data_directory,
-            &ticketry_workspace_runtime::handoff::Slice4Readiness::complete(),
+            &ticketry_workspace_runtime::Slice4Readiness::complete(),
         )
         .expect("open the workspace gate");
         let composed = adopted.runtime;

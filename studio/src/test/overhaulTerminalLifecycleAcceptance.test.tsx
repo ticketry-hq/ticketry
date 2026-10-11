@@ -57,7 +57,7 @@ const terminalReads = vi.hoisted(() => {
 });
 
 vi.mock(
-  "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
+  "../features/task-workspace/terminals/SelectedTicketTerminal",
   () => ({
     SelectedTicketTerminal: ({ bucket, active }: { bucket: string; active: boolean }) => (
       <div data-testid="selected-ticket-terminal" data-active={String(active)}>{bucket}</div>
@@ -268,6 +268,7 @@ describe("overhaul acceptance — terminals", () => {
           provider_session_id: null,
           launch_state: "Implement",
           launch_model: "gpt-5.6",
+          stage_skill_availability: null,
           effective_state: "working",
           attention_reason: null,
           output_sequence: 1,

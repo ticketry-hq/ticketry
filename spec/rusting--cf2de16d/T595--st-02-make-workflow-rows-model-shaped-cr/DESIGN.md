@@ -139,5 +139,5 @@ that flag present, and `setIssueTypeWorkflowStartState` issues
 * `workflow_configuration_compare_and_set_is_atomic_and_prunes_unreachable_policy`
   now drives start state through `catalog::update_issue_type` and still asserts
   the pruning and the revision arithmetic.
-* `npm run graphql:drift` is green, so the committed SDL and operation
+* `bun run graphql:drift` is green, so the committed SDL and operation
   manifests match the new surface.

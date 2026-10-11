@@ -1,12 +1,15 @@
+import type { CreateSprintOutcome } from "../features/sprints/sprintCreation";
 import { ApolloClient, ApolloLink, InMemoryCache, Observable } from "@apollo/client";
 import { ApolloProvider } from "@apollo/client/react";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { PlanningGraphDocument } from "../features/planning-graph";
 import { useCreateSprint, useUpdateSprint } from "../features/sprints";
+import StartSprintDialog from "../features/sprints/StartSprintDialog";
+import { sprint } from "../features/planning-graph/testGraph";
 
-const createdSprint = { __typename: "WorktrackerSprint", id: "s", name: "Release", status: "planned", createdAt: "2026-10-03" };
+const createdSprint = { __typename: "WorktrackerSprint", id: "s", name: "Release", status: "planned", rank: "V", createdAt: "2026-10-03" };
 const graph = {
   project: { __typename: "WorktrackerProjectConnection", nodes: [] },
   states: { __typename: "WorktrackerStateConnection", nodes: [] },
@@ -17,6 +20,28 @@ const graph = {
 };
 
 describe("sprint lifecycle operations acceptance", () => {
+  it("[overhaul-585] starts the first sprint through the dialog without a carry-over destination", async () => {
+    const requests: Record<string, unknown>[] = [];
+    let closed = false;
+    const client = new ApolloClient({ cache: new InMemoryCache(), link: new ApolloLink((operation) => new Observable((observer) => {
+      requests.push(operation.variables);
+      observer.next({ data: { update_sprint: { ...createdSprint, status: "active" } } });
+      observer.complete();
+    })) });
+    function FirstSprint() {
+      const { update } = useUpdateSprint("p");
+      return <StartSprintDialog sprint={sprint({ id: "s", name: "Release" })} activeSprintName={null}
+        onStart={() => update({ id: "s", status: "active" })} onClose={() => { closed = true; }} />;
+    }
+    try {
+      render(<ApolloProvider client={client}><FirstSprint /></ApolloProvider>);
+      fireEvent.click(screen.getByRole("button", { name: "Start sprint" }));
+      await waitFor(() => expect(closed).toBe(true));
+      expect(requests).toEqual([{ id: "s", status: "active" }]);
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    } finally { client.stop(); }
+  });
+
   it("returns the created id only after the authoritative planning graph arrives", async () => {
     let deliverGraph = () => {};
     let receivedVariables: unknown;
@@ -27,7 +52,7 @@ describe("sprint lifecycle operations acceptance", () => {
         deliverGraph = () => { observer.next({ data: graph }); observer.complete(); };
       } else {
         receivedVariables = operation.variables;
-        observer.next({ data: { worktrackerSprintCreateOne: { ...createdSprint, __typename: "WorktrackerSprintBasic" } } });
+        observer.next({ data: { worktrackerSprintCreateOne: { ...createdSprint, __typename: "WorktrackerSprint" } } });
         observer.complete();
       }
     })) });
@@ -36,7 +61,7 @@ describe("sprint lifecycle operations acceptance", () => {
     const watcher = client.watchQuery({ query: PlanningGraphDocument, variables: { projectId: "p" } }).subscribe({ next: () => {} });
     const { result } = renderHook(() => useCreateSprint("p"), { wrapper: ({ children }: { children: ReactNode }) => <ApolloProvider client={client}>{children}</ApolloProvider> });
     let settled = false;
-    let created: string | null = null;
+    let created: CreateSprintOutcome | null = null;
     try {
       await act(async () => {
         const pending = result.current.create("Release").then((id) => { settled = true; created = id; });
@@ -46,7 +71,7 @@ describe("sprint lifecycle operations acceptance", () => {
         deliverGraph();
         await pending;
       });
-      expect(created).toBe("s");
+      expect(created).toEqual({ kind: "created", id: "s" });
       expect(client.readQuery({ query: PlanningGraphDocument, variables: { projectId: "p" } })?.sprints.nodes).toEqual([createdSprint]);
     } finally {
       watcher.unsubscribe();
@@ -55,6 +80,8 @@ describe("sprint lifecycle operations acceptance", () => {
   });
   it.each([
     { id: "s", status: "active" },
+    { id: "s", status: "active", carryoverSprintId: null },
+    { id: "s", status: "completed" },
     { id: "s", status: "completed", carryoverSprintId: "next" },
   ])("awaits the authoritative graph after lifecycle update $status", async (variables) => {
     let deliverGraph = () => {};

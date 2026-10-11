@@ -5,13 +5,8 @@ import { loadProjects, useStudioStore } from "../../features/projects";
 import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
 import { loadKeybindingOverrides } from "../navigation/keymapSettings";
 import { recordStartupStage } from "./startupTrace";
-import { TEMP_TASK_ID } from "../../features/agents/types";
-import { scratchBucketId } from "../../features/agents/terminal";
-import { rememberStudioWorkspaceTarget } from "../../features/workspace-state/studioWorkspaceTarget";
 import {
   useClientStore,
-  visiblePaneOrder,
-  type FocusedPane,
 } from "../../state/clientStore";
 
 export type BootstrapOutcome = "provisioning" | "unavailable" | "ready";
@@ -63,31 +58,6 @@ async function restoreWorkspace(): Promise<void> {
     preloadLiveRunStatus(project.id),
   ]);
 
-  // Start the restored item on Details. Change only the active surface, so
-  // document and terminal tabs remain available when the workspace mounts.
-  const client = useClientStore.getState();
-  const bucket = client.selectedTaskId === TEMP_TASK_ID
-    ? scratchBucketId(client.selectedModuleId ?? "")
-    : client.selectedTaskId;
-  if (bucket) {
-    client.setActive(bucket, "details");
-    // The workspace restoration effect must not switch back to yesterday's
-    // document or terminal after its asynchronous records arrive.
-    rememberStudioWorkspaceTarget(bucket, { kind: "details" });
-  }
-
-  // Selecting the project restores the remembered module when it is still
-  // present and linked, so the pane to open is whichever one now has content.
-  const moduleRestored = useClientStore.getState().selectedModuleId !== null;
-  focusVisiblePane(moduleRestored ? "tasks" : "modules");
-}
-
-function focusVisiblePane(preferredPane: FocusedPane): void {
-  const { sidebarVisible, setFocusedPane } = useClientStore.getState();
-  const projectIsSelected = useStudioStore.getState().selectedProjectId !== null;
-  const visiblePanes = visiblePaneOrder(sidebarVisible, projectIsSelected);
-
-  setFocusedPane(
-    visiblePanes.includes(preferredPane) ? preferredPane : "tasks",
-  );
+  // Recovery stays reachable from the footer when no remembered module exists.
+  useClientStore.getState().setEditViewZone("stories");
 }

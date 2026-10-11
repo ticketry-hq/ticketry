@@ -5,73 +5,80 @@ description: Run the Playwright browser integration suite to validate features e
 
 # Playwright integration suite
 
-The e2e suite in `studio/e2e/` is the black-box acceptance gate for the whole
-web application. It boots the real stack itself — `scripts/web-dev.mjs
---temp-sqlite` starts the Django backend against a throwaway SQLite profile
-(auth disabled) plus the frontend on port 4173 — so it needs **no dev server
-running and no manual setup**. It never touches the developer or desktop
-database.
+Read the [feature map](../../../docs/feature-map/README.md) to find the feature
+you touched: its entry points, surfaces and coverage table. The entry's
+filename (without `.md`) is the feature ID, and its suite lives at
+`studio/e2e/features/<feature-id>.spec.ts`. Update the entry and the suite
+together when behavior changes.
+
+The browser suite is the black-box acceptance gate for the web application. It
+boots the real stack itself: `scripts/web-dev.mjs` starts the Rust GraphQL
+adapter (`ticketry_graphql_adapter`) against a throwaway SQLite profile plus the
+frontend on port 4173, with a private tmux server and the local provider
+fixture. It needs **no dev server running and no manual setup**, and it never
+touches the developer or desktop database.
 
 ## Commands
 
 Run from the repository root:
 
-```sh
-# Full suite (serial, single worker — expect several minutes)
-npm run test:e2e --workspace @worktracker/studio
+| Goal | Command |
+| --- | --- |
+| The feature you changed | `bun run --cwd studio test:e2e:feature <feature-id>` |
+| Several features | `bun run --cwd studio test:e2e:feature <id>,<id>` |
+| One case or a title subset (partial evidence) | add `--case <case-id>` or `--grep <regex>` |
+| Full app (every mapped, non-excluded feature) | `bun run --cwd studio test:e2e:features` |
+| List features, suites, isolation and cases | `bun run --cwd studio test:e2e:features --list [--json]` |
+| Map/suite drift report | `bun run --cwd studio test:e2e:features --check` |
+| Plan and Sprints features (alias) | `bun run --cwd studio test:e2e:planning` |
 
-# Just the server-state overhaul regressions (fastest meaningful slice)
-npm run test:e2e:overhaul --workspace @worktracker/studio
-
-# One spec file or one test
-npx playwright test e2e/web-app.spec.ts --config playwright.config.ts   # from studio/
-npx playwright test -g "drag reorder"                                   # by title
-```
+Raw `bun run --cwd studio test:e2e` runs plain Playwright over every spec in one
+profile. Keep it for ad-hoc debugging; it is not the completion gate.
 
 ## What to run, when
 
-Pick the smallest slice that covers the seam you touched, then run the full
-suite before declaring the change done:
+Run the changed feature's suite first, then the full-app run before declaring a
+cross-cutting change done. A filtered run (`--case`, `--grep` or a subset of
+features) never establishes full-app completion. Map entries marked
+`Suite: excluded (...)`, and `desktop-only:` or `manual:` cells, need the
+desktop harness (`bun run --cwd studio test:e2e:desktop`) or manual evidence;
+the runner summary lists them under "Not verified by the browser".
 
-| You changed… | Run first |
-| --- | --- |
-| Server state, queries/mutations, optimistic updates, realtime/SSE | `test:e2e:overhaul` |
-| Issue editing, board, hierarchy, blockers, settings, panes, shortcuts | `e2e/web-app.spec.ts` |
-| Documents, scratch workspace, launcher menu | `e2e/documents-and-scratch.spec.ts` |
-| Backend API surface the UI consumes (including the Rust port) | full `test:e2e` |
-
-Also run `npm run test:overhaul --workspace @worktracker/studio` (Vitest, not
-Playwright) when touching terminal/agent lifecycle state — those numbered
-cases (`overhaul-07..13`) are deliberately outside the browser suite.
+Also run `bun run --cwd studio test:overhaul` (Vitest, not Playwright) when
+touching terminal/agent lifecycle state; those numbered cases (`overhaul-07..13`)
+are deliberately outside the browser suite.
 
 ## Reading failures
 
-- Playwright prints a list reporter; on failure it retains a **trace** and
-  **screenshot** under `studio/test-results/` and writes an HTML report to
-  `studio/playwright-report/` (`npx playwright show-trace <trace.zip>` for
-  step-by-step replay).
-- The `setup` project (`onboarding.setup.ts`) runs first and completes
-  provider onboarding in the temp DB. If *everything* fails, check setup's
-  output before suspecting the specs.
-- Backend logs stream through the webServer output — API 500s appear inline
-  in the Playwright run output.
+- Each run writes evidence to `.ticketry-dev/e2e-results/<run-id>/`: manifest,
+  registry snapshot, per-invocation Playwright JSON and HTML reports, traces,
+  screenshots, logs and cleanup records. `.ticketry-dev/e2e-results/latest.md`
+  links the newest `summary.md`. Replay a trace with
+  `bunx playwright show-trace <trace.zip>`.
+- The `setup` project (`onboarding.setup.ts`) completes provider onboarding in
+  each fresh profile. If every case of an invocation fails, check setup first.
+- Adapter logs stream through the web-server output. Feature-runner
+  invocations write it to their `web-server.log`; raw `test:e2e` runs show it
+  in stdout/stderr.
 
 ## Gotchas
 
-- `reuseExistingServer: false` — the suite always starts its own stack on
-  ports 4173 (frontend) and 18787 (backend). A stray process on those ports
-  fails startup; free them rather than editing the config.
-- Tests are intentionally serial (`workers: 1`); don't parallelize them.
-- The suite contains **no skipped tests** by policy. If a new behavior can't
-  be tested deterministically in the browser, it belongs in the numbered
-  Vitest acceptance gate or the desktop harness, not as a skipped spec.
-- The `codex / gpt-5.6-luna / medium` catalog row is disposable test data
-  seeded by setup, not a production catalog change.
+- `reuseExistingServer: false`: each invocation starts its own stack. The runner
+  picks free ports; a raw `test:e2e` run uses 4173 and fails if it is taken.
+- Retries are disabled and cases run serially; don't parallelize them.
+- Every e2e server waits for a machine-wide memory slot (see the suite README's
+  "Memory queue and warm servers"). `[e2e-queue] … waiting` means another run
+  holds the slots; wait for it rather than killing it or raising
+  `TICKETRY_E2E_MAX_STACKS`.
+- Feature suites contain **no** `skip`, `fixme` or `only` calls; the drift check
+  rejects them. If a behavior can't be tested deterministically in the browser,
+  mark its cell `desktop-only:` or `manual:` with a reason instead.
+- Changing sources during a run invalidates its evidence.
 
-## New features need new specs
+## New features need new cases
 
-When a change adds user-visible behavior, extend the matching spec file (or
-add a focused one in `studio/e2e/`) using the helpers in `e2e/support.ts`.
-Assert through visible controls and reload-and-verify — the suite's value as
-a backend-parity oracle (Django vs Rust) depends on specs that round-trip
-through the server rather than trusting the optimistic cache.
+Add cases to the feature's suite inside its `featureSuite("<feature-id>", …)`
+call, give each a literal title and exactly one globally unique `@case-<id>`
+tag, and cite every case from the entry's coverage table. Assert through visible
+controls and read persisted state back through public GraphQL or a reload,
+rather than trusting the optimistic cache. Run `--check` before handoff.

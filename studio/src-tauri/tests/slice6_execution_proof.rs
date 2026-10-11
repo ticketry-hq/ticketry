@@ -605,9 +605,7 @@ fn string_list(value: &Value, context: &Value) -> Vec<String> {
         .collect()
 }
 
-fn launched_by(
-    report: &ticketry_agent_execution::reconciliation::ExecutionReconciliationReport,
-) -> Vec<String> {
+fn launched_by(report: &ticketry_agent_execution::ExecutionReconciliationReport) -> Vec<String> {
     let mut launched = report
         .roots
         .iter()

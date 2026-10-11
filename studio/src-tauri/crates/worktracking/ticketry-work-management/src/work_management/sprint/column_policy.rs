@@ -4,6 +4,7 @@ use seaography::BuilderContext;
 use ticketry_entities::sprint;
 
 const INSERT_SERVER_COLUMNS: &[sprint::Column] = &[
+    sprint::Column::Rank,
     sprint::Column::Id,
     sprint::Column::Status,
     sprint::Column::SuggestionRunId,
@@ -19,6 +20,10 @@ pub(super) fn apply(context: &mut BuilderContext) {
             .insert_skips
             .push(input_name(context, *column));
     }
+    context
+        .entity_input
+        .update_skips
+        .push(input_name(context, sprint::Column::Rank));
 }
 
 fn input_name(context: &BuilderContext, column: sprint::Column) -> String {

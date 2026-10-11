@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SelectedTicketTerminal } from "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal";
+import { SelectedTicketTerminal } from "../features/task-workspace/terminals/SelectedTicketTerminal";
 import {
   RETAINED_TERMINAL_VIEW_LIMIT,
   RetainedTerminalViewers,

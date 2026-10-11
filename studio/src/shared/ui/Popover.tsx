@@ -29,6 +29,10 @@ export default function Popover({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<CSSProperties>({});
+  const dismissWithEscape = () => {
+    setOpen(false);
+    ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
+  };
 
   // The panel is position:fixed so it escapes any ancestor scroll container —
   // the pickers live inside the issue sidebar (overflow-y-auto), which would
@@ -59,10 +63,18 @@ export default function Popover({
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
+      // A temporary workspace takeover retains the editor underneath it.
+      if (ref.current?.closest("[inert]")) return;
+      if (e.target instanceof Element && e.target.closest("[data-workspace-takeover-toggle]")) return;
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (ref.current?.closest("[inert]")) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        dismissWithEscape();
+      }
     };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
@@ -73,7 +85,12 @@ export default function Popover({
   }, [open]);
 
   return (
-    <div className="relative" ref={ref} data-testid={testId}>
+    <div className="relative" ref={ref} data-testid={testId} onKeyDown={(event) => {
+      if (!open || event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      dismissWithEscape();
+    }}>
       {trigger({ open, onClick: () => setOpen((v) => !v), disabled })}
       {open && (
         <div

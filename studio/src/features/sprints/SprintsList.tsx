@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react";
+import type { CreateSprintOutcome } from "./sprintCreation";
+import { useRef, useState, type ReactNode } from "react";
 import type { PlanningGraph, PlanningSprint } from "../planning-graph";
 import SprintCard from "./SprintCard";
 import SprintItemRow from "./SprintItemRow";
@@ -7,6 +8,7 @@ import StartSprintDialog from "./StartSprintDialog";
 import CompleteSprintDialog from "./CompleteSprintDialog";
 import { groupSprintItemsByEpic, sprintProgress } from "./selectors/sprintSelectors";
 import { inheritLastPlanVisit } from "./planWorkspaceState";
+import SprintReorderControls, { type SprintReorder } from "./SprintReorderControls";
 
 export type LifecycleUpdate = { id: string; status: "active" | "completed"; carryoverSprintId?: string };
 
@@ -15,17 +17,42 @@ export type SprintsListProps = {
   openStoryId: string | null;
   onOpenStory: (id: string) => void;
   onOpenSprint: (id: string) => void;
-  onCreateSprint: (name: string) => Promise<string | null>;
+  onCreateSprint: (name: string) => Promise<CreateSprintOutcome>;
   onUpdateSprint: (update: LifecycleUpdate) => Promise<boolean>;
+  onReorderSprint?: (move: SprintReorder) => Promise<void>;
+  reorderBusy?: boolean;
   renderSprintGoals: (sprint: PlanningSprint) => ReactNode;
   renderSuggestionAgentBox: (sprint: PlanningSprint) => ReactNode;
 };
 
 export default function SprintsList({ graph, openStoryId, onOpenStory, onOpenSprint, onCreateSprint,
-  onUpdateSprint, renderSprintGoals, renderSuggestionAgentBox }: SprintsListProps) {
+  onUpdateSprint, onReorderSprint, reorderBusy = false, renderSprintGoals, renderSuggestionAgentBox }: SprintsListProps) {
   const active = graph.sprints.find((sprint) => sprint.status === "active");
   const planned = graph.sprints.filter((sprint) => sprint.status === "planned");
   const completed = graph.sprints.filter((sprint) => sprint.status === "completed");
+  const pendingReorder = useRef(false);
+  const [moving, setMoving] = useState(false);
+  const [reorderError, setReorderError] = useState<string | null>(null);
+  async function move(sprint: PlanningSprint, direction: -1 | 1) {
+    if (!onReorderSprint || pendingReorder.current || reorderBusy) return;
+    const index = graph.sprints.findIndex((entry) => entry.id === sprint.id);
+    const adjacent = graph.sprints[index + direction];
+    if (!adjacent || adjacent.status !== "planned") return;
+    const remaining = graph.sprints.filter((entry) => entry.id !== sprint.id);
+    const destination = index + direction;
+    pendingReorder.current = true;
+    setMoving(true);
+    setReorderError(null);
+    try {
+      await onReorderSprint({ sprintId: sprint.id, beforeId: remaining[destination - 1]?.id ?? null,
+        afterId: remaining[destination]?.id ?? null });
+    } catch (cause) {
+      setReorderError(cause instanceof Error ? cause.message : "Sprint could not be reordered. Try again.");
+    } finally {
+      pendingReorder.current = false;
+      setMoving(false);
+    }
+  }
   const [dialog, setDialog] = useState<{ kind: "start" | "complete"; sprintId: string } | null>(null);
   const selected = graph.sprints.find((sprint) => sprint.id === dialog?.sprintId);
   const closeDialog = (kind: "start" | "complete", sprintId: string) => {
@@ -38,6 +65,9 @@ export default function SprintsList({ graph, openStoryId, onOpenStory, onOpenSpr
       {sprint.status === "planned" && <button type="button" disabled={Boolean(active)} title={active ? "Complete the active sprint first" : undefined}
         onClick={() => setDialog({ kind: "start", sprintId: sprint.id })}
         className="h-7 border border-pane-border px-2 text-sm text-text-secondary disabled:opacity-40">Start</button>}
+      {sprint.status === "planned" && <SprintReorderControls first={planned[0]?.id === sprint.id}
+        last={planned.at(-1)?.id === sprint.id} busy={moving || reorderBusy || !onReorderSprint}
+        onMove={(direction) => { void move(sprint, direction); }} />}
       {sprint.status === "active" && <button type="button" onClick={() => setDialog({ kind: "complete", sprintId: sprint.id })}
         className="h-7 border border-pane-border px-2 text-sm text-text-secondary">Complete</button>}
     </>}>
@@ -56,6 +86,7 @@ export default function SprintsList({ graph, openStoryId, onOpenStory, onOpenSpr
         onOpenSprint(id);
       }} /></div>
     </header>
+    {reorderError && <p role="alert" className="px-4 py-2 text-sm text-lifecycle-danger">{reorderError}</p>}
     <div className="flex-1 overflow-auto p-4" data-testid="sprints-list"><div className="mx-auto max-w-3xl space-y-3">
       {active && card(active)}
       {planned.map(card)}

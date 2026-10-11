@@ -4,11 +4,11 @@
   "product": "ticketry",
   "artifacts": {
     "frontend": {
-      "command": ["npm", "run", "build"],
+      "command": ["bun", "run", "build"],
       "required_outputs": ["dist/index.html"]
     },
     "tauri": {
-      "command": ["npm", "run", "tauri", "--", "build"],
+      "command": ["bun", "run", "tauri", "--", "build"],
       "binary_name": "ticketry",
       "bundle_formats": ["app", "dmg", "app.tar.gz"]
     },

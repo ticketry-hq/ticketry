@@ -78,14 +78,15 @@ vi.mock("../features/projects/mutationTransport", async () => {
   return { ...actual, updateProject: api.updateProject };
 });
 
-vi.mock("../features/studio/api/moduleFolderValidationApi", () =>
+vi.mock("../features/module-links/moduleFolderValidation", () =>
   moduleFolderValidationApi,
 );
 
 import { ModalHost } from "../app/modal/ModalHost";
 import { useModalStore } from "../app/modal/modalStore";
 import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
-import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
+import { ModuleManager, openModuleManager } from "../features/module-manager";
+import { setStorySprintFilterIntent } from "../features/work-items";
 import {
   getModulesSnapshot,
   getProjectsSnapshot,
@@ -132,26 +133,21 @@ function project(manual_module_order: boolean): Project {
 /**
  * The Add Module modal mounted together with every Module surface it feeds.
  * Right placement is only real if the shared cached collection carries it, so
- * the sidebar and the Module tab strip are asserted from one render.
+ * the manager and the Module tab strip are asserted from one render.
  */
 function ModuleCreationSurfaces() {
   return (
     <>
-      <ModulesPane />
+      <ModuleManager />
       <ModuleTabStrip />
       <ModalHost />
     </>
   );
 }
 
-function sidebarRows(): string[] {
-  return Array.from(document.querySelectorAll("li")).map(
-    (row) => row.textContent?.replace("📦 ", "").trim() ?? "",
-  );
-}
-
-function sidebarOrder(): string[] {
-  return sidebarRows().filter((name) => name !== "" && name !== "+ Add Module");
+function managerOrder(): string[] {
+  return screen.queryAllByRole("button", { name: /^Inspect / })
+    .map((row) => row.getAttribute("aria-label")!.slice("Inspect ".length));
 }
 
 function tabStripOrder(): string[] {
@@ -167,8 +163,9 @@ function tabStripOrder(): string[] {
  * what the project shows before the create.
  */
 async function createNewestModule(initialOrder: string[]): Promise<void> {
+  openModuleManager();
   render(<ModuleCreationSurfaces />);
-  await waitFor(() => expect(sidebarOrder()).toEqual(initialOrder));
+  await waitFor(() => expect(managerOrder()).toEqual(initialOrder));
 
   api.listModules.mockResolvedValue([...EXISTING, CREATED]);
   fireEvent.change(await screen.findByPlaceholderText("Module name"), {
@@ -194,9 +191,7 @@ function expectCreationFlowIntact(): void {
   expect(useClientStore.getState().selectedModuleId).toBe(NEW_MODULE_ID);
   expect(api.writeModuleLink).toHaveBeenCalledWith(NEW_MODULE_ID, "/repos/newest");
   expect(getModuleFolder(NEW_MODULE_ID)).toBe("/repos/newest");
-  // The sidebar's add control stays after its module rows.
-  expect(sidebarRows().at(-1)).toBe("+ Add Module");
-  expect(screen.getByRole("button", { name: "+ Add Module" })).toBeVisible();
+  expect(screen.getAllByRole("button", { name: "New module" })).toHaveLength(2);
 }
 
 /** Creation never changes the project's one-way ordering decision. */
@@ -243,7 +238,8 @@ describe("module creation right-placement acceptance", () => {
       });
     seedModuleLinks([]);
     useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
-    useClientStore.setState({ selectedModuleId: null, modulesCursorId: null });
+    useClientStore.setState({ selectedModuleId: null });
+    setStorySprintFilterIntent(PROJECT_ID, { mode: "all" });
     useModalStore.setState({ modalStack: [{ type: "add-module" }] });
   });
 
@@ -253,7 +249,7 @@ describe("module creation right-placement acceptance", () => {
     await createNewestModule(["Alpha", "Bravo"]);
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
+      expect(managerOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
     );
     expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Newest"]);
     expect(getModulesSnapshot(PROJECT_ID).map((entry) => entry.name)).toEqual([
@@ -270,13 +266,13 @@ describe("module creation right-placement acceptance", () => {
     seedProjects([project(false)]);
     await createNewestModule(["Alpha", "Bravo"]);
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
+      expect(managerOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
     );
 
     await useStudioStore.getState().reloadModules();
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
+      expect(managerOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
     );
     expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Newest"]);
     expectOrderingModeUnchanged(false);
@@ -288,7 +284,7 @@ describe("module creation right-placement acceptance", () => {
     await createNewestModule(["Alpha", "Bravo"]);
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
+      expect(managerOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
     );
     expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Newest"]);
     expect(getModulesSnapshot(PROJECT_ID).map((entry) => entry.name)).toEqual([
@@ -304,7 +300,7 @@ describe("module creation right-placement acceptance", () => {
     await useStudioStore.getState().reloadModules();
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
+      expect(managerOrder()).toEqual(["Alpha", "Bravo", "Newest"]),
     );
     expect(tabStripOrder()).toEqual(["Alpha", "Bravo", "Newest"]);
   });

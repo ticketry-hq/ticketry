@@ -58,9 +58,9 @@ fn publish_development_readiness(
         &ticketry_settings::Slice2Readiness::complete(),
     )?;
     ticketry_runs::publish_readiness(data_directory, &ticketry_runs::Slice3Readiness::complete())?;
-    ticketry_workspace_runtime::handoff::publish_readiness(
+    ticketry_workspace_runtime::publish_readiness(
         data_directory,
-        &ticketry_workspace_runtime::handoff::Slice4Readiness::complete(),
+        &ticketry_workspace_runtime::Slice4Readiness::complete(),
     )?;
     Ok(())
 }
@@ -294,9 +294,9 @@ mod tests {
         assert!(ticketry_runs::published_readiness_is_complete(
             directory.path()
         ));
-        assert!(
-            ticketry_workspace_runtime::handoff::published_readiness_is_complete(directory.path())
-        );
+        assert!(ticketry_workspace_runtime::published_readiness_is_complete(
+            directory.path()
+        ));
     }
 
     #[test]

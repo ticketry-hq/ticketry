@@ -29,7 +29,9 @@ export interface AgentPickerPayload {
   /** Opens the task workspace's plain module terminal when that surface exists. */
   onTerminal?: () => void;
   /** Optional surface callback after a launch has been placed in its workspace. */
-  onLaunched?: () => void;
+  onLaunched?: (sessionId: string) => void;
+  /** Captures the originating intent and its session-bound completion before launch. */
+  onLaunching?: () => ((sessionId: string) => void) | void;
 }
 
 type PickerChoice =
@@ -72,16 +74,18 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
     const prompt = payload?.initialPrompt ?? null;
     const { setActive } = useTicketWorkspaceStore.getState();
     if (mode === "plan") {
+      const completeLaunch = payload?.onLaunching?.();
       // The launch contract lives in the shared terminal-create launcher
       // (CODIN-839); this component owns only the presentation seam around it.
-      launchScratchPlanning({
+      const sessionId = launchScratchPlanning({
         projectId,
         moduleId,
         agent,
         initialPrompt: prompt,
       });
       setActive(bucketFor(null, moduleId), "terminal");
-      payload?.onLaunched?.();
+      if (completeLaunch) completeLaunch(sessionId);
+      else payload?.onLaunched?.(sessionId);
       popModal();
       return;
     }
@@ -90,7 +94,8 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
         popModal();
         return;
       }
-      launchAgent({
+      const completeLaunch = payload?.onLaunching?.();
+      const sessionId = launchAgent({
         taskId: null,
         projectId,
         moduleId,
@@ -100,7 +105,8 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
         isInstant: true,
       });
       setActive(bucketFor(null, moduleId), "terminal");
-      payload?.onLaunched?.();
+      if (completeLaunch) completeLaunch(sessionId);
+      else payload?.onLaunched?.(sessionId);
       popModal();
       return;
     }
@@ -113,7 +119,8 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
       popModal();
       return;
     }
-    launchAgent({
+    const completeLaunch = payload?.onLaunching?.();
+    const sessionId = launchAgent({
       taskId,
       projectId,
       moduleId,
@@ -122,7 +129,8 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
       isPlanning: false,
     });
     setActive(taskId, "terminal");
-    payload?.onLaunched?.();
+    if (completeLaunch) completeLaunch(sessionId);
+    else payload?.onLaunched?.(sessionId);
     popModal();
   }
 

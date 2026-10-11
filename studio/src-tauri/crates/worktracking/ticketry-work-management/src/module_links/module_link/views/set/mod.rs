@@ -16,9 +16,9 @@ use seaolim::{
 };
 
 use super::super::mutation_error::{require_write_ownership, store_error};
-use crate::module_links::{
-    entities::module_link, resolution, store::PreparedModuleLink, ModuleLinkStore,
-};
+use ticketry_entities::module_link;
+
+use crate::module_links::{resolution, store::PreparedModuleLink, ModuleLinkStore};
 
 /// The only caller-writable Module Link field.
 ///

@@ -21,10 +21,12 @@ pub struct AgentRunRecord {
     pub launch_state: Option<String>,
     pub launch_model: Option<String>,
     pub attention_reason: Option<String>,
+    pub stage_skill_availability: Option<String>,
 }
 
-/// Scope-safe public projection. Persistence-only paths, prompts, errors, and
-/// command material cannot cross this boundary.
+/// Scope-safe public projection. Initial prompts, raw run errors, and command
+/// material stay private; advisory skill observations include searched roots
+/// and read failures so the person can diagnose unavailable skills.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, CustomOutputType)]
 pub struct AgentRunHolding {
     pub agent_run_id: String,
@@ -43,6 +45,7 @@ pub struct AgentRunHolding {
     pub output_sequence: i64,
     pub last_output_at: Option<String>,
     pub attention_reason: Option<String>,
+    pub stage_skill_availability: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

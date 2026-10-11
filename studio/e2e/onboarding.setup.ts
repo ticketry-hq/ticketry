@@ -37,13 +37,14 @@ test("uses the provisioned model and completes first-run provider onboarding", a
   await page.getByRole("button", { name: /^(Continue|Get started)$/ }).click();
 
   await expect(page.getByTestId("onboarding-welcome")).toHaveCount(0);
-  await page.getByTestId("pane-modules")
-    .getByRole("button", { name: "+ Add Module" })
-    .click();
+  // CODING-2643 replaced the Modules pane with the Module Manager.
+  await page.getByRole("button", { name: "Open Module Manager", exact: true }).click();
+  await page.getByRole("region", { name: "Module Manager", exact: true })
+    .getByRole("button", { name: "New module", exact: true }).first().click();
   await page.getByTestId("onboarding-module-name-next").click();
   await page.getByTestId("onboarding-module-folder-done").click();
 
-  const moduleDialog = page.getByRole("dialog", { name: "Add Module" });
+  const moduleDialog = page.getByRole("form", { name: "Create module", exact: true });
   await moduleDialog.getByPlaceholder("Module name")
     .fill("Onboarding Tour Module");
   await moduleDialog.getByRole("textbox", { name: "Module folder" })

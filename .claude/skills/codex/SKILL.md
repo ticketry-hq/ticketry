@@ -130,7 +130,7 @@ evidence and report the conflict instead of rewriting the user's work.
 
 For Ticketry UI behavior changes, require the matching
 `studio/src/test/*Acceptance.test.tsx` coverage and run
-`npm run test:overhaul --workspace @worktracker/studio` before handoff.
+`bun run --cwd studio test:overhaul` before handoff.
 
 ## Cleanup and handoff
 

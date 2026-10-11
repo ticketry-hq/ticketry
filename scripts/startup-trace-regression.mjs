@@ -97,5 +97,5 @@ export async function awaitStartupRegressionReport({
       return renderStartupRegressionReport(compareStartupTraces(records));
     }
   }
-  return `Startup trace for ${startupId} did not complete within ${timeoutMs / 1000}s; see npm run logs:startup`;
+  return `Startup trace for ${startupId} did not complete within ${timeoutMs / 1000}s; see bun run logs:startup`;
 }

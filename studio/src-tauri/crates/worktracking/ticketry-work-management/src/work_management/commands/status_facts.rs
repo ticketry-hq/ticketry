@@ -11,6 +11,9 @@
 //! membership signal. What a consumer refetches because of a fact is the
 //! consumer's decision.
 
+mod sprint;
+pub(crate) use sprint::record_sprint_reorder;
+
 use sea_orm::DatabaseTransaction;
 use serde_json::json;
 
@@ -66,6 +69,7 @@ impl WorkFactRecorder {
 pub enum WorkItemChange {
     Created,
     Updated,
+    SprintChanged,
     Transitioned,
     Reparented,
     Reordered,
@@ -77,7 +81,7 @@ impl WorkItemChange {
     fn as_str(self) -> &'static str {
         match self {
             Self::Created => "created",
-            Self::Updated => "updated",
+            Self::Updated | Self::SprintChanged => "updated",
             Self::Transitioned => "transitioned",
             Self::Reparented => "reparented",
             Self::Reordered => "reordered",
@@ -305,6 +309,7 @@ mod tests {
     fn every_move_creation_and_removal_claims_a_membership_change() {
         for change in [
             WorkItemChange::Created,
+            WorkItemChange::SprintChanged,
             WorkItemChange::Transitioned,
             WorkItemChange::Reparented,
             WorkItemChange::Reordered,
@@ -317,6 +322,7 @@ mod tests {
 
     #[test]
     fn removal_is_its_own_event_family() {
+        assert_eq!(WorkItemChange::SprintChanged.as_str(), "updated");
         assert_eq!(WorkItemChange::Deleted.event_kind(), WORK_ITEM_DELETED);
         assert_eq!(WorkItemChange::Archived.event_kind(), WORK_ITEM_CHANGED);
         assert_eq!(

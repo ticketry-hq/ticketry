@@ -26,6 +26,10 @@ name = "prepare_foundation_generation_db"
 path = "src/bin/prepare_foundation_generation_db.rs"
 
 [[bin]]
+name = "prepare_sprint_generation_db"
+path = "src/bin/prepare_sprint_generation_db.rs"
+
+[[bin]]
 name = "prepare_terminal_generation_db"
 path = "src/bin/prepare_terminal_generation_db.rs"
 

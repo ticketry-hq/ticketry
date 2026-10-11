@@ -1,13 +1,11 @@
-import { createRef } from "react";
 import { ApolloProvider } from "@apollo/client/react";
-import type { ImperativePanelGroupHandle } from "react-resizable-panels";
 import {
   act,
   fireEvent,
   render,
-  renderHook,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -19,14 +17,14 @@ vi.mock("../features/projects/queries/readTransport", async () => ({
 }));
 
 import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
-import { TicketWorkspace } from "../app/shell/ticket-workspace/TicketWorkspace";
 import { StudioFooter } from "../app/shell/StudioFooter";
-import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
-import { routeFullSidebarViewFocusedPaneNavigation } from "../app/navigation/full-sidebar-view/fullSidebarViewNavigation";
-import { useRestoreAndSelectModule } from "../features/module-tabs";
+import { StudioLayout } from "../app/shell/StudioLayout";
+import { ModuleManager, openModuleManager } from "../features/module-manager";
+import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { seedModuleLinks } from "../features/module-links";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { useStudioStore } from "../features/projects/store";
+import { setStorySprintFilterIntent } from "../features/work-items";
 import { useModalStore } from "../app/modal/modalStore";
 import { createBrowserRuntime, initializeStudioRuntime } from "../runtime";
 import type { Module, ModulePresentation, Project } from "../shared/api/types";
@@ -95,6 +93,11 @@ function installVisibilityTransport() {
           operationName: string;
           variables: { moduleId: string; tabHidden: boolean };
         };
+        if (request.operationName === "ModuleManagerArchivedModules") {
+          return JSON.stringify({ data: { modules: { __typename: "WorktrackerIssueConnection", nodes: [],
+            pageInfo: { __typename: "PageInfo", hasNextPage: false },
+            paginationInfo: { __typename: "PaginationInfo", total: 0 } } } });
+        }
         if (request.operationName !== "UpdateWorkTrackerModulePresentation") {
           throw new Error("Unexpected GraphQL operation " + request.operationName);
         }
@@ -129,17 +132,9 @@ function tabNames(): string[] {
 const defaultDeselectModule = useClientStore.getState().deselectModule;
 
 function RecoveryShell() {
-  const sidebarVisible = useClientStore((state) => state.sidebarVisible);
-
   return (
     <ApolloProvider client={studioApolloClient()}>
-      {sidebarVisible ? <ModulesPane /> : null}
-      <TicketWorkspace
-        tasksSize={40}
-        workspaceSize={60}
-        groupRef={createRef<ImperativePanelGroupHandle>()}
-        onLayout={() => {}}
-      />
+      <StudioLayout />
       <StudioFooter />
     </ApolloProvider>
   );
@@ -152,6 +147,7 @@ describe("module tab visibility acceptance", () => {
 
   beforeEach(async () => {
     await resetStudioApolloClient();
+    setStorySprintFilterIntent(PROJECT_ID, { mode: "all" });
     hiddenIds = new Set();
     modulesForRead = MODULES;
     failNextVisibility = false;
@@ -184,6 +180,7 @@ describe("module tab visibility acceptance", () => {
 
     first.unmount();
     await resetStudioApolloClient();
+    setStorySprintFilterIntent(PROJECT_ID, { mode: "all" });
     useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
     render(<ModuleTabStrip />);
 
@@ -208,29 +205,20 @@ describe("module tab visibility acceptance", () => {
 
   it("shows module creation for an empty project instead of recovery copy", async () => {
     modulesForRead = [];
-    render(
-      <ApolloProvider client={studioApolloClient()}>
-        <TicketWorkspace
-          tasksSize={40}
-          workspaceSize={60}
-          groupRef={createRef<ImperativePanelGroupHandle>()}
-          onLayout={() => {}}
-        />
-      </ApolloProvider>,
-    );
+    render(<RecoveryShell />);
 
     expect(
       await screen.findByText("No modules yet. Add a module to start planning work."),
     ).toBeVisible();
     expect(screen.queryByTestId("empty-module-workspace")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "+ Add Module" }));
-    expect(useModalStore.getState().modalStack.at(-1)).toEqual({
-      type: "add-module",
-    });
+    fireEvent.click(screen.getByRole("button", { name: "New module" }));
+    expect(await screen.findByRole("form", { name: "Create module" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "Module Manager" })).toBeVisible();
+    expect(useModalStore.getState().modalStack).toEqual([]);
   });
 
-  it("[overhaul-177] keeps top-strip recovery and lifecycle status available when every tab is hidden", async () => {
+  it("[overhaul-177] recovers hidden tabs explicitly from the footer manager while keeping lifecycle status", async () => {
     hiddenIds = new Set(MODULES.map((module) => module.id));
     useClientStore.setState({
       selectedModuleId: null,
@@ -239,21 +227,18 @@ describe("module tab visibility acceptance", () => {
     });
     render(<RecoveryShell />);
 
-    expect(
-      await screen.findByText("Open the Modules sidebar to restore a module tab."),
-    ).toBeVisible();
+    expect(await screen.findByTestId("empty-module-workspace")).toBeVisible();
     expect(screen.queryAllByRole("tab").filter((tab) => tab.hasAttribute("data-module-id"))).toEqual([]);
     const openModules = screen.getByRole("button", {
-      name: "Open Modules pane",
+      name: "Open Module Manager",
     });
     expect(openModules).toHaveAttribute("aria-expanded", "false");
 
     fireEvent.click(openModules);
-    expect(
-      await screen.findByText(
-        "Select a module in the Modules pane to restore its tab.",
-      ),
-    ).toBeVisible();
+    const manager = await screen.findByRole("region", { name: "Module Manager" });
+    expect(manager).toBeVisible();
+    fireEvent.click(within(manager).getByRole("button", { name: "Inspect Bravo" }));
+    expect(mutationCalls).toEqual([]);
 
     act(() => {
       useAgentStatusStore.setState({
@@ -263,64 +248,43 @@ describe("module tab visibility acceptance", () => {
       });
     });
     const hiddenRow = document.querySelector<HTMLElement>(
-      'li[data-module-id="module-b"]',
+      'li[data-module-manager-row="module-b"]',
     );
     expect(hiddenRow).not.toBeNull();
     expect(
-      await screen.findByLabelText("Agent is waiting for your input"),
+      await within(hiddenRow!).findByLabelText("Agent is waiting for your input"),
     ).toBeVisible();
 
-    fireEvent.click(hiddenRow!);
+    fireEvent.click(within(hiddenRow!).getByRole("button", { name: "Restore Bravo" }));
 
     await waitFor(() => expect(tabNames()).toEqual(["Bravo"]));
-    expect(useClientStore.getState().selectedModuleId).toBe("module-b");
+    expect(useClientStore.getState().selectedModuleId).toBeNull();
+    expect(manager).toBeVisible();
     expect(mutationCalls).toContainEqual({
       moduleId: "module-b",
       tabHidden: false,
     });
-    const closeModules = screen.getByRole("button", {
-      name: "Close Modules pane",
-    });
-    expect(closeModules).toHaveAttribute("aria-expanded", "true");
-    fireEvent.click(closeModules);
+    expect(screen.getByRole("button", { name: "Close Module Manager", expanded: true })).toBeVisible();
+    const openRow = document.querySelector<HTMLElement>('li[data-module-manager-row="module-b"]')!;
+    fireEvent.click(within(openRow).getByRole("button", { name: "Open Bravo" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Module Manager" })).toBeNull());
+    expect(useClientStore.getState().selectedModuleId).toBe("module-b");
     expect(screen.getByRole("tab", { name: "Bravo" })).toBeVisible();
   });
 
-  it("restores a focused hidden sidebar module when Enter activates it", async () => {
+  it("keeps a focused hidden manager module hidden when Enter inspects it", async () => {
     hiddenIds = new Set(["module-b"]);
-    useClientStore.setState({
-      selectedModuleId: null,
-      sidebarVisible: true,
-      focusedPane: "modules",
-      modulesCursorId: "module-b",
-    });
-    render(
-      <>
-        <ModulesPane />
-        <ModuleTabStrip />
-      </>,
-    );
+    function ManagerKeyboard() { useGlobalKeymap(); return null; }
+    openModuleManager();
+    render(<><ManagerKeyboard /><ModuleManager /><ModuleTabStrip /></>);
     await waitFor(() => expect(tabNames()).toEqual(["Alpha", "Charlie"]));
-    const restore = renderHook(() => useRestoreAndSelectModule());
-    const event = new KeyboardEvent("keydown", {
-      cancelable: true,
-      key: "Enter",
-    });
-
-    expect(
-      routeFullSidebarViewFocusedPaneNavigation(
-        event,
-        [],
-        "modules.activate",
-        restore.result.current,
-      ),
-    ).toBe(true);
-
-    expect(event.defaultPrevented).toBe(true);
-    await waitFor(() =>
-      expect(tabNames()).toEqual(["Alpha", "Bravo", "Charlie"]),
-    );
-    expect(useClientStore.getState().selectedModuleId).toBe("module-b");
+    const inspect = screen.getByRole("button", { name: "Inspect Bravo" });
+    inspect.focus();
+    fireEvent.keyDown(inspect, { key: "Enter" });
+    await waitFor(() => expect(tabNames()).toEqual(["Alpha", "Charlie"]));
+    expect(mutationCalls).toEqual([]);
+    expect(useClientStore.getState().selectedModuleId).toBeNull();
+    expect(screen.getByRole("region", { name: "Module Manager" })).toBeVisible();
   });
 
   it("selects the nearest visible tab to the right, then the left", async () => {
@@ -335,11 +299,12 @@ describe("module tab visibility acceptance", () => {
     await waitFor(() => expect(tabNames()).toHaveLength(3));
 
     fireEvent.click(screen.getByRole("button", { name: "Hide Bravo tab" }));
-    expect(useClientStore.getState().selectModule).toHaveBeenLastCalledWith("module-c");
+    expect(useClientStore.getState().selectModule).toHaveBeenLastCalledWith("module-c", { isCurrent: expect.any(Function) });
     await waitFor(() => expect(tabNames()).toEqual(["Alpha", "Charlie"]));
 
     view.unmount();
     await resetStudioApolloClient();
+    setStorySprintFilterIntent(PROJECT_ID, { mode: "all" });
     seedModuleLinks(links);
     hiddenIds = new Set();
     useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
@@ -351,7 +316,7 @@ describe("module tab visibility acceptance", () => {
     await waitFor(() => expect(tabNames()).toHaveLength(3));
     fireEvent.click(screen.getByRole("button", { name: "Hide Charlie tab" }));
 
-    expect(selectModule).toHaveBeenLastCalledWith("module-b");
+    expect(selectModule).toHaveBeenLastCalledWith("module-b", expect.objectContaining({ isCurrent: expect.any(Function) }));
   });
 
   it("clears selection and the remembered module when the last visible tab is hidden", async () => {

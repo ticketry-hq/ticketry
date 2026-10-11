@@ -33,6 +33,7 @@ impl InteractiveLaunchAuthority for SubmittedLaunchAuthority {
             policy_reference: request.policy_reference.clone(),
             prompt: request.prompt.clone(),
             required_skills: request.required_skills.clone(),
+            stage_skills: request.stage_skills.clone(),
             design_directory_identity: request.design_directory_identity.clone(),
             document_relative_path: request.document_relative_path.clone(),
         })

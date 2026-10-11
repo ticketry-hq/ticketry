@@ -27,6 +27,7 @@ export function sprint(partial: Partial<PlanningSprint> & { id: string }): Plann
   return {
     name: partial.id,
     status: "planned",
+    rank: "V",
     createdAt: "2026-06-01 00:00:00",
     ...partial,
   };

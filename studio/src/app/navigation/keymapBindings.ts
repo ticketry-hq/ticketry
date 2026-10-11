@@ -1,4 +1,7 @@
+import type { KeyChord } from "../../shared/navigation/keyChord";
 import type { StudioPlatform } from "../../runtime";
+import { MODAL_ACTIONS } from "../../shared/navigation/modalActions";
+export { MODAL_ACTIONS } from "../../shared/navigation/modalActions";
 
 export const KEYMAP_CONTEXT_PRECEDENCE = [
   "modal",
@@ -14,13 +17,7 @@ export const KEYMAP_CONTEXTS = [
 
 export type KeymapContext = (typeof KEYMAP_CONTEXTS)[number];
 
-export interface KeyChord {
-  key: string;
-  alt: boolean;
-  control: boolean;
-  meta: boolean;
-  shift: boolean;
-}
+export type { KeyChord } from "../../shared/navigation/keyChord";
 
 export interface EffectiveBinding {
   context: KeymapContext;
@@ -29,14 +26,6 @@ export interface EffectiveBinding {
 }
 
 export type BindingOverride = EffectiveBinding;
-
-export const MODAL_ACTIONS = {
-  close: "modal.close",
-  next: "modal.next",
-  previous: "modal.previous",
-  confirm: "modal.confirm",
-  submit: "modal.submit",
-} as const;
 
 export interface BindingDefinition extends EffectiveBinding {
   /** Fixed bindings resolve at runtime but are not exposed to user configuration. */
@@ -209,9 +198,6 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
     defaultAliases: [chord("Enter", { meta: true })],
   },
 
-  paneBinding("modules.next", "ArrowDown"),
-  paneBinding("modules.previous", "ArrowUp"),
-  paneBinding("modules.activate", "Enter"),
   paneBinding("tasks.next", "ArrowDown"),
   paneBinding("tasks.previous", "ArrowUp"),
   paneBinding("tasks.activate", "Enter"),
@@ -227,6 +213,12 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
   globalBinding("search", "/"),
   globalBinding("show-shortcuts", "?"),
   globalBinding("toggle-sidebar", "\\"),
+  {
+    context: "global",
+    actionId: "toggle-module-manager",
+    chord: chord("M", { meta: true, shift: true }),
+    defaultAliases: [chord("m", { meta: true, shift: true })],
+  },
   { ...globalBinding("focus-left", "h"), fixedAliases: [chord("ArrowLeft")] },
   { ...globalBinding("focus-right", "l"), fixedAliases: [chord("ArrowRight")] },
   globalBinding("open-agent", "o"),

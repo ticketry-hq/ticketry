@@ -114,7 +114,7 @@ export async function deploy({ execute = run, installPath = defaultInstallPath }
   const [target] = targets;
 
   await execute(
-    "npm",
+    "bun",
     desktopBuildArguments(target),
     "unsigned local desktop build",
   );

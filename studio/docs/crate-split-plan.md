@@ -389,8 +389,8 @@ moved into `workspace`.
 
 Extract in dependency order so every extraction lands against an
 already-extracted substrate. After each step: `cargo build`, `cargo test`,
-`npm run typecheck`, `npm run test --workspace @worktracker/studio`, and boot
-`npm run desktop:dev` once.
+`bun run typecheck`, `bun run --cwd studio test`, and boot
+`bun run desktop:dev` once.
 
 Per-crate mechanics (same every time):
 
@@ -446,7 +446,7 @@ Special handling:
   `development-tools = ["dep:ticketry-dev-tools"]`-style only if the bin
   entry points must remain in the root package for tooling reasons; otherwise
   binaries live in `ticketry-dev-tools` directly and scripts
-  (`studio/scripts/release-build.mjs`, npm scripts invoking
+  (`studio/scripts/release-build.mjs`, Bun scripts invoking
   `cargo run --bin ...`) are updated with `-p ticketry-dev-tools`.
 - **`tests/common/` fixtures** (`execution_authorization.rs`,
   `runs_status_fixture.rs`, …): become `ticketry-testsupport`
@@ -478,11 +478,11 @@ repo's governing rules, applied to architecture.
 ### 5.2 Validation battery (every PR)
 
 ```bash
-npm run typecheck
-npm run test --workspace @worktracker/studio
-npm run build --workspace @worktracker/studio
+bun run typecheck
+bun run --cwd studio test
+bun run --cwd studio build
 cargo test            # in studio/src-tauri, all workspace members
-npm run desktop:dev   # boot smoke-check
+bun run desktop:dev   # boot smoke-check
 ```
 
 Plus once per phase: the Playwright e2e suite (`/e2e` skill) since the

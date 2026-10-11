@@ -11,7 +11,9 @@ function ReviewControls() {
   const [message, setMessage] = useState("Ready");
   const change = (status: string) => {
     setMessage("Saving");
-    void update({ id: "suggestion-1", status }).then(() => setMessage("Saved"));
+    void update({ id: "suggestion-1", status }).then((outcome) => setMessage(
+      outcome.kind === "saved" && !outcome.refreshFailed ? "Saved" : "Read recovery required",
+    ));
   };
   return <>
     <button onClick={() => change("dismissed")}>Dismiss suggestion</button>
@@ -37,7 +39,7 @@ function fixture() {
           const publish = () => deliver({ worktrackerSprint: { __typename: "WorktrackerSprintConnection", nodes: [{
             __typename: "WorktrackerSprint", id: "sprint", status: "planned", suggestionRunId: "run",
             goalsRevisedAt: "2026-10-04T00:00:00Z",
-            goals: { __typename: "WorktrackerSprintGoalConnection", nodes: [{ __typename: "WorktrackerSprintGoal", id: "goal", text: "Ship planning" }] },
+            goals: { __typename: "WorktrackerSprintGoalConnection", nodes: [{ __typename: "WorktrackerSprintGoal", id: "goal", text: "Ship planning", position: 0 }] },
             suggestions: { __typename: "WorktrackerSprintSuggestionConnection", nodes: suggestions.filter((row) => row.status === "waiting").map(({ id }) => ({ __typename: "WorktrackerSprintSuggestion", id })) },
           }] } });
           if (holdCard) { cardPending = true; releaseCard = publish; }
@@ -62,10 +64,10 @@ function fixture() {
           deliver({ worktrackerSprintSuggestion: { __typename: "WorktrackerSprintSuggestionConnection", nodes: suggestions.map((row) => ({ ...row })) } });
           return;
         case "PlanningGraph":
-          deliver({ project: { __typename: "WorktrackerProjectConnection", nodes: [] },
+          deliver({ project: { __typename: "WorktrackerProjectConnection", nodes: [{ __typename: "WorktrackerProject", id: "project", name: "Planner", slug: "PLAN" }] },
             states: { __typename: "WorktrackerStateConnection", nodes: [] },
             issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [] },
-            sprints: { __typename: "WorktrackerSprintConnection", nodes: [] },
+            sprints: { __typename: "WorktrackerSprintConnection", nodes: [{ __typename: "WorktrackerSprint", id: "sprint", name: "Release", status: "planned", rank: "V", createdAt: "2026-10-04T00:00:00Z" }] },
             modules: { __typename: "WorktrackerIssueConnection", nodes: [] },
             workItems: { __typename: "WorktrackerIssueConnection", nodes: [] } });
           return;

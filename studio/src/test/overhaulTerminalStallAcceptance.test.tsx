@@ -35,7 +35,7 @@ vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
 // Terminal session reads moved to the Rust Terminal Session graph, so the seam
 // a test controls is the read transport, not a host API module.
 vi.mock(
-  "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
+  "../features/task-workspace/terminals/SelectedTicketTerminal",
   () => ({
     SelectedTicketTerminal: ({ bucket }: { bucket: string }) => (
       <div data-testid="selected-ticket-terminal">{bucket}</div>

@@ -6,6 +6,8 @@
 //! command surface as an unavailable implementation.
 
 mod chords;
+mod manager_shortcut;
+pub(crate) use manager_shortcut::*;
 pub(crate) mod focus_trace;
 pub(crate) mod frames;
 mod ordering;

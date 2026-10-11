@@ -112,7 +112,7 @@ impl Fixture {
     /// Link the module to a real local folder, which is where an authorized
     /// root is resolved from.
     async fn link_module(&self) {
-        ticketry_work_management::schema::install(&self.database)
+        ticketry_work_management::install_module_links_schema(&self.database)
             .await
             .expect("install the Module Link schema");
         ticketry_work_management::ModuleLinkStore::new(self.database.clone())
@@ -214,7 +214,8 @@ async fn fixture() -> Fixture {
             ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,
             lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
             scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT, initial_prompt TEXT,
-            launch_reasoning TEXT, launch_unattended BOOLEAN NOT NULL DEFAULT 0
+            launch_reasoning TEXT, launch_unattended BOOLEAN NOT NULL DEFAULT 0,
+            attention_reason TEXT, conversation_title TEXT, stage_skill_availability TEXT
         );
         CREATE TABLE runs_status_events (
             cursor integer PRIMARY KEY AUTOINCREMENT,

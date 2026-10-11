@@ -12,7 +12,7 @@ import {
   AGENT_RUN_ACTIONS,
   type AgentRunActionId,
 } from "./actionIds";
-import { installCaptureKeymapResolver } from "../../shared/navigation/keymapResolver";
+import { installCaptureKeymapResolver, installModalKeymapResolver } from "../../shared/navigation/keymapResolver";
 
 type ActionHandler = (payload?: unknown) => boolean | Promise<boolean>;
 
@@ -308,6 +308,9 @@ function isBindingOverride(value: unknown): value is BindingOverride {
 export const studioKeymapRegistry = new KeymapRegistry();
 installCaptureKeymapResolver((event, actionIds) =>
   studioKeymapRegistry.resolve("changes", event, actionIds)
+);
+installModalKeymapResolver((event, actionIds) =>
+  studioKeymapRegistry.resolve("modal", event, actionIds)
 );
 for (const actionId of Object.values(AGENT_RUN_ACTIONS)) {
   studioKeymapRegistry.registerAction(actionId, async (payload) => {

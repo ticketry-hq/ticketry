@@ -8,7 +8,9 @@ use ticketry_entities::{
     status_event, transition_occurrence, {graph_run, launch_claim},
 };
 use ticketry_terminal::{TerminalCleanupService, TerminalLaunchService};
-use ticketry_work_management::launch_policy::{self, LaunchPolicyResolver};
+use ticketry_work_management::{
+    pending, prepare_pending_auto_starts, prepare_pending_retries, LaunchPolicyResolver,
+};
 
 use super::{ExecutionReconciliationReport, RootReconciliation};
 
@@ -55,17 +57,13 @@ impl ExecutionReconciliationService {
     /// Settle durable automation decisions before campaigns are considered.
     pub async fn reconcile_automation(&self, limit: u64) -> ExecutionReconciliationReport {
         let mut report = ExecutionReconciliationReport::default();
-        if let Err(error) =
-            launch_policy::prepare_pending_auto_starts(&self.database, &self.policy, limit).await
-        {
+        if let Err(error) = prepare_pending_auto_starts(&self.database, &self.policy, limit).await {
             report.automation_failures.push(error.to_string());
         }
-        if let Err(error) =
-            launch_policy::prepare_pending_retries(&self.database, &self.policy, limit).await
-        {
+        if let Err(error) = prepare_pending_retries(&self.database, &self.policy, limit).await {
             report.automation_failures.push(error.to_string());
         }
-        match launch_policy::pending(&self.database, limit).await {
+        match pending(&self.database, limit).await {
             Ok(decisions) => {
                 report.automation_decisions = decisions.len();
                 for decision in decisions {

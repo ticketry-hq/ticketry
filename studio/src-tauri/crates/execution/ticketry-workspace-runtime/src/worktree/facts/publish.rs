@@ -18,14 +18,14 @@ use ticketry_runs::{NewStatusEvent, RunsPersistenceError, StatusEventRepository}
 use super::scope::WorktreeFactScope;
 
 /// The payload schema worktree facts are written at.
-pub const PAYLOAD_VERSION: i32 = 1;
+pub(crate) const PAYLOAD_VERSION: i32 = 1;
 
-pub const WORKTREE_CHANGED: &str = "worktree.changed";
-pub const WORKTREE_DELETED: &str = "worktree.deleted";
+pub(crate) const WORKTREE_CHANGED: &str = "worktree.changed";
+pub(crate) const WORKTREE_DELETED: &str = "worktree.deleted";
 
 /// What kind of settlement produced a fact.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum WorktreeChange {
+pub(crate) enum WorktreeChange {
     /// A checkout was cut, or an already-matching one was adopted.
     Created,
     /// A restart finished a settlement that had already changed Git.
@@ -59,7 +59,7 @@ impl WorktreeChange {
 
 /// What a settlement publishes about the checkout it just committed.
 #[derive(Clone, Copy, Debug)]
-pub struct WorktreeFact<'a> {
+pub(crate) struct WorktreeFact<'a> {
     pub worktree_id: &'a str,
     pub change: WorktreeChange,
     pub branch: Option<&'a str>,
@@ -75,7 +75,7 @@ pub struct WorktreeFact<'a> {
 ///
 /// `events` is optional so a fixture or a composition without the adopted
 /// outbox still settles, simply without publishing.
-pub async fn record_worktree(
+pub(crate) async fn record_worktree(
     events: Option<&StatusEventRepository>,
     transaction: &DatabaseTransaction,
     scope: &WorktreeFactScope,

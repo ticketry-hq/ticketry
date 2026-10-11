@@ -13,7 +13,7 @@ use ticketry_launch::{
 };
 use ticketry_runs::{AttemptOutcome, DeliveryMode, RunsServices};
 use ticketry_terminal::{TerminalCleanupService, TerminalLaunchService};
-use ticketry_work_management::launch_policy::{mark_delivered, CallerScope, LaunchPolicyDecision};
+use ticketry_work_management::{mark_delivered, CallerScope, LaunchPolicyDecision};
 
 use super::{handoff, replacement};
 
@@ -122,6 +122,8 @@ async fn execute_traced(
             .await
             .map_err(|error| error.to_string())?
         {
+            super::stage_skills::record_for_handoff(database, &live, &decision.stage_skills)
+                .await?;
             // The decision is spent the moment typed delivery begins. Marking
             // it delivered first is what stops a replay from pasting the
             // destination prompt into the same session twice.
@@ -273,6 +275,7 @@ fn request(
         resume_from_agent_run_id: None,
         automation_attempt_id,
         required_skills: decision.required_skills.clone(),
+        stage_skills: decision.stage_skills.clone(),
         working_directory_identity: format!("task:{}", decision.task_id.replace('-', "")),
         design_directory_identity: None,
         document_relative_path: None,
@@ -302,7 +305,7 @@ fn request_surface(scope: CallerScope) -> ticketry_diagnostics::LaunchRequestSur
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ticketry_work_management::launch_policy::ModuleLinkInput;
+    use ticketry_work_management::ModuleLinkInput;
 
     fn decision(decision_id: &str) -> LaunchPolicyDecision {
         LaunchPolicyDecision {

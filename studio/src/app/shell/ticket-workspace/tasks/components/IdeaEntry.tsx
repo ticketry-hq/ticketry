@@ -8,7 +8,11 @@ import {
 import { toast } from "../../../../../state/clientStore";
 import { useOnboardingTourStore } from "../../../../onboarding/onboardingTourStore";
 import { apiErrorMessage } from "../../../../../shared/api/errors";
-import { useCreateWorkItem } from "../../../../../features/work-items";
+import {
+  useCreateWorkItem,
+  capturedStoryOutsideResults,
+  CapturedIdeaRecovery,
+} from "../../../../../features/work-items";
 import { useStudioStore } from "../../../../../features/projects";
 import { loadIssueTypes } from "../../../../../features/settings";
 import { useClientStore } from "../../../../../state/clientStore";
@@ -23,11 +27,13 @@ export function IdeaEntry() {
   });
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
+  const [capturedOutsideResults, setCapturedOutsideResults] = useState(false);
   // #623: focus needs to read at a glance — the caret alone was invisible
   // against the pane, so the field carries an accent border plus a soft ring.
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const previousModuleRef = useRef(selectedModuleId);
+  const scope = JSON.stringify([selectedProjectId, selectedModuleId]);
+  const previousScopeRef = useRef(scope);
   const submissionRef = useRef(0);
   const inFlightRef = useRef(false);
 
@@ -39,20 +45,20 @@ export function IdeaEntry() {
   }, [draft]);
 
   useEffect(() => {
-    if (previousModuleRef.current === selectedModuleId) return;
-    previousModuleRef.current = selectedModuleId;
+    if (previousScopeRef.current === scope) return;
+    previousScopeRef.current = scope;
     submissionRef.current += 1;
     inFlightRef.current = false;
     setPending(false);
     setDraft("");
-  }, [selectedModuleId]);
+    setCapturedOutsideResults(false);
+  }, [scope]);
 
   async function submit(): Promise<void> {
     const name = draft.trim();
     if (!name || !selectedProjectId || !selectedModuleId || inFlightRef.current) {
       return;
     }
-
     const projectId = selectedProjectId;
     const moduleId = selectedModuleId;
     const submission = ++submissionRef.current;
@@ -69,15 +75,18 @@ export function IdeaEntry() {
         name,
         parent_id: moduleId,
         issue_type_id: storyType.id,
+        sprint_id: null,
       });
       if (
         submissionRef.current !== submission ||
+        useStudioStore.getState().selectedProjectId !== projectId ||
         useClientStore.getState().selectedModuleId !== moduleId
       ) {
         return;
       }
 
       const ui = useClientStore.getState();
+      setCapturedOutsideResults(capturedStoryOutsideResults(projectId, created, ui.storySearchQuery));
       if (created.state && ui.collapsedStateIds.has(created.state)) {
         ui.toggleStateCollapsed(created.state);
       }
@@ -143,6 +152,8 @@ export function IdeaEntry() {
           className="block min-h-7 w-full resize-none overflow-hidden bg-transparent px-2 py-1 text-sm leading-5 text-text-primary caret-focus-accent outline-none placeholder:text-text-muted"
         />
       </div>
+      {capturedOutsideResults && selectedProjectId ? <CapturedIdeaRecovery projectId={selectedProjectId}
+        onDismiss={() => setCapturedOutsideResults(false)} /> : null}
     </div>
   );
 }

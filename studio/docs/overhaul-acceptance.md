@@ -2,7 +2,7 @@
 
 Every numbered check in the matrix below was once a manual pre-merge walk; all
 of them are now automated by
-`npm run test:overhaul --workspace @worktracker/studio`. Desktop CI runs that
+`bun run --cwd studio test:overhaul`. Desktop CI runs that
 named gate before the full Studio suite, typecheck, and build.
 
 | Case | Automated behavior |
@@ -18,7 +18,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 09 | An externally killed terminal remains as a dead tab once the run projection confirms the loss; a projection that says the run is alive outranks a stale viewer verdict. |
 | 10 | A closed terminal stays dismissed after server reconciliation. |
 | 11 | An unsaved document buffer survives tab switches. |
-| 12 | Reload restores sidebar, panel layout, expansion, and collapsed sections. |
+| 12 | Reload translates legacy panel layouts and restores expansion and collapsed sections without recreating a sidebar. |
 | 13 | A module scratch workspace launches and displays its run summary. |
 | 14 | Reconnect replay closes a missed-membership gap without duplication. |
 | 15 | Switching projects cannot let a stale status snapshot mark a connected run exited. |
@@ -43,16 +43,16 @@ named gate before the full Studio suite, typecheck, and build.
 | 34 | The Task workspace names child issues, review findings and their cancel labels, dependency chips and blocker candidates, the parent picker and Module link, and deletion confirmation copy as compact ticket identifiers without leaking canonical keys. A child description edit refreshes its finding location through its normalized task subscription. |
 | 35 | After socket startup reaches ready, live and restored task-bound terminal tabs retain their session and Agent Run identities. Reattaching a reconciled surviving run is idempotent and does not resume a new provider run. Their labels and their close affordances read the launch state their own durable run captured, with no ticket identifier, while scratch plan/instant runs keep their lowercase modes and an unrecorded state stays blank. |
 | 36 | A live terminal falsely tombstoned by legacy runtime reconciliation returns to its active lifecycle when the repaired status snapshot arrives. |
-| 37 | The sidebar, Module tab strip, keyboard position shortcuts, and backlog grouping all render the one Canonical module order. |
+| 37 | The manager, Module tab strip, keyboard position shortcuts, and backlog grouping all render the one Canonical module order. |
 | 38 | Agent activity does not overlay a second client-side order on the canonical module order. |
 | 39 | An automatic project keeps the server's canonical creation order when auxiliary project metadata cannot be read. |
 | 40 | A module list loaded before the project cache is warm still reads the project's durable ordering mode. |
 | 41 | A project whose ordering mode cannot be read is treated as automatic. |
-| 42 | The first sidebar module drag sends the exact visible order as its baseline and shows the move in the sidebar and Module tab strip at once. |
+| 42 | The first manager module drag sends the exact visible order as its baseline and shows the move in the manager and Module tab strip at once. |
 | 43 | A pending module reorder disables further drag sources and converges on authoritative project and module data once it settles. |
 | 44 | A refused module reorder restores the previous order, reports the failure, and a retry succeeds. |
 | 45 | Cancelled and no-op module drops write nothing, and a drop does not select the module it landed on. |
-| 46 | A module created in an automatic project follows every existing module, and selection, its folder link, and the sidebar add control are unchanged. |
+| 46 | A module created in an automatic project follows every existing module, and selection, its folder link, and the manager creation control are unchanged. |
 | 47 | A module created in a project with Manual module order follows every existing module without leaving that mode. |
 | 48 | A live desktop run waits for the direct native libghostty-to-tmux viewer without opening the xterm/WebSocket fallback in parallel. |
 | 49 | A terminal tab appears directly from ProjectRunStatus when its run projection arrives after the workspace first mounts, without a separate terminal-discovery read. |
@@ -133,8 +133,32 @@ named gate before the full Studio suite, typecheck, and build.
 | 124 | Task workspace Settings occlusion converges on the newest navigation and presentation intent: a pending modal hide shields a newer Details destination until native completion, and a close/reopen/close sequence cannot accept an older reveal merely because the newest request uses the same retained handle. Together with the shared mounted Settings cases 117–118, the gate preserves native-chord singleton routing, hidden-viewer focus exclusion, late attachment suppression, owner/geometry convergence, compatibility fallback, and failure recovery. |
 | 125 | Module creation refuses a missing folder before creating the module. |
 | 126 | Opening state configuration over a selected Task terminal hides the retained native viewer without detaching or replacing it, and closing state configuration remeasures and reveals the same handle. |
+| 127 | Clears a ghost scratch badge when the authoritative snapshot omits its foreign or orphaned run. |
+| 128 | Launches one promptless task run and activates its acknowledged terminal tab. |
+| 129 | Honors provider availability without changing the scratch launcher. |
+| 130 | Supports keyboard provider choice and returns focus when dismissed. |
+| 131 | Launches against the task context captured when the picker opens. |
+| 132 | Completes pending launch acknowledgement after navigating away. |
+| 133 | Lets a person move a Story directly from Ideas to Implement. |
+| 134 | Runs eligible Ideas from Details or r with one guarded request and follows workflow refreshes. |
+| 135 | Opens a document tab discovered by the backend watcher. |
+| 136 | Expands a collapsed Story on Right, then dives Right straight into its remembered Active tab body. |
+| 137 | Presents a stopped Codex run as needing input on its tab and work-item status. |
+| 138 | Moves a gracefully exited terminal from live tabs to resumable sessions. |
+| 139 | Presents a silent live terminal as stalled and recovers on output. |
+| 140 | Keeps an explicitly terminated terminal Exited against later time, output, and reconnect. |
+| 141 | Restores the latest provider lifecycle state when a live terminal resumes output. |
 | 142 | An upgraded profile uses distinct gray, red, and teal workflow colors on state headers and work-item identifiers while preserving a custom state color. |
+| 143 | Declares no rounded-corner utility anywhere in Studio source. |
+| 144 | Opens a module shell on the toggle, focuses it, and closes again from anywhere. |
+| 145 | Resolves the toggle while an agent terminal holds typing mode. |
+| 146 | Offers the folder affordance instead of launching elsewhere. |
+| 147 | Attaches nothing while the panel stays closed. |
+| 148 | Keeps an agent terminal and the panel shell visible without sharing keystrokes. |
 | 149 | The module shell uses the native renderer when available and the browser fallback otherwise. |
+| 150 | Holds several shells in one module and shows exactly one of them. |
+| 151 | Stops at the shell cap with the create action visibly refused. |
+| 152 | Swaps the strip on a module switch and returns to that module's own active tab. |
 | 153 | The desktop xterm fallback attaches, exchanges bytes, resizes, scrolls, suspends, resumes, and detaches through Tauri viewer commands instead of the Python terminal WebSocket. |
 | 154 | Desktop Run Now, agent and module-shell discovery and control use caller-owned GraphQL over TauRPC, deliberate launches get fresh request IDs while retries retain them, mutations refresh canonical terminal holdings, and native plus xterm viewers share generation-bound lease authority. |
 | 155 | Studio snapshots and live output events consume the same Rust run projection, including Shell scope, nullable provider, launch metadata, effective state, output sequence, and output time. |
@@ -159,11 +183,11 @@ named gate before the full Studio suite, typecheck, and build.
 | 174 | When this data directory’s MCP socket cannot start, Studio remains usable with a visible agent-launch warning. Local shells remain available, restart retries listener startup, and acknowledgement does not claim to continue without MCP. |
 | 175 | A hidden Module tab stays hidden after the Apollo cache is rebuilt from the authoritative project read. |
 | 176 | Agent activity does not reopen a hidden Module tab. |
-| 177 | When every Module tab is hidden, the permanent top-strip control opens the Modules pane, hidden rows keep lifecycle status, and sidebar selection restores and selects the tab. A project with no Modules offers creation instead of recovery copy. |
+| 177 | When every Module tab is hidden, the footer opens Module Manager, hidden rows keep lifecycle status, and explicit Restore reveals a tab without selecting it. Inspection writes nothing; explicit Open selects the restored tab and closes the manager. A project with no Modules offers creation instead of recovery copy. |
 | 178 | While a native Ghostty view is engaged, only its live focused surface receives Ghostty-bound Command keys such as `Cmd++`; unbound application commands stay with AppKit, and retained or tearing-down viewers cannot query stale surfaces. |
 | 179 | Cmd+1 through Cmd+9 and Cmd+Shift+0 select the same canonical visible Module positions from WebView and focused native Ghostty input; hidden and archived Modules consume no position, and native keyboard engagement clears held-Command badges. |
 | 180 | Cmd+Escape from the live focused native terminal and the WebView leave typing through the same transition exactly once, return focus to the current zone, preserve the open terminal and workspace selection, ignore disposed viewers, and do not steal modal focus. |
-| 181 | Root tasks reorder through the GraphQL write path. |
+| 181 | Root tasks reorder through GraphQL; expanded branches hide during drag and return after Escape cancellation without a write or after a successful drop. |
 | 182 | Imported root tasks with equal ranks still send deterministic reorder neighbors. |
 | 183 | A Module tab wraps its label and lifecycle chicklets, reserves constant space for the close button, and keeps its close hover background compact. |
 | 184 | Story Changes stays inside the story pane, shows only its files and selected diff in two resizable columns, and never loads other worktrees; module Changes reuses the same two-column review. |
@@ -219,7 +243,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 234 | The opt-in WebView-underlay comparison coordinates retained native Ghostty terminals through one generation-fenced window selection. |
 | 235 | Native Ghostty warm retention caps the total mounted set at the measured 20-view limit, keeps the selected run, refreshes recency on revisit, and evicts the least recently viewed inactive viewer. |
 | 236 | A bottom-left toast stays outside the selected native Ghostty host and above the Studio footer and safe areas; stacked notifications remain actionable without lowering, detaching, recreating, or focusing the terminal. |
-| 237 | The Modules pane toggle stays fixed at the workspace's left edge, while module creation sits after the last module tab and scrolls horizontally with the tabs. |
+| 237 | The footer Module Manager entry remains outside the horizontal tab scroller, while module creation sits after the last module tab and scrolls with the tabs. |
 | 238 | An authoritative snapshot that reports an agent run exited closes its mounted terminal tab and clears the local terminal session. |
 | 239 | Module Changes appears in the top strip with a version-control symbol, stays disabled without a selected Module, and is absent from the footer. |
 | 240 | A newly captured Story appears first in its issue type's initial workflow state while creation is pending and remains first after the authoritative persisted result replaces it. |
@@ -234,14 +258,14 @@ named gate before the full Studio suite, typecheck, and build.
 | 249 | Resuming one stopped terminal conversation opens and focuses one successor while every unselected stopped conversation stays independently resumable through holding refreshes and reload. |
 | 250 | The Stories pane says whether an automated transition continued the Story's live agent session or started a fresh one, and follows the newest delivery across the rolled-up subtree. |
 | 251 | The + Agent launcher follows every workspace tab inside the shared horizontal scroller and opens the same provider picker used by Cmd+Enter instead of an inline dropdown. |
-| 252 | Opening the Modules pane gives it keyboard focus; arrow keys move its cursor without snapping back, and Enter activates the cursor. |
+| 252 | Opening the manager focuses search; row arrow keys move inspection focus without snapping back, and Enter explicitly opens a visible module. |
 | 253 | Edit-view keyboard navigation reaches the + Agent launcher after the final workspace tab and opens it with Enter. |
 | 254 | Focusing an agent reveals its selected Story by expanding the containing status group and all ancestors, clearing a hiding search, and scrolling the row into view even on repeated pad presses, while keeping terminal typing focus. |
 | 255 | Novation pads exclude instant chats and historical failures on startup, retain newly observed failures until acknowledged, and show running in white, stalled in red, done in green, and permission requests in flashing white. |
 | 256 | Module Changes owns horizontal overflow below the workspace pane so checkout actions and files remain reachable in a narrow pane. |
 | 257 | Dormant workspace chips stay within their own bounded vertical scroller so accumulated closed documents and past runs cannot squeeze the active workspace tab. |
 | 258 | A long Details body stays reachable through the selected workspace's single vertical scroll owner. |
-| 259 | A selected non-Codex conversation never requests a thread title; a Codex conversation keeps its safe title through an unusable answer, adopts an accepted name in all three displays, and preserves that name when a later request fails. |
+| 259 | A selected non-Codex conversation never requests a thread title; a provider Terminal Issue Investigation title reaches the selected conversation and row across refetch/reselection and workspace reopening, while missing, blank and failed reads retain safe/accepted titles without manual-title writes or identity changes. |
 | 260 | The + Agent launcher warms the provider catalog while it is on screen, so the first agent picker of a session opens on a usable provider list instead of an inert "Loading providers…". |
 | 261 | A settled Codex conversation selection refreshes its title once on first selection, return, and startup restoration; rapid selection changes coalesce, while visibility changes and terminal focus do not read titles. |
 | 262 | Implementation launch configuration and transitions survive optimistic ticket creation, issue-type metadata updates, and reopening the state editor. Covered by the combined case 246 test. |
@@ -258,27 +282,19 @@ named gate before the full Studio suite, typecheck, and build.
 | 273 | Module Changes columns stay inside the workspace without horizontal overflow. |
 | 274 | Dormant chips remain in a bounded scroll owner above the active tab. |
 | 275 | Refresh restores run status through a unique subscription identity; refused subscriptions retry. |
-
 | 276 | An explicit agent selection overrides remembered Details on the first press, and clicking a terminal tab engages its keyboard input. |
-
 | 277 | Native terminal selection transfers input ownership from the WebView before requesting first-responder focus, including repeated programmatic selection. |
-
 | 278 | The run status snapshot carries live runs only: a terminal outcome updates its run in place through the run's own event, a run the snapshot omits leaves the live holding without being presented as exited, and each snapshot costs one summary log record instead of one per run. |
-
 | 279 | Opening a Story restores its ended runs from the generated WorkItem-to-AgentRuns read: a run is restored because it still has a terminal session record and not because it ended recently, a Story whose ended runs have no record restores none, and a run the event already settled stays one chip because both paths share the AgentRuns cache identity. |
-
 | 280 | A module scratch workspace restores its ended plan, instant, and shell runs from the module WorkItem that owns them, across a reload and with an empty live holding; a module whose ended runs have no terminal session record restores none, and a run the event already settled stays one chip. |
-
 | 281 | Reopening a restored ended run works from either surface: clicking an ended instant Conversation row opens its terminal in the scratch bucket instead of falling back to Details, because run resolution reads the shared AgentRuns cache entity the WorkItem restore retains rather than the live-only holding. |
-
 | 282 | A selected instant conversation whose run has already left the live holding is still titled: eligibility comes from the module WorkItem ended-runs read, so a Codex conversation that ended keeps refreshing its thread title. |
 | 283 | Success, info, and error toasts paint an opaque panel beneath their lifecycle tint. |
 | 284 | A failed description save after switching Stories retains the draft for retry, including when the user returns before the failure arrives. |
 | 285 | Moving a Story through the sidebar refreshes both the source and destination module, including a previously cached empty destination. |
-
 | 286 | Same-Story description writes are serialized so the newest draft persists last. |
 | 287 | Details shows its rendered description before shared rich-editor code warms after a frame; the editor mounts in place once that code loads, with no click and no second load. |
-| 288 | Launch selects Details for the restored Story or scratch workspace even if a terminal, document, or changes tab was previously selected; document and terminal tab state remains available for subsequent selection. |
+| 288 | Bootstrap preserves remembered Story and scratch document/run targets and tab state; legacy Changes targets retain the existing Details migration. |
 | 289 | Studio opens from the initial ready configuration when backend startup finishes before the WebView subscribes to health events. |
 | 290 | Module fetching and hierarchy derivation stay shared as more Stories rows mount; normalized nonstructural task updates refresh their row and selected Details without rebuilding the module tree. |
 | 291 | Declining folder trust preserves the current module selection and its links; retrying with approval saves the requested folder once and resumes selection. |
@@ -351,7 +367,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 358 | Module folder trust names and inspects only the providers the user activated. |
 | 359 | A module folder saves with no trust prompt when no provider is activated. |
 | 360 | The state picker offers only workflow destinations configured from the current state. |
-| 361 | A missing-folder module keeps its unsent Idea entry draft when the Modules pane opens or closes. |
+| 361 | A missing-folder module keeps the same mounted Idea entry and unsent draft while Module Manager covers the workspace and restores it on close; covered input is inaccessible. |
 | 362 | Provider onboarding allows planning without a provider and persists an empty provider catalog. |
 | 363 | After an interrupted tour, zero providers remains a valid choice through resume, skip, and restart. |
 | 364 | A user can create, read, and edit a work item with no active provider or agent launch. |
@@ -397,9 +413,14 @@ named gate before the full Studio suite, typecheck, and build.
 | 404 | Tab within a compact rich description list still indents the list item. |
 | 405 | A stacked task action that commits and pushes but fails PR creation shows the provider error and retries Create PR without another commit. |
 | 406 | Conversation and work-item selection, module switches, and project switches exit Conversation configuration; conversation selection opens that run's exact terminal session. |
-
 | 407 | Model configuration offers GPT-6.1 Sol for Codex with low through ultra reasoning and keeps the saved launch default on reopening. |
-
+| 408 | Restores the exact origin after selecting a story in another module. |
+| 409 | Starts a planned sprint when the project has no active sprint. |
+| 410 | Completes an active sprint with unfinished stories carried to a planned sprint. |
+| 411 | Creates a named sprint and opens it in Plan. |
+| 412 | Shows lifecycle cards, counts finished stories and opens a planned sprint. |
+| 413 | Waits for the refreshed planning graph before opening a newly created sprint. |
+| 414 | Keeps a newly opened completion dialog when an older start request finishes. |
 | 415 | External archive facts remove assigned Stories and update sprint counts and an open completion preview with one planning request per project batch. |
 | 416 | External creation facts insert assigned Stories into sprint rows, counts and the completion preview. |
 | 417 | External sprint assignments refresh canonical sprint membership even without a collection membership flag. |
@@ -410,7 +431,6 @@ named gate before the full Studio suite, typecheck, and build.
 | 422 | Suggestion accept and Undo return the generated issue relation and await authoritative planning and suggestion collections, including closed views. |
 | 423 | Suggestion dismiss and Undo converge in Apollo; rejected transitions preserve waiting suggestions and actionable server errors. |
 | 424 | Typed sprint execution stays on the sprint card with progress, Cancel, ready count, Review, staleness and Retry. Launching creates no Conversation or terminal tab and preserves the current workspace and focus. |
-
 | 425 | A desktop planner bind failure retains its address and application log, offers normal quit/reopen guidance and Settings, and does not offer unsupported Retry. |
 | 426 | A recoverable runtime offers Retry and reports a rejected recovery command while preserving the original planner diagnostic, log, and Settings access. |
 | 427 | Goal-scoped typed suggestion launches preserve the workspace and return the run identity persisted by agent_execution_create. |
@@ -440,8 +460,8 @@ named gate before the full Studio suite, typecheck, and build.
 | 451 | opens a suggestion's moduleless story in the first visible module |
 | 452 | Leaving and reopening the same story ignores the prior request's completion. |
 | 453 | Plan and module-scoped Changes precede module tabs; selecting a module leaves both surfaces. |
-| 454 | Plan opens without a selected module while the module workspace stays mounted and hidden. |
-| 455 | Arrow keys, Home and End select and focus tabs across Plan, Changes and modules. |
+| 454 | Plan owns the full width, preserves the saved Stories/workspace split and mounted module workspace, and restores them on exit even when opened without a selected module. |
+| 455 | Arrow keys, Home and End retain workspace-tab focus across Plan, Changes and modules after the real checkout switcher mounts and animation frames settle; explicit Enter/Space still enters Changes (case 332). |
 | 456 | Plan opens project-wide in a project with no modules; Changes stays disabled. |
 | 457 | Plan waits for waiting suggestions before offering an epic to finish. |
 | 458 | Each sprint restores its chosen tabs and active epic after leaving Plan. |
@@ -452,6 +472,372 @@ named gate before the full Studio suite, typecheck, and build.
 | 463 | Leaving the card for Plan during a run observes completion; a failed result refresh can be retried and a moduleless suggestion reviewed and dismissed. |
 | 464 | Removing a selected epic moves its stories and waiting suggestions to the selectable No epic group with matching counts. |
 | 465 | A new sprint starts with the last visited sprint's selected epics and active epic; an untouched sprint starts empty. |
+| 466 | Creating an epic from the tab menu focuses it and restores each sprint's planning visit. |
+| 467 | A conversation's first title click selects its terminal; clicking its selected title opens a focused editor for that row. |
+| 468 | Enter and blur save trimmed conversation titles without changing runs, terminal sessions, selection or other rows. |
+| 469 | Escape cancels a conversation rename and subsequent blur does not save it. |
+| 470 | Blank conversation titles are rejected locally while keeping the draft editable. |
+| 471 | A failed conversation rename keeps its draft and can be retried without changing another row. |
+| 472 | Conversation title editors retain focus and selection through input clicks, arrow keys and composing Enter. |
+| 473 | Saved conversation titles override older provider responses and remain shared across refetch and workspace reopening. |
+| 474 | A pending conversation rename saves once and updates its original run after selection changes. |
+| 475 | A delayed conversation list response containing an intermediate saved title cannot overwrite a successful rename back to the original title in either the list or workspace. |
+| 476 | Stories starts on the resolved Active sprint; All and No sprint change results without assigning work. |
+| 477 | Sprint filtering retains whole eligible branches, combines Story search, and keeps excluded Details open when other roots match. |
+| 478 | The sprint chooser owns arrows, Enter, Space and Escape ahead of shell navigation and returns focus to its trigger. |
+| 479 | Sprint-only collapse remains usable; collapsed children do not show exclusion notices, and drag returns only with All and empty search. |
+| 480 | Unresolved sprint loading and read failure are distinct from empty results; Retry preserves Story search. |
+| 481 | Normalized sprint membership and optimistic rollback repaint Stories and counts without reopening the module. |
+| 482 | Sprint choices count roots in unopened modules while Stories summaries stay module-scoped; recovery clears only its own axis. |
+| 483 | Explicit sprint selection survives local start/completion and transient lookup errors; successful scoped deletion or foreign-project lookup recovers to All. |
+| 484 | Planned and Completed independently page five sprints with correct totals, pinned controls and retained pages across switches/reopen. |
+| 485 | Debounced sprint-name search reaches unloaded project history, keeps Active pinned and clears independently of Story search. |
+| 486 | Failed pages preserve options and retry focus/offset; duplicate Load more requests are suppressed. |
+| 487 | Section and paginated keyboard controls own focus, announce appended choices and permit normal Tab exit. |
+| 488 | Sprint tabs exclude hidden modules and share canonical order with number shortcuts; Close tab remains enabled while sprint-restricted, writes presentation only, and reorder returns only under All. |
+| 489 | Plain manager inspection preserves hidden preferences and sprint intent; explicit Restore opens an eligible hidden tab, and an explained Open action clears the filter before selecting an excluded module. |
+| 490 | The module picker keeps Show all sprints reachable by keyboard with zero matching tabs. |
+| 491 | Zero matching modules deselects the module and keeps the project sprint chooser and All recovery available while module-bound UI stays hidden. |
+| 492 | Unknown membership uses ordinary visibility; hidden tabs remain hidden through complete membership and a transient refresh failure, with Retry available. |
+| 493 | Truncated membership cannot close ordinary tabs or produce false zero matches; Retry recovers complete membership while preserving hidden flags. |
+| 494 | Zero-module recovery preserves native Story and shell viewer mounts, document frame, session identity and leases without terminating work. |
+| 495 | A late module-tree completion cannot restore selection after its project/filter generation becomes obsolete. |
+| 496 | An unlinked fallback prompts once; cancellation keeps sprint tabs and controls reachable, and stale folder resumption cannot restore an excluded module. |
+| 497 | Plan and Changes defer sprint fallback until return; fallback restores the remembered Story while eligible selection remains intact. |
+| 498 | Opening Plan during a pending module fallback defers remembered-Story restoration and resumes it on return without replacing newer navigation. |
+| 499 | A late project load cannot restore an old project's module or error over the current project selection. |
+| 500 | A normal macOS desktop launch requests microphone access for terminal voice mode once, with a purpose string and signed audio-input entitlement; automated startup runs do not prompt. |
+| 501 | The selected conversation's focused rename button retains native Enter and Space activation ahead of the production global keymap with both legacy visibility values, without entering its terminal. |
+| 502 | Outside the rename control, arrow keys still select conversations and Right or edit-view Enter still reaches the selected terminal. |
+| 503 | A structural fact already consumed for canonical adoption still refreshes unopened module roots, matching tabs and project option counts. |
+| 504 | External root archive/unarchive, deletion and root-to-child/child-to-root reparenting update unopened module eligibility. |
+| 505 | Local structural writes refresh root eligibility before their durable facts arrive. |
+| 506 | Focus and chooser reopen refresh roots; a read error retains complete tabs and Story search, and Retry converges them. |
+| 507 | Structural refresh evicts closed memberships only for the affected project; cached roots refresh on project entry. |
+| 508 | An old project's late membership read cannot redirect or replace the current project's module. |
+| 509 | Refreshing module identities before roots adds new modules and removes archived-module roots, including an authoritative empty module set. |
+| 510 | Existing idea capture creates an unassigned root and offers Show all outside results while preserving Story search and selection. |
+| 511 | Suggestion dismissal offers Undo through the restricted update and restores the waiting row. |
+| 512 | Proposal acceptance Undo retains the created Story in the Backlog and restores an existing-story suggestion. |
+| 513 | Explicit excluded-run reveal clears sprint restriction and Story search, selects the Story through the real shell and preserves agent typing focus and session. |
+| 514 | Explicit module creation broadens to All only after canonical creation and folder setup, immediately before selecting the new module. |
+| 515 | Cancelling module creation during pending folder setup preserves sprint intent and selection. |
+| 516 | Failed folder setup preserves sprint intent while retrying the already-created module. |
+| 517 | A late automatic fallback folder completion cannot undo explicit run reveal. |
+| 518 | Revealing an eligible module-scoped run preserves the sprint selection. |
+| 519 | A late canonical module creation across a project switch cannot reuse or select the old project's identity. |
+| 520 | Canonical and optimistic existing-root membership repaint Story branches, project counts and unopened effective tabs together; rollback preserves authoritative membership and project isolation. |
+| 521 | An authoritative no-active lookup uses All; project revisits preserve independent sprint intent and prevent foreign Story results. |
+| 522 | An eligible module retains a deliberate empty Story selection through later sprint changes. |
+| 523 | A folder completion from before Active changes away and back cannot restore an obsolete module. |
+| 524 | Accepting an existing suggestion offers Undo and returns the Story to the Backlog. |
+| 525 | Done with epic restores neighbor focus for roving keys or Add epic after the final tab closes, preserving waiting suggestions. |
+| 526 | Public UUIDs and open epic visits survive collection refresh, proposal acceptance, Undo and reacceptance. |
+| 527 | A compiled OFF app omits the Plan tab, workspace mounts and lifecycle surfaces from the full Studio shell. |
+| 528 | Plan owns the full-width mounted Studio shell while retaining the migrated Stories/workspace split; Details remains mounted and the exact origin restores on Escape. |
+| 529 | A sprint completion membership fact closes incoming controls and Undo while retained sprint work can still return to the Backlog. |
+| 530 | Public Plan workspace, sprint and item entries refuse compiled OFF access while preserving module, Story, terminal and planning records. |
+| 531 | Stale OFF Plan state cannot hide the workspace, own the footer, consume Escape, or block visible Changes/module and Details/document traversal and close. |
+| 532 | The separate Plan a feature command and its agent Plan conversation flow remain available in a compiled OFF shell. |
+| 533 | Runtime process environment, URL flags and saved settings cannot enable a compiled OFF Plan workspace. |
+| 534 | Compiled ON exposes retained sprint goals, suggestions and lifecycle dialogs, preserves ordinary work on exit, and prevents Plan-owned close commands from reaching hidden documents or terminals. |
+| 535 | Native host close and module-position events preserve their ordinary owner despite stale OFF Plan state; an obsolete native host cannot close the selected terminal. |
+| 536 | Inline Story creation in the active Plan epic's Backlog preserves the ordinary create contract without assigning a sprint. |
+| 537 | Inline Story creation can assign work to an empty sprint pane without leaving the new Story in the Backlog. |
+| 538 | A rejected inline Story create preserves an editable draft and retries only on another explicit submission. |
+| 539 | A created Story and its draft survive epic close/reopen, while retrying sprint assignment does not create another Story. |
+| 540 | A failed view refresh retries reads without repeating successful Story creation or assignment. |
+| 541 | A committed lost Story-create response is inspected through reads instead of blindly creating again. |
+| 542 | Empty and repeated pending submissions are ignored; focus returns and Escape cancels only the draft. |
+| 543 | Inline creation requires an active epic and remains disabled for completed sprints. |
+| 544 | An obsolete visit creation cannot overwrite a fresh Plan visit draft. |
+| 545 | A committed sprint refresh retries without creating another sprint. |
+| 546 | Closing the project view during sprint create or refresh prevents stale navigation. |
+| 547 | Proposal acceptance requires a nonblank title from both detail and row controls. |
+| 548 | An edited proposal is accepted in one write and opens its real Story. |
+| 549 | Bulk review adds only the active epic's waiting suggestions and preserves the selected ticket. |
+| 550 | Proposal retry retains the edited title; failed Undo retries without creating another Story. |
+| 551 | An accepted proposal's goal chip stays on its planned Story until Undo restores the suggestion. |
+| 552 | Opening a proposal invalidates an older pending Story open. |
+| 553 | A delayed proposal acceptance preserves a newer pending Story selection. |
+| 554 | Accepting the final suggestion from its row keeps focus in the backlog. |
+| 555 | Creating a proposal from its selected-ticket panel keeps focus in that panel. |
+| 556 | Dismissing the last proposal from its panel returns focus to the backlog. |
+| 557 | Closing proposal review returns focus to the reviewed suggestion. |
+| 558 | Escape from the proposal input returns focus to its suggestion row. |
+| 559 | Undo after panel dismissal restores the exact edited proposal draft. |
+| 560 | Undo after list dismissal restores the exact edited proposal draft. |
+| 561 | Removing suggestions focuses the next row, previous row, then backlog heading. |
+| 562 | Delayed proposal acceptance preserves focus after the planner moves elsewhere. |
+| 563 | Add all returns focus to the backlog heading when its batch disappears. |
+| 564 | Banner acceptance keeps focus in the existing Story panel. |
+| 565 | Removing an unfocused suggestion with a pointer leaves focus elsewhere. |
+| 566 | An accepted proposal draft remains until its real ticket's module loads. |
+| 567 | Escape, unchanged Enter and successful Enter return focus to the conversation rename button; the next activation reopens rename with the production keymap with both legacy visibility values. |
+| 568 | Rename completion preserves focus elsewhere after blur, selection changes or a delayed save with both legacy visibility values. |
+| 569 | Compiled OFF shows active, other-sprint and unassigned Story branches while preserving remembered sprint intent and selected Details. |
+| 570 | Cold and failed sprint reads cannot delay OFF Stories or start hidden sprint membership indexing. |
+| 571 | OFF retains ordinary Story hierarchy, workflow counts, search expansion and drag rules. |
+| 572 | OFF explicit run reveal preserves remembered sprint intent and durable run identity. |
+| 573 | OFF uses saved module order and hidden preferences for tabs, drag and number shortcuts despite retained sprint intent. |
+| 574 | OFF ordinary module restoration completes when hidden sprint intent changes during a cold module read. |
+| 575 | OFF all-hidden recovery uses explicit manager Restore without selection, then Open to select and close; ordinary picker restoration remains available. Inspection keeps folder/agent details but hides sprint membership. Only presentation visibility is written, with no sprint writes. |
+| 576 | OFF unselected and zero-module workspaces retain generic recovery independently of failed sprint reads. |
+| 577 | OFF Stories and the module picker omit sprint selectors, counts and recovery actions. |
+| 578 | OFF text search keeps empty feedback, clearing and selected Story Details without sprint recovery actions. |
+| 579 | OFF capture ignores remembered sprint intent and preserves ordinary text exclusion feedback. |
+| 580 | OFF preserves documents, Conversations, terminal identities and planning records without neutralizing data or module preferences. |
+| 581 | Escape closes the epic picker before leaving Plan, preserving the selected epic and returning focus to Add epic. |
+| 582 | Closing the final epic returns focus to Add epic and leaves the Plan visit recoverable. |
+| 583 | Keyboard Story moves retain next, previous and empty-pane focus while pointer moves preserve focus elsewhere. |
+| 584 | A sprint card opens canonical public-UUID Story details outside the selected module and sprint filter, preserving filter intent. |
+| 585 | Starting the first sprint through its dialog sends no carry-over destination and closes after the lifecycle mutation succeeds. |
+| 586 | Active sprint idea capture remains unassigned, confirms exclusion and offers Show all recovery while preserving module/Story selection. |
+| 587 | Explicit sprint selection keeps captured Stories unassigned and confirms capture outside results. |
+| 588 | All sprints capture remains unassigned. |
+| 589 | Rejected idea creation preserves the draft and module; repeated Enter while pending creates only once. |
+| 590 | No sprint capture remains unassigned. |
+| 591 | A pending capture stays unassigned when the filter changes before its response and uses the current results for confirmation. |
+| 592 | Reopening the sprint chooser refreshes retained later-page names and membership while preserving loaded choices and counts during refresh. |
+| 593 | A failed later-page refresh preserves retained sprint choices and counts; Retry refreshes those choices and Load more continues from the retained boundary. |
+| 594 | Idea capture remains available and unassigned while the Active sprint read is loading. |
+| 595 | Idea capture remains available and unassigned when the project sprint membership read fails. |
+| 596 | A delayed provider title cannot rename another selected conversation; reselecting reads the original run and updates its title without manual-title writes or identity changes. |
+| 597 | Capturing the existing Codex provider thread through a lifecycle event resolves the first request name in the selected conversation and row without refresh/reselection, manual-title writes or terminal identity changes. |
+| 598 | A first terminal request name appears after its lifecycle refresh overlaps an earlier neutral provider read; later refreshes retain that request title. |
+| 599 | A pending unavailable resident title read preserves the safe visible conversation and terminal; the normal service restart refresh accepts the first-request name with bounded reads. |
+| 600 | Closing a selected sprint tab writes only tab_hidden, chooses an eligible fallback, preserves module records and canonical order, and persists through a fresh cache and shell reload. |
+| 601 | A failed optimistic sprint Close restores the tab and prior selected module, keeps the sprint filter, and shows a recoverable error. |
+| 602 | A delayed Close failure restores presentation while preserving newer filter intent and production number-shortcut navigation. |
+| 603 | Explicit picker Restore unhides an eligible sprint module without clearing the current sprint filter. |
+| 604 | Explicit Restore of an excluded hidden module clears the sprint filter before unhiding and leaves module selection unchanged. |
+| 605 | Open refuses a hidden module and clears the filter before selecting an excluded unhidden module without a visibility write. |
+| 606 | Open reports unavailable while folder linking still needs user action, rather than claiming a module was selected. |
+| 607 | A delayed Restore completion cannot navigate after the user changes the sprint filter. |
+| 608 | A delayed Restore completion cannot navigate after leaving and returning to the same project. |
+| 609 | Deferred folder linking cannot reopen a module whose tab was explicitly closed while the prompt was pending. |
+| 610 | Closing every matching sprint tab explains that matching tabs are hidden; explicit picker Restore recovers selection without clearing the sprint filter. |
+| 611 | Opening Module Manager from the footer groups modules and preserves inspection, tabs, search focus and Escape focus recovery. |
+| 612 | Archived module reads page within the project, retry failures and support search across collapsed archives without adding tabs. |
+| 613 | Module Manager suppresses covered native terminal rendering and focus, then restores the same viewer and session. |
+| 614 | Project visits invalidate a late Module Manager archive read before normalization or inspection. |
+| 615 | Module Manager Restore preserves selection, Close changes only tab presentation, and opening outside the sprint explains the filter change. |
+| 616 | A reopened Module Manager remains usable and keeps search focus when an older Open finishes loading; committed selection is retained. |
+| 617 | Module Manager honors effective shortcut overrides, search caret keys, modal Escape precedence and group navigation with arrows and Enter. |
+| 618 | Module Manager disables navigation while eligibility is incomplete and retries membership before restoring or opening a module. |
+| 619 | Module Manager rolls back failed presentation writes, retries explicitly and ignores late completions after a project switch. |
+| 620 | Reselecting a conversation before its earlier neutral provider read settles refreshes its first-request name in the row and heading after a lifecycle change while unselected, preserving manual-title ownership and run/thread identity. |
+| 621 | Footer count and lifecycle attention include hidden active modules; manager entry remains safe for all-hidden and empty projects. |
+| 622 | Manager takeover preserves the real Plan body, active epic draft and Changes surface through pointer entry, manager interaction and Escape; ordinary outside clicks still dismiss popovers after return. |
+| 623 | Header and Open-group entry start the same inline module edit; caret keys stay with the field and Escape cancels editing before closing the manager. |
+| 624 | Folder validation refuses an unusable directory before trust; cancelling trust creates no module and preserves the editable inline draft. |
+| 625 | Folder-save and membership-refresh retries reuse one created identity, preserve it while editing, block duplicate submits, then clear sprint intent, select the appended module and update footer count. |
+| 626 | Create failure preserves editable fields and retries only on explicit submission. |
+| 627 | A creation completing after a project switch cannot save a link or select into the new project. |
+| 628 | Cancelling during folder saving prevents late selection and closure of a reopened manager. |
+| 629 | A sprint-filter change invalidates late creation navigation; explicit folder retry reuses the same created module. |
+| 630 | Live-stream reset refreshes every inspection page without restoring hidden tabs or changing module selection. |
+| 631 | Hidden-module details show canonical name, key and local folder without restoring its tab or changing sprint intent. |
+| 632 | Narrow detail drill-in and Back retain search, collapsed groups and keyboard cursor. |
+| 633 | Detail sprint membership reads every page, exposes failures/retry and updates agent attention through the real status subscription. |
+| 634 | Archive detail inspection stays read-only; late archive reads cannot replace a newly selected module's details. |
+| 635 | Module rows count complete top-level Stories and current worktrees from public hyphenated UUID ownership fields, and show sprint details without opening hidden modules. |
+| 636 | Failed or incomplete metadata remains unavailable until retry completes; authoritative empty counts never invent activity. |
+| 637 | Subscription membership changes refresh complete Story and worktree metadata collections. |
+| 638 | Closed-manager reads cannot overwrite the next inspection scope; reopening refreshes cached counts. A companion shell regression keeps newer canonical Story revisions safe from buffered metadata pages. |
+| 639 | Lazy expansion shows all canonical ordinary Story pages without opening or restoring a hidden module. |
+| 640 | Story expansion exposes loading, incomplete pagination and retry without changing sprint intent. |
+| 641 | Production row navigation reaches expanded Stories and rejects late reads after changing projects. |
+| 642 | Status subscriptions refresh complete expanded Story membership, retain a surviving row's keyboard focus, and return focus to its module when that Story disappears; covered panes cannot steal focus. |
+| 643 | Native folder-picker cancellation writes nothing; accepted provider trust precedes inline model creation and local folder linking. |
+| 644 | Refused module renames retain an editable draft, prevent duplicate submissions, and converge manager, picker and tabs after explicit retry. |
+| 645 | Module name editing retains caret keys; Escape cancels the edit and restores contextual action focus without a write. |
+| 646 | Detail presentation actions share row Close tab/Restore contracts and truthful sprint-filter explanations without implicit restoration. |
+| 647 | Archive confirmation names the module and server cascade; cancellation writes nothing and server refusal preserves context for retry. |
+| 648 | Committed archive converges affected memberships and repairs selection even when a follow-up read needs retry. |
+| 649 | Pre-archive project, archive and Story responses cannot resurrect the committed archived module or its affected Story membership. |
+| 650 | Open rows reorder through canonical project-wide presentation order, including hidden neighbors, and share pending state with tabs. |
+| 651 | Restricted, searched, incomplete, hidden and archived rows cannot reorder; changing sprint scope cancels an accepted drag. |
+| 652 | Refused reorder rolls back rows and tabs, preserves contextual action focus, and permits an explicit retry. |
+| 653 | Pending archive confirmation and project revisits invalidate accepted reorder gestures before they can write in a new scope. |
+| 654 | Hidden-tab and empty-project recovery opens the manager with explicit restore or inline creation actions. |
+| 655 | The footer manager replaces the sidebar without an outer panel or gutter, translating saved Stories/workspace proportions and retaining mounted splits. |
+| 656 | Legacy sidebar visibility and module cursors cannot alter workspace traversal; configured legacy shortcuts open the manager. |
+| 657 | Carryover targets follow persisted base-62 rank and identity while Backlog remains selected. |
+| 658 | Planned sprints follow ascending rank and sprint history follows descending rank regardless of creation time. |
+| 659 | A warm Sprints workspace opens the first planned sprint by persisted rank. |
+| 660 | The top module picker bounds long lists to the available viewport, scrolls choices independently of search, and restores the final module. |
+| 661 | Keyboard navigation reveals the active choice in a long module picker while retaining search focus and Enter restoration. |
+| 662 | Planned sprint cards alone expose earlier/later controls with the first and last sequence ends disabled. |
+| 663 | Sprint arrows send concrete adjacent sequence neighbors, disable every arrow while pending and converge the Plan list and planned sprint choices in both directions. |
+| 664 | A refused sprint reorder preserves the prior sequence, reports inline feedback and allows retry. |
+| 665 | Durable external sprint reorder facts update visible sprint cards and planned sprint choices once per project batch. |
+| 666 | An external sprint reorder repairs a closed cached planning view and invalidates retained choices before reopening. |
+| 667 | Recovery from an unavailable status replay cursor rereads sprint order and refreshes planned choices. |
+| 668 | A committed sprint reorder retains its authoritative rank and distinguishes a failed planning refresh from a refused reorder. |
+| 669 | A public-project sprint change repairs a closed planning graph cached under the compact project identity. |
+| 670 | The task-workspace public rendered entry restores and reselects an existing terminal without replacing its durable run or session. |
+| 671 | The selected-ticket shell adapter preserves document engagement, first-press terminal focus and exact mounted document/input identities across tab switches, attaching the existing run once. |
+| 672 | The public rendered workspace restores a remembered document without engaging it, then engages and retains that exact frame across tab switches. |
+| 673 | Changes opens its independent rendered workspace from the task-workspace public entry while retaining the selected terminal, mounted viewer and remembered durable run. |
+| 674 | Preserves a remembered document when the authoritative document refresh fails. |
+| 675 | Keeps explicit Details entry selected when a remembered document arrives later. |
+| 676 | Preserves the current document after an old A response completes following A to B to A. |
+| 677 | Keeps a remembered path during loading and restores its authoritative document identity. |
+| 678 | Repairs remembered state to Details only after a successful read proves the document missing. |
+| 679 | Honors an explicit Details tab selection through unrelated presentation updates during hydration. |
+| 680 | Ignores an old document completion after A to B without changing either remembered target. |
+| 681 | Leaves remembered intent intact when a document response finishes after workspace disposal. |
+| 682 | Restores the current module context within one bucket while ignoring the former context response. |
+| 683 | Keeps an explicitly reopened document selected over pending remembered restoration. |
+| 684 | Retains a remembered run until successful run resolution establishes absence and repairs persistence. |
+| 685 | Repairs an existing remembered terminal when authoritative resumability makes it ineligible. |
+| 686 | Waits for the authoritative live snapshot before restoring a delayed remembered projection. |
+| 687 | Keeps explicit conversation entry ahead of delayed remembered terminal resolution. |
+| 688 | Follows a newer conversation within the same bucket when the older read finishes later. |
+| 689 | Rejects a durable remembered terminal belonging to another workspace and repairs its target. |
+| 690 | Preserves remembered terminal intent after an ended-run read error. |
+| 691 | Ignores an old run read and projection after switching from A to B. |
+| 692 | Preserves newer Details selection after A to B to A and an old run completion. |
+| 693 | Preserves remembered terminal intent while resumable-session resolution loads or fails. |
+| 694 | Keeps Details while resume is pending instead of applying older remembered document hydration. |
+| 695 | Committing a task launch wins over an older remembered document response. |
+| 696 | Reopening a document wins over an older terminal whose durable history arrives later. |
+| 697 | Closing an inactive document preserves the pending remembered terminal. |
+| 698 | Explicit engagement of Details wins over delayed remembered document hydration. |
+| 699 | An explicit agent run focus in the same workspace outranks delayed remembered document hydration. |
+| 700 | Retains the current document fields when an obsolete refresh returns the same document identity. |
+| 701 | Retains a completed resume after A to B without changing selection, focus or either remembered target. |
+| 702 | Preserves the new A entry when an old resume completes following A to B to A. |
+| 703 | Keeps the newer of two resume intents selected when transports complete in reverse order. |
+| 704 | Retains a launched run when its durable identity arrives after newer Details selection. |
+| 705 | Remembers the exact launched run through temporary session rekey. |
+| 706 | Retains a launched run after A to B without selecting or remembering its obsolete target. |
+| 707 | Rejects an old launched run's persistence after A to B to A and a current Details intent. |
+| 708 | Retains both launched run identities when the newer launch finishes before the older one. |
+| 709 | Treats a picker commit after a newer Details selection as a fresh launch intent. |
+| 710 | Keeps a newer Details selection and engagement when the same workspace resume settles. |
+| 711 | Preserves a legitimate resumed terminal after disposal without updating remembered intent. |
+| 712 | Deduplicates repeated clicks while resume is pending and retains exactly one successor. |
+| 713 | Preserves resume error feedback after a newer selection and leaves the source retryable. |
+| 714 | Invalidates resume intent when the same mounted workspace loses and regains presentation authority. |
+| 715 | Remembers the intended launched run when the authoritative terminal selection index changes before its durable rekey. |
+| 716 | Does not send an originating temporary terminal's deferred focus to an unrelated selected terminal. |
+| 717 | Restores current remembered intent when a retained workspace returns after hydration completed while hidden. |
+| 718 | Focuses the remembered document on its first authorized hydration while preserving global body engagement. |
+| 719 | Lets document hydration finish under configuration without taking focus and focuses its retained frame on authorized return. |
+| 720 | Leaves Details entry unfocused while retained and restores it only when body engagement authorizes return. |
+| 721 | Protects a foreground editor when configuration closes over an engaged document. |
+| 722 | Carries first engagement into the Markdown editor after its document bytes hydrate. |
+| 723 | Hydrates a retained Markdown editor without focusing it after a newer Details selection. |
+| 724 | Gives the first activated native terminal input after presentation commits, retaining the durable run and terminal. |
+| 725 | Focuses compatibility input on the first activation after native attachment fails on the same run. |
+| 726 | Cancels queued native focus when presentation authority is lost during input ownership transfer. |
+| 727 | Preserves first-press engaged fallback input through temporary-to-durable terminal rekey. |
+| 728 | Cancels delayed native focus under a modal and restores engaged focus after authorized return. |
+| 729 | Selects a native terminal from the edit-view tab strip without engaging input until Enter in its body. |
+| 730 | Retains the engaged native viewer and input when its temporary terminal identity becomes durable. |
+| 731 | Keeps fallback terminal selection in navigation mode until Enter engages its input. |
+| 732 | Drops delayed native ownership focus after Cmd+Esc disengages the still-presented terminal. |
+| 733 | Protects a newly focused editor from delayed native input ownership completion. |
+| 734 | Drops stale first-press fallback focus when native failure arrives after Cmd+Esc. |
+| 735 | Restores authorized full-sidebar native and fallback input after conversation configuration returns the same retained workspace. |
+| 736 | Actual bootstrap preserves the remembered document until rendered workspace hydration restores its authoritative path without engaging content. |
+| 737 | A successfully created epic remains selected while graph refresh still lacks its identity, then converges without another creation. |
+| 738 | Inactive epic closure preserves focus; tab closure and Done share next, previous and final Add epic focus. |
+| 739 | Incomplete and failed suggestion reads preserve the remembered Plan visit. |
+| 740 | Deleted epic tabs normalize and deduplicate under No epic, whose waiting suggestions remain discoverable after closure. |
+| 741 | Switching sprint visits restores remembered tabs and rejects an old visit's late epic creation. |
+| 742 | Created-epic refresh Retry preserves a newer epic selection. |
+| 743 | A missing Plan sprint preserves remembered intent until the sprint becomes available again. |
+| 744 | An in-flight epic creation cannot overwrite a newer selection in the same visit. |
+| 745 | Compiled OFF direct Plan mounts preserve remembered visits and initiate no planning requests. |
+| 746 | Reopening the same sprint rejects epic creation completion from the previous generation. |
+| 747 | An incoming move rechecks epic focus changed during the same input event and sends no stale assignment write. |
+| 748 | An Undo overtaken during input remains discarded after the assignment immediately returns. |
+| 749 | Retry rejects a graph refresh begun during input and explains loading or failed reads while retaining recovery. |
+| 750 | An incomplete planning graph disables Undo without discarding its unchanged normalized assignment. |
+| 751 | Retry requires its original assignment and stays discarded after an observed reassignment returns. |
+| 752 | Retry explanations retain completion, hierarchy, workflow and epic-focus reason precedence. |
+| 753 | Retained work can leave completed sprints regardless of hierarchy, workflow or focus; incoming Undo remains closed. |
+| 754 | Move Undo expires after five unheld seconds and preserves remaining time across focus and hover holds. |
+| 755 | Competing mounted views share the synchronous per-item assignment write guard. |
+| 756 | Reopening a Plan visit isolates its predecessor's late move settlement from current feedback. |
+| 757 | Move feedback retains independent per-item Retry and gives Undo to the newest successful move. |
+| 758 | Move, Retry and Undo controls captured by an older visit generation send no assignment write. |
+| 759 | Complete graph removal discards Undo permanently even if the normalized item survives and later returns. |
+| 760 | Rendered epic tabs preserve intent during a cached graph refresh and normalize when the read completes. |
+| 761 | Incoming and outgoing moves reject unavailable or foreign owning project records changed during input. |
+| 762 | Saved proposal survives failed refresh and Retry refresh keeps its committed Story identity. |
+| 763 | A definite rejection retains the edited proposal and retries only its rejected write. |
+| 764 | A lost acceptance response inspects authoritative suggestion and Story before retaining success. |
+| 765 | An uncommitted transport outcome is inspected before an explicit proposal Retry. |
+| 766 | Failed inspection remains read-only recovery and never blindly creates a second proposal. |
+| 767 | Incomplete owning graph cannot authorize repeating an unknown proposal acceptance. |
+| 768 | Reopening an unresolved visit keeps read recovery accessible before any repeat decision. |
+| 769 | Bulk acceptance stops after its first committed decision fails refresh and never replays it. |
+| 770 | Inherited recovery cannot inspect or repeat while the old visit decision is still saving. |
+| 771 | Dismissed suggestion read recovery retains Undo and its edited draft without repeating dismissal. |
+| 772 | Confirmed Undo followed by failed reads is recovered with reads without repeating either write. |
+| 773 | An ambiguous server error after commitment is inspected rather than replayed as a rejection. |
+| 774 | Rejected Undo preserves the committed decision's outstanding read recovery. |
+| 775 | Retry refresh preserves a newer selected Story and focused epic instead of following the older proposal. |
+| 776 | An old visit's held recovery read blocks newer inspection and decisions until authoritative recovery settles. |
+| 777 | Inconsistent authoritative suggestion and Story membership remains inspection recovery without replay. |
+| 778 | A suggestion accept captured before a new visit generation sends no write. |
+| 779 | Suggestion Undo is unavailable while authoritative graph reads are incomplete. |
+| 780 | Suggestion acceptance rechecks a sprint completed during input. |
+| 781 | Dismiss and Undo stay available after completion, workflow, hierarchy and epic focus changes. |
+| 782 | A suggestion read begun during input blocks writes and failed reads keep both controls unavailable. |
+| 783 | A refresh or inspection recovery control captured before a new generation sends no reads or writes. |
+| 784 | Replacing Undo starts a fresh expiry and the previous timer cannot remove the latest move. |
+| 785 | A failure keeps its Retry through delayed assignment rollback and dismisses independently. |
+| 786 | A suggestion removed from the authoritative collection during input cannot be accepted. |
+| 787 | A suggestion rejects a current graph whose owning project is refresh or inspection. |
+| 788 | Two mounted suggestion controls share a current synchronous pending guard. |
+| 789 | An unresolved Undo keeps the known decision but disables repeat Undo until inspection. |
+| 790 | A partial authoritative suggestion response preserves remembered epic intent until a complete read. |
+| 791 | Packaged desktop starts provider MCP registration once in the background without waiting for worker completion. |
+| 792 | Unpackaged processes, debug builds and every data-directory override skip provider MCP registration and preserve Claude configuration. |
+| 793 | Opening a stage's launch configuration checks its saved Stage skills, names the provider and searched locations, and still allows saving. |
+| 794 | Adding or removing a Stage skill refreshes availability for the current list. |
+| 795 | Recheck observes a manually installed skill without writing the launch binding. |
+| 796 | Changing the stage's provider or the inherited global default checks against the newly resolved provider. |
+| 797 | A slower availability response for an earlier provider never replaces the newer result. |
+| 798 | An unresolved provider or failed check shows Not verified, never available. |
+| 799 | The next Stage skills edit saves case-only matches under the installed spelling, collapses case duplicates and keeps the rest of the binding. |
+| 800 | A missing Stage skill never blocks the stage-skill save. |
+| 801 | The reachable state panel checks saved Stage skills through the host query and its Recheck writes nothing. |
+| 802 | Existing Required skill chips show provider-specific availability and searched-location warnings without automatically rewriting old bindings. |
+| 803 | Required skill edits save and reload while preserving Stage skills and unrelated binding fields. |
+| 804 | A Stage skills edit preserves exact Required identifiers even when disk availability finds a case-only match. |
+| 805 | A disk-visible Required identifier outside the pinned catalog is rejected on save with invalid_required_skills. |
+| 806 | A provider change refreshes Required skill availability for the new provider. |
+| 807 | Accessible Required skills Recheck observes a manual install without saving the binding. |
+| 808 | The reachable state configuration panel checks Required skills through the host query, and Recheck sends only read operations. |
+| 809 | A sprint Story submission retains its editor and focus while planning-cache invalidation resolves, without stealing the other pane's draft. |
+| 810 | A pending Story creation preserves deliberate focus outside its editor and the other pane's draft. |
+| 811 | Initial active-sprint resolution during module creation preserves folder setup and selects the created module. |
+| 812 | Explicit sprint-intent changes cancel late module setup; retry links the already-created identity. |
+| 813 | Add all accepts an Undone edited proposal's existing Story during a complete cached graph refresh, preserving identity and goal attribution. |
+| 814 | Keyboard Story moves retain the next-row focus handoff through temporarily unavailable reads, preserve heading fallback, and respect deliberate focus changes. |
+| 815 | The acknowledged terminal names every missing Stage skill and provider, and preserves its warning when revisited. |
+| 816 | A later acknowledged run whose skill check finds the installed skills shows no warning. |
+| 817 | Unchecked Stage skill reads name the provider, every requested skill and the read failure while preserving the terminal surface. |
+| 818 | A continued handoff updates the warning on the same acknowledged terminal through the normalized run entity. |
+| 819 | An unreadable persisted Stage skill observation remains an unchecked warning and does not crash the terminal surface. |
+| 820 | A late historical run read preserves an already visible persisted Stage skill warning on the acknowledged terminal. |
+| 821 | A compact launch run ID reads its public GraphQL UUID warning without losing the terminal lifecycle presentation. |
+| 822 | Keeps the Name editor focused after its single-click entry engages the Details surface. |
+| 824 | Keeps a Details control focused when a modal it opened closes over the engaged surface. |
+| 825 | Retrying a modal chunk whose failed import the browser keeps cached requests a fresh chunk URL and opens the requested dialog without a page reload. |
+| 826 | The production native AppKit host keeps marked/consumed IME keys out of the real libghostty PTY while ordinary Shift+Enter remains ESC CR, Enter remains CR, Ctrl/Alt/Cmd retain their behavior and UTF-8 composition commits exactly once. |
+| 827 | A delayed older run read cannot erase a newer continued-handoff stage-skill warning from the terminal banner or shared live holding. |
+| 828 | Delayed older null and non-null reports preserve newer warning creation and successful or explicit clearing in both the banner and live holding. |
+| 829 | A delayed historical run read respects newer stage-skill ownership through aliased run identity while accepting unrelated exit metadata. |
+| 830 | Fresh run reads after a handoff can clear warnings with null or successful checks and can publish a missing-skill warning. |
+| 831 | A pending older run read cannot erase a warning recreated after intervening warning creation and clearing. |
+
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose
@@ -465,9 +851,58 @@ change affects one of these behaviors, update that case in the same change. If
 the change introduces a new durable user behavior, add a new acceptance case
 and extend this matrix rather than returning to a manual checklist.
 
+Codex Instant naming delivery uses a controlled provider title in cases 259,
+473, 596, 597 and 620; cases 264 and 475 cover reader recovery and delayed list/manual
+title precedence. These fixtures prove visible delivery and ownership. Real
+Codex semantic naming and desktop launch evidence are recorded separately in
+the CODING-2534 implementation evidence.
+
+## Compiled Roadmap availability (CODING-2633)
+
+The full Studio shell cases use the existing generated GraphQL transport and
+Apollo fixtures with retained sprint, goal, suggestion, document and terminal
+records. The OFF configuration compiles a literal availability value into an
+isolated Vitest context; product settings and process environment are not a
+runtime feature toggle. The default test context exercises ON.
+
+On 2026-10-08, `bun run --cwd studio test --config vitest.roadmap-off.config.ts`
+passed all 7 tests, including cases 527, 530–533 and 535 and the supplemental
+direct-public-mount case. `bun run --cwd studio test
+src/test/overhaulRoadmapOnAcceptance.test.tsx` passed case 534. These focused
+results do not claim the complete overhaul suite passed. `test:overhaul` runs
+both contexts and combines their exit statuses, including when ON fails.
+
+## Stories sprint filter signals (CODING-2610)
+
+The approved parent [SPEC.md](../../spec/roadmap--9c384685/T2610--stories-kanban-view-should-have-a-sprint/SPEC.md)
+defines these twelve signals. The cases below run the real Story/cache/shell
+components with the generated GraphQL transport substituted. Structural cases
+also use the production local mutation and fact invalidation boundaries; recovery
+cases use the capture, run-reveal and module-creation UI paths. Focused/native
+contract checks supplement these component acceptance cases.
+
+| Parent signal | Executable evidence |
+| --- | --- |
+| AC-1 | 476 Active/All/No sprint; 483 explicit identity, scoped absence and failure; 521 authoritative no-active fallback and independent project intent across revisits. The focused `storySprintFilterStore.test.ts` additionally verifies a new application cache resets intent to Active. |
+| AC-2 | 484 separate five-item pages, retained pages and scoped totals; 487 pinned/section controls and appended focus; 592 retained-page names and membership refresh on reopen without collapsing loaded choices. Native `story_sprint_choices_graphql.rs` checks generated ordering, offset totals and project isolation. |
+| AC-3 | 485 trimmed/debounced search reaches unloaded history and rejects a late prior search; 486 failed-page Retry preserves offset, choices and focus; 593 later-page reopen failure preserves retained choices and Retry refreshes them before pagination continues. |
+| AC-4 | 477 exact root branch membership, child context and Story search; 481 reactive membership; 482 project-root versus selected-module counts; 520 canonical/optimistic branches and project counts. |
+| AC-5 | 477 excluded Details remain selected; 494 real native Story/shell viewer hosts, document frame and session identities survive zero matches and recovery; 497–498 deferred fallback restores remembered Story context. |
+| AC-6 | 481 and 520 canonical membership/optimistic rollback; 483 local sprint lifecycle and authoritative deleted/foreign selection recovery; 503–509 local/external structural convergence, scoped collection eviction and refresh recovery. |
+| AC-7 | 478 selector key ownership and focus return; 480 distinguishable loading/error/Retry; 487 section and paging controls, live feedback and normal Tab exit; 490 keyboard-reachable zero-tab recovery. |
+| AC-8 | 479 restriction/search disables drag and All plus empty search restores it; 488 restricted top-tab Hide/reorder and saved visibility. |
+| AC-9 | 510 unassigned idea capture, confirmation and independent Show all recovery; 586-591 unassigned capture across filter scopes, selection retention, rejection and pending filter changes; 594-595 capture independence from loading/failed sprint reads; 513 actual run reveal clears both filter axes while preserving agent typing focus and session; 514–516 canonical module creation/folder success, cancellation and retry without sprint assignment; 517–519 reveal and creation stale-navigation guards. |
+| AC-10 | 488 exact sets/order and shortcuts; 489 saved-hidden preference/manager navigation; 520 existing-root changes include unopened tabs without persisted visibility writes. Native `story_sprint_index_graphql.rs` checks direct roots, archive/project exclusion and complete generated collections. |
+| AC-11 | 491 zero-match recovery; 492 cached-results preservation on read errors; 493 truncated-read refusal; 495–496 obsolete load/folder guards; 497–498 deferred fallback; 506 focus/chooser refresh, read failure and Retry; 522 eligible intentional empty Story selection. |
+| AC-12 | 488 shared tab/shortcut projection; 494 dormant viewer/session identity and no termination; 495–499 stale module/project/folder guards; 503–509 local/external structural convergence, scoped cache eviction, late-project reads and module archive; 514–519 explicit module creation/reveal and stale callbacks; 520 unopened canonical/optimistic projection; 521 project isolation; 523 late folder completion after Active changes away and back. |
+
+The approved desktop/narrow mockups and existing responsive controls remain the
+visual reference. These automated component cases do not claim a live packaged
+desktop session or a real external coding-agent run.
+
 ## Real-browser web gate
 
-`npm run test:e2e:overhaul --workspace @worktracker/studio` starts the browser
+`bun run --cwd studio test:e2e:overhaul` starts the browser
 development stack with a temporary SQLite profile and drives Chromium through
 the visible Studio UI. The Playwright cases live in `studio/e2e/overhaul.spec.ts`.
 The temporary profile and its tmux socket are removed when the run exits.
@@ -477,3 +912,35 @@ outside Studio, or repository-backed documents remain explicitly skipped in
 the web suite. They must not be counted as automated until the harness has safe
 fixture support for those boundaries; their existing Vitest cases are not a
 substitute for running-application verification.
+
+## Stage skill availability (CODING-2722, 2026-10-10)
+
+Cases 793–801 cover workflow-configuration Stage skill availability at the
+`LaunchConfigurationForm` seam with an injected host check, plus one reachable
+`StateConfigurationPanel` case over the real `LaunchSkillAvailability` GraphQL
+transport. The filesystem contract itself is covered by Rust tests in
+`ticketry-provider/tests/skill_availability.rs` and
+`ticketry-work-management/tests/launch_skill_availability.rs`.
+
+## Required skill availability (CODING-2723, 2026-10-10)
+
+Cases 802–808 cover Required skills in the same launch configuration, including
+legacy names such as `grill-with-docs`, exact identifier preservation,
+save/reload, cross-field preservation, pinned-catalog refusal, provider changes
+and accessible Recheck. Cases 802–807 exercise `LaunchConfigurationForm` with an
+injected host availability check; case 808 exercises the reachable
+`StateConfigurationPanel` over the `LaunchSkillAvailability` GraphQL transport
+and proves its inspection/Recheck path emits no writes. Provider Rust filesystem
+tests establish physical skill-directory preservation. These component cases
+do not claim installed-desktop persistence or external-provider execution.
+
+## Plan recovery integration (CODING-2662, 2026-10-10)
+
+Cases 762–790 extend the approved mounted Plan controls / Apollo-GraphQL seam.
+The final serialized validation passed 152 focused tests, architecture lint,
+typecheck, build, and the full overhaul command (1028 tests plus 20 compiled
+Roadmap-OFF tests). These are current implementation results, separate from the
+historical Spec baseline. Earlier ownerless-fixture and simultaneous-run timeout
+failures, native smoke evidence, source hashes, and remaining native recovery /
+completed-Plan control limitations are recorded in
+[IMPLEMENTATION-2662.md](../../spec/0-2-0--d3bee32f/T2642--concentrate-plan-visit-epic-selection-an/IMPLEMENTATION-2662.md).

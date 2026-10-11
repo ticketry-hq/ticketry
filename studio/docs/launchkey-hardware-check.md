@@ -11,7 +11,7 @@ Run this check on an Apple silicon Mac with a Launchkey Mini MK3. It verifies th
 - Run the automated Launchkey tests first:
 
   ```bash
-  npm run test --workspace @worktracker/studio -- \
+  bun run --cwd studio test \
     src/features/launchkey \
     src/test/overhaulLaunchkeyAcceptance.test.tsx \
     src/test/desktopShellContract.test.ts \

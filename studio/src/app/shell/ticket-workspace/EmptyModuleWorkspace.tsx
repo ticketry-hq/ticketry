@@ -1,12 +1,12 @@
 interface EmptyModuleWorkspaceProps {
   kind: "no-modules" | "all-hidden";
-  sidebarVisible: boolean;
+  onManage: () => void;
   onCreate: () => void;
 }
 
 export function EmptyModuleWorkspace({
   kind,
-  sidebarVisible,
+  onManage,
   onCreate,
 }: EmptyModuleWorkspaceProps) {
   if (kind === "no-modules") {
@@ -21,7 +21,7 @@ export function EmptyModuleWorkspace({
           onClick={onCreate}
           className="border border-pane-border px-2 py-1 text-text-primary hover:bg-pane-title"
         >
-          + Add Module
+          New module
         </button>
       </div>
     );
@@ -30,11 +30,13 @@ export function EmptyModuleWorkspace({
   return (
     <div
       data-testid="empty-module-workspace"
-      className="flex h-full items-center justify-center px-6 text-center text-sm text-text-muted"
+      className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-text-muted"
     >
-      {sidebarVisible
-        ? "Select a module in the Modules pane to restore its tab."
-        : "Open the Modules sidebar to restore a module tab."}
+      <p>All module tabs are hidden. Restore a tab in the Module Manager.</p>
+      <button type="button" onClick={onManage}
+        className="border border-pane-border px-2 py-1 text-text-primary hover:bg-pane-title focus-visible:outline focus-visible:outline-focus-accent">
+        Manage modules
+      </button>
     </div>
   );
 }

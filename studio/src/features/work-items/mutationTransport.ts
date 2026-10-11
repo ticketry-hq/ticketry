@@ -1,3 +1,5 @@
+import { gql } from "@apollo/client";
+import { refreshProjectStorySprintIndex } from "./queries/refreshProjectStorySprintIndex";
 import type { WorkItem, WorkItemCreate } from "../../shared/api/types";
 import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../../shared/apollo/client";
@@ -22,6 +24,7 @@ import { recordLocalWorkItemConvergence } from "./workItemConvergence";
 export interface WorkItemWriteOptions {
   optimistic?: GeneratedWorkTrackerWorkItemFieldsFragment;
   moduleId?: string;
+  projectId?: string;
   moduleIds?: readonly string[];
 }
 
@@ -59,6 +62,7 @@ export async function createWorkItem(
       description: body.description,
       stateId: body.state_id ? compactWorktrackerId(body.state_id) : body.state_id,
       parentId: body.parent_id ? compactWorktrackerId(body.parent_id) : body.parent_id,
+      sprintId: body.sprint_id ? compactWorktrackerId(body.sprint_id) : body.sprint_id,
     },
     optimisticResponse: options.optimistic
       ? { create_work_item: options.optimistic }
@@ -84,8 +88,8 @@ export async function createWorkItem(
       });
     },
   });
-  await refreshModuleLists(options);
   recordLocalWorkItemConvergence(data!.create_work_item.id, data!.create_work_item.updated_at);
+  await Promise.allSettled([refreshModuleLists(options), refreshProjectStorySprintIndex(data!.create_work_item.project_id ?? projectId)]);
   return workItemFromIssue(data!.create_work_item);
 }
 
@@ -171,11 +175,11 @@ export async function reparentWorkItem(
       ? { update_work_item: options.optimistic }
       : undefined,
   });
-  await refreshModuleLists({
+  recordLocalWorkItemConvergence(data!.update_work_item.id, data!.update_work_item.updated_at);
+  await Promise.allSettled([refreshModuleLists({
     ...options,
     moduleIds: [...(options.moduleIds ?? []), data!.update_work_item.module_id ?? ""],
-  });
-  recordLocalWorkItemConvergence(data!.update_work_item.id, data!.update_work_item.updated_at);
+  }), refreshProjectStorySprintIndex(data!.update_work_item.project_id)]);
   return workItemFromIssue(data!.update_work_item);
 }
 
@@ -267,6 +271,11 @@ export async function deleteWorkItem(
   options: WorkItemWriteOptions = {},
 ): Promise<void> {
   const client = studioApolloClient();
+  const projectId = client.cache.readFragment<{ projectId: string }>({
+    id: client.cache.identify({ __typename: "WorktrackerIssue", id: compactWorktrackerId(id) }),
+    fragment: gql`fragment DeletedWorkItemProject on WorktrackerIssue { projectId }`,
+    optimistic: false,
+  })?.projectId ?? options.projectId;
   await client.mutate({
     mutation: DeleteWorkTrackerWorkItemDocument,
     variables: { id: compactWorktrackerId(id) },
@@ -280,6 +289,6 @@ export async function deleteWorkItem(
       });
     },
   });
-  await refreshModuleLists(options);
+  await Promise.allSettled([refreshModuleLists(options), ...(projectId ? [refreshProjectStorySprintIndex(projectId)] : [])]);
   client.cache.gc();
 }

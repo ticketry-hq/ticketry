@@ -2,7 +2,7 @@ use sea_orm::{ConnectionTrait, Database};
 use seaography::async_graphql::{dynamic::Schema, Request, Variables};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_graphql_schema::{foundation_schema, initialize_with_worktracker_and_install};
-use ticketry_work_management::commands::CommandDatabase;
+use ticketry_work_management::CommandDatabase;
 
 fn request(query: &str, variables: serde_json::Value) -> String {
     serde_json::json!({ "query": query, "variables": variables }).to_string()

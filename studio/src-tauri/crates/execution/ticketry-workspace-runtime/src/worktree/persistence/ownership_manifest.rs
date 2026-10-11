@@ -9,13 +9,13 @@ use super::schema::{LEDGER_TABLE, WORKTREE_COLUMNS};
 use super::{pull_request_url_migration, ship_record_migration};
 
 /// Version of the checked Worktree ownership contract.
-pub const VERSION: i32 = 1;
+pub(crate) const VERSION: i32 = 1;
 
 /// The adopted Django table, at its post-adoption column shape.
-pub const ADOPTED_TABLES: &[(&str, &[&str])] = &[("worktrees", WORKTREE_COLUMNS)];
+pub(crate) const ADOPTED_TABLES: &[(&str, &[&str])] = &[("worktrees", WORKTREE_COLUMNS)];
 
 /// The focused table this slice authors outright.
-pub const AUTHORED_TABLES: &[(&str, &[&str])] = &[
+pub(crate) const AUTHORED_TABLES: &[(&str, &[&str])] = &[
     (
         LEDGER_TABLE,
         &[
@@ -105,7 +105,7 @@ pub const GENERATED_MUTATION_GAPS: &[&str] = &[
 ];
 
 /// Every table whose production writer is Rust after the Worktree handoff.
-pub fn owned_tables() -> Vec<&'static str> {
+pub(crate) fn owned_tables() -> Vec<&'static str> {
     ADOPTED_TABLES
         .iter()
         .chain(AUTHORED_TABLES.iter())

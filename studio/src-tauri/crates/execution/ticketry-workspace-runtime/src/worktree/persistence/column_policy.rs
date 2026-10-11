@@ -24,7 +24,7 @@ pub fn apply(context: &mut BuilderContext) {
 
 /// `"<TypeName>.<fieldName>"` for every protected column, resolved through the
 /// context's own naming functions rather than hardcoded GraphQL spellings.
-pub fn protected_input_names(context: &BuilderContext) -> Vec<String> {
+pub(crate) fn protected_input_names(context: &BuilderContext) -> Vec<String> {
     let type_name = (context.entity_object.type_name)(worktree::Entity.table_name());
     worktree::Column::iter()
         .filter(|column| PROTECTED_COLUMNS.contains(&column.as_str()))

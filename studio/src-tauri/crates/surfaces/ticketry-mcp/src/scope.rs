@@ -1,7 +1,7 @@
 use sea_orm::{DatabaseConnection, EntityTrait};
 
 use ticketry_entities::issue;
-use ticketry_work_management::{commands::CommandError, read_queries, read_types::WorkItem};
+use ticketry_work_management::{CommandError, WorkItem};
 
 use super::{projection, RunPrincipal};
 
@@ -43,7 +43,7 @@ pub async fn task_or_module_id(
         return Ok(task.id);
     }
     if principal.is_global() {
-        if let Some(item) = read_queries::work_item(database, value).await? {
+        if let Some(item) = ticketry_work_management::work_item(database, value).await? {
             return Ok(item.id);
         }
         return issue::Entity::find_by_id(value.replace('-', ""))
@@ -53,7 +53,7 @@ pub async fn task_or_module_id(
             .map(|item| item.id)
             .ok_or_else(|| CommandError::NotFound("Work item not found.".to_owned()));
     }
-    let modules = read_queries::modules(database, &principal.project_id, true).await?;
+    let modules = ticketry_work_management::modules(database, &principal.project_id, true).await?;
     modules
         .into_iter()
         .find(|module| {
@@ -78,7 +78,7 @@ pub async fn module_id(
             .map(|item| item.id)
             .ok_or_else(|| CommandError::NotFound("Module not found.".to_owned()));
     }
-    read_queries::modules(database, &principal.project_id, true)
+    ticketry_work_management::modules(database, &principal.project_id, true)
         .await?
         .into_iter()
         .find(|module| same_id(&module.id, value))
@@ -93,7 +93,7 @@ pub async fn issue_type(
     principal: &RunPrincipal,
     type_id: &str,
 ) -> Result<(), CommandError> {
-    let kind = read_queries::issue_type(database, type_id)
+    let kind = ticketry_work_management::issue_type(database, type_id)
         .await?
         .ok_or_else(|| CommandError::NotFound("Work-item type not found.".to_owned()))?;
     if !principal.is_global() && kind.project != principal.project_id {

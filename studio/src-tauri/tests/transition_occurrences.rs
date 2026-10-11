@@ -1,9 +1,7 @@
 use sea_orm::{ConnectionTrait, Database, DbBackend, EntityTrait, Statement};
 use ticketry_entities::issue;
-use ticketry_work_management::{
-    commands::workflow::{self, TransitionOrigin, TransitionWorkItem},
-    open_for_commands,
-};
+use ticketry_work_management::transition;
+use ticketry_work_management::{open_for_commands, TransitionOrigin, TransitionWorkItem};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const ISSUE_TYPE: &str = "20000000000000000000000000000000";
@@ -104,7 +102,7 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
 async fn committed_transition_appends_one_durable_frozen_occurrence() {
     let (directory, database) = fixture().await;
 
-    workflow::transition(
+    transition(
         &database,
         TransitionWorkItem {
             id: ISSUE.to_owned(),
@@ -167,7 +165,7 @@ async fn committed_transition_appends_one_durable_frozen_occurrence() {
 #[tokio::test]
 async fn rejected_or_rolled_back_transition_publishes_no_occurrence() {
     let (_directory, database) = fixture().await;
-    let no_op = workflow::transition(
+    let no_op = transition(
         &database,
         TransitionWorkItem {
             id: ISSUE.to_owned(),
@@ -197,7 +195,7 @@ async fn rejected_or_rolled_back_transition_publishes_no_occurrence() {
         )
         .await
         .unwrap();
-    let rolled_back = workflow::transition(
+    let rolled_back = transition(
         &database,
         TransitionWorkItem {
             id: ISSUE.to_owned(),
@@ -278,7 +276,7 @@ async fn handoff_is_recorded_identically_for_human_and_agent_movers() {
             .await
             .unwrap();
 
-        workflow::transition(
+        transition(
             &database,
             TransitionWorkItem {
                 id: ISSUE.to_owned(),
@@ -321,7 +319,7 @@ async fn handoff_is_recorded_identically_for_human_and_agent_movers() {
 async fn an_unchecked_edge_records_no_handoff() {
     let (_directory, database) = fixture().await;
 
-    workflow::transition(
+    transition(
         &database,
         TransitionWorkItem {
             id: ISSUE.to_owned(),

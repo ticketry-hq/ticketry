@@ -11,7 +11,13 @@
  * Apollo keeps an optimistic layer above incoming network data, so external
  * refreshes can proceed while a local write is in flight without painting an
  * older value over the edit.
+ *
+ * A canonical read that fails (the browser is offline) stays owed: it is
+ * requeued without arming the window, so the next flush — at the latest the
+ * reconnect's caught-up boundary — retries it. The status cursor advances
+ * independently, so no replayed fact would otherwise ask for it again.
  */
+import { invalidateModuleInspections } from "../../../module-manager";
 import { compactWorktrackerId } from "../../../../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../../../../shared/apollo/client";
 import { convergePlanningCollections } from "../../../planning-graph";
@@ -19,8 +25,10 @@ import { loadModules } from "../../../projects";
 import {
   GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
   WorkTrackerModuleOpenDocument,
+  WorkTrackerReviewFindingsDocument,
   WorkTrackerWorkItemDocument,
 } from "../../../work-items";
+import { refreshProjectStorySprintIndex } from "../../../work-items";
 import type { WorkItemFact } from "./statusFacts";
 import { consumeLocalWorkItemConvergence } from "../../../work-items";
 
@@ -42,11 +50,18 @@ export function createWorkItemInvalidator(
   const removed = new Set<string>();
   const moduleProjects = new Set<string>();
   const planningProjects = new Set<string>();
+  const sprintIndexProjects = new Set<string>();
   const taskModules = new Set<string>();
   let unknownTaskMembershipChanged = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  // Bumped by cancel(): a read that fails after a reset or stop is not owed.
+  let epoch = 0;
 
   const flush = () => {
+    const flushEpoch = epoch;
+    const owe = (queue: Set<string>, id: string) => {
+      if (flushEpoch === epoch && !removed.has(id)) queue.add(id);
+    };
     if (timer) {
       clearTimeout(timer);
       timer = null;
@@ -55,11 +70,13 @@ export function createWorkItemInvalidator(
     const evicted = [...removed];
     const projects = [...moduleProjects];
     const planning = [...planningProjects];
+    const sprintIndexes = [...sprintIndexProjects];
     const modules = [...taskModules];
     pending.clear();
     removed.clear();
     moduleProjects.clear();
     planningProjects.clear();
+    sprintIndexProjects.clear();
     taskModules.clear();
     const refreshUnknownTaskMembership = unknownTaskMembershipChanged;
     unknownTaskMembershipChanged = false;
@@ -77,7 +94,10 @@ export function createWorkItemInvalidator(
         query: WorkTrackerWorkItemDocument,
         variables: { id: compactWorktrackerId(id) },
         fetchPolicy: "network-only",
-      }).catch(() => {});
+      }).catch(() => owe(pending, id));
+    }
+    for (const projectId of sprintIndexes) {
+      void refreshProjectStorySprintIndex(projectId, client).catch(() => {});
     }
     if (planning.length) {
       void convergePlanningCollections(client, planning).catch(() => {});
@@ -90,10 +110,19 @@ export function createWorkItemInvalidator(
         query: WorkTrackerModuleOpenDocument,
         variables: { moduleId: compactWorktrackerId(moduleId) },
         fetchPolicy: "network-only",
-      }).catch(() => {});
+      }).catch(() => owe(taskModules, moduleId));
+    }
+    if (planning.length || projects.length || modules.length || refreshUnknownTaskMembership) {
+      void invalidateModuleInspections(planning.length ? planning : projects.length ? projects : undefined, refreshUnknownTaskMembership || planning.length ? undefined : modules.length ? modules : undefined).catch(() => {});
     }
     if (refreshUnknownTaskMembership) {
       void client.refetchQueries({ include: [WorkTrackerModuleOpenDocument] })
+        .catch(() => {});
+    }
+    // Parent-scoped finding lists keep archived children, so module membership
+    // cannot stand in for them; re-read whichever ones are displayed.
+    if (modules.length || refreshUnknownTaskMembership) {
+      void client.refetchQueries({ include: [WorkTrackerReviewFindingsDocument] })
         .catch(() => {});
     }
     client.cache.gc();
@@ -124,6 +153,7 @@ export function createWorkItemInvalidator(
       // Local writes adopt canonical rows, not the filtered planning collections.
       if (fact.projectId && (fact.itemKind === "module" || fact.membershipChanged || fact.removed)) {
         planningProjects.add(fact.projectId);
+        sprintIndexProjects.add(fact.projectId);
       }
       if (fact.itemKind === "module" && fact.projectId) {
         moduleProjects.add(fact.projectId);
@@ -136,10 +166,12 @@ export function createWorkItemInvalidator(
     },
     flush,
     cancel() {
+      epoch += 1;
       pending.clear();
       removed.clear();
       moduleProjects.clear();
       planningProjects.clear();
+      sprintIndexProjects.clear();
       taskModules.clear();
       unknownTaskMembershipChanged = false;
       if (timer) {

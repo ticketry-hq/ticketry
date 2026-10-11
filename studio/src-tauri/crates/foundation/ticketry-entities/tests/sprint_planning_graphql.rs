@@ -10,13 +10,14 @@ async fn sprint_entities_validate_goal_text_and_waiting_proposals() {
     )).await.unwrap();
     for sql in [
         "CREATE TABLE worktracker_issue (id TEXT PRIMARY KEY, project_id TEXT, type TEXT, issue_type_id TEXT, parent_id TEXT, module_id TEXT, state_id TEXT, sprint_id TEXT, state_revision INTEGER, name TEXT, sequence_id INTEGER, is_archived INTEGER, rank TEXT, description TEXT, workspace_tab_order TEXT, created_at TEXT, updated_at TEXT)",
-        "CREATE TABLE worktracker_sprint (id TEXT PRIMARY KEY, project_id TEXT, name TEXT, status TEXT, suggestion_run_id TEXT, goals_revised_at TEXT, created_at TEXT, updated_at TEXT)",
+        "CREATE TABLE worktracker_sprint (id TEXT PRIMARY KEY, project_id TEXT, name TEXT, status TEXT, rank TEXT NOT NULL, suggestion_run_id TEXT, goals_revised_at TEXT, created_at TEXT, updated_at TEXT)",
         "CREATE TABLE worktracker_sprint_goal (id TEXT PRIMARY KEY, sprint_id TEXT, position INTEGER, text TEXT, created_at TEXT, updated_at TEXT)",
         "CREATE TABLE worktracker_sprint_suggestion (id TEXT PRIMARY KEY, sprint_id TEXT, goal_id TEXT, issue_id TEXT, proposed_name TEXT, proposed_epic_id TEXT, reason TEXT, status TEXT, run_id TEXT, created_at TEXT)",
     ] { database.execute_unprepared(sql).await.unwrap(); }
     let sprint = sprint::ActiveModel {
         project_id: Set(project_id),
         name: Set("  Sprint 1  ".into()),
+        rank: Set("V".into()),
         ..Default::default()
     }
     .insert(&database)

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { launchFailureMessage } from "../../features/agents/terminal/internal/launchFailure";
+import { FoundationGraphQlError } from "../../shared/apollo/errorLink";
+import { graphQlMutationError } from "../../shared/api/graphqlError";
 
 
 describe("launchFailureMessage", () => {
@@ -86,5 +88,15 @@ describe("launchFailureMessage", () => {
       "The previous agent could not be ended. Close its terminal session, "
         + "then try again.",
     );
+  });
+
+  it("shows the GraphQL error message when the refusal carries no domain code", () => {
+    let refused: unknown;
+    try {
+      graphQlMutationError(new FoundationGraphQlError("unknown", "forced launch recovery failure"));
+    } catch (error) {
+      refused = error;
+    }
+    expect(launchFailureMessage(refused)).toBe("forced launch recovery failure");
   });
 });

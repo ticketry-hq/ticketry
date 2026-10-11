@@ -1,4 +1,4 @@
-import { getStatesSnapshot } from "../../projects";
+import { getStatesSnapshot, useStudioStore } from "../../projects";
 import {
   getModuleTreeSnapshot,
   getWorkItemSnapshot,
@@ -26,7 +26,8 @@ export function revealRunStory(projectId: string | null, moduleId: string, taskI
   // Also run when the same pad is pressed again after manually scrolling away.
   requestAnimationFrame(() => {
     const current = useClientStore.getState();
-    if (current.selectedModuleId !== moduleId || current.selectedTaskId !== taskId) return;
+    if (current.selectedModuleId !== moduleId || current.selectedTaskId !== taskId
+      || useStudioStore.getState().selectedProjectId !== projectId) return;
     const row = Array.from(document.querySelectorAll<HTMLElement>(
       '[data-pane="tasks"] [data-task-id]',
     )).find((element) => element.dataset.taskId === taskId);

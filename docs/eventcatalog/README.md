@@ -6,7 +6,7 @@ state ownership, and decisions explorable at several levels of detail.
 From the repository root:
 
 ```sh
-npm run catalog:dev
+bun run catalog:dev
 ```
 
 Open <http://localhost:3100>. The command regenerates the full sidecar OpenAPI
@@ -31,4 +31,4 @@ authoritative evidence, not a replacement for source code:
 - HTTP details are regenerated from `studio_server.api`;
 - WebSocket payloads are traced to the backend and TypeScript wire contracts.
 
-Run `npm run catalog:build` before committing catalog changes.
+Run `bun run catalog:build` before committing catalog changes.

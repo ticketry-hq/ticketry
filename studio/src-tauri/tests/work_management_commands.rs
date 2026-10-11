@@ -1,4 +1,7 @@
 use std::collections::{HashMap, HashSet};
+use ticketry_work_management::{
+    install_module_presentation_schema, install_workspace_tab_order_schema,
+};
 
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, Database, EntityTrait, PaginatorTrait,
@@ -10,13 +13,18 @@ use ticketry_entities::{
     module_presentation, project, state, worktree,
 };
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
-use ticketry_work_management::commands::{
-    attachments, blockers, catalog, hierarchy, reorder, state_configuration, work_items, workflow,
-};
 use ticketry_work_management::{
-    module_presentation_migration, open_for_commands, update_workspace_tab_order,
-    workspace_tab_order_migration,
+    append_description, archive_work_item, change_blockers, create_attachment,
+    create_review_finding, create_state, create_transition, create_work_item, delete_state,
+    delete_transition, delete_work_item, list_attachments, list_blockers, patch_launch_binding,
+    reorder_module_presentation, reorder_work_item, reparent_work_item, replace_blockers,
+    transition, update_issue_type, update_transition, update_work_item, AppendDescription,
+    AttachmentStorage, BlockerChange, CreateAttachment, CreateReviewFinding, CreateState,
+    CreateWorkItem, NewTransition, PatchLaunchBinding, PatchValue, ReorderWorkItem,
+    ReparentWorkItem, RevisionedTransition, TransitionOrigin, TransitionPatch, TransitionWorkItem,
+    UpdateIssueType, UpdateWorkItem,
 };
+use ticketry_work_management::{open_for_commands, update_workspace_tab_order};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const TASK_TYPE: &str = "30000000000000000000000000000001";
@@ -184,13 +192,13 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
     let database = open_for_commands(&path)
         .await
         .expect("open command database");
-    workspace_tab_order_migration::install(&database)
+    install_workspace_tab_order_schema(&database)
         .await
         .expect("install workspace-tab ordering");
-    module_presentation_migration::install(&database)
+    install_module_presentation_schema(&database)
         .await
         .expect("install module presentation");
-    ticketry_work_management::tag_migration::install(&database)
+    ticketry_work_management::install_tag_schema(&database)
         .await
         .expect("install tag relations");
     let issue_column_count = database
@@ -205,8 +213,9 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
     (directory, database)
 }
 
-fn create_input(name: impl Into<String>) -> work_items::CreateWorkItem {
-    work_items::CreateWorkItem {
+fn create_input(name: impl Into<String>) -> CreateWorkItem {
+    CreateWorkItem {
+        sprint_id: None,
         project_id: PROJECT.to_owned(),
         name: name.into(),
         issue_type_id: TASK_TYPE.to_owned(),
@@ -273,10 +282,10 @@ async fn seed_workspace_identities(
 #[tokio::test]
 async fn workspace_tab_order_preserves_owned_dormant_tabs_prunes_unknown_and_rejects_foreign() {
     let (_directory, database) = fixture().await;
-    let target = work_items::create(&database, create_input("Workspace target"), None)
+    let target = create_work_item(&database, create_input("Workspace target"), None)
         .await
         .unwrap();
-    let foreign = work_items::create(&database, create_input("Workspace foreign"), None)
+    let foreign = create_work_item(&database, create_input("Workspace foreign"), None)
         .await
         .unwrap();
     seed_workspace_identities(&database, &target, &foreign).await;
@@ -350,10 +359,10 @@ async fn workspace_tab_order_preserves_owned_dormant_tabs_prunes_unknown_and_rej
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn concurrent_workspace_tab_writes_serialize_and_allocate_distinct_revisions() {
     let (_directory, database) = fixture().await;
-    let target = work_items::create(&database, create_input("Concurrent workspace"), None)
+    let target = create_work_item(&database, create_input("Concurrent workspace"), None)
         .await
         .unwrap();
-    let foreign = work_items::create(&database, create_input("Identity owner fixture"), None)
+    let foreign = create_work_item(&database, create_input("Identity owner fixture"), None)
         .await
         .unwrap();
     seed_workspace_identities(&database, &target, &foreign).await;
@@ -400,10 +409,10 @@ async fn concurrent_workspace_tab_writes_serialize_and_allocate_distinct_revisio
 #[tokio::test]
 async fn graphql_reads_and_restricted_update_share_the_workspace_tab_order_model_field() {
     let (directory, database) = fixture().await;
-    let target = work_items::create(&database, create_input("GraphQL workspace"), None)
+    let target = create_work_item(&database, create_input("GraphQL workspace"), None)
         .await
         .unwrap();
-    let foreign = work_items::create(&database, create_input("GraphQL foreign"), None)
+    let foreign = create_work_item(&database, create_input("GraphQL foreign"), None)
         .await
         .unwrap();
     seed_workspace_identities(&database, &target, &foreign).await;
@@ -505,9 +514,9 @@ async fn graphql_reads_and_restricted_update_share_the_workspace_tab_order_model
 #[tokio::test]
 async fn catalogue_creation_validates_groups_levels_and_appends_orders() {
     let (_directory, database) = fixture().await;
-    let state_id = catalog::create_state(
+    let state_id = create_state(
         &database,
-        catalog::CreateState {
+        CreateState {
             project_id: PROJECT.to_owned(),
             name: "Ready".to_owned(),
             group: "unstarted".to_owned(),
@@ -539,9 +548,9 @@ async fn catalogue_creation_validates_groups_levels_and_appends_orders() {
     assert_eq!(created_type.sort_order, 2);
     assert_eq!(created_type.color, "#123456");
 
-    let invalid = catalog::create_state(
+    let invalid = create_state(
         &database,
-        catalog::CreateState {
+        CreateState {
             project_id: PROJECT.to_owned(),
             name: "Unknown".to_owned(),
             group: "invented".to_owned(),
@@ -561,7 +570,7 @@ async fn concurrent_creates_allocate_one_shared_sequence_and_revision_each() {
     for index in 0..12 {
         let database = database.clone();
         creates.push(tokio::spawn(async move {
-            work_items::create(&database, create_input(format!("Item {index}")), None).await
+            create_work_item(&database, create_input(format!("Item {index}")), None).await
         }));
     }
     let mut ids = Vec::new();
@@ -599,7 +608,7 @@ async fn validation_failure_rolls_back_counters_and_typed_edits_advance_revision
     let (_directory, database) = fixture().await;
     let mut invalid = create_input("Wrong birth");
     invalid.state_id = Some(DONE.to_owned());
-    let error = work_items::create(&database, invalid, None)
+    let error = create_work_item(&database, invalid, None)
         .await
         .unwrap_err();
     assert_eq!(error.code(), "illegal_birth");
@@ -610,7 +619,7 @@ async fn validation_failure_rolls_back_counters_and_typed_edits_advance_revision
         .unwrap();
     assert_eq!((project.seq_counter, project.state_revision), (20, 7));
 
-    let id = work_items::create(&database, create_input("  New item  "), None)
+    let id = create_work_item(&database, create_input("  New item  "), None)
         .await
         .unwrap();
     let created = issue::Entity::find_by_id(&id)
@@ -624,9 +633,9 @@ async fn validation_failure_rolls_back_counters_and_typed_edits_advance_revision
     assert_eq!(created.state_revision, 8);
     assert!(!created.rank.is_empty());
 
-    work_items::update(
+    update_work_item(
         &database,
-        work_items::UpdateWorkItem {
+        UpdateWorkItem {
             id: id.clone(),
             name: Some("Renamed".to_owned()),
             description: Some("Body".to_owned()),
@@ -648,9 +657,9 @@ async fn validation_failure_rolls_back_counters_and_typed_edits_advance_revision
     assert_eq!(updated.issue_type_id, OTHER_TASK_TYPE);
     assert_eq!(updated.state_revision, 9);
 
-    let wrong_level = work_items::update(
+    let wrong_level = update_work_item(
         &database,
-        work_items::UpdateWorkItem {
+        UpdateWorkItem {
             id,
             name: None,
             description: None,
@@ -666,9 +675,10 @@ async fn validation_failure_rolls_back_counters_and_typed_edits_advance_revision
 #[tokio::test]
 async fn create_work_item_accepts_a_top_level_module_type() {
     let (_directory, database) = fixture().await;
-    let id = work_items::create(
+    let id = create_work_item(
         &database,
-        work_items::CreateWorkItem {
+        CreateWorkItem {
+            sprint_id: None,
             project_id: PROJECT.to_owned(),
             name: "  General  ".to_owned(),
             issue_type_id: MODULE_TYPE.to_owned(),
@@ -712,12 +722,10 @@ async fn hierarchy_create_reparent_detach_repairs_deep_module_ancestry_across_re
 
     let mut root_input = create_input("Root");
     root_input.parent_id = Some("20000000-0000-0000-0000-000000000001".to_owned());
-    let root = work_items::create(&database, root_input, None)
-        .await
-        .unwrap();
+    let root = create_work_item(&database, root_input, None).await.unwrap();
     let mut child_input = create_input("Child");
     child_input.parent_id = Some(root.clone());
-    let child = work_items::create(&database, child_input, None)
+    let child = create_work_item(&database, child_input, None)
         .await
         .unwrap();
     database
@@ -728,12 +736,12 @@ async fn hierarchy_create_reparent_detach_repairs_deep_module_ancestry_across_re
         .unwrap();
     let mut nested_child_input = create_input("Nested child");
     nested_child_input.parent_id = Some("60000000-0000-0000-0000-000000000001".to_owned());
-    let nested_child = work_items::create(&database, nested_child_input, None)
+    let nested_child = create_work_item(&database, nested_child_input, None)
         .await
         .unwrap();
     let mut unrelated_input = create_input("Unrelated");
     unrelated_input.parent_id = Some("20000000-0000-0000-0000-000000000001".to_owned());
-    let unrelated = work_items::create(&database, unrelated_input, None)
+    let unrelated = create_work_item(&database, unrelated_input, None)
         .await
         .unwrap();
     let unrelated_before = issue::Entity::find_by_id(&unrelated)
@@ -742,9 +750,9 @@ async fn hierarchy_create_reparent_detach_repairs_deep_module_ancestry_across_re
         .unwrap()
         .unwrap();
 
-    hierarchy::reparent(
+    reparent_work_item(
         &database,
-        hierarchy::ReparentWorkItem {
+        ReparentWorkItem {
             id: root.clone(),
             parent_id: Some("20000000-0000-0000-0000-000000000002".to_owned()),
             before_id: Some("50000000-0000-0000-0000-000000000001".to_owned()),
@@ -803,9 +811,9 @@ async fn hierarchy_create_reparent_detach_repairs_deep_module_ancestry_across_re
     let database = open_for_commands(&directory.path().join("state.db"))
         .await
         .unwrap();
-    hierarchy::reparent(
+    reparent_work_item(
         &database,
-        hierarchy::ReparentWorkItem {
+        ReparentWorkItem {
             id: root.clone(),
             parent_id: None,
             before_id: None,
@@ -880,9 +888,9 @@ async fn live_worktrees_block_cross_module_reparent_and_detach_atomically() {
                 .unwrap()
                 .unwrap();
 
-            let error = hierarchy::reparent(
+            let error = reparent_work_item(
                 &database,
-                hierarchy::ReparentWorkItem {
+                ReparentWorkItem {
                     id: issue_before.id.clone(),
                     parent_id: destination,
                     before_id: None,
@@ -945,9 +953,9 @@ async fn a_live_worktree_allows_same_module_reparenting() {
         .await
         .unwrap();
 
-    hierarchy::reparent(
+    reparent_work_item(
         &database,
-        hierarchy::ReparentWorkItem {
+        ReparentWorkItem {
             id: "50000000000000000000000000000003".to_owned(),
             parent_id: Some("50000000000000000000000000000002".to_owned()),
             before_id: None,
@@ -972,9 +980,9 @@ async fn a_live_worktree_allows_same_module_reparenting() {
         Some("20000000000000000000000000000001")
     );
 
-    hierarchy::reparent(
+    reparent_work_item(
         &database,
-        hierarchy::ReparentWorkItem {
+        ReparentWorkItem {
             id: moved.id.clone(),
             parent_id: moved.parent_id.clone(),
             before_id: Some("50000000000000000000000000000004".to_owned()),
@@ -1012,12 +1020,10 @@ async fn invalid_hierarchy_targets_and_foreign_creation_are_atomic() {
         .unwrap();
     let mut root_input = create_input("Root");
     root_input.parent_id = Some("20000000000000000000000000000001".to_owned());
-    let root = work_items::create(&database, root_input, None)
-        .await
-        .unwrap();
+    let root = create_work_item(&database, root_input, None).await.unwrap();
     let mut child_input = create_input("Child");
     child_input.parent_id = Some(root.clone());
-    let child = work_items::create(&database, child_input, None)
+    let child = create_work_item(&database, child_input, None)
         .await
         .unwrap();
     let before = issue::Entity::find()
@@ -1039,9 +1045,9 @@ async fn invalid_hierarchy_targets_and_foreign_creation_are_atomic() {
         "21000000000000000000000000000001".to_owned(),
         "ffffffffffffffffffffffffffffffff".to_owned(),
     ] {
-        assert!(hierarchy::reparent(
+        assert!(reparent_work_item(
             &database,
-            hierarchy::ReparentWorkItem {
+            ReparentWorkItem {
                 id: root.clone(),
                 parent_id: Some(parent_id),
                 before_id: None,
@@ -1081,7 +1087,7 @@ async fn invalid_hierarchy_targets_and_foreign_creation_are_atomic() {
         let mut invalid_create = create_input("Rejected");
         invalid_create.parent_id = Some(parent_id.to_owned());
         assert_eq!(
-            work_items::create(&database, invalid_create, None)
+            create_work_item(&database, invalid_create, None)
                 .await
                 .unwrap_err()
                 .code(),
@@ -1101,19 +1107,19 @@ async fn invalid_hierarchy_targets_and_foreign_creation_are_atomic() {
 #[tokio::test]
 async fn task_reorder_matches_django_boundaries_and_rolls_back_invalid_neighbors() {
     let (_directory, database) = fixture().await;
-    let a = work_items::create(&database, create_input("A"), None)
+    let a = create_work_item(&database, create_input("A"), None)
         .await
         .unwrap();
-    let b = work_items::create(&database, create_input("B"), None)
+    let b = create_work_item(&database, create_input("B"), None)
         .await
         .unwrap();
-    let c = work_items::create(&database, create_input("C"), None)
+    let c = create_work_item(&database, create_input("C"), None)
         .await
         .unwrap();
 
-    reorder::reorder_work_item(
+    reorder_work_item(
         &database,
-        reorder::ReorderWorkItem {
+        ReorderWorkItem {
             id: c.clone(),
             before_id: None,
             after_id: Some(a.clone()),
@@ -1135,9 +1141,9 @@ async fn task_reorder_matches_django_boundaries_and_rolls_back_invalid_neighbors
         .unwrap();
     assert!(top.rank < first.rank);
 
-    reorder::reorder_work_item(
+    reorder_work_item(
         &database,
-        reorder::ReorderWorkItem {
+        ReorderWorkItem {
             id: c.clone(),
             before_id: Some(b.clone()),
             after_id: None,
@@ -1171,9 +1177,9 @@ async fn task_reorder_matches_django_boundaries_and_rolls_back_invalid_neighbors
         .unwrap()
         .unwrap()
         .state_revision;
-    let invalid = reorder::reorder_work_item(
+    let invalid = reorder_work_item(
         &database,
-        reorder::ReorderWorkItem {
+        ReorderWorkItem {
             id: a,
             before_id: Some(c),
             after_id: Some(b),
@@ -1214,13 +1220,13 @@ async fn task_reorder_matches_django_boundaries_and_rolls_back_invalid_neighbors
 #[tokio::test]
 async fn task_reorder_repairs_duplicate_sibling_ranks() {
     let (_directory, database) = fixture().await;
-    let a = work_items::create(&database, create_input("A"), None)
+    let a = create_work_item(&database, create_input("A"), None)
         .await
         .unwrap();
-    let b = work_items::create(&database, create_input("B"), None)
+    let b = create_work_item(&database, create_input("B"), None)
         .await
         .unwrap();
-    let c = work_items::create(&database, create_input("C"), None)
+    let c = create_work_item(&database, create_input("C"), None)
         .await
         .unwrap();
 
@@ -1235,9 +1241,9 @@ async fn task_reorder_repairs_duplicate_sibling_ranks() {
         active.update(&database).await.unwrap();
     }
 
-    reorder::reorder_work_item(
+    reorder_work_item(
         &database,
-        reorder::ReorderWorkItem {
+        ReorderWorkItem {
             id: c.clone(),
             before_id: Some(b.clone()),
             after_id: Some(a.clone()),
@@ -1297,9 +1303,9 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
         .unwrap();
     }
 
-    let stale = reorder::reorder_module_presentation(
+    let stale = reorder_module_presentation(
         &database,
-        reorder::ReorderWorkItem {
+        ReorderWorkItem {
             id: ids[0].to_owned(),
             before_id: None,
             after_id: Some(ids[2].to_owned()),
@@ -1317,9 +1323,9 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
         .iter()
         .all(|row| row.rank.is_empty()));
 
-    let inverted = reorder::reorder_module_presentation(
+    let inverted = reorder_module_presentation(
         &database,
-        reorder::ReorderWorkItem {
+        ReorderWorkItem {
             id: ids[0].to_owned(),
             before_id: Some(ids[1].to_owned()),
             after_id: Some(ids[2].to_owned()),
@@ -1337,9 +1343,9 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
         .iter()
         .all(|row| row.rank.is_empty()));
 
-    reorder::reorder_module_presentation(
+    reorder_module_presentation(
         &database,
-        reorder::ReorderWorkItem {
+        ReorderWorkItem {
             id: ids[0].to_owned(),
             before_id: None,
             after_id: Some(ids[2].to_owned()),
@@ -1364,9 +1370,9 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
     assert_eq!(durable_order, ["A", "C", "B"]);
 
     let fixed = module_presentation_ranks(&reopened).await;
-    reorder::reorder_module_presentation(
+    reorder_module_presentation(
         &reopened,
-        reorder::ReorderWorkItem {
+        ReorderWorkItem {
             id: ids[0].to_owned(),
             before_id: Some(ids[2].to_owned()),
             after_id: Some(ids[1].to_owned()),
@@ -1385,20 +1391,20 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
 #[tokio::test]
 async fn archive_cascades_delete_rejects_children_and_attachment_materializes_first() {
     let (directory, database) = fixture().await;
-    let parent = work_items::create(&database, create_input("Parent"), None)
+    let parent = create_work_item(&database, create_input("Parent"), None)
         .await
         .unwrap();
     let mut child_input = create_input("Child");
     child_input.parent_id = Some(parent.clone());
-    let child = work_items::create(&database, child_input, None)
+    let child = create_work_item(&database, child_input, None)
         .await
         .unwrap();
 
-    let conflict = work_items::delete(&database, &parent, None)
+    let conflict = delete_work_item(&database, &parent, None)
         .await
         .unwrap_err();
     assert_eq!(conflict.code(), "conflict");
-    work_items::archive(&database, &parent, None).await.unwrap();
+    archive_work_item(&database, &parent, None).await.unwrap();
     assert!(
         issue::Entity::find_by_id(&parent)
             .one(&database)
@@ -1418,10 +1424,10 @@ async fn archive_cascades_delete_rejects_children_and_attachment_materializes_fi
 
     let blocked_root = directory.path().join("not-a-directory");
     std::fs::write(&blocked_root, b"occupied").unwrap();
-    let failed = attachments::create(
+    let failed = create_attachment(
         &database,
-        &attachments::AttachmentStorage::new(blocked_root),
-        attachments::CreateAttachment {
+        &AttachmentStorage::new(blocked_root),
+        CreateAttachment {
             issue_id: child.clone(),
             filename: "lost.txt".to_owned(),
             mime_type: Some("text/plain".to_owned()),
@@ -1431,16 +1437,16 @@ async fn archive_cascades_delete_rejects_children_and_attachment_materializes_fi
     .await
     .unwrap_err();
     assert_eq!(failed.code(), "storage_failed");
-    assert!(attachments::list(&database, &child)
+    assert!(list_attachments(&database, &child)
         .await
         .unwrap()
         .is_empty());
 
-    let storage = attachments::AttachmentStorage::new(directory.path().join("media"));
-    let created = attachments::create(
+    let storage = AttachmentStorage::new(directory.path().join("media"));
+    let created = create_attachment(
         &database,
         &storage,
-        attachments::CreateAttachment {
+        CreateAttachment {
             issue_id: child.clone(),
             filename: "../note.txt".to_owned(),
             mime_type: Some("text/plain".to_owned()),
@@ -1457,7 +1463,7 @@ async fn archive_cascades_delete_rejects_children_and_attachment_materializes_fi
         std::fs::read(directory.path().join("media").join(&created.file)).unwrap(),
         b"hello"
     );
-    assert_eq!(attachments::list(&database, &child).await.unwrap().len(), 1);
+    assert_eq!(list_attachments(&database, &child).await.unwrap().len(), 1);
 
     let hyphenated = uuid::Uuid::parse_str(&child)
         .unwrap()
@@ -1472,7 +1478,7 @@ async fn archive_cascades_delete_rejects_children_and_attachment_materializes_fi
         .await
         .unwrap();
 
-    work_items::delete(&database, &child, None).await.unwrap();
+    delete_work_item(&database, &child, None).await.unwrap();
     assert!(attachment::Entity::find_by_id(created.id)
         .one(&database)
         .await
@@ -1490,7 +1496,7 @@ async fn archive_cascades_delete_rejects_children_and_attachment_materializes_fi
         vec!["doc-other"],
         "deleting a task removes its own document metadata only"
     );
-    work_items::delete(&database, &parent, None).await.unwrap();
+    delete_work_item(&database, &parent, None).await.unwrap();
     assert!(design_document::Entity::find()
         .all(&database)
         .await
@@ -1663,6 +1669,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
         "update_sprint",
         "worktrackerSprintCreateOne",
         "reorder_module_presentation",
+        "reorder_sprint",
         "reorder_work_item",
         "delete_work_item",
         "remove_state_from_issue_type_workflow",
@@ -1841,10 +1848,10 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
         ["A", "C", "B"]
     );
 
-    let task_a = work_items::create(&database, create_input("GraphQL A"), None)
+    let task_a = create_work_item(&database, create_input("GraphQL A"), None)
         .await
         .unwrap();
-    let task_b = work_items::create(&database, create_input("GraphQL B"), None)
+    let task_b = create_work_item(&database, create_input("GraphQL B"), None)
         .await
         .unwrap();
     let caller_update: serde_json::Value = serde_json::from_str(
@@ -2040,24 +2047,24 @@ async fn transitions_preserve_human_agent_reachability_and_cancelled_subtrees() 
         ))
         .await
         .unwrap();
-    let parent = work_items::create(&database, create_input("Parent"), None)
+    let parent = create_work_item(&database, create_input("Parent"), None)
         .await
         .unwrap();
     let mut child_input = create_input("Child");
     child_input.parent_id = Some(parent.clone());
-    let child = work_items::create(&database, child_input, None)
+    let child = create_work_item(&database, child_input, None)
         .await
         .unwrap();
-    blockers::replace(&database, &parent, vec![child.clone()])
+    replace_blockers(&database, &parent, vec![child.clone()])
         .await
         .unwrap();
 
-    let denied = workflow::transition(
+    let denied = transition(
         &database,
-        workflow::TransitionWorkItem {
+        TransitionWorkItem {
             id: parent.clone(),
             target_state_id: READY.to_owned(),
-            origin: workflow::TransitionOrigin::Agent,
+            origin: TransitionOrigin::Agent,
         },
         None,
     )
@@ -2067,23 +2074,23 @@ async fn transitions_preserve_human_agent_reachability_and_cancelled_subtrees() 
     assert_eq!(denied.from_state(), Some("Backlog"));
     assert_eq!(denied.to_state(), Some("Ready"));
 
-    workflow::transition(
+    transition(
         &database,
-        workflow::TransitionWorkItem {
+        TransitionWorkItem {
             id: parent.clone(),
             target_state_id: READY.to_owned(),
-            origin: workflow::TransitionOrigin::Human,
+            origin: TransitionOrigin::Human,
         },
         None,
     )
     .await
     .unwrap();
-    workflow::transition(
+    transition(
         &database,
-        workflow::TransitionWorkItem {
+        TransitionWorkItem {
             id: parent.clone(),
             target_state_id: CANCELLED.to_owned(),
-            origin: workflow::TransitionOrigin::Agent,
+            origin: TransitionOrigin::Agent,
         },
         None,
     )
@@ -2106,12 +2113,12 @@ async fn transitions_preserve_human_agent_reachability_and_cancelled_subtrees() 
             .is_archived
     );
 
-    workflow::transition(
+    transition(
         &database,
-        workflow::TransitionWorkItem {
+        TransitionWorkItem {
             id: parent.clone(),
             target_state_id: READY.to_owned(),
-            origin: workflow::TransitionOrigin::Human,
+            origin: TransitionOrigin::Human,
         },
         None,
     )
@@ -2132,12 +2139,12 @@ async fn transitions_preserve_human_agent_reachability_and_cancelled_subtrees() 
             .is_archived
     );
 
-    let illegal = workflow::transition(
+    let illegal = transition(
         &database,
-        workflow::TransitionWorkItem {
+        TransitionWorkItem {
             id: parent,
             target_state_id: DONE.to_owned(),
-            origin: workflow::TransitionOrigin::Human,
+            origin: TransitionOrigin::Human,
         },
         None,
     )
@@ -2154,15 +2161,13 @@ async fn protected_and_referenced_states_cannot_be_deleted() {
             ('{READY}', '{PROJECT}', 'Ready', 'started', '', 2, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
             ('{CANCELLED}', '{PROJECT}', 'Custom', 'started', '', 3, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     "#)).await.unwrap();
-    let protected = state_configuration::delete_state(&database, READY)
-        .await
-        .unwrap_err();
+    let protected = delete_state(&database, READY).await.unwrap_err();
     assert_eq!(protected.code(), "conflict");
     assert!(protected.to_string().contains("protected"));
 
-    workflow::create_transition(
+    create_transition(
         &database,
-        workflow::NewTransition {
+        NewTransition {
             issue_type_id: TASK_TYPE.to_owned(),
             from_state_id: BACKLOG.to_owned(),
             to_state_id: CANCELLED.to_owned(),
@@ -2173,14 +2178,12 @@ async fn protected_and_referenced_states_cannot_be_deleted() {
     )
     .await
     .unwrap();
-    let referenced = state_configuration::delete_state(&database, CANCELLED)
-        .await
-        .unwrap_err();
+    let referenced = delete_state(&database, CANCELLED).await.unwrap_err();
     assert_eq!(referenced.code(), "conflict");
     assert!(referenced.to_string().contains("workflow configuration"));
-    workflow::delete_transition(
+    delete_transition(
         &database,
-        workflow::RevisionedTransition {
+        RevisionedTransition {
             issue_type_id: TASK_TYPE.to_owned(),
             from_state_id: BACKLOG.to_owned(),
             to_state_id: CANCELLED.to_owned(),
@@ -2189,9 +2192,7 @@ async fn protected_and_referenced_states_cannot_be_deleted() {
     )
     .await
     .unwrap();
-    state_configuration::delete_state(&database, CANCELLED)
-        .await
-        .unwrap();
+    delete_state(&database, CANCELLED).await.unwrap();
     assert!(state::Entity::find_by_id(CANCELLED)
         .one(&database)
         .await
@@ -2209,9 +2210,9 @@ async fn workflow_configuration_compare_and_set_is_atomic_and_prunes_unreachable
         .await
         .unwrap();
 
-    workflow::create_transition(
+    create_transition(
         &database,
-        workflow::NewTransition {
+        NewTransition {
             issue_type_id: TASK_TYPE.to_owned(),
             from_state_id: BACKLOG.to_owned(),
             to_state_id: READY.to_owned(),
@@ -2222,9 +2223,9 @@ async fn workflow_configuration_compare_and_set_is_atomic_and_prunes_unreachable
     )
     .await
     .unwrap();
-    let stale = workflow::create_transition(
+    let stale = create_transition(
         &database,
-        workflow::NewTransition {
+        NewTransition {
             issue_type_id: TASK_TYPE.to_owned(),
             from_state_id: READY.to_owned(),
             to_state_id: DONE.to_owned(),
@@ -2244,27 +2245,27 @@ async fn workflow_configuration_compare_and_set_is_atomic_and_prunes_unreachable
         1
     );
 
-    workflow::patch_launch_binding(
+    patch_launch_binding(
         &database,
-        workflow::PatchLaunchBinding {
+        PatchLaunchBinding {
             issue_type_id: TASK_TYPE.to_owned(),
             state_id: READY.to_owned(),
             workflow_revision: 2,
-            prompt: workflow::PatchValue::Value("Implement the work item.".to_owned()),
-            required_skills: workflow::PatchValue::Unset,
-            stage_skills: workflow::PatchValue::Unset,
-            profile: workflow::PatchValue::Unset,
-            model_id: workflow::PatchValue::Unset,
-            reasoning_id: workflow::PatchValue::Unset,
-            auto_start: workflow::PatchValue::Value(true),
-            subtree_run_enabled: workflow::PatchValue::Unset,
+            prompt: PatchValue::Value("Implement the work item.".to_owned()),
+            required_skills: PatchValue::Unset,
+            stage_skills: PatchValue::Unset,
+            profile: PatchValue::Unset,
+            model_id: PatchValue::Unset,
+            reasoning_id: PatchValue::Unset,
+            auto_start: PatchValue::Value(true),
+            subtree_run_enabled: PatchValue::Unset,
         },
     )
     .await
     .unwrap();
-    catalog::update_issue_type(
+    update_issue_type(
         &database,
-        catalog::UpdateIssueType {
+        UpdateIssueType {
             id: TASK_TYPE.to_owned(),
             name: None,
             color: None,
@@ -2313,9 +2314,9 @@ async fn concurrent_workflow_edits_have_one_winner_and_one_typed_stale_result() 
         .map(|(target, allowed)| {
             let database = database.clone();
             tokio::spawn(async move {
-                workflow::create_transition(
+                create_transition(
                     &database,
-                    workflow::NewTransition {
+                    NewTransition {
                         issue_type_id: TASK_TYPE.to_owned(),
                         from_state_id: BACKLOG.to_owned(),
                         to_state_id: target.to_owned(),
@@ -2362,13 +2363,13 @@ async fn concurrent_workflow_edits_have_one_winner_and_one_typed_stale_result() 
 #[tokio::test]
 async fn blocker_replacement_rejects_bad_graphs_atomically_and_survives_restart() {
     let (directory, database) = fixture().await;
-    let a = work_items::create(&database, create_input("A"), None)
+    let a = create_work_item(&database, create_input("A"), None)
         .await
         .unwrap();
-    let b = work_items::create(&database, create_input("B"), None)
+    let b = create_work_item(&database, create_input("B"), None)
         .await
         .unwrap();
-    let c = work_items::create(&database, create_input("C"), None)
+    let c = create_work_item(&database, create_input("C"), None)
         .await
         .unwrap();
     let foreign = "50000000000000000000000000000009";
@@ -2377,10 +2378,10 @@ async fn blocker_replacement_rejects_bad_graphs_atomically_and_survives_restart(
             ('11000000000000000000000000000000', 'Other', 'OTH', '', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
         INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, parent_id, module_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, created_at, updated_at, workspace_tab_order) VALUES ('{foreign}', '11000000000000000000000000000000', 'task', '{TASK_TYPE}', NULL, NULL, NULL, 0, 'Foreign', 1, 0, 'A', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '[]')
     "#)).await.unwrap();
-    blockers::replace(&database, &a, vec![b.clone()])
+    replace_blockers(&database, &a, vec![b.clone()])
         .await
         .unwrap();
-    blockers::replace(&database, &b, vec![c.clone()])
+    replace_blockers(&database, &b, vec![c.clone()])
         .await
         .unwrap();
 
@@ -2394,34 +2395,31 @@ async fn blocker_replacement_rejects_bad_graphs_atomically_and_survives_restart(
         ),
         (vec![foreign.to_owned()], "foreign_scope"),
     ] {
-        let error = blockers::replace(&database, &c, candidate)
+        let error = replace_blockers(&database, &c, candidate)
             .await
             .unwrap_err();
         assert_eq!(error.code(), code);
-        assert!(blockers::list(&database, &c).await.unwrap().is_empty());
+        assert!(list_blockers(&database, &c).await.unwrap().is_empty());
     }
 
     drop(database);
     let reopened = open_for_commands(&directory.path().join("state.db"))
         .await
         .unwrap();
-    assert_eq!(
-        blockers::list(&reopened, &a).await.unwrap(),
-        vec![b.clone()]
-    );
-    assert_eq!(blockers::list(&reopened, &b).await.unwrap(), vec![c]);
+    assert_eq!(list_blockers(&reopened, &a).await.unwrap(), vec![b.clone()]);
+    assert_eq!(list_blockers(&reopened, &b).await.unwrap(), vec![c]);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn additive_blocker_changes_serialize_without_losing_edges() {
     let (_directory, database) = fixture().await;
-    let task = work_items::create(&database, create_input("Blocked"), None)
+    let task = create_work_item(&database, create_input("Blocked"), None)
         .await
         .unwrap();
-    let first = work_items::create(&database, create_input("First blocker"), None)
+    let first = create_work_item(&database, create_input("First blocker"), None)
         .await
         .unwrap();
-    let second = work_items::create(&database, create_input("Second blocker"), None)
+    let second = create_work_item(&database, create_input("Second blocker"), None)
         .await
         .unwrap();
 
@@ -2429,9 +2427,9 @@ async fn additive_blocker_changes_serialize_without_losing_edges() {
         let database = database.clone();
         let task = task.clone();
         tokio::spawn(async move {
-            blockers::change(
+            change_blockers(
                 &database,
-                blockers::BlockerChange::Add {
+                BlockerChange::Add {
                     task_id: task,
                     blocker_id,
                 },
@@ -2443,7 +2441,7 @@ async fn additive_blocker_changes_serialize_without_losing_edges() {
         addition.await.unwrap().unwrap();
     }
 
-    let mut committed = blockers::list(&database, &task).await.unwrap();
+    let mut committed = list_blockers(&database, &task).await.unwrap();
     committed.sort();
     let mut expected = vec![first.clone(), second];
     expected.sort();
@@ -2455,9 +2453,9 @@ async fn additive_blocker_changes_serialize_without_losing_edges() {
         .unwrap()
         .unwrap()
         .state_revision;
-    blockers::change(
+    change_blockers(
         &database,
-        blockers::BlockerChange::Add {
+        BlockerChange::Add {
             task_id: task,
             blocker_id: first,
         },
@@ -2478,15 +2476,15 @@ async fn description_appends_serialize_without_losing_content() {
     let (_directory, database) = fixture().await;
     let mut input = create_input("Append target");
     input.description = Some("Original".to_owned());
-    let task = work_items::create(&database, input, None).await.unwrap();
+    let task = create_work_item(&database, input, None).await.unwrap();
 
     let appends = ["First", "Second"].map(|new_content| {
         let database = database.clone();
         let task = task.clone();
         tokio::spawn(async move {
-            work_items::append_description(
+            append_description(
                 &database,
-                work_items::AppendDescription {
+                AppendDescription {
                     id: task,
                     new_content: new_content.to_owned(),
                 },
@@ -2522,7 +2520,7 @@ async fn review_finding_creation_owns_parent_policy_evidence_and_serial_relation
         ))
         .await
         .unwrap();
-    let parent = work_items::create(&database, create_input("Reviewed story"), None)
+    let parent = create_work_item(&database, create_input("Reviewed story"), None)
         .await
         .unwrap();
     database
@@ -2532,9 +2530,9 @@ async fn review_finding_creation_owns_parent_policy_evidence_and_serial_relation
         .await
         .unwrap();
 
-    let finding = work_items::create_review_finding(
+    let finding = create_review_finding(
         &database,
-        work_items::CreateReviewFinding {
+        CreateReviewFinding {
             project_id: PROJECT.to_owned(),
             parent_id: parent.clone(),
             name: "Controller ownership".to_owned(),
@@ -2559,9 +2557,9 @@ async fn review_finding_creation_owns_parent_policy_evidence_and_serial_relation
         row.description,
         "Path: studio/src-tauri/src/work_management/mcp/dispatch.rs\nLines: 10-12\nNote: Policy belongs in the transaction."
     );
-    let next_finding = work_items::create_review_finding(
+    let next_finding = create_review_finding(
         &database,
-        work_items::CreateReviewFinding {
+        CreateReviewFinding {
             project_id: PROJECT.to_owned(),
             parent_id: parent.clone(),
             name: "Second finding".to_owned(),
@@ -2574,18 +2572,15 @@ async fn review_finding_creation_owns_parent_policy_evidence_and_serial_relation
     )
     .await
     .unwrap();
-    assert!(blockers::list(&database, &finding)
-        .await
-        .unwrap()
-        .is_empty());
+    assert!(list_blockers(&database, &finding).await.unwrap().is_empty());
     assert_eq!(
-        blockers::list(&database, &next_finding).await.unwrap(),
+        list_blockers(&database, &next_finding).await.unwrap(),
         [finding]
     );
 
-    let error = work_items::create_review_finding(
+    let error = create_review_finding(
         &database,
-        work_items::CreateReviewFinding {
+        CreateReviewFinding {
             project_id: PROJECT.to_owned(),
             parent_id: parent,
             name: "Bad evidence".to_owned(),
@@ -2602,22 +2597,80 @@ async fn review_finding_creation_owns_parent_policy_evidence_and_serial_relation
 }
 
 #[tokio::test]
+async fn required_skill_save_gate_uses_catalog_spelling_even_when_disk_availability_differs() {
+    use ticketry_provider::{
+        check_skill_availability, Provider, SkillAvailabilityRequest, SkillAvailabilityStatus,
+        SkillSearchEnvironment,
+    };
+
+    let (directory, database) = fixture().await;
+    let module = directory.path().join("module");
+    let skill_root = module.join("skills");
+    for name in ["outside-catalog", "TDD"] {
+        std::fs::create_dir_all(skill_root.join(name)).unwrap();
+        std::fs::write(skill_root.join(name).join("SKILL.md"), "# skill\n").unwrap();
+    }
+    let report = check_skill_availability(&SkillAvailabilityRequest {
+        provider: Provider::Codex,
+        working_root: Some(module),
+        names: vec![
+            "outside-catalog".into(),
+            "tdd".into(),
+            "grill-with-docs".into(),
+        ],
+        environment: SkillSearchEnvironment {
+            home: Some(directory.path().join("empty-home")),
+            ..SkillSearchEnvironment::default()
+        },
+    });
+    assert_eq!(report.skills[0].status, SkillAvailabilityStatus::Available);
+    assert_eq!(report.skills[1].status, SkillAvailabilityStatus::Available);
+    assert_eq!(report.skills[1].installed_name.as_deref(), Some("TDD"));
+    assert_eq!(report.skills[2].status, SkillAvailabilityStatus::Missing);
+
+    for identifier in ["outside-catalog", "TDD", "grill-with-docs"] {
+        let result = patch_launch_binding(
+            &database,
+            PatchLaunchBinding {
+                issue_type_id: TASK_TYPE.to_owned(),
+                state_id: BACKLOG.to_owned(),
+                workflow_revision: 1,
+                prompt: PatchValue::Value("Implement the ticket.".to_owned()),
+                required_skills: PatchValue::Value(vec![identifier.to_owned()]),
+                stage_skills: PatchValue::Unset,
+                profile: PatchValue::Unset,
+                model_id: PatchValue::Unset,
+                reasoning_id: PatchValue::Unset,
+                auto_start: PatchValue::Unset,
+                subtree_run_enabled: PatchValue::Unset,
+            },
+        )
+        .await;
+        if identifier == "grill-with-docs" {
+            result.expect("a pinned skill may be saved even when unavailable on disk");
+        } else {
+            assert_eq!(result.unwrap_err().code(), "invalid_required_skills");
+        }
+    }
+}
+
+#[tokio::test]
 async fn launch_binding_patch_preserves_omitted_fields_and_skips_noop_revision() {
     let (_directory, database) = fixture().await;
-    let created = workflow::patch_launch_binding(
+    let created = patch_launch_binding(
         &database,
-        workflow::PatchLaunchBinding {
+        PatchLaunchBinding {
             issue_type_id: TASK_TYPE.to_owned(),
             state_id: BACKLOG.to_owned(),
             workflow_revision: 1,
-            prompt: workflow::PatchValue::Value("Initial prompt".to_owned()),
-            required_skills: workflow::PatchValue::Value(vec!["tdd".to_owned()]),
-            stage_skills: workflow::PatchValue::Unset,
-            profile: workflow::PatchValue::Unset,
-            model_id: workflow::PatchValue::Unset,
-            reasoning_id: workflow::PatchValue::Unset,
-            auto_start: workflow::PatchValue::Unset,
-            subtree_run_enabled: workflow::PatchValue::Unset,
+            prompt: PatchValue::Value("Initial prompt".to_owned()),
+            required_skills: PatchValue::Value(vec!["tdd".to_owned()]),
+            stage_skills: PatchValue::Unset,
+            profile: PatchValue::Unset,
+            model_id: PatchValue::Unset,
+            reasoning_id: PatchValue::Unset,
+            auto_start: PatchValue::Unset,
+            subtree_run_enabled: PatchValue::Unset,
         },
     )
     .await
@@ -2630,20 +2683,20 @@ async fn launch_binding_patch_preserves_omitted_fields_and_skips_noop_revision()
         .workflow_revision;
     assert_eq!(revision_after_create, 2);
 
-    let unchanged = workflow::patch_launch_binding(
+    let unchanged = patch_launch_binding(
         &database,
-        workflow::PatchLaunchBinding {
+        PatchLaunchBinding {
             issue_type_id: TASK_TYPE.to_owned(),
             state_id: BACKLOG.to_owned(),
             workflow_revision: 2,
-            prompt: workflow::PatchValue::Unset,
-            required_skills: workflow::PatchValue::Unset,
-            stage_skills: workflow::PatchValue::Unset,
-            profile: workflow::PatchValue::Unset,
-            model_id: workflow::PatchValue::Unset,
-            reasoning_id: workflow::PatchValue::Unset,
-            auto_start: workflow::PatchValue::Value(false),
-            subtree_run_enabled: workflow::PatchValue::Unset,
+            prompt: PatchValue::Unset,
+            required_skills: PatchValue::Unset,
+            stage_skills: PatchValue::Unset,
+            profile: PatchValue::Unset,
+            model_id: PatchValue::Unset,
+            reasoning_id: PatchValue::Unset,
+            auto_start: PatchValue::Value(false),
+            subtree_run_enabled: PatchValue::Unset,
         },
     )
     .await
@@ -2671,20 +2724,20 @@ async fn launch_binding_patch_preserves_omitted_fields_and_skips_noop_revision()
 #[tokio::test]
 async fn automation_flags_ride_the_launch_binding_patch_and_need_a_configured_binding() {
     let (_directory, database) = fixture().await;
-    let bare = workflow::patch_launch_binding(
+    let bare = patch_launch_binding(
         &database,
-        workflow::PatchLaunchBinding {
+        PatchLaunchBinding {
             issue_type_id: TASK_TYPE.to_owned(),
             state_id: BACKLOG.to_owned(),
             workflow_revision: 1,
-            prompt: workflow::PatchValue::Unset,
-            required_skills: workflow::PatchValue::Unset,
-            stage_skills: workflow::PatchValue::Unset,
-            profile: workflow::PatchValue::Unset,
-            model_id: workflow::PatchValue::Unset,
-            reasoning_id: workflow::PatchValue::Unset,
-            auto_start: workflow::PatchValue::Value(true),
-            subtree_run_enabled: workflow::PatchValue::Unset,
+            prompt: PatchValue::Unset,
+            required_skills: PatchValue::Unset,
+            stage_skills: PatchValue::Unset,
+            profile: PatchValue::Unset,
+            model_id: PatchValue::Unset,
+            reasoning_id: PatchValue::Unset,
+            auto_start: PatchValue::Value(true),
+            subtree_run_enabled: PatchValue::Unset,
         },
     )
     .await
@@ -2707,49 +2760,41 @@ async fn automation_flags_ride_the_launch_binding_patch_and_need_a_configured_bi
         1
     );
 
-    let id = workflow::patch_launch_binding(
+    let id = patch_launch_binding(
         &database,
-        workflow::PatchLaunchBinding {
+        PatchLaunchBinding {
             issue_type_id: TASK_TYPE.to_owned(),
             state_id: BACKLOG.to_owned(),
             workflow_revision: 1,
-            prompt: workflow::PatchValue::Value("Implement it.".to_owned()),
-            required_skills: workflow::PatchValue::Unset,
-            stage_skills: workflow::PatchValue::Unset,
-            profile: workflow::PatchValue::Unset,
-            model_id: workflow::PatchValue::Unset,
-            reasoning_id: workflow::PatchValue::Unset,
-            auto_start: workflow::PatchValue::Unset,
-            subtree_run_enabled: workflow::PatchValue::Unset,
+            prompt: PatchValue::Value("Implement it.".to_owned()),
+            required_skills: PatchValue::Unset,
+            stage_skills: PatchValue::Unset,
+            profile: PatchValue::Unset,
+            model_id: PatchValue::Unset,
+            reasoning_id: PatchValue::Unset,
+            auto_start: PatchValue::Unset,
+            subtree_run_enabled: PatchValue::Unset,
         },
     )
     .await
     .unwrap();
     for (revision, auto_start, subtree_run_enabled) in [
-        (
-            2,
-            workflow::PatchValue::Value(true),
-            workflow::PatchValue::Unset,
-        ),
-        (
-            3,
-            workflow::PatchValue::Unset,
-            workflow::PatchValue::Value(true),
-        ),
+        (2, PatchValue::Value(true), PatchValue::Unset),
+        (3, PatchValue::Unset, PatchValue::Value(true)),
     ] {
         assert_eq!(
-            workflow::patch_launch_binding(
+            patch_launch_binding(
                 &database,
-                workflow::PatchLaunchBinding {
+                PatchLaunchBinding {
                     issue_type_id: TASK_TYPE.to_owned(),
                     state_id: BACKLOG.to_owned(),
                     workflow_revision: revision,
-                    prompt: workflow::PatchValue::Unset,
-                    required_skills: workflow::PatchValue::Unset,
-                    stage_skills: workflow::PatchValue::Unset,
-                    profile: workflow::PatchValue::Unset,
-                    model_id: workflow::PatchValue::Unset,
-                    reasoning_id: workflow::PatchValue::Unset,
+                    prompt: PatchValue::Unset,
+                    required_skills: PatchValue::Unset,
+                    stage_skills: PatchValue::Unset,
+                    profile: PatchValue::Unset,
+                    model_id: PatchValue::Unset,
+                    reasoning_id: PatchValue::Unset,
                     auto_start,
                     subtree_run_enabled,
                 },
@@ -2778,9 +2823,9 @@ async fn transition_rows_reject_stale_revisions_and_unknown_rows() {
         ))
         .await
         .unwrap();
-    let missing = workflow::update_transition(
+    let missing = update_transition(
         &database,
-        workflow::TransitionPatch {
+        TransitionPatch {
             issue_type_id: TASK_TYPE.to_owned(),
             from_state_id: BACKLOG.to_owned(),
             to_state_id: READY.to_owned(),
@@ -2793,9 +2838,9 @@ async fn transition_rows_reject_stale_revisions_and_unknown_rows() {
     .unwrap_err();
     assert_eq!(missing.code(), "not_found");
     // The refused claim rolled back, so the revision the caller read still holds.
-    workflow::create_transition(
+    create_transition(
         &database,
-        workflow::NewTransition {
+        NewTransition {
             issue_type_id: TASK_TYPE.to_owned(),
             from_state_id: BACKLOG.to_owned(),
             to_state_id: READY.to_owned(),
@@ -2806,9 +2851,9 @@ async fn transition_rows_reject_stale_revisions_and_unknown_rows() {
     )
     .await
     .unwrap();
-    workflow::update_transition(
+    update_transition(
         &database,
-        workflow::TransitionPatch {
+        TransitionPatch {
             issue_type_id: TASK_TYPE.to_owned(),
             from_state_id: BACKLOG.to_owned(),
             to_state_id: READY.to_owned(),
@@ -2826,9 +2871,9 @@ async fn transition_rows_reject_stale_revisions_and_unknown_rows() {
         .unwrap();
     assert!(!transition.agent_allowed);
     assert!(transition.handoff);
-    let stale = workflow::delete_transition(
+    let stale = delete_transition(
         &database,
-        workflow::RevisionedTransition {
+        RevisionedTransition {
             issue_type_id: TASK_TYPE.to_owned(),
             from_state_id: BACKLOG.to_owned(),
             to_state_id: READY.to_owned(),

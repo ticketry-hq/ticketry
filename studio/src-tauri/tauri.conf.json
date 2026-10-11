@@ -4,9 +4,9 @@
   "version": "0.2.0",
   "identifier": "com.ticketry.desktop",
   "build": {
-    "beforeDevCommand": "npm run dev -- --host 127.0.0.1",
+    "beforeDevCommand": "bun run dev -- --host 127.0.0.1",
     "devUrl": "http://127.0.0.1:5174",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
   },
   "app": {

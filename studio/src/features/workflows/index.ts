@@ -70,3 +70,4 @@ export { deriveWorkflowImpact, workflowMemberStateIds } from "./selectors";
 export type { WorkflowEditorResources } from "./queries";
 export { useWorkflowEditorStore } from "./workflowEditorStore";
 export { setIssueTypeMetadata } from "./queries/issueTypeMetadata";
+export type { SkillAvailabilityResult } from "./skillAvailability";

@@ -358,9 +358,9 @@ fn the_legacy_profile_file_is_read_only_history() {
         }"#;
     fs::write(&path, original).unwrap();
 
-    let source = ticketry_work_management::legacy_source::locate(directory.path())
+    let source = ticketry_work_management::locate_legacy_module_links(directory.path())
         .expect("the live profile file is a supported legacy source");
-    let catalog = ticketry_work_management::legacy_source::read(&source).unwrap();
+    let catalog = ticketry_work_management::read_legacy_module_links(&source).unwrap();
 
     assert_eq!(
         catalog.profiles[0].module_links,
@@ -382,8 +382,8 @@ fn a_malformed_legacy_profile_file_is_refused_and_left_intact() {
     fs::write(&path, b"{broken").unwrap();
 
     let source =
-        ticketry_work_management::legacy_source::locate(directory.path()).expect("located");
-    let error = ticketry_work_management::legacy_source::read(&source)
+        ticketry_work_management::locate_legacy_module_links(directory.path()).expect("located");
+    let error = ticketry_work_management::read_legacy_module_links(&source)
         .expect_err("a malformed profile file cannot be adopted");
 
     assert_eq!(

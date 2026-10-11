@@ -51,6 +51,8 @@ import {
   type WorkItemInvalidator,
 } from "./workItemInvalidation";
 import { applyWorkflowStateFact } from "./workflowStateConvergence";
+import { createSprintInvalidator } from "./sprintInvalidation";
+import { compactWorktrackerId } from "../../../../shared/api/generatedWorktracker";
 import {
   createWorktreeInvalidator,
   refreshWorktreeHoldings,
@@ -105,6 +107,7 @@ export const statusStreamFeed = {
     // The subscription generation that owned the reset now in flight.
     let resetGeneration = 0;
     const invalidator: WorkItemInvalidator = createWorkItemInvalidator();
+    const sprints = createSprintInvalidator();
     const documents: DocumentInvalidator = createDocumentInvalidator();
     const worktrees: WorktreeInvalidator = createWorktreeInvalidator();
     const lostRuns = createLostRunNotifier();
@@ -210,6 +213,9 @@ export const statusStreamFeed = {
         case "work_item":
           invalidator.record(fact);
           return;
+        case "sprint":
+          if (compactWorktrackerId(fact.projectId) === compactWorktrackerId(projectId)) sprints.record(fact.projectId);
+          return;
         case "workflow_state":
           applyWorkflowStateFact(
             projectId,
@@ -260,6 +266,7 @@ export const statusStreamFeed = {
       // refetched, and only then is the supplied baseline installed.
       if (frame.project_id !== projectId) return;
       invalidator.cancel();
+      sprints.cancel();
       documents.cancel();
       worktrees.cancel();
       resetGeneration = generation;
@@ -331,6 +338,7 @@ export const statusStreamFeed = {
             // Replay is complete, so this is the reconnect boundary at which
             // capabilities outside the outbox refresh authoritatively.
             invalidator.flush();
+            sprints.flush();
             documents.flush();
             worktrees.flush();
             refreshDocumentRegistries();
@@ -408,6 +416,7 @@ export const statusStreamFeed = {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("online", onOnline);
       invalidator.cancel();
+      sprints.cancel();
       documents.cancel();
       worktrees.cancel();
       lostRuns.cancel();

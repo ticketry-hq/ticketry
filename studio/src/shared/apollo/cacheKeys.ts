@@ -5,6 +5,7 @@ import { compactWorktrackerId } from "../api/generatedWorktracker";
 const normalizedEntityKeyFields = {
   WorktrackerProject: ["id"],
   WorktrackerIssue: ["id"],
+  WorktrackerSprint: ["id"],
   WorktrackerIssueBlockedBy: ["id"],
   WorktrackerState: ["id"],
   WorktrackerIssuetype: ["id"],
@@ -59,7 +60,7 @@ export function normalizedEntityPolicies(): TypePolicies {
     fields: {
       title: {
         read: (serverTitle, { readField }) =>
-          readField<string>("acceptedTitle") ?? serverTitle,
+          readField<string>("user_title") ?? readField<string>("acceptedTitle") ?? serverTitle,
       },
     },
   };

@@ -11,6 +11,7 @@ const issueQuery = gql`
     name
     description
     state_revision: stateRevision
+    is_archived: isArchived
   }
   query RevisionGuardIssues {
     worktrackerIssue {
@@ -25,18 +26,20 @@ const cacheFragment = gql`
     name
     description
     stateRevision
+    isArchived
   }
 `;
 
 const ID = 'WorktrackerIssue:{"id":"issue-1091"}';
 
-function snapshot(stateRevision: number, name = `revision-${stateRevision}`) {
+function snapshot(stateRevision: number, name = `revision-${stateRevision}`, archived = false) {
   return {
     __typename: "WorktrackerIssue",
     id: "issue-1091",
     name,
     description: `description-${stateRevision}`,
     state_revision: stateRevision,
+    is_archived: archived,
   } as const;
 }
 
@@ -63,7 +66,7 @@ function cacheWith(existing: ReturnType<typeof snapshot>) {
   cache.writeFragment({
     id: ID,
     fragment: cacheFragment,
-    data: { ...existing, stateRevision: existing.state_revision },
+    data: { ...existing, stateRevision: existing.state_revision, isArchived: existing.is_archived },
   });
   return cache;
 }
@@ -90,6 +93,35 @@ describe("Work Item revision guard link", () => {
     });
   });
 
+  it("preserves the complete authoritative Story when a module fragment precedes the Story fragment", async () => {
+    const mixedQuery = gql`
+      fragment MinimalModule on WorktrackerIssue { id name state_revision: stateRevision }
+      fragment CompleteStory on WorktrackerIssue { id name description state_revision: stateRevision is_archived: isArchived }
+      query MixedModuleAndStories {
+        module { nodes { ...MinimalModule } }
+        worktrackerIssue { nodes { ...CompleteStory } }
+      }
+    `;
+    const cache = cacheWith(snapshot(7));
+    const response = new ApolloLink(() => new Observable((observer) => {
+      observer.next({ data: {
+        module: { __typename: "WorktrackerIssueConnection", nodes: [{ __typename: "WorktrackerIssue", id: "module-a", name: "Module", state_revision: 1 }] },
+        worktrackerIssue: { __typename: "WorktrackerIssueConnection", nodes: [snapshot(6, "stale Story")] },
+      } });
+      observer.complete();
+    }));
+    const client = new ApolloClient({ cache, link: ApolloLink.from([createIssueRevisionGuardLink(cache), response]) });
+    const result = await client.query<IssueQueryResult>({ query: mixedQuery, fetchPolicy: "network-only" });
+    expect(result.data!.worktrackerIssue.nodes[0]).toMatchObject({ name: "revision-7", description: "description-7", state_revision: 7 });
+    expect(cache.readFragment({ id: ID, fragment: cacheFragment })).toMatchObject({ description: "description-7" });
+  });
+
+  it("keeps an archived cascade descendant when an active snapshot arrives at the same server revision", async () => {
+    const cache = cacheWith(snapshot(7, "Archived descendant", true));
+    const result = await query(clientWith(cache, snapshot(7, "Stale active descendant", false)));
+    expect(result.data!.worktrackerIssue.nodes[0]).toMatchObject({ name: "Archived descendant", is_archived: true });
+  });
+
   it("accepts a network snapshot at the same revision", async () => {
     const cache = cacheWith(snapshot(7));
     const result = await query(clientWith(cache, snapshot(7, "equal-update")));
@@ -113,7 +145,7 @@ describe("Work Item revision guard link", () => {
       optimistic.writeFragment({
         id: ID,
         fragment: cacheFragment,
-        data: { ...snapshot(9, "optimistic"), stateRevision: 9 },
+        data: { ...snapshot(9, "optimistic"), stateRevision: 9, isArchived: false },
       });
     }, "mutation-1");
 

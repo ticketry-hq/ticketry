@@ -18,10 +18,10 @@ use crate::workspace::operations::{WorkspaceOperationIntent, WorkspaceOperationK
 use super::plan::CreatePlan;
 
 /// The intent schema version this build writes and decodes.
-pub const INTENT_VERSION: i32 = 2;
+pub(crate) const INTENT_VERSION: i32 = 2;
 
 /// A stable, path-free identity for one canonical repository.
-pub fn repository_digest(repository: &Path) -> String {
+pub(crate) fn repository_digest(repository: &Path) -> String {
     let mut hasher = Sha256::new();
     hasher.update(repository.to_string_lossy().as_bytes());
     format!("{:x}", hasher.finalize())
@@ -30,11 +30,11 @@ pub fn repository_digest(repository: &Path) -> String {
 /// The subject this operation acts on. One task owns one checkout, so an
 /// ambiguous creation isolates that task alone and leaves every other
 /// repository converging.
-pub fn resource_key(top_level_row_id: &str) -> String {
+pub(crate) fn resource_key(top_level_row_id: &str) -> String {
     format!("worktree/{top_level_row_id}")
 }
 
-pub fn intent(
+pub(crate) fn intent(
     operation_id: &str,
     plan: &CreatePlan,
     base_ref: &str,
@@ -62,7 +62,7 @@ fn payload(plan: &CreatePlan, base_ref: &str, base_commit: &str) -> Value {
 
 /// The immutable intent, as a later pass reads it back.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CreateIntent {
+pub(crate) struct CreateIntent {
     pub top_level_row_id: String,
     pub branch: String,
     pub checkout_name: String,

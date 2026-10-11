@@ -17,7 +17,7 @@
   // Studio-owned Command chords bypass Ghostty's binding table. The focused
   // view reports them once; when the WebView owns focus this view returns NO
   // above and the ordinary React keydown route remains the only handler.
-  if (muxed_ghostty_studio_chord(event.modifierFlags, event.keyCode) !=
+  if (muxed_ghostty_event_studio_chord(event) !=
       MUXED_GHOSTTY_CHORD_NONE) {
     [self keyDown:event];
     return YES;

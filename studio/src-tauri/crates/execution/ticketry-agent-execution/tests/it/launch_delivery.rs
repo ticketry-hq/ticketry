@@ -3,17 +3,15 @@
 
 use async_trait::async_trait;
 use sea_orm::{ConnectionTrait, DbBackend, Statement};
-use ticketry_agent_execution::launch_delivery::execute;
+use ticketry_agent_execution::execute_launch_delivery as execute;
 use ticketry_launch::{CreateTerminalSession, TerminalLaunchError, TerminalLaunchErrorCode};
 use ticketry_terminal::{
     CleanupKillResult, CleanupRuntimeObservation, TerminalCleanupRuntime, TerminalCleanupService,
     TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalLaunchService,
     TerminalRuntimeObservation,
 };
-use ticketry_work_management::launch_policy::{
-    record, CallerScope, LaunchPolicyDecision, ModuleLinkInput,
-};
 use ticketry_work_management::open_for_commands;
+use ticketry_work_management::{record, CallerScope, LaunchPolicyDecision, ModuleLinkInput};
 
 #[path = "../../../../../tests/common/execution_legacy_fixture.rs"]
 mod execution_legacy_fixture;
@@ -115,13 +113,16 @@ async fn a_rejected_preparation_leaves_the_live_agent_alone() {
     let database = open_for_commands(&path).await.unwrap();
     // Bring the WorkTracker columns the entity contract expects up to the
     // current shape before anything reads or writes a module row.
-    ticketry_work_management::workspace_tab_order_migration::install(&database)
+    ticketry_work_management::install_workspace_tab_order_schema(&database)
         .await
         .unwrap();
-    ticketry_work_management::module_presentation_migration::install(&database)
+    ticketry_work_management::install_module_presentation_schema(&database)
         .await
         .unwrap();
-    ticketry_work_management::sprint_migration::install(&database)
+    ticketry_work_management::install_sprint_schema(&database)
+        .await
+        .unwrap();
+    ticketry_work_management::install_sprint_rank_schema(&database)
         .await
         .unwrap();
     // The adopted worktrees row predates the pull-request column the entity
@@ -132,7 +133,7 @@ async fn a_rejected_preparation_leaves_the_live_agent_alone() {
         .unwrap();
     // A linked module folder the runtime will then refuse to launch in, so
     // preparation rejects at preflight rather than at scope validation.
-    ticketry_work_management::schema::install(&database)
+    ticketry_work_management::install_module_links_schema(&database)
         .await
         .unwrap();
     ticketry_work_management::ModuleLinkStore::new(database.clone())
@@ -214,5 +215,114 @@ async fn a_rejected_preparation_leaves_the_live_agent_alone() {
         )
         .await,
         1
+    );
+}
+
+#[tokio::test]
+async fn continued_handoff_checks_the_live_provider_and_its_persisted_directory() {
+    let directory = tempfile::tempdir().unwrap();
+    let module_folder = tempfile::tempdir().unwrap();
+    let live_folder = tempfile::tempdir().unwrap();
+    execution_legacy_fixture::provision_current(directory.path()).await;
+    ticketry_runs::adopt(directory.path()).await.unwrap();
+    ticketry_terminal::adopt_terminal_persistence(directory.path())
+        .await
+        .unwrap();
+    let database = open_for_commands(&directory.path().join("state.db"))
+        .await
+        .unwrap();
+    ticketry_work_management::install_workspace_tab_order_schema(&database)
+        .await
+        .unwrap();
+    ticketry_work_management::install_module_presentation_schema(&database)
+        .await
+        .unwrap();
+    ticketry_work_management::install_sprint_schema(&database)
+        .await
+        .unwrap();
+    ticketry_work_management::install_sprint_rank_schema(&database)
+        .await
+        .unwrap();
+    ticketry_workspace_runtime::install_pull_request_url_migration(&database)
+        .await
+        .unwrap();
+    ticketry_work_management::install_module_links_schema(&database)
+        .await
+        .unwrap();
+    ticketry_work_management::ModuleLinkStore::new(database.clone())
+        .set(MODULE, module_folder.path().to_str().unwrap())
+        .await
+        .unwrap();
+    let run_id = uuid::Uuid::new_v4().to_string();
+    let session_name = ticketry_terminal::PersistedSessionName::for_agent_run(&run_id)
+        .unwrap()
+        .into_string();
+    database.execute_unprepared(&format!(
+        "INSERT INTO agent_runs (id, issue_id, agent, status, started_at, scope, cwd) VALUES ('{run_id}', '{CLAIMED_CHILD}', 'claude', 'running', '2026-08-19 12:30:00', 'task', '{}'); INSERT INTO agent_terminal_sessions (agent_run_id, tmux_session_name, task_id, module_id, project_id, created_at, scope, agent) VALUES ('{run_id}', '{session_name}', '{CLAIMED_CHILD}', '{MODULE}', '{PROJECT}', '2026-08-19 12:30:00', 'task', 'claude');", live_folder.path().display()
+    )).await.unwrap();
+    let name = format!("ticketry-disposable-stage-skill-{}", uuid::Uuid::new_v4());
+    let wrong_provider_skill = module_folder.path().join(".agents/skills").join(&name);
+    std::fs::create_dir_all(&wrong_provider_skill).unwrap();
+    std::fs::write(
+        wrong_provider_skill.join("SKILL.md"),
+        "module's codex skill",
+    )
+    .unwrap();
+    let mut decision = decision();
+    decision.handoff = true;
+    decision.stage_skills = vec![name.clone()];
+    record(&database, &decision).await.unwrap();
+    let launch =
+        TerminalLaunchService::new(database.clone(), std::sync::Arc::new(RejectingRuntime));
+    let cleanup = TerminalCleanupService::new(
+        database.clone(),
+        std::sync::Arc::new(SettlingCleanupRuntime),
+    );
+    // This deliberately absent runtime rejects typed delivery; the public handoff
+    // seam still records its advisory report and never starts a fresh provider.
+    assert!(execute(&database, &launch, &cleanup, &decision)
+        .await
+        .is_err());
+    let runs = ticketry_runs::RunsServices::new(database.clone());
+    let holdings = runs.queries().run_holdings(PROJECT, None).await.unwrap();
+    let warning = holdings
+        .iter()
+        .find(|run| run.agent_run_id == run_id)
+        .unwrap()
+        .stage_skill_availability
+        .as_deref()
+        .unwrap();
+    let warning: serde_json::Value = serde_json::from_str(warning).unwrap();
+    assert_eq!(warning["provider"], "claude");
+    assert_eq!(warning["skills"][0]["requested"], name);
+    assert_eq!(warning["skills"][0]["status"], "missing");
+    assert!(warning["searched_roots"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|root| root.as_str()
+            == Some(live_folder.path().join(".claude/skills").to_str().unwrap())));
+    assert!(!live_folder.path().join(".claude").exists());
+    let skill = live_folder.path().join(".claude/skills").join(&name);
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(
+        skill.join("SKILL.md"),
+        "installed into the live provider's actual directory",
+    )
+    .unwrap();
+    decision.decision_id = "decision-2724-second-handoff".to_owned();
+    decision.idempotency_key = "transport-second-handoff".to_owned();
+    record(&database, &decision).await.unwrap();
+    assert!(execute(&database, &launch, &cleanup, &decision)
+        .await
+        .is_err());
+    let holdings = runs.queries().run_holdings(PROJECT, None).await.unwrap();
+    assert_eq!(
+        holdings
+            .iter()
+            .find(|run| run.agent_run_id == run_id)
+            .unwrap()
+            .stage_skill_availability,
+        None
     );
 }

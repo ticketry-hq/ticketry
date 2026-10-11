@@ -35,6 +35,10 @@ try {
       join(executionEntityTarget, name),
     );
   }
+  await copyFile(
+    join(scratch, "sprint-entities/sprint.rs"),
+    join(studioRoot, "src-tauri/crates/foundation/ticketry-entities/src/work_management/sprint.rs"),
+  );
   const terminalEntityTarget = join(
     studioRoot,
     "src-tauri/crates/foundation/ticketry-entities/src/terminals",

@@ -1,9 +1,9 @@
+use super::sprint_status::{
+    SPRINT_SUGGESTION_ACCEPTED as ACCEPTED, SPRINT_SUGGESTION_DISMISSED as DISMISSED,
+    SPRINT_SUGGESTION_WAITING as WAITING,
+};
 use sea_orm::entity::prelude::*;
 use sea_orm::{ActiveValue, Set, Unchanged};
-
-pub const WAITING: &str = "waiting";
-pub const ACCEPTED: &str = "accepted";
-pub const DISMISSED: &str = "dismissed";
 
 #[sea_orm::model]
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]

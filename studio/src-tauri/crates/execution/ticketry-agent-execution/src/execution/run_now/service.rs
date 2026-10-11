@@ -4,21 +4,21 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use ticketry_entities::{issue, issue_type, issue_type_transition, state, transition_occurrence};
 use ticketry_terminal::TerminalLaunchService;
-use ticketry_work_management::commands::{
-    status_facts::WorkFactRecorder,
-    workflow::{
-        self, TransitionCausation, TransitionExpectation, TransitionOrigin, TransitionWorkItem,
-    },
+use ticketry_work_management::work_item;
+use ticketry_work_management::{
+    load_by_identity, mark_delivered, record, CallerScope, LaunchPolicyDecision,
+    LaunchPolicyRequest, LaunchPolicyResolver,
 };
-use ticketry_work_management::launch_policy::{
-    self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
+use ticketry_work_management::{
+    refuse_run_now_with_subtasks, run_now_destination_type, transition_with_expectation,
+    TransitionCausation, TransitionExpectation, TransitionOrigin, TransitionWorkItem,
+    WorkFactRecorder,
 };
-use ticketry_work_management::read_queries;
 
 use super::launcher::{RunNowLauncher, TerminalRunNowLauncher};
 use super::refusals::{
-    identity_conflict, implementation_not_configured, launch_failure, not_eligible,
-    policy_refusal, refusal, storage_refusal, transition_refusal,
+    identity_conflict, implementation_not_configured, launch_failure, not_eligible, policy_refusal,
+    refusal, storage_refusal, transition_refusal,
 };
 use super::{
     RunNowCaller, RunNowIssueType, RunNowRefusal, RunNowRequest, RunNowState, RunNowSuccess,
@@ -89,7 +89,7 @@ impl RunNowService {
             ));
         }
 
-        let projected = read_queries::work_item(&self.database, &request.id_or_key)
+        let projected = work_item(&self.database, &request.id_or_key)
             .await
             .map_err(|error| storage_refusal(&unresolved_target, error.to_string()))?
             .ok_or_else(|| {
@@ -116,7 +116,7 @@ impl RunNowService {
                 )
             })?;
 
-        let recorded = launch_policy::load_by_identity(
+        let recorded = load_by_identity(
             &self.database,
             CallerScope::RunNow.as_str(),
             &request.request_identity,
@@ -153,7 +153,7 @@ impl RunNowService {
         if current.is_archived || kind.name != "Story" || source.name != "Ideas" {
             return Err(not_eligible(&projected.id));
         }
-        workflow::refuse_run_now_with_subtasks(&self.database, &target_id)
+        refuse_run_now_with_subtasks(&self.database, &target_id)
             .await
             .map_err(|error| transition_refusal(&projected.id, error))?;
         let destination = state::Entity::find()
@@ -180,7 +180,7 @@ impl RunNowService {
             .map_err(|error| storage_refusal(&projected.id, error.to_string()))?
             .ok_or_else(|| not_eligible(&projected.id))?;
         let conversion =
-            workflow::run_now_destination_type(&self.database, &current.project_id, &destination.id)
+            run_now_destination_type(&self.database, &current.project_id, &destination.id)
                 .await
                 .map_err(|error| storage_refusal(&projected.id, error.to_string()))?
                 .ok_or_else(|| implementation_not_configured(&projected.id))?;
@@ -218,7 +218,7 @@ impl RunNowService {
                     )
                     .await
                     .map_err(|error| policy_refusal(&projected.id, error))?;
-                launch_policy::record(&self.database, &decision)
+                record(&self.database, &decision)
                     .await
                     .map_err(|error| policy_refusal(&projected.id, error))?
             }
@@ -230,7 +230,7 @@ impl RunNowService {
             return Err(identity_conflict(projected.id));
         }
 
-        let transition = workflow::transition_with_expectation(
+        let transition = transition_with_expectation(
             &self.database,
             TransitionWorkItem {
                 id: target_id,
@@ -267,7 +267,7 @@ impl RunNowService {
 
     async fn decision_is_claimed(
         &self,
-        decision: &launch_policy::LaunchPolicyDecision,
+        decision: &LaunchPolicyDecision,
     ) -> Result<bool, sea_orm::DbErr> {
         transition_occurrence::Entity::find()
             .filter(transition_occurrence::Column::RunNowDecisionId.eq(&decision.decision_id))
@@ -281,7 +281,7 @@ impl RunNowService {
     async fn committed_issue_type(
         &self,
         target_id: &str,
-        decision: &launch_policy::LaunchPolicyDecision,
+        decision: &LaunchPolicyDecision,
     ) -> Result<RunNowIssueType, RunNowRefusal> {
         let kind = issue_type::Entity::find_by_id(compact(&decision.issue_type_id))
             .one(&self.database)
@@ -296,7 +296,7 @@ impl RunNowService {
     async fn launch_committed(
         &self,
         target_id: String,
-        decision: &launch_policy::LaunchPolicyDecision,
+        decision: &LaunchPolicyDecision,
     ) -> Result<RunNowSuccess, RunNowRefusal> {
         let committed = RunNowState {
             id: canonical(&decision.state_id),
@@ -314,7 +314,7 @@ impl RunNowService {
                 converted.clone(),
             )
         })?;
-        launch_policy::mark_delivered(&self.database, &decision.decision_id)
+        mark_delivered(&self.database, &decision.decision_id)
             .await
             .map_err(|error| policy_refusal(&target_id, error))?;
         Ok(RunNowSuccess {

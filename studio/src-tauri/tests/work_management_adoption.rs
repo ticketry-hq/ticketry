@@ -1,11 +1,12 @@
 mod common;
 
 use std::path::Path;
+use ticketry_work_management::{
+    install_launch_binding_entry_skill_schema, install_workflow_handoff_schema,
+};
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
-use ticketry_work_management::adoption::{adopt, SourceClassification};
-use ticketry_work_management::launch_binding_entry_skill_migration;
-use ticketry_work_management::workflow_handoff_migration;
+use ticketry_work_management::{adopt, SourceClassification};
 
 async fn django_fixture(database_path: &Path) {
     common::execution_legacy_fixture::provision_current(
@@ -66,7 +67,7 @@ async fn reopens_after_the_ledger_backed_entry_skill_migration() {
     let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
         .await
         .expect("open adopted WorkTracker");
-    launch_binding_entry_skill_migration::install(&database)
+    install_launch_binding_entry_skill_schema(&database)
         .await
         .expect("install entry-skill final shape");
     database.close().await.expect("close migrated WorkTracker");
@@ -89,7 +90,7 @@ async fn reopens_after_the_ledger_backed_workflow_handoff_migration() {
     let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
         .await
         .expect("open adopted WorkTracker");
-    workflow_handoff_migration::install(&database)
+    install_workflow_handoff_schema(&database)
         .await
         .expect("install workflow-handoff final shape");
     database.close().await.expect("close migrated WorkTracker");
@@ -188,7 +189,7 @@ async fn reopens_after_sprint_migration_with_all_planning_tables_owned() {
     let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
         .await
         .unwrap();
-    ticketry_work_management::sprint_migration::install(&database)
+    ticketry_work_management::install_sprint_schema(&database)
         .await
         .unwrap();
     database.close().await.unwrap();
@@ -197,4 +198,19 @@ async fn reopens_after_sprint_migration_with_all_planning_tables_owned() {
         .expect("reopen sprint-owned database");
     assert_eq!(upgraded.source, SourceClassification::RustOwned);
     assert!(upgraded.restoration_verified);
+
+    // Existing no-rank Sprint installations must reopen before their migration,
+    // and the same adoption seam must accept the ledger-backed ranked shape.
+    let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
+        .await
+        .unwrap();
+    ticketry_work_management::install_sprint_rank_schema(&database)
+        .await
+        .unwrap();
+    database.close().await.unwrap();
+    let ranked = adopt(directory.path())
+        .await
+        .expect("reopen sprint-owned database after rank migration");
+    assert_eq!(ranked.source, SourceClassification::RustOwned);
+    assert!(ranked.restoration_verified);
 }

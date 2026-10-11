@@ -29,6 +29,7 @@ pub struct TerminalLaunchService {
     pub(super) authority: Option<Arc<dyn InteractiveLaunchAuthority>>,
     pub(super) lease_owner: String,
     pub(super) checkpoints: LaunchCheckpoints,
+    pub(super) skill_search_environment: ticketry_provider::SkillSearchEnvironment,
     graph_run_mutation_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
@@ -41,8 +42,18 @@ impl TerminalLaunchService {
             authority: None,
             lease_owner: uuid::Uuid::new_v4().simple().to_string(),
             checkpoints: LaunchCheckpoints::default(),
+            skill_search_environment: ticketry_provider::SkillSearchEnvironment::from_process(),
             graph_run_mutation_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
+    }
+
+    /// Select the provider-visible user roots for a disposable launch environment.
+    pub fn with_skill_search_environment(
+        mut self,
+        environment: ticketry_provider::SkillSearchEnvironment,
+    ) -> Self {
+        self.skill_search_environment = environment;
+        self
     }
 
     pub fn graph_run_mutation_lock(&self) -> Arc<tokio::sync::Mutex<()>> {
@@ -106,6 +117,7 @@ impl TerminalLaunchService {
             resume_from_agent_run_id: None,
             automation_attempt_id: None,
             required_skills: Vec::new(),
+            stage_skills: Vec::new(),
             working_directory_identity: format!("module:{}", compact(&module.id)),
             design_directory_identity: None,
             document_relative_path: None,
@@ -155,6 +167,7 @@ impl TerminalLaunchService {
             resume_from_agent_run_id: None,
             automation_attempt_id: None,
             required_skills: Vec::new(),
+            stage_skills: Vec::new(),
             working_directory_identity: format!("task:{}", compact(&issue.id)),
             design_directory_identity: None,
             document_relative_path: None,
@@ -195,7 +208,14 @@ impl TerminalLaunchService {
             return self.respond(&accepted.agent_run_id).await;
         }
         let row = accepted.material.load(&self.database).await?;
-        self.execute(row).await
+        let effect_id = row.effect_id.clone();
+        match self.execute(row).await {
+            Err(error) if error.code == TerminalLaunchErrorCode::EffectBusy => {
+                self.await_dispatch_acknowledgement(&effect_id, &accepted.agent_run_id)
+                    .await
+            }
+            result => result,
+        }
     }
 
     async fn create_inner(
@@ -274,7 +294,8 @@ impl TerminalLaunchService {
             Some(snapshot) => snapshot,
             None => self.resolve_launch_state(&request).await?,
         };
-        let material = PreparedMaterial::new(&request, launch_state);
+        let warning = self.stage_skill_warning(&request).await;
+        let material = PreparedMaterial::new(&request, launch_state, warning);
         self.checkpoints
             .checkpoint(TerminalLaunchBoundary::MaterialPrepared)
             .await?;
@@ -358,7 +379,7 @@ impl TerminalLaunchService {
                 let module_id = if !submitted.is_archived && submitted.r#type == "module" {
                     submitted.id.clone()
                 } else {
-                    ticketry_workspace_runtime::status::owner::resolve(
+                    ticketry_workspace_runtime::resolve_worktree_owner(
                         &self.database,
                         &request.issue_id,
                     )
@@ -390,7 +411,7 @@ impl TerminalLaunchService {
             | ticketry_launch::TerminalLaunchKind::DocumentChat
             | ticketry_launch::TerminalLaunchKind::Automation
             | ticketry_launch::TerminalLaunchKind::TaskShell => {
-                let owner = ticketry_workspace_runtime::status::owner::resolve(
+                let owner = ticketry_workspace_runtime::resolve_worktree_owner(
                     &self.database,
                     &request.issue_id,
                 )

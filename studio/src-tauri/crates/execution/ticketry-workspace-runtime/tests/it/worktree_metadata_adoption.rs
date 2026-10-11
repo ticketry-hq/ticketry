@@ -7,9 +7,9 @@
 use std::path::Path;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
-use ticketry_workspace_runtime::persistence::{
-    adopt, preflight, worktrees_adopted, SourceClassification, WorktreePersistenceErrorCode,
-    LEDGER_TABLE,
+use ticketry_workspace_runtime::{
+    adopt_worktrees, preflight, worktrees_adopted, SourceClassification,
+    WorktreePersistenceErrorCode, LEDGER_TABLE,
 };
 
 async fn fixture(path: &Path) {
@@ -54,8 +54,8 @@ async fn adopts_existing_rows_in_place_and_reopens_deterministically() {
     let path = directory.path().join("state.db");
     fixture(&path).await;
 
-    let first = adopt(directory.path()).await.unwrap();
-    let second = adopt(directory.path()).await.unwrap();
+    let first = adopt_worktrees(directory.path()).await.unwrap();
+    let second = adopt_worktrees(directory.path()).await.unwrap();
 
     assert_eq!(first.source, SourceClassification::Django("0001_initial"));
     assert_eq!(second.source, SourceClassification::RustOwned);
@@ -117,7 +117,7 @@ async fn refuses_an_unknown_worktree_schema() {
         .unwrap();
     database.close().await.unwrap();
 
-    let error = adopt(directory.path()).await.unwrap_err();
+    let error = adopt_worktrees(directory.path()).await.unwrap_err();
 
     assert_eq!(
         error.code(),
@@ -139,7 +139,7 @@ async fn refuses_semantically_invalid_metadata() {
         .unwrap();
     database.close().await.unwrap();
 
-    let error = adopt(directory.path()).await.unwrap_err();
+    let error = adopt_worktrees(directory.path()).await.unwrap_err();
 
     assert_eq!(error.code(), WorktreePersistenceErrorCode::InvalidMetadata);
     let database = open(&path).await;
@@ -158,7 +158,7 @@ async fn refuses_a_worktree_row_without_its_work_item() {
         .unwrap();
     database.close().await.unwrap();
 
-    let error = adopt(directory.path()).await.unwrap_err();
+    let error = adopt_worktrees(directory.path()).await.unwrap_err();
 
     assert_eq!(error.code(), WorktreePersistenceErrorCode::InvalidMetadata);
 }
@@ -175,7 +175,7 @@ async fn refuses_a_store_without_django_worktree_history() {
         .unwrap();
     database.close().await.unwrap();
 
-    let error = adopt(directory.path()).await.unwrap_err();
+    let error = adopt_worktrees(directory.path()).await.unwrap_err();
 
     assert_eq!(
         error.code(),

@@ -71,6 +71,7 @@ describe("LaunchConfigurationForm", () => {
 
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({
+      required_skills: [],
       prompt: "do the thing",
       stage_skills: [],
       agent: "gemini",
@@ -90,6 +91,7 @@ describe("LaunchConfigurationForm", () => {
 
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({
+      required_skills: [],
       prompt: "do the thing",
       stage_skills: [],
       agent: "claude",
@@ -132,6 +134,7 @@ describe("LaunchConfigurationForm", () => {
 
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({
+      required_skills: [],
       prompt: "do the thing",
       stage_skills: [],
       agent: "claude",
@@ -175,6 +178,7 @@ describe("LaunchConfigurationForm", () => {
 
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({
+      required_skills: [],
       prompt: "implement the slice",
       stage_skills: ["tdd", "frontend-design"],
       agent: "claude",

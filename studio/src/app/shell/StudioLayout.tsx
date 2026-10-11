@@ -1,46 +1,27 @@
-import { Panel, PanelGroup } from "react-resizable-panels";
-import { outerPanelLayout, splitWorkArea } from "./layout/layoutMath";
-import { StudioSidebar } from "./sidebar/StudioSidebar";
+import { splitWorkArea } from "./layout/layoutMath";
 import { useStudioPanelLayout } from "./layout/useStudioPanelLayout";
 import { TicketWorkspace } from "./ticket-workspace/TicketWorkspace";
+import { ModuleManager } from "../../features/module-manager/ModuleManager";
+import { useModuleManagerStore } from "../../features/module-manager/state";
 
 export function StudioLayout() {
-  const {
-    layout,
-    sidebarVisible,
-    outerGroupRef,
-    workAreaGroupRef,
-    handleOuterLayout,
-    handleWorkAreaLayout,
-  } = useStudioPanelLayout();
+  const managerActive = useModuleManagerStore((state) => state.active);
+  const { layout, workAreaGroupRef, handleWorkAreaLayout } = useStudioPanelLayout();
   const [tasksSize, workspaceSize] = splitWorkArea(layout);
 
-  const outerLayout = outerPanelLayout(layout, sidebarVisible);
-
   return (
-    <PanelGroup
-      ref={outerGroupRef}
-      direction="horizontal"
-      className="h-full w-full"
-      onLayout={handleOuterLayout}
-    >
-      {sidebarVisible ? (
-        <StudioSidebar key="modules-sidebar" layout={layout} />
+    <div className="relative h-full w-full">
+      <TicketWorkspace
+        tasksSize={tasksSize}
+        workspaceSize={workspaceSize}
+        groupRef={workAreaGroupRef}
+        onLayout={handleWorkAreaLayout}
+      />
+      {managerActive ? (
+        <div className="absolute inset-x-0 bottom-0 top-7 z-20 bg-pane-bg">
+          <ModuleManager />
+        </div>
       ) : null}
-      <Panel
-        key="ticket-workspace"
-        id="workspace"
-        defaultSize={outerLayout.at(-1)}
-        minSize={30}
-        order={3}
-      >
-        <TicketWorkspace
-          tasksSize={tasksSize}
-          workspaceSize={workspaceSize}
-          groupRef={workAreaGroupRef}
-          onLayout={handleWorkAreaLayout}
-        />
-      </Panel>
-    </PanelGroup>
+    </div>
   );
 }

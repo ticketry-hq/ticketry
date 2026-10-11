@@ -7,10 +7,8 @@ use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
 
 use ticketry_terminal::TerminalLaunchService;
-use ticketry_work_management::launch_policy::{self, LaunchPolicyDecision};
-use ticketry_workspace_runtime::changes::{
-    LaunchedAgent, MergePreparationError, MergePreparationLauncher,
-};
+use ticketry_work_management::{record, LaunchPolicyDecision};
+use ticketry_workspace_runtime::{LaunchedAgent, MergePreparationError, MergePreparationLauncher};
 
 pub struct TerminalMergePreparationLauncher {
     database: DatabaseConnection,
@@ -32,7 +30,7 @@ impl MergePreparationLauncher for TerminalMergePreparationLauncher {
         &self,
         decision: &LaunchPolicyDecision,
     ) -> Result<LaunchedAgent, MergePreparationError> {
-        let decision = launch_policy::record(&self.database, decision).await?;
+        let decision = record(&self.database, decision).await?;
         let cleanup = ticketry_terminal::TerminalCleanupService::with_tmux(self.database.clone());
         let session =
             super::launch_delivery::execute(&self.database, &self.terminals, &cleanup, &decision)

@@ -27,7 +27,7 @@ import {
   thematicBreakPlugin,
   toolbarPlugin,
 } from "@mdxeditor/editor";
-import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "@mdxeditor/editor/style.css";
 import "./richMarkdownEditor.css";
@@ -44,6 +44,8 @@ export default function RichMarkdownEditor({
   layout = "document",
   toolbarActions,
   quietUntilFocused = false,
+  focusSignal = 0,
+  canFocus,
 }: {
   markdown: string;
   onChange: (markdown: string) => void;
@@ -58,12 +60,23 @@ export default function RichMarkdownEditor({
   toolbarActions?: ReactNode;
   /** Hide the frame and toolbar until focus enters, so it reads like rendered text. */
   quietUntilFocused?: boolean;
+  focusSignal?: number;
+  canFocus?: (target?: HTMLElement | null) => boolean;
 }) {
   const compact = layout === "compact";
   const shellRef = useRef<HTMLDivElement>(null);
   // MDXEditor captures toolbarContents once, so actions are portaled into a
   // slot it renders; they then re-render with this component's props.
   const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell || focusSignal === 0 || shell.contains(document.activeElement)) return;
+    return observeEnabledRichTextEditable(shell, () => {
+      const editable = shell.querySelector<HTMLElement>('[contenteditable="true"]');
+      if (editable && (canFocus?.(editable) ?? true)) editable.focus();
+    });
+  }, [focusSignal, canFocus]);
 
   useLayoutEffect(() => {
     if (!import.meta.env.DEV || !onEditableReady || !shellRef.current) return;

@@ -19,6 +19,7 @@ mod unix {
     /// concurrent tests and can outlast the client's five-second timeout.
     const APP_SERVER_SCRIPT: &str = r#"#!/bin/sh
 home=$(dirname "$0")
+printf '%s\n' "$@" > "$home/arguments"
 mode=$(cat "$home/mode")
 printf '%s\n' launched >> "$home/launches"
 if [ "$mode" = exiting ]; then
@@ -169,6 +170,27 @@ done
                 .lines()
                 .count()
         }
+    }
+
+    #[tokio::test]
+    async fn starts_with_an_empty_mcp_servers_override() {
+        let server = ScriptedAppServer::named("Read the title");
+        let _client = CodexAppServerClient::start(&server.executable)
+            .await
+            .expect("start resident app-server");
+
+        let arguments = fs::read_to_string(
+            server
+                .executable
+                .parent()
+                .expect("scripted app-server has a directory")
+                .join("arguments"),
+        )
+        .expect("read captured spawn arguments");
+        assert_eq!(
+            arguments.lines().take(4).collect::<Vec<_>>(),
+            ["app-server", "--stdio", "-c", "mcp_servers={}"]
+        );
     }
 
     #[tokio::test]
@@ -325,6 +347,13 @@ done
             serde_json::json!({
                 "threadId": "019e9428-9788-7df0-84cd-755e1b776245",
                 "name": "Fix the flaky test",
+            })
+        );
+        assert_eq!(
+            requests[2]["params"],
+            serde_json::json!({
+                "threadId": "019e9428-9788-7df0-84cd-755e1b776245",
+                "includeTurns": false,
             })
         );
         assert_eq!(

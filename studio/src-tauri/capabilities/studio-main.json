@@ -31,6 +31,7 @@
     "allow-viewer-detach",
     "allow-viewer-status",
     "allow-native-terminal-available",
+    "allow-native-terminal-set-module-manager-shortcut",
     "allow-native-terminal-attach",
     "allow-native-terminal-set-frame",
     "allow-native-terminal-hide",

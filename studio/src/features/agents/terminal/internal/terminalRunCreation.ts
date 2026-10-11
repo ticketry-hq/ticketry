@@ -1,4 +1,6 @@
+import { toast } from "../../../../state/clientStore";
 import { createTerminalRun } from "../../api/agentApi";
+import { launchFailureMessage } from "./launchFailure";
 import { useTerminalStore, type SessionMeta } from "./sessionStore";
 
 const pendingCreations = new Map<string, Promise<void>>();
@@ -30,10 +32,16 @@ export function ensureTerminalRunCreated(
       if (!current || current.agentRunId) return;
       store.bindRun(sessionId, agent_run_id);
     })
-    .catch(() => {
-      if (useTerminalStore.getState().sessions[sessionId]) {
-        useTerminalStore.getState().setError(sessionId);
-      }
+    .catch((error) => {
+      // A refused create never produced a run, so its placeholder tab would
+      // be a phantom terminal. Drop it (the workspace falls back to its prior
+      // surface) and say why, leaving the user free to retry (CODING-2763).
+      const store = useTerminalStore.getState();
+      if (store.sessions[sessionId]) store.closeTab(sessionId, { dismiss: false });
+      const subject = session.isInstant || session.isPlanning
+        ? "Conversation did not start"
+        : "Agent run could not be started";
+      toast.error(`${subject}: ${launchFailureMessage(error)}`);
     })
     .finally(() => {
       if (pendingCreations.get(sessionId) === creation) {

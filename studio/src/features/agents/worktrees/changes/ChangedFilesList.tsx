@@ -138,6 +138,7 @@ export function ChangedFilesList({
     return (
       <div
         ref={emptyRef}
+        data-changes-navigation
         role="region"
         tabIndex={0}
         aria-label={`${label} empty`}
@@ -154,6 +155,7 @@ export function ChangedFilesList({
   let index = -1;
   return (
     <ul
+      data-changes-navigation
       aria-label={label}
       className="border-t border-pane-border"
       onFocusCapture={() => { focusOwned.current = true; }}

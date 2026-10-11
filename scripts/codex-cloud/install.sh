@@ -34,23 +34,17 @@ seaorm_version=$(awk '/^name = "sea-orm-cli"$/ { found=1; next } found && /^vers
 [[ -n $rust_version && -n $seaorm_version ]]
 rustup toolchain install "$rust_version" --profile minimal --component clippy --component rustfmt
 
-# npm's lockfile contains an SSH GitHub URL. Rewrite it for this process and
-# its children without changing personal Git configuration or the lockfile.
-git_config_index=${GIT_CONFIG_COUNT:-0}
-for github_prefix in 'ssh://git@github.com/' 'git@github.com:'; do
-  export "GIT_CONFIG_KEY_${git_config_index}=url.https://github.com/.insteadOf"
-  export "GIT_CONFIG_VALUE_${git_config_index}=$github_prefix"
-  git_config_index=$((git_config_index + 1))
-done
-export GIT_CONFIG_COUNT=$git_config_index
-export GIT_TERMINAL_PROMPT=0
+if ! command -v bun >/dev/null || [[ $(bun --version) != 1.4.2 ]]; then
+  echo "Install Bun 1.4.2 before running this installer." >&2
+  exit 1
+fi
 
-npm ci --no-audit --no-fund
+bun install --frozen-lockfile
 if [[ $(sea-orm-cli --version 2>/dev/null || true) != "sea-orm-cli $seaorm_version" ]]; then
   cargo +"$rust_version" install sea-orm-cli --version "$seaorm_version" --locked \
     --no-default-features --features codegen,sqlx-sqlite,runtime-tokio-rustls
 fi
-npm exec --workspace @worktracker/studio -- playwright install --with-deps chromium
+bun run --cwd studio playwright install --with-deps chromium
 
 cargo fetch --locked --manifest-path studio/src-tauri/Cargo.toml
 cargo build --locked --manifest-path studio/src-tauri/Cargo.toml \

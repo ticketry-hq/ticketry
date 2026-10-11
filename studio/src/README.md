@@ -1,5 +1,8 @@
 # Studio frontend map
 
+For production entry points, surfaces and verification coverage, start with the
+[feature map](../../docs/feature-map/README.md).
+
 Start with `main.tsx`, which initializes the browser or desktop runtime and
 mounts `app/StudioApp.tsx`.
 

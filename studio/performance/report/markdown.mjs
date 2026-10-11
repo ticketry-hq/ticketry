@@ -219,7 +219,7 @@ function cpuSection(cpu) {
     + "`.map` files sitting beside the assets:",
     "",
     "```sh",
-    "npx --prefix studio -- vite preview --config vite.performance.config.ts --port 4273",
+    "bun run --cwd studio vite preview --config vite.performance.config.ts --port 4273",
     "```",
     "",
     ...cpuOriginLines(cpu),

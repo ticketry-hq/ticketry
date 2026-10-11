@@ -11,6 +11,7 @@
  */
 
 import { isTauri } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { useModalStore } from "../modal/modalStore";
@@ -24,6 +25,9 @@ import {
 } from "./sharedNavigation";
 import { disengageEditViewBody } from "./three-zone/threeZoneNavigation";
 import { isNativeTerminalKeyboardOwner } from "../../runtime/nativeTerminalKeyboard";
+import { openModuleManager, useModuleManagerStore } from "../../features/module-manager/state";
+import { studioKeymapRegistry } from "./keymapRegistry";
+import { useTerminalStore } from "../../features/agents/terminal/appNavigation";
 
 /** Emitted by the native host for one recognised chord. */
 export const NATIVE_TERMINAL_CHORD_EVENT = "native-terminal-chord";
@@ -33,6 +37,7 @@ export type NativeTerminalChord =
   | "panel-toggle"
   | "settings"
   | "close-tab"
+  | "module-manager"
   | "body-disengage"
   | "zoom-in"
   | "zoom-out"
@@ -60,7 +65,21 @@ function modulePositionFromChord(
 }
 
 function runChord(payload: NativeTerminalChordEvent["payload"]): void {
+  if (useModuleManagerStore.getState().active) return;
   const chord = payload?.chord;
+  if (chord === "module-manager") {
+    if (useModalStore.getState().modalStack.length === 0 && payload?.handle && payload.runId &&
+      isNativeTerminalKeyboardOwner({ handle: payload.handle, runId: payload.runId })) {
+      const sessionId = Object.values(useTerminalStore.getState().sessions)
+        .find((session) => session.agentRunId === payload.runId)?.sessionId;
+      openModuleManager({ restoreFocus: sessionId ? () => {
+        if (useTerminalStore.getState().sessions[sessionId]?.agentRunId === payload.runId)
+          useTerminalStore.getState().focusSession(sessionId);
+        else document.querySelector<HTMLElement>("[data-module-manager-toggle]")?.focus();
+      } : undefined });
+    }
+    return;
+  }
   if (chord === "close-tab") {
     if (
       useModalStore.getState().modalStack.length === 0 &&
@@ -122,6 +141,16 @@ export function subscribeNativeTerminalChords(): () => void {
   if (!isTauri()) return () => {};
   let active = true;
   let unlisten: UnlistenFn | null = null;
+  const syncManagerShortcut = () => {
+    const chord = studioKeymapRegistry.getEffectiveBinding("global", "toggle-module-manager")?.chord;
+    if (!chord) return;
+    const modifiers = (chord.shift ? 1 << 17 : 0) | (chord.control ? 1 << 18 : 0)
+      | (chord.alt ? 1 << 19 : 0) | (chord.meta ? 1 << 20 : 0);
+    void Promise.resolve(invoke("native_terminal_set_module_manager_shortcut", { key: chord.key, modifiers }))
+      .catch((error) => console.warn("[keymap] native Module Manager shortcut unavailable", error));
+  };
+  syncManagerShortcut();
+  const unsubscribeKeymap = studioKeymapRegistry.subscribe(syncManagerShortcut);
   void listen(NATIVE_TERMINAL_CHORD_EVENT, (event: NativeTerminalChordEvent) => {
     if (active) runChord(event.payload);
   })
@@ -132,6 +161,7 @@ export function subscribeNativeTerminalChords(): () => void {
     .catch(() => {});
   return () => {
     active = false;
+    unsubscribeKeymap();
     unlisten?.();
   };
 }

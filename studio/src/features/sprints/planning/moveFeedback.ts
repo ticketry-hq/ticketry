@@ -8,6 +8,7 @@ export type MoveEligibility =
   | { kind: "focus"; epicName: string }
   | { kind: "workflow"; stateName: string }
   | { kind: "hierarchy" }
+  | { kind: "closed" }
   | { kind: "unavailable" };
 /** `seen` once the graph has shown the item where its Retry or Undo expects it. */
 export type Outcome = { op: number; move: Move; seen?: true };

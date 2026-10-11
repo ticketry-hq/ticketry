@@ -1,3 +1,4 @@
+import { compareSprintSequence } from "./sprintSequence";
 import type { PlanningGraphQuery } from "./generated/planningGraph.documents";
 
 // The planner's read model: the PlanningGraph query adapted into the plain
@@ -18,6 +19,7 @@ export interface PlanningSprint {
   name: string;
   status: SprintStatus;
   createdAt: string;
+  rank: string;
 }
 
 export interface PlanningModule {
@@ -87,11 +89,12 @@ export function adaptPlanningGraph(data: PlanningGraphQuery): PlanningGraph {
     states,
     storyType: storyTypeOf(data.issueTypes.nodes),
     epicType: epicTypeOf(data.issueTypes.nodes),
-    sprints: data.sprints.nodes.map((sprint) => ({
+    sprints: [...data.sprints.nodes].sort(compareSprintSequence).map((sprint) => ({
       id: sprint.id,
       name: sprint.name,
       status: sprintStatus(sprint.status),
       createdAt: sprint.createdAt,
+      rank: sprint.rank,
     })),
     modules,
     workItems: data.workItems.nodes.map((item) => ({

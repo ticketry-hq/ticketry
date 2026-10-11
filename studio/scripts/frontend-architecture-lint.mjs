@@ -100,6 +100,14 @@ export function architectureViolations(entries) {
     for (const specifier of importedSpecifiers(source)) {
       const target = targetPath(normalizedFile, specifier);
       if (!target) continue;
+      const workspaceTarget = target.replace(/\.(?:ts|tsx)$/, "");
+      if (
+        !normalizedFile.startsWith("features/task-workspace/")
+        && workspaceTarget.startsWith("features/task-workspace/")
+        && !["features/task-workspace/index", "features/task-workspace/navigation"].includes(workspaceTarget)
+      ) {
+        violations.push(`${normalizedFile}: task workspace callers must use its public entry`);
+      }
       if (
         normalizedFile.startsWith("state/")
         && target.replace(/\.(?:ts|tsx)$/, "") === "shared/api/types"

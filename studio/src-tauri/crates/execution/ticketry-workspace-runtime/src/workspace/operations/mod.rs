@@ -36,22 +36,21 @@ mod checkpoint;
 mod claim;
 mod cleanup;
 mod error;
-mod intent;
+pub(crate) mod intent;
 mod journal;
 mod kinds;
-pub mod ownership_manifest;
+pub(crate) mod ownership_manifest;
 mod prepare;
 mod probe;
 mod reconciliation;
 mod records;
 mod sanitize;
 mod scan;
-pub mod schema;
+pub(crate) mod schema;
 mod settle;
 mod timestamp;
 
-pub use checkpoint::CHECKPOINT_KEY;
-pub use claim::{ClaimedOperation, MAX_LEASE_SECONDS};
+pub use claim::ClaimedOperation;
 pub use cleanup::CleanupProgress;
 pub use error::{WorkspaceOperationError, WorkspaceOperationErrorCode};
 pub use intent::WorkspaceOperationIntent;
@@ -62,8 +61,7 @@ pub use probe::{
     ExternalObservation, OperationSubject, WorkspaceOperationExecutor, WorkspaceStateProbe,
 };
 pub use reconciliation::{
-    ReconciledOperation, ReconciliationDecision, ReconciliationReport,
-    WorkspaceOperationReconciler, EXTERNAL_CONFLICT_CODE, MAX_RECONCILIATION_BATCH,
+    ReconciledOperation, ReconciliationDecision, ReconciliationReport, WorkspaceOperationReconciler,
 };
 pub use records::{ResourceIdentity, WorkspaceOperationRecord};
 pub use sanitize::REDACTED;
@@ -73,6 +71,6 @@ pub use settle::{SettledOperation, Settlement, WorkspaceOperationOutcome};
 /// applies to durable evidence. A capability that repeats Git's or the
 /// filesystem's own words to a caller uses this, so a message that reaches a
 /// user can never be wider than one that reaches the recovery log.
-pub fn redact_diagnostic(detail: &str) -> String {
+pub(crate) fn redact_diagnostic(detail: &str) -> String {
     sanitize::redact_text(detail, 500)
 }

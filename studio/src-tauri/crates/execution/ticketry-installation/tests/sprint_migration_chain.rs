@@ -8,7 +8,7 @@ mod support;
 async fn installation_chain_reaches_sprints_and_preserves_backlog() {
     let (_directory, database) = support::fixture().await;
     install_final_schema_migrations(&database).await.unwrap();
-    assert_eq!(ORDERED_MIGRATION_IDS.last(), Some(&"0063_sprints"));
+    assert_eq!(ORDERED_MIGRATION_IDS.last(), Some(&"0065_sprint_rank"));
     for table in [
         "worktracker_sprint",
         "worktracker_sprint_goal",

@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ChangesToolbar } from "../features/agents/worktrees/changes/ChangesToolbar";
@@ -68,7 +68,7 @@ describe("overhaul acceptance - stacked Changes actions", () => {
     expect(screen.getByRole("dialog")).toHaveTextContent("feature/changes");
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("created a pull request"));
+    await waitFor(() => expect(within(screen.getByRole("region", { name: "Stable Changes section" })).getByRole("status")).toHaveTextContent("created a pull request"));
     expect(calls).toEqual(["commit_push", "pull_request"]);
   });
 
@@ -112,7 +112,7 @@ describe("overhaul acceptance - stacked Changes actions", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(
       "Pull-request creation failed. Commit and push succeeded. Retry Create PR.",
     ));
-    expect(screen.queryByRole("status")).toBeNull();
+    expect(within(screen.getByRole("region", { name: "Stable Changes section" })).queryByRole("status")).toBeNull();
   });
 
   it("[overhaul-352] opens on Cancel, cancels with Escape, and restores the action opener", () => {

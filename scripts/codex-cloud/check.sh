@@ -18,11 +18,11 @@ check() {
 }
 
 frontend() {
-  check 'shipping caller gate' npm run caller:check
-  check 'TypeScript' npm run typecheck
-  check 'UI acceptance' npm run test:overhaul --workspace @worktracker/studio
-  check 'frontend tests' npm run test --workspace @worktracker/studio
-  check 'frontend build' npm run build
+  check 'shipping caller gate' bun run caller:check
+  check 'TypeScript' bun run typecheck
+  check 'UI acceptance' bun run --cwd studio test:overhaul
+  check 'frontend tests' bun run --cwd studio test
+  check 'frontend build' bun run build
 }
 
 rust() {
@@ -31,13 +31,13 @@ rust() {
 }
 
 graphql() {
-  check 'GraphQL drift' npm run graphql:drift --workspace @worktracker/studio
+  check 'GraphQL drift' bun run --cwd studio graphql:drift
 }
 
 e2e() {
   # Playwright starts the existing Rust adapter with a unique temporary SQLite
   # directory and tmux socket. It must not reuse a manually started server.
-  check 'browser E2E' env BROWSER=none npm run test:e2e --workspace @worktracker/studio -- "$@"
+  check 'browser E2E' env BROWSER=none bun run --cwd studio test:e2e "$@"
 }
 
 mode=${1:-frontend}

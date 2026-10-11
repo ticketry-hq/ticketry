@@ -1,7 +1,7 @@
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement};
 use seaography::async_graphql::Value;
 
-use ticketry_work_management::commands::CommandDatabase;
+use ticketry_work_management::CommandDatabase;
 
 const PROJECT: &str = "10000000000000000000000000000000";
 
@@ -33,6 +33,19 @@ async fn fixture() -> sea_orm::DatabaseConnection {
                 issue_type_id TEXT NOT NULL
                     REFERENCES worktracker_issuetype(id) ON DELETE CASCADE
             );
+            CREATE TABLE worktracker_state (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL REFERENCES worktracker_project(id)
+            );
+            CREATE TABLE worktracker_launchbinding (
+                id INTEGER PRIMARY KEY,
+                issue_type_id TEXT NOT NULL REFERENCES worktracker_issuetype(id)
+            );
+            CREATE TABLE worktracker_issue_blocked_by (
+                id INTEGER PRIMARY KEY,
+                from_issue_id TEXT NOT NULL REFERENCES worktracker_issue(id),
+                to_issue_id TEXT NOT NULL REFERENCES worktracker_issue(id)
+            );
             INSERT INTO worktracker_project VALUES (
                 '{PROJECT}', 'Project', 'PRJ', '', 0, 0,
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0
@@ -40,6 +53,9 @@ async fn fixture() -> sea_orm::DatabaseConnection {
             INSERT INTO worktracker_issuetype VALUES ('type', '{PROJECT}');
             INSERT INTO worktracker_issue VALUES ('issue', '{PROJECT}', 'type');
             INSERT INTO worktracker_issuetypetransition VALUES (1, 'type');
+            INSERT INTO worktracker_state VALUES ('state', '{PROJECT}');
+            INSERT INTO worktracker_launchbinding VALUES (1, 'type');
+            INSERT INTO worktracker_issue_blocked_by VALUES (1, 'issue', 'issue');
             CREATE TRIGGER fail_project_delete BEFORE DELETE ON worktracker_project
                 BEGIN SELECT RAISE(ABORT, 'injected project delete failure'); END;
             "#,
@@ -97,6 +113,9 @@ async fn ordered_project_delete_rolls_back_and_cleans_references_atomically() {
         "worktracker_issue",
         "worktracker_issuetype",
         "worktracker_issuetypetransition",
+        "worktracker_state",
+        "worktracker_launchbinding",
+        "worktracker_issue_blocked_by",
     ] {
         assert_eq!(row_count(&database, table).await, 1, "rolled back {table}");
     }
@@ -116,6 +135,9 @@ async fn ordered_project_delete_rolls_back_and_cleans_references_atomically() {
         "worktracker_issue",
         "worktracker_issuetype",
         "worktracker_issuetypetransition",
+        "worktracker_state",
+        "worktracker_launchbinding",
+        "worktracker_issue_blocked_by",
     ] {
         assert_eq!(row_count(&database, table).await, 0, "cleaned {table}");
     }

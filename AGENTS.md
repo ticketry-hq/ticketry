@@ -7,7 +7,19 @@ This repository owns the complete Ticketry desktop application: the React
 frontend, Tauri shell, in-process Rust services, MCP listener, and generated
 GraphQL contracts required by that application.
 
-Use `npm run desktop:dev` or `pnpm run dev` from the repository root for local
+Before changing or verifying a feature, read the
+[feature map](docs/feature-map/README.md) for its entry points, surfaces,
+verification paths and known coverage gaps. Update the map in the same change
+that alters behavior.
+
+Each mapped feature has a browser suite at
+`studio/e2e/features/<feature-id>.spec.ts`. Run
+`bun run --cwd studio test:e2e:feature <feature-id>` for the feature being built
+or changed, and `bun run --cwd studio test:e2e:features` for the full app. Keep
+the entry and its suite aligned; the drift check
+(`bun run --cwd studio test:e2e:features --check`) enforces that alignment.
+
+Use `bun run desktop:dev` or `bun run dev` from the repository root for local
 desktop development. Both commands rebuild and launch Ticketry. Keep browser-
 only service commands as supporting development tools, not as a separate product.
 
@@ -45,7 +57,7 @@ enter through the restricted WorkItem update contract; hierarchy, dependency,
 transition, and revision code remains internal and transactional. Only behavior
 that cannot be represented as model CRUD may become a named domain operation,
 and it must be recorded in the route/operation registry with the reason. The
-current exceptions are work-item reorder, module-presentation reorder, state
+current exceptions are work-item reorder, module-presentation reorder, sprint reorder, state
 reorder, issue-type reorder, remove-state-from-workflow, and onboarding
 acknowledgement. Do not add
 replacement CRUD, DAO/repository layers that mirror SeaORM, mirrored DTOs,
@@ -56,6 +68,27 @@ smallest custom seam, and its drift-prevention test.
 The MCP listener binds `<data-directory>/mcp.sock` under the data-directory
 ownership guard. Provider MCP uses the packaged `ticketry-hook mcp` stdio bridge;
 there is no MCP TCP port or port override.
+
+On startup, installed, packaged Ticketry registers a user-level global
+`ticketry` stdio server for Claude Code and Codex against the product data
+directory. Plain CLI sessions can read and update work across all projects,
+manage dependencies, and launch work from any folder. Workflow gates
+and agent-allowed transition permissions still apply; `terminate_current_run`
+and other run-only controls are refused. Ticketry-launched agents use their
+credentialed, run-scoped `ticketry` server instead, preserving project scope
+and run controls. Run mode never falls back to global authority.
+
+Development builds, the GraphQL development adapter, and launches with
+`TICKETRY_DATA_DIR`, `TICKETRY_PRODUCT_DATA_DIR`, `MUXED_DATA_DIR`, or
+`TICKETRY_DATA_DIR_NAME` set never register globally. To register by hand, add
+a user-level stdio server named `ticketry` with the absolute packaged hook path
+and arguments matching `ticketry-hook mcp --data-dir <absolute-data-directory>
+--global`. This command runs the bridge; it does not edit provider configuration.
+Global mode requires no authorization secret and cannot be combined with
+`--agent-run-id`. Registration persists on quit: offline calls return
+`service_unavailable` while CLI sessions keep running. Restart Ticketry and
+reconnect through the CLI's MCP controls (Claude `/mcp`) to restore access.
+See [`docs/plans/CODING-2533-global-mcp-spec.md`](docs/plans/CODING-2533-global-mcp-spec.md).
 
 Ticketry has no product REST API. Browser development may use the Rust GraphQL
 adapter, but it must not grow into a second backend or external compatibility
@@ -70,8 +103,8 @@ terminal renderer in development desktop and packaged desktop builds. It runs
 the validated tmux attach command in its own PTY and draws in a native view
 inside the Ticketry window, so terminal output stays out of the webview;
 lifecycle, layout, visibility and focus control messages still use IPC. It links
-from the shipping Cargo package's default features, and `npm run
-libghostty:prepare --workspace @worktracker/studio` stages the pinned static
+from the shipping Cargo package's default features, and `bun run --cwd studio
+libghostty:prepare` stages the pinned static
 library that every desktop and release build needs. Browser development renders
 with xterm over the `browserTerminalClient` WebSocket adapter to the Rust
 terminal adapter. xterm is also the compatibility fallback everywhere, including
@@ -86,14 +119,13 @@ databases, caches, native libraries, and build output must not be
 committed.
 
 Development frontend, Rust runtime, and MCP output is persisted at
-`.ticketry-dev/logs/ticketry.log`. Use `npm run logs` to inspect recent output,
-`npm run logs:follow` while reproducing a problem, and `npm run logs:clear` to
+`.ticketry-dev/logs/ticketry.log`. Use `bun run logs` to inspect recent output,
+`bun run logs:follow` while reproducing a problem, and `bun run logs:clear` to
 start a clean capture. This directory is generated and must not be committed.
 
 Every user-visible Studio UI behavior change must add or update an automated
 acceptance case in `studio/src/test/*Acceptance.test.tsx`. Keep the numbered
-overhaul gate current and run `npm run test:overhaul --workspace
-@worktracker/studio` before handing the change off.
+overhaul gate current and run `bun run --cwd studio test:overhaul` before handing the change off.
 
 ## LLD authoring
 

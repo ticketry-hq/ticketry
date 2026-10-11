@@ -10,8 +10,8 @@ use common::terminal_lifecycle_harness::{
 };
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use seaography::{Builder, BuilderContext};
-use ticketry_agent_execution::graph::{ExecutionMode, GraphAccess};
-use ticketry_agent_execution::reconciliation::ExecutionReconciliationService;
+use ticketry_agent_execution::ExecutionReconciliationService;
+use ticketry_agent_execution::{ExecutionMode, GraphAccess};
 use ticketry_agent_execution::{GraphRunCaller, GraphRunRequest, GraphRunService};
 use ticketry_entities::{agent_run, launch_material, session};
 use ticketry_launch::TerminalLaunchError;
@@ -19,7 +19,7 @@ use ticketry_terminal::{
     TerminalLaunchBoundary, TerminalLaunchCheckpoint, TerminalLaunchRuntime, TerminalLaunchService,
     TerminalRuntimeObservation, VerifiedTerminalRuntime,
 };
-use ticketry_work_management::launch_policy::LaunchPolicyResolver;
+use ticketry_work_management::LaunchPolicyResolver;
 
 const CHILD_A: &str = "00000000000000000000000000008951";
 const CHILD_B: &str = "00000000000000000000000000008952";
@@ -185,7 +185,7 @@ async fn graph_run_graphql_contract_returns_authoritative_models_and_child_ids()
     let mut builder = ticketry_entities::register_execution_entities(builder);
     seaography::register_entity!(builder, agent_run, mutation: false);
     seaography::register_entity!(builder, session, mutation: false);
-    let schema = ticketry_agent_execution::graph_run::register_graphql(builder)
+    let schema = ticketry_agent_execution::register_graph_run_graphql(builder)
         .schema_builder()
         .data(database.clone())
         .data(service)
@@ -634,9 +634,9 @@ async fn automatic_continuation_recovers_stage_skills_for_legacy_policy_snapshot
             .collect::<Vec<_>>(),
         [CHILD_B]
     );
-    assert!(launch_prompt(&database, CHILD_B).await.contains(
-        "Stage skills:\nUse these skills for this stage: [\"tdd\"]"
-    ));
+    assert!(launch_prompt(&database, CHILD_B)
+        .await
+        .contains("Stage skills:\nUse these skills for this stage: [\"tdd\"]"));
 }
 
 #[tokio::test]
@@ -799,7 +799,7 @@ async fn seed(database: &DatabaseConnection, directory: &std::path::Path) {
     .unwrap();
     // The folder a graph run launches in is the Module's typed link. The
     // profile above still decides which workspace may launch at all.
-    ticketry_work_management::schema::install(database)
+    ticketry_work_management::install_module_links_schema(database)
         .await
         .unwrap();
     ticketry_work_management::ModuleLinkStore::new(database.clone())

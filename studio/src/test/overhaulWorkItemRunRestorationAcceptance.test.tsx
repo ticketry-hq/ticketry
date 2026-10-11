@@ -29,7 +29,7 @@ const documentRegistry = vi.hoisted(() => ({
 vi.mock("../features/documents/documentRegistry", () => documentRegistry);
 
 vi.mock(
-  "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
+  "../features/task-workspace/terminals/SelectedTicketTerminal",
   () => ({
     SelectedTicketTerminal: ({ bucket }: { bucket: string }) => (
       <div data-testid="selected-ticket-terminal">{bucket}</div>

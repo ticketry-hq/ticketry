@@ -55,6 +55,7 @@ typedef enum {
   MUXED_GHOSTTY_CHORD_ZOOM_RESET = 16,
   // Close the active workspace tab (Cmd+W).
   MUXED_GHOSTTY_CHORD_CLOSE_TAB = 17,
+  MUXED_GHOSTTY_CHORD_MODULE_MANAGER = 18,
 } muxed_ghostty_chord_e;
 
 // Reported when the hosted view recognises a Studio chord instead of
@@ -132,6 +133,7 @@ void muxed_ghostty_view_disable_chord_callback(void *view);
 // muxed_ghostty_chord_e value; MUXED_GHOSTTY_CHORD_NONE means the key belongs
 // to the terminal.
 uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code);
+void muxed_ghostty_set_module_manager_shortcut(const char *key, uint64_t modifier_flags);
 
 void muxed_ghostty_view_disable_scroll_callback(void *view);
 void muxed_ghostty_view_disable_resize_callback(void *view);

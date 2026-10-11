@@ -70,7 +70,7 @@ export function createPackagedUpdateBuildCommand({
   };
 
   return {
-    command: "npm",
+    command: "bun",
     args: [
       "run",
       "tauri",
@@ -192,7 +192,7 @@ export async function signArchiveWithWrongKey({
 }) {
   const archive = requireText(archivePath, "wrong-key updater archive");
   await execute(
-    "npm",
+    "bun",
     [
       "run",
       "tauri",

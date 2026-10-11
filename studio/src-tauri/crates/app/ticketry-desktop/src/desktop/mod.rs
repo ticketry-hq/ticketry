@@ -12,10 +12,13 @@ pub(crate) mod document_protocol;
 pub(crate) mod environment;
 pub(crate) mod folder_selection;
 pub(crate) mod frontend_log;
+pub(crate) mod global_mcp_registration;
 pub(crate) mod handy;
 pub(crate) mod launch_runtime;
 pub(crate) mod lifecycle;
 pub(crate) mod mcp_runtime;
+#[cfg(target_os = "macos")]
+pub(crate) mod microphone_permission;
 pub(crate) mod packaged_binaries;
 pub(crate) mod planner_runtime;
 pub(crate) mod readiness_publication;

@@ -1,0 +1,24 @@
+[package]
+name = "ticketry-public-api-fixtures"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Scanner fixtures stay independent of desktop dependencies. The boundary
+# target deliberately checks and compiles the real shipping workspace.
+[workspace]
+
+[[test]]
+name = "public_api_fixture_contract"
+path = "../public_api_fixture_contract.rs"
+
+[dev-dependencies]
+syn = { version = "=2.0.119", features = ["full", "visit"] }
+serde_json = "=1.0.151"
+tempfile = "=3.23.0"
+quote = "=1.0.47"
+proc-macro2 = "=1.0.107"
+
+[[test]]
+name = "public_api_boundary_contract"
+path = "../public_api_boundary_contract.rs"

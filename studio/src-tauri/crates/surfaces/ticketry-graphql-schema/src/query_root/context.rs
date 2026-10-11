@@ -67,7 +67,10 @@ pub(super) fn builder_context() -> BuilderContext {
             entities::issue::Column::SprintId,
         ],
     );
-    add_uuid_columns::<entities::agent_execution::Entity>(&mut context, [entities::agent_execution::Column::SprintId]);
+    add_uuid_columns::<entities::agent_execution::Entity>(
+        &mut context,
+        [entities::agent_execution::Column::SprintId],
+    );
     add_uuid_columns::<entities::sprint::Entity>(
         &mut context,
         [
@@ -183,19 +186,19 @@ pub(super) fn builder_context() -> BuilderContext {
     add_launch_binding_stage_skills_column(&mut context);
     // Derived, Git-owned, and server-owned Worktree columns are never part of
     // a generated input, whatever the entity's mutation registration is.
-    ticketry_workspace_runtime::persistence::column_policy::apply(&mut context);
+    ticketry_workspace_runtime::apply_worktree_column_policy(&mut context);
     // Design Document roots and provenance leave the contract on the entity
     // itself; every remaining adopted column is skipped in generated inputs.
     ticketry_documents::apply_column_policy(&mut context);
     // Terminal writes remain private, but the generated inputs are still
     // denylisted centrally so later registration cannot expose lifecycle data.
     ticketry_terminal::apply_terminal_column_policy(&mut context);
-    ticketry_work_management::graphql::apply_generated_input_policy(&mut context);
+    ticketry_work_management::apply_generated_input_policy(&mut context);
     context.hooks = LifecycleHooks::new(
         MultiLifecycleHooks::default()
             .add(ticketry_terminal::TerminalReadScope)
             .add(ticketry_agent_execution::GraphRunReadScope)
-            .add(ticketry_workspace_runtime::persistence::ShipRecordReadScope),
+            .add(ticketry_workspace_runtime::ShipRecordReadScope),
     );
 
     context

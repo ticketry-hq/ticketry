@@ -116,7 +116,7 @@ export async function generateUpdaterKeyPair({
   const publicKeyPath = `${privateKeyPath}.pub`;
   const execute = boundaries.execute ?? runAcceptanceCommand;
   await execute(
-    "npm",
+    "bun",
     ["run", "tauri", "--", "signer", "generate", "--ci", "--password",
       requireText(password, "updater key password"), "--write-keys", privateKeyPath],
     `generate ${keyName} updater key`,

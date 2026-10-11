@@ -9,7 +9,7 @@ export const CHECKS = Object.freeze([
   {
     id: "connect",
     title: "Connected startup",
-    action: "Connect the Launchkey Mini MK3 before running npm run desktop:dev. Wait for Studio and the agent status stream to load.",
+    action: "Connect the Launchkey Mini MK3 before running bun run desktop:dev. Wait for Studio and the agent status stream to load.",
     expect: "Ticketry claims DAW session mode once, the pad grid changes from standalone mode, and Studio remains usable.",
   },
   {
@@ -71,7 +71,7 @@ export function renderChecklist() {
   return [
     "Launchkey Mini MK3 macOS hardware check",
     "",
-    "Use a disposable test project and start Studio with npm run desktop:dev unless a step says otherwise.",
+    "Use a disposable test project and start Studio with bun run desktop:dev unless a step says otherwise.",
     "",
     ...checks,
   ].join("\n");

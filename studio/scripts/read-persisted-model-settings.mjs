@@ -97,7 +97,7 @@ export function parseGlobalLaunchDefault(value) {
   }
   const raw = document?.global_default;
   if (!raw || typeof raw !== "object") return null;
-  const known = ["provider", "model", "reasoning"];
+  const known = ["provider", "profile", "model", "reasoning"];
   if (Object.keys(raw).some((key) => !known.includes(key))) return null;
   const provider = typeof raw.provider === "string" ? raw.provider.trim() : "";
   if (!provider) return null;
@@ -105,12 +105,13 @@ export function parseGlobalLaunchDefault(value) {
     raw[field] === undefined || raw[field] === null
       ? null
       : typeof raw[field] === "string"
-        ? raw[field]
+        ? raw[field].trim() || null
         : undefined;
+  const profile = optional("profile");
   const model = optional("model");
   const reasoning = optional("reasoning");
-  if (model === undefined || reasoning === undefined) return null;
-  return { provider, model, reasoning };
+  if (profile === undefined || model === undefined || reasoning === undefined) return null;
+  return { provider, profile, model, reasoning };
 }
 
 export function readProviderCatalogSetting(databasePath) {

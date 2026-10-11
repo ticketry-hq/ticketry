@@ -101,7 +101,7 @@ pub enum RunStatusFrame {
 
 /// Reasons a retained cursor cannot be replayed. They are part of the public
 /// contract, so they stay stable strings rather than formatted prose.
-pub mod reset_reason {
+pub(crate) mod reset_reason {
     pub const COMPACTED: &str = "cursor_compacted";
     pub const AHEAD_OF_SERVER: &str = "cursor_ahead_of_server";
     pub const REPLAY_BOUNDED: &str = "replay_bounded";
@@ -114,7 +114,7 @@ pub mod reset_reason {
 
 /// Terminal failure codes. They match the structured error vocabulary the rest
 /// of the Runs surface already publishes.
-pub mod failure_code {
+pub(crate) mod failure_code {
     pub const BAD_REQUEST: &str = "status_stream_bad_request";
     pub const UNAVAILABLE: &str = "runs_unavailable";
     pub const STORAGE: &str = "runs_storage_failed";

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { generateTerminalEntities } from "./terminal-entity-generation.mjs";
 import { generateExecutionEntities } from "./execution-entity-generation.mjs";
+import { generateSprintEntity } from "./sprint-entity-generation.mjs";
 import { generateStudioTypedDocuments } from "./typed-document-generation.mjs";
 
 export const studioRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -98,6 +99,15 @@ export async function generateFoundationArtifacts(outputRoot) {
     tauriRoot,
   );
   await generateExecutionEntities({ rawDirectory: rawExecutionEntities, outputRoot });
+  const sprintDatabasePath = join(outputRoot, "sprint-generation.sqlite3");
+  const rawSprintEntities = join(outputRoot, "raw-sprint-entities");
+  run("cargo", ["run", "--locked", "--quiet", "-p", "ticketry-dev-tools", "--bin", "prepare_sprint_generation_db", "--", sprintDatabasePath], tauriRoot);
+  run("sea-orm-cli", [
+    "generate", "entity", "--database-url", `sqlite://${sprintDatabasePath}`,
+    "--output-dir", rawSprintEntities, "--entity-format", "dense", "--seaography",
+    "--tables", "worktracker_sprint", "--with-prelude", "none", "--banner-version", "off",
+  ], tauriRoot);
+  await generateSprintEntity({ rawDirectory: rawSprintEntities, outputRoot });
   const schemaPath = join(outputRoot, "schema.graphql");
   const bindingsPath = join(outputRoot, "taurpc.ts");
   run(

@@ -6,18 +6,20 @@ import {
   openModuleChangesWorkspace,
   useChangesWorkspace,
 } from "../../../features/agents/worktrees";
-import { leavePlanWorkspace, openPlanWorkspace, usePlanWorkspace } from "../../../features/sprints";
+import { leavePlanWorkspace, openPlanWorkspace, selectPlanWorkspaceActive, usePlanWorkspace } from "../../../features/sprints";
 import { useClientStore } from "../../../state/clientStore";
+import { ROADMAP_ENABLED } from "../../../shared/config/roadmapAvailability";
 
 export function WorkspaceTabs({ moduleName }: { moduleName?: string }) {
   const projectId = useStudioStore((state) => state.selectedProjectId);
   const selectedModuleId = useClientStore((state) => state.selectedModuleId);
-  const planActive = usePlanWorkspace((state) => state.active);
+  const planActive = usePlanWorkspace(selectPlanWorkspaceActive);
   const planModuleId = usePlanWorkspace((state) => state.origin?.selectedModuleId ?? null);
   const changes = useChangesWorkspace();
   const moduleId = changes.active ? changes.moduleId : planActive ? planModuleId : selectedModuleId;
   const changesLabel = moduleName ? `Changes · ${moduleName}` : "Changes";
   const selectPlan = () => {
+    if (!ROADMAP_ENABLED) return;
     if (changes.active) leaveChangesWorkspace();
     if (!planActive) openPlanWorkspace();
   };
@@ -26,6 +28,14 @@ export function WorkspaceTabs({ moduleName }: { moduleName?: string }) {
     if (planActive) leavePlanWorkspace();
     const restoredModuleId = useClientStore.getState().selectedModuleId;
     if (restoredModuleId) openModuleChangesWorkspace(restoredModuleId);
+  };
+  const enterChanges = () => {
+    selectChanges();
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLButtonElement>(
+        '[data-testid="independent-changes-workspace"] [aria-label="Choose checkout"]',
+      )?.focus({ preventScroll: true });
+    });
   };
   const activate = (event: KeyboardEvent<HTMLButtonElement>, select: () => void) => {
     if ((event.key !== "Enter" && event.key !== " ") || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
@@ -36,15 +46,15 @@ export function WorkspaceTabs({ moduleName }: { moduleName?: string }) {
     "flex shrink-0 items-center gap-1 border-r border-pane-border px-3 text-xs disabled:opacity-50 " +
     (selected ? "bg-pane-panel font-semibold text-text-primary shadow-[inset_0_-2px_0_0_#7aa2f7]" : "text-text-muted hover:bg-pane-panel hover:text-text-primary");
   return <>
-    <button type="button" role="tab" data-testid="workspace-tab-plan"
+    {ROADMAP_ENABLED ? <button type="button" role="tab" data-testid="workspace-tab-plan"
       aria-selected={planActive} tabIndex={planActive ? 0 : -1} disabled={!projectId}
       onClick={selectPlan} onKeyDown={(event) => activate(event, selectPlan)} className={className(planActive)}>
       <span aria-hidden="true">◆</span><span>Plan</span>
-    </button>
+    </button> : null}
     <button type="button" role="tab" data-testid="workspace-tab-changes" data-changes-keyboard-entry
       aria-label={changesLabel} aria-selected={changes.active} tabIndex={changes.active ? 0 : -1}
       title={moduleId ? changesLabel : "Select a module to open Changes"} disabled={!moduleId}
-      onClick={selectChanges} onKeyDown={(event) => activate(event, selectChanges)} className={className(changes.active)}>
+      onClick={selectChanges} onKeyDown={(event) => activate(event, enterChanges)} className={className(changes.active)}>
       <IconGitBranch size={14} data-testid="version-control-icon" /><span>{changesLabel}</span>
     </button>
   </>;

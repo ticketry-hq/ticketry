@@ -89,6 +89,8 @@ impl Authorization {
             launch_reasoning: Set(None),
             launch_unattended: Set(false),
             attention_reason: Set(None),
+            conversation_title: Set(None),
+            stage_skill_availability: Set(None),
         }
         .insert(database)
         .await

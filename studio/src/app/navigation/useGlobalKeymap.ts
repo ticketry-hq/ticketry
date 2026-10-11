@@ -1,12 +1,9 @@
 import { useEffect, useRef } from "react";
 import { useModalStore } from "../modal/modalStore";
-import { useClientStore } from "../../state/clientStore";
 import { isTypingTarget } from "../../shared/utilities/keyboard";
 import {
-  focusedPaneActionIds,
-  routeFullSidebarViewCaptureNavigation,
-  routeFullSidebarViewFocusedPaneNavigation,
-} from "./full-sidebar-view/fullSidebarViewNavigation";
+  routeWorkspaceCaptureNavigation,
+} from "./workspaceNavigation";
 import {
   routeThreeZoneNavigation,
   routeThreeZoneBodyEngagement,
@@ -23,9 +20,11 @@ import {
 import { subscribeNativeTerminalChords } from "./nativeTerminalChords";
 import type { TreeRow } from "../shell/ticket-workspace/tasks/TasksPane";
 import { studioKeymapRegistry } from "./keymapRegistry";
-import { useRestoreAndSelectModule } from "../../features/module-tabs";
+
 import { routeTaskWorkspaceTabAction } from "../shell/ticket-workspace/selected-ticket/appNavigation";
-import { routePlanKeyboardNavigation, usePlanWorkspace } from "../../features/sprints";
+import { routePlanKeyboardNavigation, selectPlanWorkspaceActive, usePlanWorkspace } from "../../features/sprints";
+import { useModuleManagerStore, toggleModuleManager } from "../../features/module-manager/state";
+import { routeModuleManagerKeyboardNavigation } from "../../features/module-manager/keyboardNavigation";
 
 const EMPTY_TASK_ROWS: TreeRow[] = [];
 
@@ -40,6 +39,13 @@ function isLaunchMenuTarget(target: EventTarget | null): boolean {
 
 function hasModifier(event: KeyboardEvent): boolean {
   return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
+}
+
+function isConversationRenameActivation(event: KeyboardEvent): boolean {
+  return !hasModifier(event) &&
+    (event.key === "Enter" || event.key === " ") &&
+    event.target instanceof HTMLElement &&
+    event.target.closest("button[data-conversation-rename]") !== null;
 }
 
 function isChangesEntryActivation(event: KeyboardEvent): boolean {
@@ -61,33 +67,60 @@ function isWorkspaceTabNavigation(event: KeyboardEvent): boolean {
     event.target.closest('[data-workspace-tablist] [role="tab"]') !== null;
 }
 
+function isButtonActivation(event: KeyboardEvent): boolean {
+  return !hasModifier(event) && (event.key === "Enter" || event.key === " ") &&
+    event.target instanceof HTMLElement && event.target.closest("button") !== null;
+}
+
+function isChangesNavigationTarget(event: KeyboardEvent): boolean {
+  return !hasModifier(event) &&
+    ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Enter", " ", "Escape"].includes(event.key) &&
+    event.target instanceof HTMLElement &&
+    event.target.closest("[data-changes-navigation]") !== null;
+}
+
 /** Installs the application-wide keyboard precedence and delegates actions. */
 export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
   const taskRowsRef = useRef(taskRows);
-  const restoreAndSelectModule = useRestoreAndSelectModule();
-  const restoreAndSelectModuleRef = useRef(restoreAndSelectModule);
 
   useEffect(() => {
     taskRowsRef.current = taskRows;
   }, [taskRows]);
 
   useEffect(() => {
-    restoreAndSelectModuleRef.current = restoreAndSelectModule;
-  }, [restoreAndSelectModule]);
-
-  useEffect(() => {
     function onCaptureKeyDown(event: KeyboardEvent): void {
-      const ui = useClientStore.getState();
-      const sidebarVisible = ui.sidebarVisible;
+      // Native rename-button activation precedes capture-phase workspace entry.
+      if (isConversationRenameActivation(event)) return;
       const actionId = studioKeymapRegistry.resolve("capture", event);
       if (actionId === "modules.select-position-10") {
         event.preventDefault();
         event.stopPropagation();
       }
+      if (event.target instanceof HTMLElement && event.target.closest("[data-story-sprint-picker]")) return;
       if (hasOpenModal()) return;
+      const managerAction = studioKeymapRegistry.resolve("global", event);
+      if (!actionId && (managerAction === "toggle-module-manager" ||
+        managerAction === "toggle-sidebar" && !isTypingTarget(event.target))) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        toggleModuleManager();
+        return;
+      }
+      if (useModuleManagerStore.getState().active) {
+        // Covered workspaces stay mounted; their document listeners must not
+        // dismiss an underlying editor before the manager handles Escape.
+        const inDialog = event.target instanceof HTMLElement &&
+          event.target.closest('[role="dialog"]') !== null;
+        if (!inDialog && event.key === "Escape" &&
+          routeModuleManagerKeyboardNavigation(event)) {
+          event.stopImmediatePropagation();
+        }
+        return;
+      }
       if (isLaunchMenuTarget(event.target)) return;
       if (isChangesEntryActivation(event)) return;
       if (isWorkspaceTabNavigation(event)) return;
+      if (isButtonActivation(event)) return;
 
       // Cmd+W must reach the selected run while its terminal owns typing.
       if (actionId === "close-tab") {
@@ -100,12 +133,13 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
       // focus position, including an agent terminal in typing mode (#667).
       if (routeTerminalPanelToggle(event, actionId)) return;
       if (routeModulePositionNavigation(event, actionId)) return;
+      if (isChangesNavigationTarget(event)) return;
       if (
         useChangesWorkspace.getState().active &&
         (actionId === "cycle-terminal-forward" ||
           actionId === "cycle-terminal-backward")
       ) {
-        routeFullSidebarViewCaptureNavigation(
+        routeWorkspaceCaptureNavigation(
           event,
           taskRowsRef.current,
           actionId,
@@ -115,7 +149,7 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
       // Changes owns its local keys before either planning layout sees them.
       // The focused control resolves its exact action through the same registry.
       if (useChangesWorkspace.getState().active) return;
-      if (usePlanWorkspace.getState().active) return;
+      if (selectPlanWorkspaceActive(usePlanWorkspace.getState())) return;
       if (
         actionId === "workspace-tab-next" ||
         actionId === "workspace-tab-previous"
@@ -123,23 +157,22 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
         routeTaskWorkspaceTabAction(event, actionId);
         return;
       }
-      if (!sidebarVisible && routeThreeZoneBodyEngagement(event)) return;
-      if (sidebarVisible) {
-        routeFullSidebarViewCaptureNavigation(
-          event,
-          taskRowsRef.current,
-          actionId,
-        );
-      } else {
-        routeThreeZoneNavigation(event, taskRowsRef.current, actionId);
-      }
+      if (routeThreeZoneBodyEngagement(event)) return;
+      if (routeWorkspaceCaptureNavigation(event, taskRowsRef.current, actionId)) return;
+      routeThreeZoneNavigation(event, taskRowsRef.current, actionId);
     }
 
     function onKeyDown(event: KeyboardEvent): void {
+      if (useModuleManagerStore.getState().active) {
+        if (!hasOpenModal()) routeModuleManagerKeyboardNavigation(event);
+        return;
+      }
+      if (isConversationRenameActivation(event)) return;
       if (isWorkspaceTabNavigation(event)) return;
-      const ui = useClientStore.getState();
-      const sidebarVisible = ui.sidebarVisible;
-      if (usePlanWorkspace.getState().active) {
+      if (isButtonActivation(event)) return;
+      if (event.target instanceof HTMLElement && event.target.closest("[data-story-sprint-picker]")) return;
+      if (isChangesNavigationTarget(event)) return;
+      if (selectPlanWorkspaceActive(usePlanWorkspace.getState())) {
         if (hasOpenModal() || event.defaultPrevented) return;
         // Bare Escape belongs to the Plan workspace even when focus is in an
         // editable field: first close its ticket detail, then leave Plan.
@@ -180,12 +213,9 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
         }
         return;
       }
-      if (!sidebarVisible && routeThreeZoneBodyEngagement(event)) return;
+      if (routeThreeZoneBodyEngagement(event)) return;
       const captureAction = studioKeymapRegistry.resolve("capture", event);
-      if (
-        captureAction &&
-        (!sidebarVisible || !captureAction.startsWith("edit-view."))
-      ) {
+      if (captureAction) {
         return;
       }
       if (
@@ -205,21 +235,6 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
           globalAction === "open-with-prompt-command")
       ) {
         routeSharedNavigation(event, taskRowsRef.current, globalAction);
-        return;
-      }
-      if (
-        sidebarVisible &&
-        routeFullSidebarViewFocusedPaneNavigation(
-          event,
-          taskRowsRef.current,
-          studioKeymapRegistry.resolve(
-            "focused-pane",
-            event,
-            focusedPaneActionIds(ui.focusedPane),
-          ),
-          restoreAndSelectModuleRef.current,
-        )
-      ) {
         return;
       }
       routeSharedNavigation(

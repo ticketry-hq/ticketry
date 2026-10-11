@@ -25,7 +25,7 @@ export type {
   AutomationDeliveryMode,
   AutomationDeliveryPresentation,
 } from "./automationDelivery";
-export { isAgentlessRun, SHELL_RUN_SCOPE } from "./runScopes";
+export { isAgentlessRun, isWorkItemShellRun, SHELL_RUN_SCOPE } from "./runScopes";
 export { ModuleLifecycleChicklets } from "./ModuleLifecycleChicklets";
 export {
   useAgentStatusRuns,

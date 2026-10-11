@@ -13,6 +13,10 @@ pub(super) const DOMAIN_OPERATIONS: &[DomainOperation] = &[
         reason: "Task reorder allocates a fractional rank between concrete sibling identities and records the project revision atomically. Generated model CRUD cannot validate that ordered gap.",
     },
     DomainOperation {
+        field: "reorder_sprint",
+        reason: "Sprint reorder allocates a fractional rank between concrete sequence neighbors under the Project lock and enforces that history precedes planned sprints; generated model CRUD cannot validate that ordered gap.",
+    },
+    DomainOperation {
         field: "reorder_states",
         reason: "State reorder validates the complete project-owned state set and replaces its ordering atomically.",
     },
@@ -39,6 +43,7 @@ pub(super) fn assert_complete() {
         [
             "reorder_module_presentation",
             "reorder_work_item",
+            "reorder_sprint",
             "reorder_states",
             "reorder_issue_types",
             "remove_state_from_issue_type_workflow",
@@ -57,11 +62,35 @@ mod tests {
     #[test]
     fn every_named_work_management_operation_has_a_reason() {
         assert_complete();
+        assert_eq!(
+            DOMAIN_OPERATIONS
+                .iter()
+                .map(|entry| entry.field)
+                .collect::<Vec<_>>(),
+            [
+                "reorder_module_presentation",
+                "reorder_work_item",
+                "reorder_sprint",
+                "reorder_states",
+                "reorder_issue_types",
+                "remove_state_from_issue_type_workflow",
+                "acknowledge_onboarding",
+            ]
+        );
+        assert!(DOMAIN_OPERATIONS
+            .iter()
+            .all(|entry| !entry.reason.is_empty()));
         assert!(DOMAIN_OPERATIONS
             .iter()
             .find(|entry| entry.field == "reorder_module_presentation")
             .unwrap()
             .reason
             .contains("Generated model CRUD"));
+        assert!(DOMAIN_OPERATIONS
+            .iter()
+            .find(|entry| entry.field == "reorder_sprint")
+            .unwrap()
+            .reason
+            .contains("generated model CRUD cannot validate that ordered gap"));
     }
 }

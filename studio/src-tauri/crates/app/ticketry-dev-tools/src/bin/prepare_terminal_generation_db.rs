@@ -32,7 +32,7 @@ async fn main() {
                resumed_from varchar(255), scope varchar(32) NOT NULL,\n\
                launch_state varchar(255), launch_model varchar(255), initial_prompt text,\n\
                launch_reasoning varchar(255), launch_unattended boolean NOT NULL DEFAULT 0,\n\
-               attention_reason text\n\
+               attention_reason text, conversation_title text, stage_skill_availability text\n\
              );\n\
              CREATE TABLE agent_terminal_sessions (\n\
                agent_run_id varchar(255) PRIMARY KEY REFERENCES agent_runs(id) ON DELETE CASCADE,\n\

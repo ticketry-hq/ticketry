@@ -25,47 +25,51 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
         ),
         (
             "ticketry_worktracker_adoption",
-            ticketry_work_management::work_management_ownership_manifest::VERSION,
+            ticketry_work_management::WORK_MANAGEMENT_OWNERSHIP_VERSION,
         ),
         (
             ticketry_settings::CODEX_5_6_LEDGER,
             ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
         ),
         (
-            ticketry_work_management::project_onboarding_migration::LEDGER_TABLE,
-            ticketry_work_management::project_onboarding_migration::VERSION,
+            ticketry_work_management::PROJECT_ONBOARDING_MIGRATION_LEDGER_TABLE,
+            ticketry_work_management::PROJECT_ONBOARDING_MIGRATION_VERSION,
         ),
         (
-            ticketry_work_management::launch_binding_entry_skill_migration::LEDGER_TABLE,
-            ticketry_work_management::launch_binding_entry_skill_migration::VERSION,
+            ticketry_work_management::LAUNCH_BINDING_ENTRY_SKILL_MIGRATION_LEDGER_TABLE,
+            ticketry_work_management::LAUNCH_BINDING_ENTRY_SKILL_MIGRATION_VERSION,
         ),
         (
-            ticketry_work_management::launch_binding_profile_migration::LEDGER_TABLE,
-            ticketry_work_management::launch_binding_profile_migration::VERSION,
+            ticketry_work_management::LAUNCH_BINDING_PROFILE_MIGRATION_LEDGER_TABLE,
+            ticketry_work_management::LAUNCH_BINDING_PROFILE_MIGRATION_VERSION,
         ),
         (
-            ticketry_work_management::launch_binding_stage_skills_migration::LEDGER_TABLE,
-            ticketry_work_management::launch_binding_stage_skills_migration::VERSION,
+            ticketry_work_management::LAUNCH_BINDING_STAGE_SKILLS_MIGRATION_LEDGER_TABLE,
+            ticketry_work_management::LAUNCH_BINDING_STAGE_SKILLS_MIGRATION_VERSION,
         ),
         (
-            ticketry_work_management::sprint_migration::LEDGER_TABLE,
-            ticketry_work_management::sprint_migration::VERSION,
+            ticketry_work_management::SPRINT_MIGRATION_LEDGER_TABLE,
+            ticketry_work_management::SPRINT_MIGRATION_VERSION,
         ),
         (
-            ticketry_work_management::tag_migration::LEDGER_TABLE,
-            ticketry_work_management::tag_migration::VERSION,
+            ticketry_work_management::SPRINT_RANK_MIGRATION_LEDGER_TABLE,
+            ticketry_work_management::SPRINT_RANK_MIGRATION_VERSION,
         ),
         (
-            ticketry_work_management::workflow_color_migration::LEDGER_TABLE,
-            ticketry_work_management::workflow_color_migration::VERSION,
+            ticketry_work_management::TAG_MIGRATION_LEDGER_TABLE,
+            ticketry_work_management::TAG_MIGRATION_VERSION,
         ),
         (
-            ticketry_work_management::workspace_tab_order_migration::LEDGER_TABLE,
-            ticketry_work_management::workspace_tab_order_migration::VERSION,
+            ticketry_work_management::WORKFLOW_COLOR_MIGRATION_LEDGER_TABLE,
+            ticketry_work_management::WORKFLOW_COLOR_MIGRATION_VERSION,
         ),
         (
-            ticketry_work_management::module_presentation_migration::LEDGER_TABLE,
-            ticketry_work_management::module_presentation_migration::VERSION,
+            ticketry_work_management::WORKSPACE_TAB_ORDER_MIGRATION_LEDGER_TABLE,
+            ticketry_work_management::WORKSPACE_TAB_ORDER_MIGRATION_VERSION,
+        ),
+        (
+            ticketry_work_management::MODULE_PRESENTATION_MIGRATION_LEDGER_TABLE,
+            ticketry_work_management::MODULE_PRESENTATION_MIGRATION_VERSION,
         ),
         (
             ticketry_settings::CODEX_SPARK_LEDGER,
@@ -102,15 +106,15 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
         ),
         (
             "ticketry_execution_adoption",
-            ticketry_agent_execution::persistence::VERSION,
+            ticketry_agent_execution::EXECUTION_SCHEMA_VERSION,
         ),
         (
             ticketry_documents::LEDGER_TABLE,
             ticketry_documents::DOCUMENT_SCHEMA_VERSION,
         ),
         (
-            ticketry_workspace_runtime::persistence::LEDGER_TABLE,
-            ticketry_workspace_runtime::persistence::VERSION,
+            ticketry_workspace_runtime::LEDGER_TABLE,
+            ticketry_workspace_runtime::VERSION,
         ),
     ]
 }

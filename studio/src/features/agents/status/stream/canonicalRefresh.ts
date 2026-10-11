@@ -26,11 +26,14 @@ import { studioApolloClient } from "../../../../shared/apollo/client";
 import { WorkTrackerProjectOpenDocument } from "../../../projects";
 import {
   WorkTrackerModuleOpenDocument,
+  WorkTrackerReviewFindingsDocument,
   WorkTrackerWorkItemDocument,
 } from "../../../work-items";
+import { refreshProjectStorySprintIndex } from "../../../work-items";
 import { refreshDocumentRegistries } from "./documentInvalidation";
 import { refreshWorktreeHoldings } from "./worktreeInvalidation";
 import { refreshTerminalHoldings } from "../../terminal";
+import { refreshSprintHoldings } from "./sprintInvalidation";
 
 export interface CanonicalRefreshRequest {
   readonly projectId: string;
@@ -62,9 +65,12 @@ export async function refreshCanonicalHoldings(
       include: [
         WorkTrackerProjectOpenDocument,
         WorkTrackerModuleOpenDocument,
+        WorkTrackerReviewFindingsDocument,
         WorkTrackerWorkItemDocument,
       ],
     }),
+    refreshProjectStorySprintIndex(request.projectId),
+    refreshSprintHoldings(request.projectId),
     refreshDocumentRegistries(),
     refreshTerminalHoldings(),
     refreshWorktreeHoldings(),

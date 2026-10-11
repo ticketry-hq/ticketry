@@ -1,19 +1,20 @@
 mod common;
 
 use std::sync::Arc;
+use ticketry_work_management::{pending, record};
 
 use common::terminal_lifecycle_harness::{
     TerminalLifecycleHarness, MODULE_ID, PROJECT_ID, TASK_ID, TASK_RUN_ID,
 };
 use common::terminal_reconciliation_runtime::ScriptedRuntime;
 use sea_orm::{ActiveValue::NotSet, ConnectionTrait, EntityTrait, Set};
-use ticketry_agent_execution::reconciliation::ExecutionReconciliationService;
+use ticketry_agent_execution::ExecutionReconciliationService;
 use ticketry_entities::{
     agent_run, automation_attempt, issue, launch_material, launch_policy_decision, session,
 };
 use ticketry_terminal::{CleanupRuntimeObservation, TerminalCleanupService, TerminalLaunchService};
-use ticketry_work_management::launch_policy::{
-    self, CallerScope, LaunchPolicyDecision, LaunchPolicyResolver, ModuleLinkInput,
+use ticketry_work_management::{
+    CallerScope, LaunchPolicyDecision, LaunchPolicyResolver, ModuleLinkInput,
 };
 
 const ISSUE_TYPE: &str = "00000000-0000-0000-0000-000000008645";
@@ -47,7 +48,7 @@ async fn a_replacing_delivery_ends_the_live_agent_before_launching_once() {
     .await;
 
     let fresh =
-        ticketry_agent_execution::launch_delivery::execute(&database, &launch, &cleanup, &decision)
+        ticketry_agent_execution::execute_launch_delivery(&database, &launch, &cleanup, &decision)
             .await
             .unwrap();
 
@@ -101,7 +102,7 @@ async fn a_failed_kill_stops_launch_and_retry_kills_again_then_launches() {
     .await;
 
     assert_eq!(
-        ticketry_agent_execution::launch_delivery::execute(&database, &launch, &cleanup, &first,)
+        ticketry_agent_execution::execute_launch_delivery(&database, &launch, &cleanup, &first,)
             .await
             .unwrap_err(),
         "previous_agent_not_ended"
@@ -156,7 +157,7 @@ async fn a_failed_kill_stops_launch_and_retry_kills_again_then_launches() {
         "codex",
     )
     .await;
-    let fresh = ticketry_agent_execution::launch_delivery::execute(
+    let fresh = ticketry_agent_execution::execute_launch_delivery(
         &database,
         &launch,
         &cleanup,
@@ -223,7 +224,7 @@ async fn a_handoff_delivers_the_complete_composed_destination_prompt_once() {
     .await;
 
     let continued =
-        ticketry_agent_execution::launch_delivery::execute(&database, &launch, &cleanup, &decision)
+        ticketry_agent_execution::execute_launch_delivery(&database, &launch, &cleanup, &decision)
             .await
             .unwrap();
 
@@ -315,7 +316,7 @@ async fn legacy_pending_handoffs_preserve_the_selected_skill_through_reconciliat
     ticketry_installation::install_final_schema_migrations(&database)
         .await
         .expect("upgrade the database containing pending version-2 decisions");
-    let migrated = launch_policy::pending(&database, 10).await.unwrap();
+    let migrated = pending(&database, 10).await.unwrap();
     assert_eq!(migrated.len(), 3);
     assert_eq!(migrated[0].stage_skills, ["tdd"]);
     assert!(migrated[1].stage_skills.is_empty());
@@ -471,7 +472,7 @@ async fn recorded_decision(
     stage_skill: Option<&str>,
     provider: &str,
 ) -> LaunchPolicyDecision {
-    launch_policy::record(
+    record(
         database,
         &LaunchPolicyDecision {
             version: 3,

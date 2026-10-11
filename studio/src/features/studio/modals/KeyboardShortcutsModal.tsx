@@ -31,7 +31,8 @@ const ESSENTIALS: readonly { id: string; label: string }[] = [
   { id: "capture:cycle-terminal-forward", label: "Next terminal" },
   { id: "capture:toggle-terminal-panel", label: "Toggle terminal panel" },
   { id: "global:search", label: "Search" },
-  { id: "global:toggle-sidebar", label: "Toggle sidebar" },
+  { id: "global:toggle-module-manager", label: "Toggle Module Manager" },
+  { id: "global:toggle-sidebar", label: "Toggle Module Manager (legacy)" },
 ];
 
 function bindingId(binding: EffectiveBinding): string {

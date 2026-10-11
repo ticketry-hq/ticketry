@@ -101,6 +101,9 @@ impl InstantRunTicketTitleService {
         else {
             return Ok(None);
         };
+        if run.conversation_title.is_some() {
+            return Ok(None);
+        }
         let Some(thread_id) = run
             .provider_session_id
             .as_deref()

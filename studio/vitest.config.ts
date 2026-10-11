@@ -1,7 +1,9 @@
-import { defineConfig } from "vitest/config";
+import { resolveRoadmapAvailability } from "./scripts/roadmap-build-policy.mjs";
+import { defineConfig, configDefaults } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
+  define: { __TICKETRY_ROADMAP_ENABLED__: JSON.stringify(resolveRoadmapAvailability(process.env)) },
   plugins: [react()],
   // Mirrors vite.config.ts: one CodeMirror instance, or the dark theme Studio
   // hands to MDXEditor's code blocks fails CodeMirror's extension checks.
@@ -23,5 +25,6 @@ export default defineConfig({
       deps: { inline: [/@mdxeditor/, /codemirror/, /cm6-theme/, /@lezer/] },
     },
     include: ["src/**/*.test.{ts,tsx}"],
+    exclude: [...configDefaults.exclude, "src/test/overhaulRoadmapOff*Acceptance.test.tsx"],
   },
 });

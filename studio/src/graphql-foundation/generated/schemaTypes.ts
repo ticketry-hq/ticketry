@@ -88,10 +88,15 @@ export type AgentRunHolding = {
   project_id: Scalars['String']['output'];
   provider_session_id?: Maybe<Scalars['String']['output']>;
   scope: Scalars['String']['output'];
+  stage_skill_availability?: Maybe<Scalars['String']['output']>;
   started_at: Scalars['String']['output'];
   state: Scalars['String']['output'];
   task_id?: Maybe<Scalars['String']['output']>;
   updated_at: Scalars['String']['output'];
+};
+
+export type AgentRunUpdateInput = {
+  conversationTitle: Scalars['String']['input'];
 };
 
 export type AgentRunViewerLeases = {
@@ -147,6 +152,7 @@ export type AgentRunViewerLeasesOrderInput = {
 export type AgentRuns = {
   __typename?: 'AgentRuns';
   agent?: Maybe<Scalars['String']['output']>;
+  conversationTitle?: Maybe<Scalars['String']['output']>;
   endedAt?: Maybe<Scalars['String']['output']>;
   error?: Maybe<Scalars['String']['output']>;
   exitCode?: Maybe<Scalars['Int']['output']>;
@@ -163,6 +169,7 @@ export type AgentRuns = {
   providerSessionId?: Maybe<Scalars['String']['output']>;
   resumedFrom?: Maybe<Scalars['String']['output']>;
   scope: Scalars['String']['output'];
+  stageSkillAvailability?: Maybe<Scalars['String']['output']>;
   startedAt: Scalars['String']['output'];
   status: Scalars['String']['output'];
   terminalSession: AgentTerminalSessionsConnection;
@@ -193,6 +200,7 @@ export type AgentRunsEdge = {
 export type AgentRunsFilterInput = {
   agent?: InputMaybe<StringFilterInput>;
   and?: InputMaybe<Array<AgentRunsFilterInput>>;
+  conversationTitle?: InputMaybe<StringFilterInput>;
   endedAt?: InputMaybe<StringFilterInput>;
   error?: InputMaybe<StringFilterInput>;
   exitCode?: InputMaybe<IntegerFilterInput>;
@@ -210,6 +218,7 @@ export type AgentRunsFilterInput = {
   providerSessionId?: InputMaybe<StringFilterInput>;
   resumedFrom?: InputMaybe<StringFilterInput>;
   scope?: InputMaybe<StringFilterInput>;
+  stageSkillAvailability?: InputMaybe<StringFilterInput>;
   startedAt?: InputMaybe<StringFilterInput>;
   status?: InputMaybe<StringFilterInput>;
   ticketSeq?: InputMaybe<IntegerFilterInput>;
@@ -222,6 +231,7 @@ export type AgentRunsHavingInput = {
 
 export type AgentRunsOrderInput = {
   agent?: InputMaybe<OrderByEnum>;
+  conversationTitle?: InputMaybe<OrderByEnum>;
   endedAt?: InputMaybe<OrderByEnum>;
   error?: InputMaybe<OrderByEnum>;
   exitCode?: InputMaybe<OrderByEnum>;
@@ -237,6 +247,7 @@ export type AgentRunsOrderInput = {
   providerSessionId?: InputMaybe<OrderByEnum>;
   resumedFrom?: InputMaybe<OrderByEnum>;
   scope?: InputMaybe<OrderByEnum>;
+  stageSkillAvailability?: InputMaybe<OrderByEnum>;
   startedAt?: InputMaybe<OrderByEnum>;
   status?: InputMaybe<OrderByEnum>;
   ticketSeq?: InputMaybe<OrderByEnum>;
@@ -541,6 +552,7 @@ export type InstantRunTicket = {
   agent_run_id: Scalars['String']['output'];
   started_at: Scalars['String']['output'];
   title: Scalars['String']['output'];
+  user_title?: Maybe<Scalars['String']['output']>;
 };
 
 export type IntegerFilterInput = {
@@ -568,6 +580,25 @@ export type KeybindingSetting = {
   scope: Scalars['String']['output'];
   updated_at: Scalars['String']['output'];
   value: Scalars['Json']['output'];
+};
+
+export type LaunchSkillAvailabilityEntry = {
+  __typename?: 'LaunchSkillAvailabilityEntry';
+  installed_name?: Maybe<Scalars['String']['output']>;
+  location?: Maybe<Scalars['String']['output']>;
+  reason?: Maybe<Scalars['String']['output']>;
+  requested: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+};
+
+export type LaunchSkillAvailabilityPayload = {
+  __typename?: 'LaunchSkillAvailabilityPayload';
+  code?: Maybe<Scalars['String']['output']>;
+  message?: Maybe<Scalars['String']['output']>;
+  provider?: Maybe<Scalars['String']['output']>;
+  searched_roots: Array<Scalars['String']['output']>;
+  skills: Array<LaunchSkillAvailabilityEntry>;
+  status: Scalars['String']['output'];
 };
 
 export type LifecycleAccepted = {
@@ -756,6 +787,7 @@ export type Mutation = {
   remove_state_from_issue_type_workflow: Scalars['Boolean']['output'];
   reorder_issue_types: Array<WorktrackerIssuetype>;
   reorder_module_presentation: WorktrackerModulepresentation;
+  reorder_sprint: WorktrackerSprint;
   reorder_states: Array<WorktrackerState>;
   reorder_work_item: WorktrackerIssue;
   retry_automation_attempt: AutomationAttemptProjection;
@@ -765,6 +797,7 @@ export type Mutation = {
   terminal_output_observe: TerminalOutputObservation;
   terminal_session_create: AgentTerminalSessions;
   terminal_session_update: AgentTerminalSessions;
+  update_agent_run: AgentRuns;
   update_instant_launch_setting: KeybindingSetting;
   update_issue_type: WorktrackerIssuetype;
   update_issue_type_transition: WorktrackerIssuetypetransition;
@@ -780,7 +813,7 @@ export type Mutation = {
   update_work_item: WorktrackerIssue;
   upsert_issue_type_launch_binding: WorktrackerLaunchbinding;
   worktrackerIssuetypeCreateOne: WorktrackerIssuetypeBasic;
-  worktrackerSprintCreateOne: WorktrackerSprintBasic;
+  worktrackerSprintCreateOne: WorktrackerSprint;
   worktree_cleanup: WorktreeDiscardResult;
   worktree_commit: RepositoryCommandResult;
   worktree_commit_push: RepositoryCommandResult;
@@ -865,6 +898,7 @@ export type MutationCreate_Work_ItemArgs = {
   name: Scalars['String']['input'];
   parent_id?: InputMaybe<Scalars['String']['input']>;
   project_id: Scalars['String']['input'];
+  sprint_id?: InputMaybe<Scalars['String']['input']>;
   state_id?: InputMaybe<Scalars['String']['input']>;
 };
 
@@ -1002,6 +1036,13 @@ export type MutationReorder_Module_PresentationArgs = {
 };
 
 
+export type MutationReorder_SprintArgs = {
+  after_id?: InputMaybe<Scalars['String']['input']>;
+  before_id?: InputMaybe<Scalars['String']['input']>;
+  sprint_id: Scalars['String']['input'];
+};
+
+
 export type MutationReorder_StatesArgs = {
   ordered_ids: Array<Scalars['String']['input']>;
   project_id: Scalars['String']['input'];
@@ -1072,6 +1113,12 @@ export type MutationTerminal_Session_CreateArgs = {
 export type MutationTerminal_Session_UpdateArgs = {
   agent_run_id: Scalars['String']['input'];
   termination_request_id?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type MutationUpdate_Agent_RunArgs = {
+  id: Scalars['String']['input'];
+  input: AgentRunUpdateInput;
 };
 
 
@@ -1374,6 +1421,7 @@ export type Query = {
   instant_run_ticket_title?: Maybe<Scalars['String']['output']>;
   instant_run_tickets: Array<InstantRunTicket>;
   keybinding_setting?: Maybe<KeybindingSetting>;
+  launch_skill_availability: LaunchSkillAvailabilityPayload;
   migrationProbes: MigrationProbesConnection;
   moduleLinks: ModuleLinksConnection;
   module_file_diff: FileDiffView;
@@ -1482,6 +1530,14 @@ export type QueryInstant_Run_Ticket_TitleArgs = {
 export type QueryInstant_Run_TicketsArgs = {
   module_id: Scalars['String']['input'];
   project_id: Scalars['String']['input'];
+};
+
+
+export type QueryLaunch_Skill_AvailabilityArgs = {
+  agent?: InputMaybe<Scalars['String']['input']>;
+  module_id: Scalars['String']['input'];
+  names: Array<Scalars['String']['input']>;
+  profile?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -2905,6 +2961,7 @@ export type WorktrackerSprint = {
   name: Scalars['String']['output'];
   project?: Maybe<WorktrackerProject>;
   projectId: Scalars['String']['output'];
+  rank: Scalars['String']['output'];
   status: Scalars['String']['output'];
   suggestionRun?: Maybe<AgentRuns>;
   suggestionRunId?: Maybe<Scalars['String']['output']>;
@@ -2933,18 +2990,6 @@ export type WorktrackerSprintSuggestionsArgs = {
   pagination?: InputMaybe<PaginationInput>;
 };
 
-export type WorktrackerSprintBasic = {
-  __typename?: 'WorktrackerSprintBasic';
-  createdAt: Scalars['String']['output'];
-  goalsRevisedAt?: Maybe<Scalars['String']['output']>;
-  id: Scalars['String']['output'];
-  name: Scalars['String']['output'];
-  projectId: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-  suggestionRunId?: Maybe<Scalars['String']['output']>;
-  updatedAt: Scalars['String']['output'];
-};
-
 export type WorktrackerSprintConnection = {
   __typename?: 'WorktrackerSprintConnection';
   edges: Array<WorktrackerSprintEdge>;
@@ -2968,6 +3013,7 @@ export type WorktrackerSprintFilterInput = {
   not?: InputMaybe<WorktrackerSprintFilterInput>;
   or?: InputMaybe<Array<WorktrackerSprintFilterInput>>;
   projectId?: InputMaybe<StringFilterInput>;
+  rank?: InputMaybe<StringFilterInput>;
   status?: InputMaybe<StringFilterInput>;
   suggestionRunId?: InputMaybe<StringFilterInput>;
   updatedAt?: InputMaybe<TextFilterInput>;
@@ -3042,6 +3088,7 @@ export type WorktrackerSprintOrderInput = {
   id?: InputMaybe<OrderByEnum>;
   name?: InputMaybe<OrderByEnum>;
   projectId?: InputMaybe<OrderByEnum>;
+  rank?: InputMaybe<OrderByEnum>;
   status?: InputMaybe<OrderByEnum>;
   suggestionRunId?: InputMaybe<OrderByEnum>;
   updatedAt?: InputMaybe<OrderByEnum>;

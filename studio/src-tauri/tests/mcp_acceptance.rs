@@ -13,6 +13,8 @@ use tokio::time::{timeout, Duration};
 #[path = "mcp_acceptance/codex_rename.rs"]
 mod codex_rename;
 mod common;
+#[path = "mcp_acceptance/sprint_assignment.rs"]
+mod sprint_assignment;
 #[path = "mcp_acceptance/sprint_suggestions.rs"]
 mod sprint_suggestions;
 #[path = "mcp_acceptance/tags.rs"]
@@ -132,7 +134,7 @@ async fn mcp_stage_skills_use_the_workflow_list_contract() {
     ))
     .await
     .unwrap();
-    ticketry_work_management::launch_binding_stage_skills_migration::install(&database)
+    ticketry_work_management::install_launch_binding_stage_skills_schema(&database)
         .await
         .unwrap();
     database.close().await.unwrap();

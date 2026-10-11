@@ -2,7 +2,7 @@ use std::io;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::Value;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::UnixStream;
@@ -22,20 +22,14 @@ pub enum Input {
 
 pub async fn connect_authenticated(
     path: PathBuf,
-    agent_run_id: String,
-    authorization: String,
+    envelope: Value,
 ) -> Result<(OwnedReadHalf, OwnedWriteHalf), String> {
     tokio::time::timeout(CONNECT_TIMEOUT, async move {
         let mut stream = UnixStream::connect(path)
             .await
             .map_err(|_| "service_unavailable".to_owned())?;
-        let envelope = serde_json::to_vec(&json!({
-            "ticketry_mcp_auth": 1,
-            "mode": "run",
-            "agent_run_id": agent_run_id,
-            "authorization": authorization,
-        }))
-        .map_err(|_| "handshake_malformed".to_owned())?;
+        let envelope =
+            serde_json::to_vec(&envelope).map_err(|_| "handshake_malformed".to_owned())?;
         if envelope.len() > MAX_HANDSHAKE_BYTES {
             return Err("handshake_too_large".to_owned());
         }

@@ -134,6 +134,7 @@ export const useAgentStatusStore: AgentStatusFacade = Object.assign(
         ]),
       );
       replaceAgentStatusHolding({
+        complete: next.complete ?? true,
         projectId,
         runs: nextRuns,
         automationAttempts:

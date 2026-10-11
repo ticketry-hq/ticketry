@@ -15,6 +15,6 @@ export function releasePlanWrite(id: string): void {
 }
 export function usePlanWritePending(): (id: string) => boolean {
   usePlanWrites.getState();
-  const pending = usePlanWrites((state) => state.pending);
-  return (id) => Boolean(pending[compactWorktrackerId(id)]);
+  usePlanWrites((state) => state.pending);
+  return (id) => Boolean(usePlanWrites.getState().pending[compactWorktrackerId(id)]);
 }

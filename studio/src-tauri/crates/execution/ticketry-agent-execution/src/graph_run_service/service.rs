@@ -18,7 +18,7 @@ use ticketry_entities::{
 use ticketry_launch::{compose_task_prompt, TaskPromptSource};
 use ticketry_launch::{CreateTerminalSession, TerminalLaunchKind};
 use ticketry_terminal::TerminalLaunchService;
-use ticketry_work_management::launch_policy::{
+use ticketry_work_management::{
     CallerScope, LaunchPolicyDecision, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 
@@ -432,6 +432,7 @@ impl GraphRunService {
                                 &child_id,
                                 &graph.project_id,
                                 prompt,
+                                &stage_skills,
                             ),
                             &claim,
                         )
@@ -615,6 +616,7 @@ fn terminal_request(
         resume_from_agent_run_id: None,
         automation_attempt_id: None,
         required_skills: decision.required_skills.clone(),
+        stage_skills: decision.stage_skills.clone(),
         working_directory_identity: format!("task:{}", compact(child_id)),
         design_directory_identity: None,
         document_relative_path: None,
@@ -629,6 +631,7 @@ fn stored_terminal_request(
     child_id: &str,
     project_id: &str,
     prompt: String,
+    stage_skills: &[String],
 ) -> CreateTerminalSession {
     CreateTerminalSession {
         client_request_id: identity.request_id.clone(),
@@ -646,6 +649,7 @@ fn stored_terminal_request(
         resume_from_agent_run_id: None,
         automation_attempt_id: None,
         required_skills: policy.required_skills.clone(),
+        stage_skills: stage_skills.to_owned(),
         working_directory_identity: format!("task:{}", compact(child_id)),
         design_directory_identity: None,
         document_relative_path: None,

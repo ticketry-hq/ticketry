@@ -41,6 +41,9 @@ export function listTaskDocuments(
   return studioApolloClient()
     .mutate({
       mutation: RefreshTaskDocumentRegistryDocument,
+      // The workspace accepts this response before publishing registry rows.
+      // Avoid normalizing obsolete refresh fields ahead of that entry guard.
+      fetchPolicy: "no-cache",
       variables: {
         taskId,
         projectId: projectId ?? null,
@@ -61,6 +64,7 @@ export function listScratchDocuments(
   return studioApolloClient()
     .mutate({
       mutation: RefreshScratchDocumentRegistryDocument,
+      fetchPolicy: "no-cache",
       variables: { moduleId },
     })
     .then((result) => {

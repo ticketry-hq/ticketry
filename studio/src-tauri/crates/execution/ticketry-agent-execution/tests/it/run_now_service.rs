@@ -1,7 +1,7 @@
 use std::sync::atomic::Ordering;
 
 use sea_orm::{ConnectionTrait, DatabaseConnection, EntityTrait, PaginatorTrait};
-use ticketry_agent_execution::run_now::{RunNowCaller, RunNowRefusal, RunNowRequest};
+use ticketry_agent_execution::{RunNowCaller, RunNowRefusal, RunNowRequest};
 use ticketry_entities::{issue, launch_policy_decision, transition_occurrence};
 
 use super::run_now_fixture::*;
@@ -100,7 +100,7 @@ async fn retry_resumes_a_claimed_failure_but_a_fresh_identity_cannot_adopt_imple
         None
     );
     assert_eq!(
-        ticketry_work_management::launch_policy::pending(&fixture.database, 10)
+        ticketry_work_management::pending(&fixture.database, 10)
             .await
             .unwrap()
             .len(),
@@ -309,7 +309,7 @@ async fn transition_failure_rolls_back_and_late_launch_failure_reports_the_commi
         0
     );
     assert!(
-        ticketry_work_management::launch_policy::pending(&rejected_transition.database, 10,)
+        ticketry_work_management::pending(&rejected_transition.database, 10,)
             .await
             .unwrap()
             .is_empty(),
@@ -362,12 +362,10 @@ async fn assert_refused_without_mutation(fixture: &Fixture, refusal: RunNowRefus
             .unwrap(),
         0
     );
-    assert!(
-        ticketry_work_management::launch_policy::pending(&fixture.database, 10)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert!(ticketry_work_management::pending(&fixture.database, 10)
+        .await
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]
@@ -442,16 +440,17 @@ async fn a_child_committed_after_preflight_is_refused_inside_the_guarded_transit
 
 #[tokio::test]
 async fn concurrent_child_creation_either_precedes_and_refuses_or_follows_the_commit() {
-    use ticketry_work_management::commands::work_items::{create, CreateWorkItem};
+    use ticketry_work_management::{create_work_item, CreateWorkItem};
     for attempt in 0..8 {
         let fixture = fixture(None).await;
         let mut request = human(TASK);
         request.request_identity = format!("race-{attempt}");
         let (run_now, child) = tokio::join!(
             fixture.service.execute(request),
-            create(
+            create_work_item(
                 &fixture.database,
                 CreateWorkItem {
+                    sprint_id: None,
                     project_id: PROJECT.to_owned(),
                     name: "Racing subtask".to_owned(),
                     issue_type_id: STORY.to_owned(),

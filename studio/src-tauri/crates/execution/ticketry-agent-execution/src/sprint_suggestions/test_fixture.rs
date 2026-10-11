@@ -47,8 +47,8 @@ pub(super) async fn fixture() -> (DatabaseConnection, tempfile::TempDir) {
         ('20000000000000000000000000000001','Project','project','',2,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,0);
         INSERT INTO worktracker_issuetype (id,project_id,name,level,color,sort_order,start_state_id,workflow_revision,is_pathfind,created_at,updated_at) VALUES
         ('70000000000000000000000000000001','20000000000000000000000000000001','Story','task','',1,NULL,1,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
-        INSERT INTO worktracker_sprint (id,project_id,name,status,created_at,updated_at) VALUES
-        ('10000000000000000000000000000001','20000000000000000000000000000001','Sprint','planned',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
+        INSERT INTO worktracker_sprint (id,project_id,name,status,rank,created_at,updated_at) VALUES
+        ('10000000000000000000000000000001','20000000000000000000000000000001','Sprint','planned','V',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
         INSERT INTO worktracker_sprint_goal (id,sprint_id,position,text,created_at,updated_at) VALUES
         ('30000000000000000000000000000001','10000000000000000000000000000001',1,'Ship planning',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
         INSERT INTO worktracker_issue (id,project_id,type,issue_type_id,state_revision,name,sequence_id,is_archived,rank,description,workspace_tab_order,created_at,updated_at) VALUES

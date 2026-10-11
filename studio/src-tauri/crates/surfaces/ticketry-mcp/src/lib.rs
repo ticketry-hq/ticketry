@@ -38,6 +38,7 @@ mod termination_eligibility;
 #[cfg(any(test, feature = "test-support"))]
 mod test_support;
 mod work_facts;
+mod work_item_sprint_tools;
 mod work_item_tools;
 mod workflow_tools;
 
@@ -49,7 +50,7 @@ use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::sync::CancellationToken;
 
 use ticketry_data_directory::DataDirectoryGuard;
-use ticketry_work_management::{commands::attachments::AttachmentStorage, open_for_commands};
+use ticketry_work_management::{open_for_commands, AttachmentStorage};
 
 pub use registry::allowed_provider_operations;
 use service::WorktrackerMcpService;
@@ -248,8 +249,7 @@ impl McpRuntime {
             .map_err(McpStartupError::other)?;
         let socket_path = mcp_socket_path(&data_directory);
         let (listener, bound) = socket_path::bind(&socket_path).await?;
-        let launch_policy =
-            ticketry_work_management::launch_policy::LaunchPolicyResolver::new(database.clone());
+        let launch_policy = ticketry_work_management::LaunchPolicyResolver::new(database.clone());
         let graph_runs = terminal_launch.clone().map(|terminal_launch| {
             ticketry_agent_execution::GraphRunService::production(
                 database.clone(),

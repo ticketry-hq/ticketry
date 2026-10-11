@@ -172,3 +172,19 @@ describe("Apollo normalized entity identities", () => {
     });
   });
 });
+
+
+it("unifies Sprint records returned with compact and public IDs", () => {
+  const cache = new InMemoryCache({ typePolicies });
+  const fragment = gql`fragment SprintIdentity on WorktrackerSprint { id name status }`;
+  cache.writeFragment({ fragment, data: { __typename: "WorktrackerSprint",
+    id: "20000000000000000000000000000000", name: "Current", status: "active" } });
+  cache.writeFragment({ fragment, data: { __typename: "WorktrackerSprint",
+    id: "20000000-0000-0000-0000-000000000000", name: "Current", status: "completed" } });
+  expect(cache.identify({ __typename: "WorktrackerSprint",
+    id: "20000000000000000000000000000000" })).toBe(
+      cache.identify({ __typename: "WorktrackerSprint",
+        id: "20000000-0000-0000-0000-000000000000" }));
+  expect(cache.readFragment({ fragment, id: cache.identify({ __typename: "WorktrackerSprint",
+    id: "20000000000000000000000000000000" }) })).toMatchObject({ status: "completed" });
+});

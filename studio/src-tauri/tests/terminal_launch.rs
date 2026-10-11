@@ -264,7 +264,9 @@ fn request(id: &str, kind: TerminalLaunchKind) -> CreateTerminalSession {
         _ => TASK_ID,
     };
     let working_directory_identity = match kind {
-        TerminalLaunchKind::Task | TerminalLaunchKind::Automation | TerminalLaunchKind::TaskShell => {
+        TerminalLaunchKind::Task
+        | TerminalLaunchKind::Automation
+        | TerminalLaunchKind::TaskShell => {
             format!("task:{}", TASK_ID.replace('-', ""))
         }
         TerminalLaunchKind::Planning | TerminalLaunchKind::Instant | TerminalLaunchKind::Shell => {
@@ -295,6 +297,7 @@ fn request(id: &str, kind: TerminalLaunchKind) -> CreateTerminalSession {
         resume_from_agent_run_id: None,
         automation_attempt_id: None,
         required_skills: vec!["seaography-graphql".to_owned()],
+        stage_skills: Vec::new(),
         working_directory_identity,
         design_directory_identity: None,
         document_relative_path: (kind == TerminalLaunchKind::DocumentChat)
@@ -321,6 +324,7 @@ fn shell_request(id: &str) -> CreateTerminalSession {
         resume_from_agent_run_id: None,
         automation_attempt_id: None,
         required_skills: Vec::new(),
+        stage_skills: Vec::new(),
         working_directory_identity: format!("module:{}", MODULE_ID.replace('-', "")),
         design_directory_identity: None,
         document_relative_path: None,

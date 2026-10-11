@@ -1,7 +1,7 @@
 //! Explicit, branch-scoped preparation of one mapped pull request.
 
 mod error;
-pub mod launcher;
+mod launcher;
 mod operation_registry;
 mod prompt;
 mod service;

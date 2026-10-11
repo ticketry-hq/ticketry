@@ -25,7 +25,7 @@ use super::{
 
 /// The evidence key checkpoints accumulate under, so a settlement's own
 /// evidence and the boundary evidence that preceded it stay distinguishable.
-pub const CHECKPOINT_KEY: &str = "checkpoint";
+pub(crate) const CHECKPOINT_KEY: &str = "checkpoint";
 
 impl WorkspaceOperationJournal {
     /// Record one boundary observation under the caller's live lease.

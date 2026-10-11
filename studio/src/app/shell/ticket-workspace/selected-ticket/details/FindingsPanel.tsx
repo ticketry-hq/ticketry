@@ -1,5 +1,4 @@
-import { FindingLocationLabel } from "../../../../../features/work-items";
-import { type WorkItem } from "../../../../../shared/api/types";
+import { FindingLocationLabel, useReviewFindingChildren } from "../../../../../features/work-items";
 import { stateColor, stateLabel } from "../../../../../shared/utilities/display";
 import { useClientStore } from "../../../../../state/clientStore";
 import { useCachedStates, stateById } from "../../../../../features/projects";
@@ -12,7 +11,7 @@ import {
 } from "./internal/findings";
 
 interface FindingsPanelProps {
-  children: WorkItem[];
+  parentId: string;
   projectId: string;
   onCancel: (childId: string) => void;
 }
@@ -21,9 +20,12 @@ interface FindingsPanelProps {
 // direct Implementation children (findings the integration-review agent filed
 // via CODIN-905) with key, title, state chip, and parsed location, plus a
 // "N fixes queued" count of the ones at the Implementation start stage.
+// Children come from the parent-scoped read, not filtered module membership:
+// cancelling archives a finding, and it must stay listed as resolved.
 // Open/edit selects the child in the Studio task store; cancel reuses the child
 // state-move mutation, after which the parent detail reconciles.
-export default function FindingsPanel({ children, projectId, onCancel }: FindingsPanelProps) {
+export default function FindingsPanel({ parentId, projectId, onCancel }: FindingsPanelProps) {
+  const children = useReviewFindingChildren(parentId);
   const selectTask = useClientStore((state) => state.selectTask);
   const states = useCachedStates(projectId);
   const issueTypes = useIssueTypesQuery(projectId).data ?? [];

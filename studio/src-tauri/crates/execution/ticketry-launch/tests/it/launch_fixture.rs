@@ -163,7 +163,7 @@ pub(crate) async fn fixture() -> Fixture {
     let database = open_for_commands(&path).await.unwrap();
     // The folder a launch runs in is the module's typed link, not a profile
     // entry, so the prompt facts and the design directory resolve from here.
-    ticketry_work_management::schema::install(&database)
+    ticketry_work_management::install_module_links_schema(&database)
         .await
         .unwrap();
     ticketry_work_management::ModuleLinkStore::new(database.clone())
@@ -202,6 +202,7 @@ pub(crate) fn caller_request(kind: TerminalLaunchKind) -> CreateTerminalSession 
         resume_from_agent_run_id: None,
         automation_attempt_id: None,
         required_skills: vec!["caller-chosen-skill".to_owned()],
+        stage_skills: Vec::new(),
         working_directory_identity: format!("task:{issue_id}"),
         design_directory_identity: Some("caller-chosen-directory".to_owned()),
         document_relative_path: Some("caller-chosen.html".to_owned()),

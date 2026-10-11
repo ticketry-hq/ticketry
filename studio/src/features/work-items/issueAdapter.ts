@@ -14,6 +14,7 @@ export function workItemFromIssue(item: GeneratedWorkTrackerWorkItemFieldsFragme
     state: item.state_id ? publicWorktrackerId(item.state_id) : null,
     description: item.description,
     parent_id: item.parent_id ? publicWorktrackerId(item.parent_id) : null,
+    sprint_id: item.sprint_id ? publicWorktrackerId(item.sprint_id) : null,
     sub_issues_count: item.children.nodes.filter((child) =>
       !("is_archived" in child) || !child.is_archived
     ).length,

@@ -1,8 +1,12 @@
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ConnectionTrait, Database, EntityTrait};
+use ticketry_work_management::modules;
 
 use ticketry_entities::{issue, module_presentation as presentation};
-use ticketry_work_management::commands::{reorder, work_items};
-use ticketry_work_management::{open_for_commands, read_queries};
+
+use ticketry_work_management::open_for_commands;
+use ticketry_work_management::{
+    create_work_item, reorder_module_presentation, CreateWorkItem, ReorderWorkItem,
+};
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const MODULE_TYPE: &str = "20000000000000000000000000000000";
@@ -97,8 +101,8 @@ fn move_module(
     before: Option<&str>,
     after: Option<&str>,
     baseline: Option<Vec<&str>>,
-) -> reorder::ReorderWorkItem {
-    reorder::ReorderWorkItem {
+) -> ReorderWorkItem {
+    ReorderWorkItem {
         id: id.to_owned(),
         before_id: before.map(str::to_owned),
         after_id: after.map(str::to_owned),
@@ -107,7 +111,7 @@ fn move_module(
 }
 
 async fn active_order(database: &sea_orm::DatabaseConnection) -> Vec<String> {
-    read_queries::modules(database, PROJECT, false)
+    modules(database, PROJECT, false)
         .await
         .unwrap()
         .into_iter()
@@ -148,7 +152,7 @@ async fn first_drag_seeds_active_modules_once_and_preserves_visibility() {
     let (_directory, database) = fixture().await;
     update_visibility(&database, B, true).await;
 
-    reorder::reorder_module_presentation(
+    reorder_module_presentation(
         &database,
         move_module(A, None, Some(C), Some(vec![C, B, A])),
         None,
@@ -171,7 +175,7 @@ async fn first_drag_seeds_active_modules_once_and_preserves_visibility() {
 #[tokio::test]
 async fn later_drag_updates_one_rank_and_rejects_stale_neighbors() {
     let (_directory, database) = fixture().await;
-    reorder::reorder_module_presentation(
+    reorder_module_presentation(
         &database,
         move_module(A, None, Some(C), Some(vec![C, B, A])),
         None,
@@ -184,7 +188,7 @@ async fn later_drag_updates_one_rank_and_rejects_stale_neighbors() {
         .map(|row| (row.module_id, (row.rank, row.tab_hidden)))
         .collect();
 
-    reorder::reorder_module_presentation(&database, move_module(A, Some(C), Some(B), None), None)
+    reorder_module_presentation(&database, move_module(A, Some(C), Some(B), None), None)
         .await
         .unwrap();
     let after: std::collections::HashMap<_, _> = presentations(&database)
@@ -197,10 +201,9 @@ async fn later_drag_updates_one_rank_and_rejects_stale_neighbors() {
     assert_ne!(before[A].0, after[A].0);
     assert_eq!(active_order(&database).await, ["c", "a", "b"]);
 
-    let error =
-        reorder::reorder_module_presentation(&database, move_module(A, Some(C), None, None), None)
-            .await
-            .unwrap_err();
+    let error = reorder_module_presentation(&database, move_module(A, Some(C), None, None), None)
+        .await
+        .unwrap_err();
     assert_eq!(error.to_string(), "before/after are not ordered neighbors.");
     assert_eq!(active_order(&database).await, ["c", "a", "b"]);
 }
@@ -239,9 +242,10 @@ async fn an_archived_rank_does_not_enable_manual_order_for_active_modules() {
 
     assert_eq!(active_order(&database).await, ["a", "b", "c"]);
 
-    let created = work_items::create(
+    let created = create_work_item(
         &database,
-        work_items::CreateWorkItem {
+        CreateWorkItem {
+            sprint_id: None,
             project_id: PROJECT.to_owned(),
             name: "automatic-new".to_owned(),
             issue_type_id: MODULE_TYPE.to_owned(),
@@ -315,9 +319,10 @@ async fn visibility_requires_a_valid_module_identity() {
 #[tokio::test]
 async fn automatic_and_manual_module_creation_use_their_canonical_end() {
     let (_directory, database) = fixture().await;
-    let automatic = work_items::create(
+    let automatic = create_work_item(
         &database,
-        work_items::CreateWorkItem {
+        CreateWorkItem {
+            sprint_id: None,
             project_id: PROJECT.to_owned(),
             name: "automatic-new".to_owned(),
             issue_type_id: MODULE_TYPE.to_owned(),
@@ -339,7 +344,7 @@ async fn automatic_and_manual_module_creation_use_their_canonical_end() {
         "automatic-new"
     );
 
-    reorder::reorder_module_presentation(
+    reorder_module_presentation(
         &database,
         move_module(
             A,
@@ -366,9 +371,10 @@ async fn automatic_and_manual_module_creation_use_their_canonical_end() {
         .unwrap()
         .rank;
 
-    let manual = work_items::create(
+    let manual = create_work_item(
         &database,
-        work_items::CreateWorkItem {
+        CreateWorkItem {
+            sprint_id: None,
             project_id: PROJECT.to_owned(),
             name: "manual-new".to_owned(),
             issue_type_id: MODULE_TYPE.to_owned(),
@@ -395,7 +401,7 @@ async fn concurrent_first_drags_serialize_and_seed_one_complete_order() {
     let (_directory, database) = fixture().await;
     let requests = [database.clone(), database.clone()].map(|database| {
         tokio::spawn(async move {
-            reorder::reorder_module_presentation(
+            reorder_module_presentation(
                 &database,
                 move_module(A, None, Some(C), Some(vec![C, B, A])),
                 None,

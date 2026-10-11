@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { orderedWorkItems } from "./issueAdapter";
+import { orderedWorkItems, workItemFromIssue } from "./issueAdapter";
 import type { GeneratedWorkTrackerWorkItemFieldsFragment } from "./generated/workItems.documents";
 
 // Exactly what the Rust `fractional_rank::rebalance(5)` allocates. Every case
@@ -59,5 +59,15 @@ describe("orderedWorkItems", () => {
     expect(orderedWorkItems(rows).map((item) => item.sequence_id)).toEqual([
       1, 2, 3,
     ]);
+  });
+});
+
+
+describe("Work Item sprint membership", () => {
+  it("retains nullable canonical sprint identity through the adapter", () => {
+    expect(workItemFromIssue(issue("V", 1)).sprint_id).toBeNull();
+    expect(workItemFromIssue({
+      ...issue("V", 1), sprint_id: "20000000000000000000000000000000",
+    }).sprint_id).toBe("20000000-0000-0000-0000-000000000000");
   });
 });

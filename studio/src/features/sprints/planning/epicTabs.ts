@@ -1,9 +1,5 @@
 import type { PlanVisit } from "../planWorkspaceState";
-import { NO_EPIC, type EpicGraph, type EpicSuggestion, type PlanEpic } from "./epicMembership";
-
-export function seedEpicTabs(_graph: EpicGraph, _suggestions: EpicSuggestion[], _sprintId: string): PlanVisit {
-  return { epicTabs: [], activeEpicId: null };
-}
+import { NO_EPIC, type PlanEpic } from "./epicMembership";
 
 export function reconcileEpicTabs(visit: PlanVisit, epics: PlanEpic[]): PlanVisit {
   const available = new Set(epics.map((epic) => epic.id));

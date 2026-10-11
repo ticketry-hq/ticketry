@@ -2,10 +2,10 @@
 
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, DbErr, Statement, TransactionTrait};
 
-pub const VERSION: i32 = 1;
+pub(crate) const VERSION: i32 = 1;
 pub const MIGRATION_ID: &str = "20260831-0052-worktree-pull-request-url-v1";
 pub const LEDGER_TABLE: &str = "ticketry_worktree_pull_request_url_migration";
-pub const SOURCE_COMMIT: &str = "7453d4e956dfe394d73924e26b51e0c8580af90a";
+pub(crate) const SOURCE_COMMIT: &str = "7453d4e956dfe394d73924e26b51e0c8580af90a";
 
 pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
     let transaction = database.begin().await?;
@@ -45,11 +45,11 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
     Ok(())
 }
 
-pub async fn installed(database: &impl ConnectionTrait) -> Result<bool, DbErr> {
+pub(crate) async fn installed(database: &impl ConnectionTrait) -> Result<bool, DbErr> {
     table_exists(database, LEDGER_TABLE).await
 }
 
-pub async fn verify(database: &impl ConnectionTrait) -> Result<(), DbErr> {
+pub(crate) async fn verify(database: &impl ConnectionTrait) -> Result<(), DbErr> {
     verify_ledger(database).await?;
     verify_column(database).await
 }

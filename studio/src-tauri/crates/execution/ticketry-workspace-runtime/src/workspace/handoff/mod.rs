@@ -13,13 +13,13 @@
 
 mod adoption;
 mod error;
-pub mod gate;
-pub mod manifest;
+pub(crate) mod gate;
+pub(crate) mod manifest;
 mod readiness;
 
 pub use adoption::{adopt, HandoffEvidence};
 pub use error::{WorkspaceHandoffError, WorkspaceHandoffErrorCode};
 pub use gate::WorkspaceReadinessGate;
 pub use readiness::{
-    publish as publish_readiness, published_readiness_is_complete, Slice4Readiness, READINESS_FILE,
+    publish as publish_readiness, published_readiness_is_complete, Slice4Readiness,
 };

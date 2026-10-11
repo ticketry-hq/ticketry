@@ -32,7 +32,7 @@ muxed_ghostty_scroll_mods(NSEvent *event) {
   return precision | (momentum << 1);
 }
 
-@interface MuxedGhosttyView : NSView {
+@interface MuxedGhosttyView : NSView <NSTextInputClient> {
  @public
   ghostty_surface_t _surface;
   muxed_ghostty_surface_owner_s _surfaceOwner;
@@ -54,6 +54,11 @@ muxed_ghostty_scroll_mods(NSEvent *event) {
   NSView *_webview;
   float _baseFontSize;
   double _fontZoom;
+  NSMutableAttributedString *_markedText;
+  NSRange _markedSelectedRange;
+  NSMutableArray<NSString *> *_keyTextAccumulator;
+  BOOL _keyInputOwned;
+  BOOL _keyCommandRequested;
 }
 - (instancetype)initWithRuntime:(MuxedGhosttyRuntime *)runtime
                          parent:(NSView *)parent
@@ -231,6 +236,15 @@ muxed_ghostty_scroll_mods(NSEvent *event) {
   atomic_fetch_add_explicit(&_redrawGeneration, 1, memory_order_release);
 }
 
+#include "libghostty_text_input.m"
+#include "libghostty_key_input.m"
+
+- (void)dealloc {
+  [_markedText release];
+  [_keyTextAccumulator release];
+  [super dealloc];
+}
+
 - (void)keyDown:(NSEvent *)event {
   if (!_acceptsInput || _surface == NULL) return;
   // Studio chords must survive an engaged terminal (#667, #735): the WebView
@@ -238,7 +252,7 @@ muxed_ghostty_scroll_mods(NSEvent *event) {
   // recognised here, hands the keyboard back, and is reported to Studio.
   // Only the chord is native; what it *means* stays owned by the JavaScript
   // binding, which is why this reports instead of acting.
-  uint8_t chord = muxed_ghostty_studio_chord(event.modifierFlags, event.keyCode);
+  uint8_t chord = muxed_ghostty_event_studio_chord(event);
   if (chord != MUXED_GHOSTTY_CHORD_NONE) {
     muxed_focus_trace(self, "disengaged by studio chord", _acceptsInput);
     if (chord < MUXED_GHOSTTY_CHORD_ZOOM_IN ||
@@ -248,9 +262,7 @@ muxed_ghostty_scroll_mods(NSEvent *event) {
     return;
   }
 
-  ghostty_input_key_s key = muxed_ghostty_key_event(
-      event, event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS);
-  ghostty_surface_key(_surface, key);
+  [self forwardKeyEvent:event];
 }
 
 - (void)keyUp:(NSEvent *)event {

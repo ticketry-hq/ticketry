@@ -174,7 +174,7 @@ test("desktop development accepts explicit data modes", () => {
   );
   assert.throws(
     () => parseDesktopDevMode(["--unknown"]),
-    /usage: pnpm --filter @worktracker\/studio desktop:dev -- \[--production-data \| --temp-sqlite\]/,
+    /usage: bun run --cwd studio desktop:dev \[--production-data \| --temp-sqlite\]/,
   );
 });
 

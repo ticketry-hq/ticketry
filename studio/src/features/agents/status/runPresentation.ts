@@ -68,9 +68,22 @@ export function isAwaitingUser(state: string): boolean {
 export function stallDeadlineAt(run: RunRecord): number | null {
   if (isTerminalOutcome(run.state) || isAwaitingUser(run.state)) return null;
   if (!run.last_output_at) return null;
-  const observed = Date.parse(run.last_output_at);
+  const observed = parseServerTimestamp(run.last_output_at);
   if (Number.isNaN(observed)) return null;
   return observed + STALL_AFTER_MS;
+}
+
+const ZONE_DESIGNATOR = /(?:Z|[+-]\d{2}:?\d{2})$/i;
+
+/**
+ * Parse a server timestamp the way the Runs service does: a value without a
+ * zone designator is UTC. `Date.parse` would read it as browser-local time,
+ * making a fresh run look hours old east of UTC (#2762).
+ */
+function parseServerTimestamp(value: string): number {
+  const trimmed = value.trim();
+  if (ZONE_DESIGNATOR.test(trimmed)) return Date.parse(trimmed);
+  return Date.parse(`${trimmed.replace(" ", "T")}Z`);
 }
 
 /**

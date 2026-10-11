@@ -122,7 +122,7 @@ pub async fn prepare_command_database(directory: &tempfile::TempDir) {
                 lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
                 scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT,
                 initial_prompt TEXT, launch_reasoning TEXT,
-                launch_unattended BOOL NOT NULL DEFAULT 0, attention_reason TEXT
+                launch_unattended BOOL NOT NULL DEFAULT 0, attention_reason TEXT, conversation_title TEXT, stage_skill_availability TEXT
             );
             CREATE TABLE runs_status_events (
                 cursor INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE,
@@ -226,11 +226,14 @@ pub async fn prepare_command_database(directory: &tempfile::TempDir) {
         ))
         .await
         .expect("link fixture module to the temp directory");
-    ticketry_work_management::module_presentation_migration::install(&database)
+    ticketry_work_management::install_module_presentation_schema(&database)
         .await
         .expect("install final module-presentation shape");
-    ticketry_work_management::sprint_migration::install(&database)
+    ticketry_work_management::install_sprint_schema(&database)
         .await
         .expect("install sprint planning shape");
+    ticketry_work_management::install_sprint_rank_schema(&database)
+        .await
+        .expect("install sprint sequence shape");
     database.close().await.expect("close MCP command fixture");
 }

@@ -8,7 +8,6 @@ export const TASK_SELECTIONS_KEY = "studio.selectedTaskByModule:v1";
 export const RECENT_MODULE_KEY = "studio.recentModule:v1";
 export const TERMINAL_PANEL_KEY = "studio.terminalPanel:v1";
 
-const LEGACY_SIDEBAR_KEYS = ["plane-tui:sidebar-visible"];
 const LEGACY_PANEL_LAYOUT_KEYS = ["plane-tui:panel-layout"];
 const LEGACY_COLLAPSED_STATE_KEYS = [
   "studio.collapsedStates:v1",
@@ -32,16 +31,11 @@ function isStringArray(value: unknown): value is string[] {
 }
 
 export function readSidebarVisible(): boolean {
-  return readVersionedItem(SIDEBAR_KEY, LEGACY_SIDEBAR_KEYS) !== "false";
+  return false;
 }
 
-export function writeSidebarVisible(visible: boolean): void {
-  try {
-    localStorage.setItem(SIDEBAR_KEY, String(visible));
-  } catch {
-    /* unavailable storage leaves the in-memory preference intact */
-  }
-}
+/** @deprecated The retired preference cannot create a sidebar. */
+export function writeSidebarVisible(_visible: boolean): void {}
 
 /**
  * The one module this installation was last working in.
@@ -75,14 +69,21 @@ export function clearRecentModule(): void {
   }
 }
 
-/** Panel sizes, migrating the retired leading projects-pane slot away. */
+/** Retain the Stories/workspace ratio while discarding retired leading panes. */
 export function readPanelLayout(): number[] | null {
   try {
     const raw = readVersionedItem(PANEL_LAYOUT_KEY, LEGACY_PANEL_LAYOUT_KEYS);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    if (!isPanelLayout(parsed)) return null;
-    return parsed.length === 4 ? parsed.slice(1) : parsed;
+    const normalized = normalizePanelLayout(parsed);
+    if (normalized && Array.isArray(parsed) && parsed.length > 2) {
+      try {
+        localStorage.setItem(PANEL_LAYOUT_KEY, JSON.stringify(normalized));
+      } catch {
+        /* unavailable storage leaves the translated in-memory split intact */
+      }
+    }
+    return normalized;
   } catch {
     return null;
   }
@@ -91,9 +92,17 @@ export function readPanelLayout(): number[] | null {
 export function isPanelLayout(value: unknown): value is number[] {
   return (
     Array.isArray(value) &&
-    value.length > 0 &&
-    value.every((size) => typeof size === "number" && Number.isFinite(size))
+    [2, 3, 4].includes(value.length) &&
+    value.every((size) => typeof size === "number" && Number.isFinite(size) && size >= 0)
   );
+}
+
+export function normalizePanelLayout(value: unknown): [number, number] | null {
+  if (!isPanelLayout(value)) return null;
+  const [stories, workspace] = value.slice(-2);
+  const total = stories + workspace;
+  if (total <= 0) return null;
+  return [stories / total * 100, workspace / total * 100];
 }
 
 export function persistPanelLayout(sizes: number[]): void {

@@ -14,6 +14,7 @@ import { useEffect, useMemo } from "react";
 import { useQuery } from "@apollo/client/react";
 
 import { studioApolloClient } from "../../../shared/apollo/client";
+import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
 import { retainRestoredAgentRun } from "../status";
 import type { AgentRunScope, RunRecord } from "../status";
 import {
@@ -64,17 +65,18 @@ function restorableRun(
   // Resumability comes from the terminal session record. No record, no durable
   // terminal; a terminated record, no tmux session left to reattach.
   const session = run.terminal_session.nodes.find(
-    (candidate) => candidate.agent_run_id === run.agent_run_id,
+    (candidate) => compactWorktrackerId(candidate.agent_run_id) === compactWorktrackerId(run.agent_run_id),
   );
   if (!session || session.terminated_at !== null) return null;
   return {
-    agent_run_id: run.agent_run_id,
+    agent_run_id: compactWorktrackerId(run.agent_run_id),
     project_id: item.project_id,
     ...placement(item),
     agent: run.agent,
     scope: run.scope as AgentRunScope,
     launch_state: run.launch_state,
     launch_model: run.launch_model,
+    stage_skill_availability: run.stage_skill_availability,
     provider_session_id: run.provider_session_id,
     started_at: run.started_at,
     state: endedState(run),
@@ -115,7 +117,7 @@ function useEndedRuns(
   issueType: string,
   scopes: readonly AgentRunScope[],
   placement: RunPlacement,
-): RunRecord[] {
+): { runs: RunRecord[]; isResolved: boolean } {
   const query = useQuery(WorkItemEndedRunsDocument, {
     client: studioApolloClient(),
     variables: {
@@ -135,11 +137,19 @@ function useEndedRuns(
   useEffect(() => {
     for (const run of runs) retainRestoredAgentRun(run);
   }, [runs]);
-  return runs;
+  return {
+    runs,
+    isResolved: Boolean(issueId) && !query.loading && !query.error && data !== undefined,
+  };
 }
 
 /** A Story's exited-but-restorable runs, read through the WorkItem model. */
 export function useStoryEndedRuns(taskId: string | null): RunRecord[] {
+  return useStoryEndedRunRead(taskId).runs;
+}
+
+/** The existing read plus successful resolution, for durable-target fallback. */
+export function useStoryEndedRunRead(taskId: string | null) {
   return useEndedRuns(taskId, "task", ["task"], storyPlacement);
 }
 
@@ -148,5 +158,9 @@ export function useStoryEndedRuns(taskId: string | null): RunRecord[] {
  * runs, read through the module WorkItem that owns them.
  */
 export function useModuleScratchEndedRuns(moduleId: string | null): RunRecord[] {
+  return useModuleScratchEndedRunRead(moduleId).runs;
+}
+
+export function useModuleScratchEndedRunRead(moduleId: string | null) {
   return useEndedRuns(moduleId, "module", SCRATCH_SCOPES, scratchPlacement);
 }

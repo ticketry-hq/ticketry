@@ -21,7 +21,7 @@ use super::{
 };
 
 /// Leases are bounded so a crashed worker cannot hold an operation forever.
-pub const MAX_LEASE_SECONDS: i64 = 900;
+pub(crate) const MAX_LEASE_SECONDS: i64 = 900;
 
 /// Everything an executor is allowed to receive.
 #[derive(Clone, Debug, Eq, PartialEq)]

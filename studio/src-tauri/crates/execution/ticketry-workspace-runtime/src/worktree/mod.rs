@@ -1,9 +1,9 @@
 //! Worktree capability: creating, inspecting, discarding, and tracking git worktrees.
 
-pub mod changes;
-pub mod create;
-pub mod discard;
-pub mod facts;
-pub mod operations;
-pub mod persistence;
-pub mod status;
+pub(crate) mod changes;
+pub(crate) mod create;
+pub(crate) mod discard;
+pub(crate) mod facts;
+pub(crate) mod operations;
+pub(crate) mod persistence;
+pub(crate) mod status;

@@ -28,16 +28,16 @@
 //! a database, resolves the established data directory, or holds a default, so
 //! an import can only ever reach the installation it was handed.
 
-pub mod folder_preflight;
-pub mod identity;
-pub mod legacy_import;
-pub mod legacy_source;
-pub mod local_path;
-pub mod ownership_manifest;
-pub mod receipt;
-pub mod resolution;
-pub mod schema;
-pub mod store;
+pub(crate) mod folder_preflight;
+pub(crate) mod identity;
+mod legacy_import;
+pub(crate) mod legacy_source;
+mod local_path;
+pub(crate) mod ownership_manifest;
+pub(crate) mod receipt;
+pub(crate) mod resolution;
+pub(crate) mod schema;
+pub(crate) mod store;
 
 mod module_link;
 
@@ -46,9 +46,7 @@ mod module_link;
 /// `#[cfg(test)]` only ever meant "this crate's own tests", and the worktree
 /// tests that need these fixtures are now in another crate.
 #[cfg(feature = "test-support")]
-pub mod test_support;
-
-pub use ticketry_entities as entities;
+pub(crate) mod test_support;
 
 mod error;
 

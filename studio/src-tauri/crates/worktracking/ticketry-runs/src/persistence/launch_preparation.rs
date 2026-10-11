@@ -41,6 +41,7 @@ pub struct RunSnapshot {
     pub provider_session_id: Option<String>,
     pub launch_state: Option<String>,
     pub launch_model: Option<String>,
+    pub stage_skill_availability: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -366,6 +367,8 @@ async fn mint_or_validate_run(
         launch_reasoning: Set(request.snapshot.reasoning.clone()),
         launch_unattended: Set(request.snapshot.unattended),
         attention_reason: NotSet,
+        conversation_title: NotSet,
+        stage_skill_availability: Set(request.snapshot.stage_skill_availability.clone()),
     }
     .insert(transaction)
     .await

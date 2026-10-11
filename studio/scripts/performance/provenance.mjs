@@ -25,7 +25,7 @@ export const FINGERPRINTED_PATHS = [
   "studio/vite.proxy.ts",
   "studio/tailwind.config.ts",
   "studio/postcss.config.js",
-  "package-lock.json",
+  "bun.lock",
 ];
 
 function git(arguments_, { cwd = repositoryRoot } = {}) {
@@ -141,7 +141,7 @@ export function stalePreparationMessage(reasons) {
   return [
     "the prepared profiling artifacts are stale or missing:",
     ...reasons.map((reason) => `  - ${reason}`),
-    "run: npm run perf:prepare --workspace @worktracker/studio",
+    "run: bun run --cwd studio perf:prepare",
     "or rerun with --allow-stale-build to profile the recorded bundle anyway",
   ].join("\n");
 }

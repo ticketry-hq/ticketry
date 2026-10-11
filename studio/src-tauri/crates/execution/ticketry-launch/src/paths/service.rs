@@ -25,9 +25,10 @@ use ticketry_documents::{self as design_directory, ModuleIdentity, TaskIdentity,
 use ticketry_entities::design_document;
 use ticketry_entities::issue;
 use ticketry_entities::worktree;
-use ticketry_work_management::resolution;
-use ticketry_workspace_runtime::status::identity::{canonical_uuid, compact_uuid};
-use ticketry_workspace_runtime::status::owner::{self, WorktreeOwner};
+use ticketry_work_management::{resolved_folder, usable_folder, ModuleFolderRefusal};
+use ticketry_workspace_runtime::{
+    canonical_uuid, compact_uuid, resolve_worktree_owner, WorktreeOwner,
+};
 
 use super::error::{LaunchPathsError, LaunchPathsErrorCode};
 use super::request::{LaunchPathsRequest, LaunchScope, SUPPORTED_VERSION};
@@ -69,8 +70,8 @@ impl LaunchPathsService {
     pub async fn preflight_module_folder(
         &self,
         module_id: &str,
-    ) -> Result<PathBuf, resolution::ModuleFolderRefusal> {
-        resolution::usable_folder(&self.database, module_id).await
+    ) -> Result<PathBuf, ModuleFolderRefusal> {
+        usable_folder(&self.database, module_id).await
     }
 
     // -----------------------------------------------------------------
@@ -88,7 +89,7 @@ impl LaunchPathsService {
             .ok_or_else(|| {
                 LaunchPathsError::identity_required("A task launch needs a Work Item identity.")
             })?;
-        let owner = owner::resolve(&self.database, task_id).await?;
+        let owner = resolve_worktree_owner(&self.database, task_id).await?;
         // The module is derived from the Work Item graph. A submitted module
         // is only ever checked against it, so a caller cannot point a launch
         // at another module's folder by naming one.
@@ -107,7 +108,7 @@ impl LaunchPathsService {
         let (worktree_root, usage) = self.worktree_root(&owner).await?;
         let root = match worktree_root.clone() {
             Some(root) => Some(root),
-            None => resolution::resolved_folder(&self.database, &module_id).await,
+            None => resolved_folder(&self.database, &module_id).await,
         };
 
         let module = self.module_identity(&module_id).await?;
@@ -183,7 +184,7 @@ impl LaunchPathsService {
                 LaunchPathsError::identity_required("A scratch launch needs a module identity.")
             })?;
         let module = self.module_identity(module_id).await?;
-        let root = resolution::resolved_folder(&self.database, module_id).await;
+        let root = resolved_folder(&self.database, module_id).await;
         let relative = module
             .as_ref()
             .map(|module| design_directory::planning_design_dir(module, &request.agent_run_id));

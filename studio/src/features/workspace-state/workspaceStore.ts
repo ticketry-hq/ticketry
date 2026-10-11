@@ -1,5 +1,5 @@
 import { createApolloStore } from "../../shared/apollo/localState";
-import { readSidebarVisible, readPanelLayout, readExpandedIdsByModule, rememberTaskSelection } from "../../state/persistence";
+import { readPanelLayout, readExpandedIdsByModule, rememberTaskSelection } from "../../state/persistence";
 import type { ClientState } from "./types";
 import { moduleSelectionActions } from "./moduleSelection";
 import { workspaceTabActions } from "./workspaceTabs";
@@ -34,7 +34,7 @@ export const useClientStore = createApolloStore<ClientState>("client", (set, get
   editViewBodyEngaged: false,
   navigationModality: "keyboard",
   modulesCursorId: null,
-  sidebarVisible: readSidebarVisible(),
+  sidebarVisible: false,
   panelLayout: readPanelLayout(),
   expandedIdsByModule: readExpandedIdsByModule(),
   collapsedStateIds: initialCollapsedStateIds,

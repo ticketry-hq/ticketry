@@ -59,8 +59,8 @@ async fn goals_append_per_sprint_and_updates_preserve_protected_fields() {
     );
     execute(&f, DELETE, json!({"id": second["id"]})).await;
     assert_eq!(create(&f, SPRINT, "Fourth").await["position"], 4);
-    f.db.execute_unprepared("INSERT INTO worktracker_sprint (id, project_id, name, status, created_at, updated_at)
-        VALUES ('10000000000000000000000000000002', '20000000000000000000000000000001', 'Other', 'planned', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)").await.unwrap();
+    f.db.execute_unprepared("INSERT INTO worktracker_sprint (id, project_id, name, status, rank, created_at, updated_at)
+        VALUES ('10000000000000000000000000000002', '20000000000000000000000000000001', 'Other', 'planned', 'k', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)").await.unwrap();
     assert_eq!(
         create(&f, "10000000-0000-0000-0000-000000000002", "Other").await["position"],
         1

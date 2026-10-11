@@ -8,7 +8,7 @@ TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/ticketry-native-text-input.XXXXXX")
 trap 'rm -rf "$TEST_DIR"' EXIT
 
 if [ ! -f "$INCLUDE_DIR/ghostty.h" ]; then
-  echo "missing pinned ghostty.h; run npm run libghostty:prepare" >&2
+  echo "missing pinned ghostty.h; run bun run libghostty:prepare" >&2
   exit 1
 fi
 

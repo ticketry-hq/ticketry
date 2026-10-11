@@ -172,11 +172,18 @@ async fn initialize_with_worktracker_commands_and_install_inner(
             )
         })?;
     if let Some(directory) = readiness_data_directory {
-        ticketry_agent_execution::SprintSuggestionExecutor::new(worktracker_database.clone(), directory.to_owned())
-            .recover().await.map_err(|error| FoundationInitializationError::new(
+        ticketry_agent_execution::SprintSuggestionExecutor::new(
+            worktracker_database.clone(),
+            directory.to_owned(),
+        )
+        .recover()
+        .await
+        .map_err(|error| {
+            FoundationInitializationError::new(
                 FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
                 format!("could not recover sprint executions: {error}"),
-            ))?;
+            )
+        })?;
     }
     let settings_repository =
         ticketry_settings::AppSettingRepository::open(worktracker_database_path)
@@ -194,7 +201,7 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     let work_facts = ticketry_runs::outbox_adopted(&worktracker_database)
         .await
         .then(|| {
-            ticketry_work_management::commands::status_facts::WorkFactRecorder::new(
+            ticketry_work_management::WorkFactRecorder::new(
                 ticketry_runs::RunsServices::new(worktracker_database.clone())
                     .outbox()
                     .events()
@@ -247,10 +254,10 @@ async fn initialize_with_worktracker_commands_and_install_inner(
     let schema = crate::query_root::foundation_schema_with_terminal_services(
         foundation_database,
         Some(worktracker_database.clone()),
-        Some(ticketry_work_management::commands::CommandDatabase(
+        Some(ticketry_work_management::CommandDatabase(
             worktracker_database.clone(),
         )),
-        Some(ticketry_work_management::commands::attachments::AttachmentStorage::new(media_root)),
+        Some(ticketry_work_management::AttachmentStorage::new(media_root)),
         Some(settings_repository),
         readiness_data_directory.map(Path::to_path_buf),
         work_facts,
@@ -337,8 +344,7 @@ async fn compose_worktree_operations(
     outbox_adopted: bool,
 ) -> ComposedWorktreeOperations {
     if let Err(error) =
-        ticketry_workspace_runtime::workspace_operations::schema::install(worktracker_database)
-            .await
+        ticketry_workspace_runtime::install_workspace_operations(worktracker_database).await
     {
         eprintln!("Ticketry could not install the Workspace Operation journal: {error}");
         return ComposedWorktreeOperations {
@@ -353,11 +359,10 @@ async fn compose_worktree_operations(
             .events()
             .clone()
     });
-    let journal = ticketry_workspace_runtime::workspace_operations::WorkspaceOperationJournal::new(
-        worktracker_database.clone(),
-    );
-    let locks = ticketry_workspace_runtime::status::RepositoryLocks::shared();
-    let create = ticketry_workspace_runtime::create::WorktreeCreateService::new(
+    let journal =
+        ticketry_workspace_runtime::WorkspaceOperationJournal::new(worktracker_database.clone());
+    let locks = ticketry_workspace_runtime::RepositoryLocks::shared();
+    let create = ticketry_workspace_runtime::WorktreeCreateService::new(
         worktracker_database.clone(),
         journal.clone(),
         events.clone(),
@@ -367,7 +372,7 @@ async fn compose_worktree_operations(
         eprintln!("Ticketry could not reconcile abandoned worktree operations: {error}");
         reconciled = false;
     }
-    let discard = ticketry_workspace_runtime::discard::WorktreeDiscardService::new(
+    let discard = ticketry_workspace_runtime::WorktreeDiscardService::new(
         worktracker_database.clone(),
         journal.clone(),
         events.clone(),
@@ -380,7 +385,7 @@ async fn compose_worktree_operations(
         eprintln!("Ticketry could not reconcile abandoned worktree discards: {error}");
         reconciled = false;
     }
-    let changes = ticketry_workspace_runtime::changes::WorktreeChangesService::from_status(
+    let changes = ticketry_workspace_runtime::WorktreeChangesService::from_status(
         create.status_service().clone(),
     );
     if let Err(error) = changes.merge_reconciler().reconcile().await {
@@ -388,11 +393,9 @@ async fn compose_worktree_operations(
         reconciled = false;
     }
     ComposedWorktreeOperations {
-        operations: Some(
-            ticketry_workspace_runtime::worktree_operations::WorktreeOperations::new(
-                create, discard, changes,
-            ),
-        ),
+        operations: Some(ticketry_workspace_runtime::WorktreeOperations::new(
+            create, discard, changes,
+        )),
         reconciled,
     }
 }
@@ -402,7 +405,7 @@ async fn compose_worktree_operations(
 /// needs both: a composed capability whose backlog was never drained is not one
 /// a window may be pointed at yet.
 struct ComposedWorktreeOperations {
-    operations: Option<ticketry_workspace_runtime::worktree_operations::WorktreeOperations>,
+    operations: Option<ticketry_workspace_runtime::WorktreeOperations>,
     reconciled: bool,
 }
 
@@ -419,8 +422,7 @@ async fn compose_document_saves(
     outbox_adopted: bool,
 ) -> bool {
     if let Err(error) =
-        ticketry_workspace_runtime::workspace_operations::schema::install(worktracker_database)
-            .await
+        ticketry_workspace_runtime::install_workspace_operations(worktracker_database).await
     {
         eprintln!("Ticketry could not install the Workspace Operation journal: {error}");
         return false;
@@ -433,11 +435,9 @@ async fn compose_document_saves(
                 .clone(),
         )
     });
-    let service = ticketry_workspace_runtime::document_save::DocumentSaveService::new(
+    let service = ticketry_workspace_runtime::DocumentSaveService::new(
         worktracker_database.clone(),
-        ticketry_workspace_runtime::workspace_operations::WorkspaceOperationJournal::new(
-            worktracker_database.clone(),
-        ),
+        ticketry_workspace_runtime::WorkspaceOperationJournal::new(worktracker_database.clone()),
         facts,
     );
     if let Err(error) = service.reconciler().reconcile().await {
@@ -586,7 +586,7 @@ pub async fn adopt_worktracker_and_install(
     // before any workspace command is composed. An unknown or malformed
     // Documents, Worktree, or journal schema refuses the handoff and leaves the
     // pre-cutover snapshots restorable.
-    ticketry_workspace_runtime::handoff::adopt(data_directory)
+    ticketry_workspace_runtime::adopt_workspace(data_directory)
         .await
         .map_err(workspace_adoption_error)?;
     timing.record("workspace");
@@ -629,7 +629,7 @@ fn installation_adoption_error(
 }
 
 fn workspace_adoption_error(
-    error: ticketry_workspace_runtime::handoff::WorkspaceHandoffError,
+    error: ticketry_workspace_runtime::WorkspaceHandoffError,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,
@@ -659,7 +659,7 @@ fn terminal_adoption_error(
 }
 
 fn execution_adoption_error(
-    error: ticketry_agent_execution::persistence::ExecutionPersistenceError,
+    error: ticketry_agent_execution::ExecutionPersistenceError,
 ) -> FoundationInitializationError {
     FoundationInitializationError::new(
         FoundationInitializationErrorCode::WorktrackerDatabaseOpen,

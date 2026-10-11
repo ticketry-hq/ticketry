@@ -30,12 +30,14 @@ export type XtermTerminalProps = {
   sessionId: string | null;
   owner?: ForegroundOwner;
   focusSignal?: number;
+  canFocus?: (target?: HTMLElement | null) => boolean;
 };
 
 export function XtermTerminal({
   sessionId,
   owner = "studio",
   focusSignal,
+  canFocus,
 }: XtermTerminalProps) {
   const sessions = useTerminalStore((state) => state.sessions);
   const registerHost = useTerminalForegroundStore((state) => state.registerHost);
@@ -66,10 +68,10 @@ export function XtermTerminal({
   useEffect(() => {
     if (!visibleSessionId) return;
     return registerTerminalFocus(visibleSessionId, () => {
-      if (mountedIdRef.current !== visibleSessionId) return;
+      if (mountedIdRef.current !== visibleSessionId || !(canFocus?.(hostRef.current) ?? true)) return;
       getEntry(visibleSessionId)?.term.focus?.();
     });
-  }, [mountedIdRef, visibleSessionId]);
+  }, [canFocus, hostRef, mountedIdRef, visibleSessionId]);
 
   useEffect(() => {
     const pendingSignal =
@@ -77,6 +79,7 @@ export function XtermTerminal({
       focusSignal !== 0 &&
       focusSignal !== handledFocusSignalRef.current;
     if (
+      !(canFocus?.(hostRef.current) ?? true) ||
       !pendingSignal ||
       !visibleSessionId ||
       mountedIdRef.current !== visibleSessionId
@@ -90,7 +93,7 @@ export function XtermTerminal({
       handledFocusSignalRef.current = focusSignal;
     }
     entry.term.focus?.();
-  }, [focusSignal, mountedIdRef, visibleSessionId]);
+  }, [canFocus, focusSignal, hostRef, mountedIdRef, visibleSessionId]);
 
   const presentedElsewhere = session !== null && resolvedOwner !== owner;
 

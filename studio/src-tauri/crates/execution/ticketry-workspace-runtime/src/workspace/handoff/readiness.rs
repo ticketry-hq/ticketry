@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use super::manifest::VERSION;
 use super::{WorkspaceHandoffError, WorkspaceHandoffErrorCode};
 
-pub const READINESS_FILE: &str = "slice4-readiness.json";
+pub(crate) const READINESS_FILE: &str = "slice4-readiness.json";
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]

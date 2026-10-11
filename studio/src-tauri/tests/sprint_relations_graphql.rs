@@ -10,6 +10,88 @@ const ISSUE: &str = "40000000000000000000000000000000";
 const SUGGESTION: &str = "50000000000000000000000000000000";
 const RUN: &str = "70000000-0000-0000-0000-000000000000";
 
+#[tokio::test]
+async fn start_sprint_accepts_null_or_omitted_carryover_but_rejects_a_destination() {
+    let frontend_operations = include_str!("../../src/features/sprints/operations/sprints.graphql");
+    let update_sprint = frontend_operations
+        .split("mutation UpdateSprint(")
+        .nth(1)
+        .expect("frontend UpdateSprint operation")
+        .split("query SprintSuggestions")
+        .next()
+        .unwrap();
+    let update_sprint = format!("mutation UpdateSprint({update_sprint}");
+    for (label, query, variables) in [
+        (
+            "omitted variable",
+            update_sprint.clone(),
+            serde_json::json!({ "id": SPRINT, "status": "active" }),
+        ),
+        (
+            "explicit null",
+            update_sprint.clone(),
+            serde_json::json!({ "id": SPRINT, "status": "active", "carryoverSprintId": null }),
+        ),
+        (
+            "omitted argument",
+            format!(
+                r#"mutation {{ update_sprint(id: "{SPRINT}", status: "active") {{ id status }} }}"#
+            ),
+            serde_json::json!({}),
+        ),
+    ] {
+        let database = fixture().await;
+        let schema = ticketry_graphql_schema::foundation_schema(
+            database.clone(),
+            Some(database.clone()),
+            Some(ticketry_work_management::CommandDatabase(database)),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("build shipping schema");
+        let rejected = schema
+            .execute(async_graphql::Request::new(&update_sprint).variables(
+                async_graphql::Variables::from_json(serde_json::json!({
+                    "id": SPRINT, "status": "active", "carryoverSprintId": PROJECT,
+                })),
+            ))
+            .await;
+        assert_eq!(rejected.errors.len(), 1, "{label}: {:?}", rejected.errors);
+        assert!(
+            rejected.errors[0]
+                .message
+                .contains("Carry-over applies only when completing a sprint."),
+            "{:?}",
+            rejected.errors
+        );
+        let response = schema
+            .execute(
+                async_graphql::Request::new(query)
+                    .variables(async_graphql::Variables::from_json(variables)),
+            )
+            .await;
+        assert!(response.errors.is_empty(), "{label}: {:?}", response.errors);
+        let data = serde_json::to_value(response.data).unwrap();
+        assert_eq!(data["update_sprint"]["status"], "active", "{label}");
+        let persisted = schema.execute(format!(r#"query {{ worktrackerSprint(filters: {{ id: {{ eq: "{SPRINT}" }} }}) {{ nodes {{ status }} }} }}"#)).await;
+        assert!(
+            persisted.errors.is_empty(),
+            "{label}: {:?}",
+            persisted.errors
+        );
+        assert_eq!(
+            serde_json::to_value(persisted.data).unwrap()["worktrackerSprint"]["nodes"][0]
+                ["status"],
+            "active",
+            "{label}"
+        );
+    }
+}
+
 async fn fixture() -> DatabaseConnection {
     let mut options = ConnectOptions::new("sqlite::memory:");
     options.max_connections(1).min_connections(1);
@@ -61,8 +143,8 @@ async fn fixture() -> DatabaseConnection {
         VALUES ('{RUN}', 'sprint-relation-fixture', '{ISSUE}', '{ISSUE}', '{PROJECT}',
                 '2026-10-03T00:00:00Z', 'sprint', 0, '{namespace}', 0);
         INSERT INTO worktracker_sprint
-            (id, project_id, name, status, suggestion_run_id, created_at, updated_at)
-        VALUES ('{SPRINT}', '{PROJECT}', 'Sprint one', 'planned', '{RUN}',
+            (id, project_id, name, status, suggestion_run_id, rank, created_at, updated_at)
+        VALUES ('{SPRINT}', '{PROJECT}', 'Sprint one', 'planned', '{RUN}', 'a0',
                 '2026-10-03 00:00:00', '2026-10-03 00:00:00');
         INSERT INTO worktracker_sprint_goal
             (id, sprint_id, position, text, created_at, updated_at)
@@ -140,3 +222,6 @@ async fn canonical_sprint_relations_resolve_the_persisted_planning_graph() {
         })
     );
 }
+
+#[path = "sprint_relations_graphql/story_creation.rs"]
+mod story_creation;

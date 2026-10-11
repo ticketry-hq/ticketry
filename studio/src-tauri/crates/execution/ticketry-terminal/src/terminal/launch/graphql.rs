@@ -131,6 +131,7 @@ impl TerminalSessionMutations {
                 resume_from_agent_run_id,
                 automation_attempt_id,
                 required_skills,
+                stage_skills: Vec::new(),
                 working_directory_identity: required(
                     working_directory_identity,
                     "working directory",

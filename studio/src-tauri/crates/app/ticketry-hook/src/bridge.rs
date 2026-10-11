@@ -27,18 +27,7 @@ type ConnectResult = Result<(OwnedReadHalf, OwnedWriteHalf), String>;
 type ConnectTask = Pin<Box<dyn Future<Output = ConnectResult>>>;
 
 pub async fn run(invocation: McpInvocation) -> io::Result<()> {
-    let authorization = std::env::var("TICKETRY_MCP_AUTHORIZATION").map_err(|_| {
-        io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "TICKETRY_MCP_AUTHORIZATION is required",
-        )
-    })?;
-    if authorization.is_empty() {
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "TICKETRY_MCP_AUTHORIZATION is required",
-        ));
-    }
+    let handshake = crate::mcp_authority::handshake(invocation.mode)?;
 
     let socket_path = invocation.data_dir.join("mcp.sock");
     let (input_tx, mut input_rx) = mpsc::channel(32);
@@ -62,8 +51,7 @@ pub async fn run(invocation: McpInvocation) -> io::Result<()> {
         if reader.is_none() && connect.is_none() && Instant::now() >= retry_at {
             connect = Some(Box::pin(connect_authenticated(
                 socket_path.clone(),
-                invocation.agent_run_id.clone(),
-                authorization.clone(),
+                handshake.clone(),
             )));
         }
 

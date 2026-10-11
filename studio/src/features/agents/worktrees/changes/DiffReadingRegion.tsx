@@ -57,6 +57,7 @@ export function DiffReadingRegion({ children }: { children: ReactNode }) {
   return (
     <div
       aria-label="File diff content"
+      data-changes-navigation
       className="min-h-0 flex-1 overflow-auto p-3 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-focus-accent"
       data-testid="changes-diff-scroll-region"
       onKeyDown={scrollDiff}

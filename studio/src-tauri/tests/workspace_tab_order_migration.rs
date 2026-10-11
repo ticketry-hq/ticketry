@@ -1,7 +1,12 @@
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use ticketry_work_management::{
-    module_presentation_migration, workflow_color_migration,
-    workspace_tab_order_migration::{self, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT},
+    install_workspace_tab_order_schema, MODULE_PRESENTATION_MIGRATION_LEDGER_TABLE,
+    WORKFLOW_COLOR_MIGRATION_LEDGER_TABLE,
+};
+use ticketry_work_management::{
+    WORKSPACE_TAB_ORDER_MIGRATION_LEDGER_TABLE as LEDGER_TABLE,
+    WORKSPACE_TAB_ORDER_MIGRATION_MIGRATION_ID as MIGRATION_ID,
+    WORKSPACE_TAB_ORDER_MIGRATION_SOURCE_COMMIT as SOURCE_COMMIT,
 };
 
 async fn memory_database() -> sea_orm::DatabaseConnection {
@@ -34,11 +39,11 @@ async fn fresh_migration_defaults_existing_and_new_rows_and_reopens_idempotently
         .await
         .expect("seed pre-migration Issue table");
 
-    workspace_tab_order_migration::install(&database)
+    install_workspace_tab_order_schema(&database)
         .await
         .expect("install workspace-tab migration");
     let first_columns = issue_columns(&database).await;
-    workspace_tab_order_migration::install(&database)
+    install_workspace_tab_order_schema(&database)
         .await
         .expect("repeat workspace-tab migration");
     assert_eq!(issue_columns(&database).await, first_columns);
@@ -99,10 +104,10 @@ async fn adoption_preserves_valid_preexisting_workspace_order() {
         .await
         .expect("seed adopted Issue schema");
 
-    workspace_tab_order_migration::install(&database)
+    install_workspace_tab_order_schema(&database)
         .await
         .expect("adopt preexisting workspace order");
-    workspace_tab_order_migration::install(&database)
+    install_workspace_tab_order_schema(&database)
         .await
         .expect("reopen adopted workspace order");
     let stored = database
@@ -129,7 +134,7 @@ async fn failed_ledger_creation_rolls_back_the_issue_column() {
         .await
         .expect("seed deterministic ledger collision");
 
-    workspace_tab_order_migration::install(&database)
+    install_workspace_tab_order_schema(&database)
         .await
         .expect_err("ledger collision must fail migration");
 
@@ -144,7 +149,7 @@ fn workspace_tab_checkpoint_is_between_colors_and_module_presentation() {
     let ledgers = ticketry_installation::owned_ledgers();
     let colors = ledgers
         .iter()
-        .position(|(table, _)| *table == workflow_color_migration::LEDGER_TABLE)
+        .position(|(table, _)| *table == WORKFLOW_COLOR_MIGRATION_LEDGER_TABLE)
         .expect("workflow color ledger");
     let workspace = ledgers
         .iter()
@@ -152,7 +157,7 @@ fn workspace_tab_checkpoint_is_between_colors_and_module_presentation() {
         .expect("workspace-tab ledger");
     let presentation = ledgers
         .iter()
-        .position(|(table, _)| *table == module_presentation_migration::LEDGER_TABLE)
+        .position(|(table, _)| *table == MODULE_PRESENTATION_MIGRATION_LEDGER_TABLE)
         .expect("module presentation ledger");
     assert_eq!(workspace, colors + 1);
     assert_eq!(presentation, workspace + 1);

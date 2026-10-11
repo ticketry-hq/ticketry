@@ -4,7 +4,8 @@ import { useClientStore, toast, type ClientState } from "../../state/clientStore
 import { scratchBucketId, TEMP_TASK_ID } from "../agents/terminal";
 import { getModuleTreeSnapshot, loadModuleTree, readWorkItem } from "../work-items";
 import { getVisibleModulesSnapshot, useStudioStore } from "../projects";
-import { adaptPlanningGraph, PlanningGraphDocument } from "../planning-graph";
+import { adaptPlanningGraph, compareSprintSequence, PlanningGraphDocument } from "../planning-graph";
+import { ROADMAP_ENABLED } from "../../shared/config/roadmapAvailability";
 
 type PlanOrigin = Pick<ClientState,
   | "selectedModuleId"
@@ -41,6 +42,11 @@ export const usePlanWorkspace = createApolloStore<PlanWorkspaceState>(
   () => ({ active: false, generation: 0, itemRequestVersion: 0, projectId: null, defaultSprintPending: false, sprintId: null, lastVisitedSprintId: null, visits: {}, openItem: null, pendingOpenItem: null, origin: null }),
 );
 
+/** Only an available Plan workspace may own the shell or navigation. */
+export function selectPlanWorkspaceActive(state: Pick<PlanWorkspaceState, "active">): boolean {
+  return ROADMAP_ENABLED && state.active;
+}
+
 function planningGraph() {
   const projectId = useStudioStore.getState().selectedProjectId;
   if (!projectId) return null;
@@ -67,11 +73,12 @@ function planningOrigin(): PlanOrigin {
 }
 
 export function openPlanWorkspace(sprintId?: string | null): void {
+  if (!ROADMAP_ENABLED) return;
   const projectId = useStudioStore.getState().selectedProjectId;
   const graph = planningGraph();
   const nextSprintId = sprintId ?? graph?.sprints
     .filter((sprint) => sprint.status === "planned")
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0]?.id ?? null;
+    .sort(compareSprintSequence)[0]?.id ?? null;
   usePlanWorkspace.setState((state) => {
     const sameProject = state.projectId === projectId;
     return {
@@ -98,6 +105,7 @@ export function closePlanSprint(): void {
 }
 
 export async function openPlanItem(workItemId: string, suggestionId?: string): Promise<void> {
+  if (!ROADMAP_ENABLED) return;
   const graph = planningGraph();
   const item = graph?.workItems.find((candidate) => candidate.id === workItemId);
   const currentWorkspace = usePlanWorkspace.getState();
@@ -133,6 +141,7 @@ export async function openPlanItem(workItemId: string, suggestionId?: string): P
 }
 
 export function leavePlanWorkspace(): void {
+  if (!ROADMAP_ENABLED) return;
   const { origin, projectId } = usePlanWorkspace.getState();
   usePlanWorkspace.setState((state) => ({ generation: state.generation + 1, active: false, sprintId: null, openItem: null, pendingOpenItem: null, origin: null, defaultSprintPending: false }));
   if (!origin || projectId !== useStudioStore.getState().selectedProjectId) return;

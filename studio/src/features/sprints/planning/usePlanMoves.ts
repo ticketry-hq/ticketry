@@ -16,15 +16,14 @@ const NOT_HELD = { focus: false, hover: false };
  * client (see work-items' planWriteGuard), so reopening Plan or using the
  * story panel can't send a second write. This keeps only the Retry and Undo
  * feedback for the Plan visit.
- * `sprintOf` reads an item's current assignment, so stale Retry and Undo drop,
- * and stay dropped even if the item returns.
- * `eligibility` is the screen's current rule and reason for every move; every write
- * checks it at action time, so Retry and Undo follow the
- * same backlog eligibility and focus as the buttons.
+ * Private coordinator readers recheck optimistic assignment, current policy and
+ * visit ownership immediately before transport. Feedback observation also runs
+ * at command time so an overtaken action cannot revive between React renders.
  */
 export function usePlanMoves(
   sprintOf: (itemId: string) => string | null | undefined,
   eligibility: (move: Move) => MoveEligibility,
+  isCurrent: () => boolean,
 ) {
   // Plan's failure entry carries the item, destination and Retry, so no global notice.
   const plan = usePlanWorkItem();
@@ -75,22 +74,29 @@ export function usePlanMoves(
   const move = useCallback(
     async (next: Move) => {
       // The shared guard is synchronous, so a double click or a drop racing a click can't send twice.
-      if (planPending(next.itemId) || !allowedNow.current(next)) return;
+      if (!isCurrent() || planPending(next.itemId) || sprintOf(next.itemId) !== next.from || !allowedNow.current(next)) return;
       const op = ++lastOp.current;
       dispatch({ type: "start", op, move: next });
       const ok = Boolean(await plan(next.itemId, next.to));
       // After unmount this dispatch goes nowhere, so a late result can't reach another visit.
-      if (mounted.current) dispatch({ type: "settle", op, ok });
+      if (mounted.current && isCurrent()) dispatch({ type: "settle", op, ok });
     },
-    [plan, planPending],
+    [plan, planPending, sprintOf, isCurrent],
   );
 
+  const currentFeedback = () => {
+    if (!isCurrent()) return EMPTY_FEEDBACK;
+    const current = useMoveFeedback.getState();
+    const event = observed(current, sprintOf);
+    if (event) dispatch(event);
+    return liveFeedback(useMoveFeedback.getState(), sprintOf);
+  };
   const retry = (itemId: string) => {
-    const failure = feedback.failures.find((candidate) => candidate.move.itemId === itemId);
+    const failure = currentFeedback().failures.find((candidate) => candidate.move.itemId === itemId);
     if (failure) void move(failure.move);
   };
   const undo = () => {
-    const done = feedback.success;
+    const done = currentFeedback().success;
     if (done) void move({ ...done.move, from: done.move.to, to: done.move.from });
   };
 

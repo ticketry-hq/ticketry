@@ -1,0 +1,35 @@
+fragment ProjectStorySprintRootFields on WorktrackerIssue {
+  __typename
+  id
+  project_id: projectId
+  parent_id: parentId
+  module_id: moduleId
+  sprint_id: sprintId
+  is_archived: isArchived
+  updated_at: updatedAt
+  state_revision: stateRevision @nonreactive
+}
+
+# Seaography rc.9 self-relation having shadows its correlated table.
+# Resolve complete project module identities, then apply native parentId filtering.
+query ProjectStorySprintModules($projectId: String!) {
+  modules: worktrackerIssue(
+    filters: { projectId: { eq: $projectId }, type: { eq: "module" }, isArchived: { eq: false } }
+    orderBy: { id: ASC }
+  ) {
+    nodes { __typename id }
+    pageInfo { __typename hasNextPage }
+    paginationInfo { __typename total }
+  }
+}
+
+query ProjectStorySprintIndex($projectId: String!, $moduleIds: [String!]!) {
+  roots: worktrackerIssue(
+    filters: { projectId: { eq: $projectId }, type: { eq: "task" }, isArchived: { eq: false }, parentId: { is_in: $moduleIds } }
+    orderBy: { id: ASC }
+  ) {
+    nodes { ...ProjectStorySprintRootFields }
+    pageInfo { __typename hasNextPage }
+    paginationInfo { __typename total }
+  }
+}

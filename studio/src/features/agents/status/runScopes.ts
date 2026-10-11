@@ -1,3 +1,5 @@
+import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
+import { SCRATCH_RUN_TASK_ID } from "../types";
 import type { AgentRunScope, RunRecord } from "./types";
 
 /**
@@ -20,4 +22,20 @@ const AGENTLESS_SCOPES: ReadonlySet<AgentRunScope> = new Set([SHELL_RUN_SCOPE]);
  */
 export function isAgentlessRun(run: Pick<RunRecord, "scope">): boolean {
   return AGENTLESS_SCOPES.has(run.scope);
+}
+
+/**
+ * Whether a run is a Work Item's own login shell (`task_shell`).
+ *
+ * It shares the agentless `"shell"` scope with a module shell; only its owner
+ * differs. A module shell carries no task (or the scratch sentinel), while a
+ * Work Item shell carries that Work Item's id, so its terminal belongs in the
+ * Work Item's workspace beside the agent terminals rather than in the panel.
+ */
+export function isWorkItemShellRun(
+  run: Pick<RunRecord, "scope" | "task_id">,
+): boolean {
+  return run.scope === SHELL_RUN_SCOPE &&
+    !!run.task_id &&
+    compactWorktrackerId(run.task_id) !== compactWorktrackerId(SCRATCH_RUN_TASK_ID);
 }

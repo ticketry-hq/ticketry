@@ -51,6 +51,7 @@ export interface RunRecord {
   scope: AgentRunScope;
   launch_state?: string | null;
   launch_model?: string | null;
+  stage_skill_availability?: string | null;
   provider_session_id?: string | null;
   attention_reason?: string | null;
   started_at?: string;
@@ -92,6 +93,8 @@ export interface AutomationAttemptRecord {
 export type AgentLifecycle = "idle" | "active" | "attention";
 
 export interface AgentStatusData {
+  /** True only after an authoritative full-project snapshot. */
+  complete?: boolean;
   projectId: string | null;
   runs: Record<string, RunRecord>;
   automationAttempts: Record<string, AutomationAttemptRecord>;

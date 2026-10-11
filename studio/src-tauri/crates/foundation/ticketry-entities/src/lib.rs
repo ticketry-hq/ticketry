@@ -27,7 +27,8 @@ pub use documents::{
     design_document, register_entity_modules as register_document_entities, DESIGN_DOCUMENT_OBJECT,
 };
 pub use execution::{
-    agent_execution, graph_run, launch_claim, register_entity_modules as register_execution_entities,
+    agent_execution, graph_run, launch_claim,
+    register_entity_modules as register_execution_entities,
 };
 pub use foundation::{migration_probes, register_entity_modules as register_foundation_entities};
 pub use graphql_scalars::StringList;
@@ -47,3 +48,11 @@ pub use workspace_runtime::{
     operation, register_entity_modules as register_workspace_runtime_entities, ship_record,
 };
 pub use worktrees::{register_entity_modules as register_worktree_entities, worktree};
+
+pub use work_management::sprint_status::{
+    SPRINT_ACTIVE, SPRINT_COMPLETED, SPRINT_PLANNED, SPRINT_SUGGESTION_ACCEPTED,
+    SPRINT_SUGGESTION_DISMISSED, SPRINT_SUGGESTION_WAITING,
+};
+pub use workspace_runtime::ship_receipt::{
+    append as append_ship_receipt, AppendReceipt, ReceiptError,
+};

@@ -24,6 +24,7 @@
  * the checkout is gone. Evicting it would blank the block instead of showing
  * that answer.
  */
+import { invalidateModuleInspections } from "../../../module-manager";
 import { studioApolloClient } from "../../../../shared/apollo/client";
 import { CurrentWorktreesDocument } from "../../worktrees/generated/currentWorktrees.documents";
 import {
@@ -56,6 +57,7 @@ export function createWorktreeInvalidator(
     const owners = [...pending];
     pending.clear();
     if (owners.length > 0) {
+      void invalidateModuleInspections().catch(() => {});
       void studioApolloClient().refetchQueries({
         include: "active",
         updateCache(cache) {
@@ -101,10 +103,10 @@ export function createWorktreeInvalidator(
  * fact this client received saying so.
  */
 export function refreshWorktreeHoldings(): Promise<void> {
-  return studioApolloClient().refetchQueries({
+  return Promise.all([invalidateModuleInspections(), studioApolloClient().refetchQueries({
     include: [WorktreeStatusDocument, CurrentWorktreesDocument],
     updateCache(cache) {
       cache.evict({ id: "ROOT_QUERY", fieldName: "worktrees" });
     },
-  }).then(() => undefined);
+  })]).then(() => undefined);
 }

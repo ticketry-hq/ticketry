@@ -79,6 +79,8 @@ pub(crate) async fn prepare(
         launch_reasoning: Set(snapshot.reasoning.clone()),
         launch_unattended: Set(false),
         attention_reason: Set(None),
+        conversation_title: Set(None),
+        stage_skill_availability: Set(None),
         ..Default::default()
     }
     .insert(txn)

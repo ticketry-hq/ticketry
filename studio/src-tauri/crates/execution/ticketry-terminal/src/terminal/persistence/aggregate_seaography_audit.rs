@@ -114,6 +114,13 @@ pub const CUSTOM_QUERIES: &[CustomField] = &[
 /// model-shaped seam over SeaORM, not a per-field RPC.
 pub const CUSTOM_MUTATIONS: &[CustomField] = &[
     CustomField {
+        field: "update_agent_run",
+        kind: CustomFieldKind::Mutation,
+        returns: "AgentRuns",
+        override_reason: "require a concrete single run identity and a title-only input, validating the existing instant launch material and run eligibility before an ActiveModel update",
+        evidence: "studio/src-tauri/crates/execution/ticketry-terminal/src/terminal/instant_run_ticket/update-audit.md",
+    },
+    CustomField {
         field: "terminal_session_create",
         kind: CustomFieldKind::Mutation,
         returns: "AgentTerminalSessions",
@@ -169,7 +176,7 @@ pub const CUSTOM_OUTPUTS: &[CustomField] = &[
     CustomField {
         field: "InstantRunTicket",
         kind: CustomFieldKind::Output,
-        returns: "computed: agent_run_id, title, started_at",
+        returns: "computed: agent_run_id, title, user_title, started_at",
         override_reason: "title is a bounded safe projection of only the user's Instant request, not a stored model or the private launch prompt",
         evidence: "terminal::instant_run_ticket registers it beside instant_run_tickets",
     },
@@ -258,7 +265,7 @@ mod tests {
     fn the_recorded_counts_are_the_audited_counts() {
         assert_eq!(REGISTERED_ENTITIES.len(), 3);
         assert_eq!(CUSTOM_QUERIES.len(), 3);
-        assert_eq!(CUSTOM_MUTATIONS.len(), 6);
+        assert_eq!(CUSTOM_MUTATIONS.len(), 7);
         assert_eq!(CUSTOM_OUTPUTS.len(), 2);
         assert_eq!(RAW_SQL_EVIDENCE_ONLY.len(), 5);
     }

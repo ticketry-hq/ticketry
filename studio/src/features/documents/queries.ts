@@ -32,10 +32,12 @@ export function useWorkspaceDocuments(
     ? `${scratch ? "scratch" : "task"}:${ownerId}:${projectId ?? ""}:${moduleId ?? ""}`
     : null;
   const [readyKey, setReadyKey] = useState<string | null>(null);
+  const [failedKey, setFailedKey] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     setReadyKey(null);
+    setFailedKey(null);
     if (!registryKey || !ownerId) return () => { active = false; };
 
     const refresh = scratch
@@ -48,6 +50,7 @@ export function useWorkspaceDocuments(
     recordSelectionProfilePoint("doc-registry-refresh:start");
     void refresh.then((documents) => {
       recordSelectionProfilePoint("doc-registry-refresh:end");
+      if (!active) return;
       const nodes = documents.map((document) => ({
         __typename: "DesignDocuments",
         id: document.id,
@@ -79,17 +82,24 @@ export function useWorkspaceDocuments(
       }
       if (active) setReadyKey(registryKey);
     }).catch(() => {
-      if (active) setReadyKey(registryKey);
+      // A failed refresh cannot establish that a remembered file is absent.
+      // Keep showing the rows Apollo already knows, but only a successful
+      // registry response makes restoration authoritative.
+      if (active) setFailedKey(registryKey);
     });
     return () => { active = false; };
   }, [client, moduleId, ownerId, projectId, registryKey, scratch]);
 
+  const ready = readyKey === registryKey;
+  const retainingKnownRows = !ready && failedKey === registryKey;
+  const fetchPolicy = retainingKnownRows ? "cache-only" : "cache-first";
   const taskQuery = useQuery(
     TaskDocumentRegistryDocument,
     {
       client,
       variables: { taskId: bucket ?? "" },
-      skip: scratch || !bucket || readyKey !== registryKey,
+      fetchPolicy,
+      skip: scratch || !bucket || !(ready || retainingKnownRows),
     },
   );
   const scratchQuery = useQuery(
@@ -97,7 +107,8 @@ export function useWorkspaceDocuments(
     {
       client,
       variables: { moduleId: moduleId ?? "" },
-      skip: !scratch || !moduleId || readyKey !== registryKey,
+      fetchPolicy,
+      skip: !scratch || !moduleId || !(ready || retainingKnownRows),
     },
   );
   const rows = scratch
@@ -114,8 +125,10 @@ export function useWorkspaceDocuments(
   );
   return {
     documents,
-    isFetched: readyKey === registryKey
-      && !(scratch ? scratchQuery.loading : taskQuery.loading),
+    isFetched: ready
+      && rows !== undefined
+      && !(scratch ? scratchQuery.loading : taskQuery.loading)
+      && !(scratch ? scratchQuery.error : taskQuery.error),
   };
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { useClientStore } from "../../../state/clientStore";
 import { Terminal } from "./Terminal";
@@ -17,14 +17,18 @@ export function RetainedTerminalViewers({
   bucket,
   owner,
   focusSignal,
+  canFocus,
   active,
   retentionLimit = RETAINED_TERMINAL_VIEW_LIMIT,
   onNativeVisibilityPendingChange,
+  rendererOverlay,
 }: {
   bucket: string | null;
   owner: ForegroundOwner;
   focusSignal: number;
+  canFocus?: (target?: HTMLElement | null) => boolean;
   active: boolean;
+  rendererOverlay?: ReactNode;
   /** Total mounted viewers, including the selected viewer. */
   retentionLimit?: number;
   onNativeVisibilityPendingChange?: (runId: string, pending: boolean) => void;
@@ -135,8 +139,10 @@ export function RetainedTerminalViewers({
               }
             >
               <Terminal
+                rendererOverlay={presented ? rendererOverlay : undefined}
                 sessionId={sessionId}
                 owner={owner}
+                canFocus={canFocus}
                 focusSignal={presented ? focusSignal : 0}
                 active
                 onNativeVisibilityPendingChange={onNativeVisibilityPendingChange}
@@ -160,8 +166,10 @@ export function RetainedTerminalViewers({
             }
           >
             <Terminal
+              rendererOverlay={presented ? rendererOverlay : undefined}
               sessionId={sessionId}
               owner={owner}
+              canFocus={canFocus}
               focusSignal={presented ? focusSignal : 0}
               active={presented}
               onNativeVisibilityPendingChange={onNativeVisibilityPendingChange}

@@ -14,6 +14,15 @@ static void require(bool condition, const char *message) {
 }
 
 int main(void) {
+  muxed_ghostty_set_module_manager_shortcut("g", NSEventModifierFlagControl | NSEventModifierFlagShift);
+  NSEvent *managerEvent = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint
+      modifierFlags:NSEventModifierFlagControl | NSEventModifierFlagShift timestamp:0
+      windowNumber:0 context:nil characters:@"G" charactersIgnoringModifiers:@"G" isARepeat:NO keyCode:0x05];
+  require(muxed_ghostty_event_studio_chord(managerEvent) == MUXED_GHOSTTY_CHORD_MODULE_MANAGER,
+          "configured manager chord did not survive native terminal focus");
+  muxed_ghostty_set_module_manager_shortcut("m", NSEventModifierFlagCommand | NSEventModifierFlagShift);
+  require(muxed_ghostty_event_studio_chord(managerEvent) == MUXED_GHOSTTY_CHORD_NONE,
+          "old manager shortcut remained active after rebinding");
   const uint64_t control = NSEventModifierFlagControl;
   const uint64_t command = NSEventModifierFlagCommand;
   const uint64_t shift = NSEventModifierFlagShift;

@@ -9,7 +9,7 @@ shows only:
 From the repository root:
 
 ```sh
-npm run catalog:model
+bun run catalog:model
 ```
 
 Open <http://localhost:3200>.

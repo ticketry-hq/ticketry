@@ -8,7 +8,7 @@ use crate::planning::Provider;
 use crate::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
 use ticketry_entities::provider;
 use ticketry_settings::read_global_launch_default;
-use ticketry_workspace_runtime::status::repository::module_folder;
+use ticketry_workspace_runtime::module_folder;
 
 use super::error::{LaunchAuthorityError, LaunchAuthorityErrorCode};
 

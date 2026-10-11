@@ -62,10 +62,9 @@ function playwrightVersion() {
 
 async function runPlaywright(options, environment) {
   const child = spawn(
-    "npm",
+    "bun",
     [
-      "exec",
-      "--",
+      "run",
       "playwright",
       "test",
       "--config",

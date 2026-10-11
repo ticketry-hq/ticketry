@@ -1,0 +1,38 @@
+fragment ModuleManagerStoryFields on WorktrackerIssue {
+  __typename
+  id
+  name
+  project_id: projectId
+  sequence_id: sequenceId
+  state_id: stateId
+  state_revision: stateRevision
+  description
+  workspace_tab_order: workspaceTabOrder
+  parent_id: parentId
+  module_id: moduleId
+  sprint_id: sprintId
+  is_archived: isArchived
+  created_at: createdAt
+  updated_at: updatedAt
+  rank
+  issue_type_id: issueTypeId
+  project { id slug }
+  state_record: state { id name group color sort_order: sortOrder is_protected: isProtected }
+  issue_type_record: issueType { id name level color sort_order: sortOrder }
+  children { nodes { id is_archived: isArchived } }
+  blocked_by_edges: blockedByEdges { nodes { id to_issue_id: toIssueId } }
+  blocks_edges: blocksEdges { nodes { id from_issue_id: fromIssueId } }
+}
+
+query ModuleManagerStories($projectId: String!, $moduleId: String!, $offset: Int!, $limit: Int!) {
+  stories: worktrackerIssue(
+    filters: { projectId: { eq: $projectId }, moduleId: { eq: $moduleId }, parentId: { eq: $moduleId }, type: { eq: "task" }, isArchived: { eq: false } }
+    orderBy: { rank: ASC, sequenceId: ASC, id: ASC }
+    pagination: { offset: { offset: $offset, limit: $limit } }
+  ) {
+    __typename
+    nodes { ...ModuleManagerStoryFields }
+    pageInfo { __typename hasNextPage }
+    paginationInfo { __typename total }
+  }
+}

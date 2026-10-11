@@ -143,9 +143,9 @@ From the repository root, in order:
    `include_str!` mistakes.
 2. `cargo test --workspace` — exercises the path-literal tests, the fixed
    scanners, and the new tier test.
-3. `npm run typecheck`
-4. `npm run test --workspace @worktracker/studio`
-5. `npm run build --workspace @worktracker/studio`
+3. `bun run typecheck`
+4. `bun run --cwd studio test`
+5. `bun run --cwd studio build`
 6. Final sweep: `grep -rn "crates/ticketry\|crates/tauri-graphql"` shows only
    tiered paths and historical docs.
 

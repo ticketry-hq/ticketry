@@ -10,9 +10,7 @@ use ticketry_launch::{
     materialize, DurableLaunchMaterial, ExecutionAuthority, InteractiveLaunchAuthority, LaunchKind,
     Provider, ProviderOptions, TerminalLaunchKind, WorkspaceIdentity,
 };
-use ticketry_work_management::launch_policy::{
-    CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
-};
+use ticketry_work_management::{CallerScope, LaunchPolicyRequest, LaunchPolicyResolver};
 
 use crate::launch_fixture::{caller_request, fixture, MODULE, PROJECT, TASK};
 

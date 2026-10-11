@@ -1,0 +1,92 @@
+# Module terminal panel
+
+Open durable module shells below the ticket workspace, manage their tabs and failures, and resize or hide their presentation independently of agent terminals.
+
+Surfaces: browser, desktop
+
+## Sub-features
+
+- module-terminal-toggle: footer and capture-keymap access to the selected module's shell panel.
+- module-terminal-shell-tabs: create, select and close up to four shells per module.
+- module-terminal-shell-recovery: remove cleanly exited shells and inspect or restart failed shells.
+- module-terminal-furniture: minimize, maximize, restore and resize the panel.
+- module-terminal-folder-recovery: link a usable module folder before starting a shell.
+- module-terminal-body-states: distinguish pending, launch failure, no-module and no-shell bodies.
+- module-terminal-persistence: recover surviving shells, active-tab memory, module open state and window size preferences.
+
+## How to get to it
+
+Select a module, then use `footer-terminal-toggle`, named **Open terminal panel** or **Minimize terminal panel**. The capture action `toggle-terminal-panel` defaults to **Ctrl+backtick** and works while terminal typing is engaged; desktop native terminals route it through the native chord bridge. Without a selected module the footer is disabled and named **Select a module to open a terminal panel**.
+
+Use **New shell**, the **Shell N** tabs, **Close shell N**, and **Restart shell** in a dead shell's body. Panel header controls are **Minimize terminal panel**, **Maximize terminal panel** and **Restore terminal panel size**. Drag the top separator or focus **Resize the terminal panel** and press **ArrowUp/ArrowDown** to grow/shrink it by 24 pixels.
+
+The capture actions `cycle-terminal-forward` (**Cmd+backslash**) and `cycle-terminal-backward` (**Cmd+Shift+backslash**, represented as Cmd+Shift+pipe with a backslash alias) cycle live agent terminals; module shells are deliberately excluded. They do not cycle the panel's shell tabs. Defaults come from `studio/src/app/navigation/keymapBindings.ts` and may be customized.
+
+## Prerequisites
+
+Have a selected project and module with a usable linked local folder. Missing, relative, vanished or non-directory folders produce a refusal rather than starting a shell in another directory. Browser checks require the canonical Rust terminal adapter and private tmux stack from the index; native checks require macOS and the prepared libghostty build.
+
+Read the [Workspace Runtime context](../../studio/src-tauri/crates/execution/ticketry-workspace-runtime/src/worktree/CONTEXT.md), [Desktop Runtime context](../../studio/src-tauri/crates/app/ticketry-desktop/src/desktop/CONTEXT.md) and [terminal-renderer strategy](../plans/terminal-renderer-strategy.md) for ownership and historical renderer decisions.
+
+## Expected behavior
+
+Opening first discovers surviving module shells and creates a first shell if none exist. Selecting modules swaps shell membership and restores that module's active tab and open state. Only the selected shell receives a mounted terminal viewer while the panel is open; hiding it or selecting another shell detaches that presentation without ending its tmux session. Desktop normally presents native libghostty; browser presents xterm over the browser terminal WebSocket. Desktop xterm fallback uses Tauri viewer transport, not the browser WebSocket.
+
+New shells append and become active. **New shell** remains visible but disabled at four shells or while busy. Closing a live shell terminates its durable run, removes its tab and selects a determinate survivor. Close is available as soon as a shell tab exists; closing a shell that is still starting, before its prompt renders, ends it the same way (CODING-2751). Rust cleanup reserves the SQLite writer before reading, so it waits behind startup writes instead of refusing with `terminal_cleanup_storage_failed`. If termination fails the previous strip returns and an error toast appears. Closing the last shell leaves **No shells in this module. Use + to start one.** without immediately repopulating the strip. A clean exit removes its tab; nonzero or unknown exit retains a dead tab and exit message. Restart creates a new run in the same tab slot; restart failure retains the dead tab and reports an error toast. These paths are implemented in `studio/src/features/terminal-panel/moduleShellStore.ts` and `studio/src/features/terminal-panel/shellTabSet.ts`.
+
+Minimize preserves shells and size mode. Maximize uses the current geometry bound; restoring returns to the ordinary height. Pointer or keyboard resizing exits maximized mode and saves the new ordinary height. Open state and selected shell are remembered per module; ordinary height and maximized mode are window preferences, restored after reload/restart. See `studio/src/features/terminal-panel/panelStore.ts` and `studio/src/features/terminal-panel/panelGeometry.ts`.
+
+Folder refusal shows a folder input and **Use this folder**. Invalid input disables saving; save failures leave the affordance with an alert; successful linking retries discovery/launch. Launch failure shows **Could not start a shell** and **Try again**. Discovery failure avoids creating a duplicate and can retry on a later open. Pending discovery/session setup has a blank pending body. The defensive no-project/module body says **Select a module to open a shell**; the normal no-module toggle cannot open it. Every body retains header furniture. See `studio/src/features/terminal-panel/TerminalPanel.tsx` and `studio/src/features/terminal-panel/ModuleFolderRequired.tsx`.
+
+## Verifying it
+
+Observe `terminal-panel`, `footer-terminal-toggle`, `terminal-panel-tabs`, `terminal-panel-tab` (`data-run-id`, `data-active`, `data-dead`), `terminal-panel-new-shell`, `terminal-panel-tab-close`, xterm's `terminal-host` and native `native-terminal-host`. The native renderer's host is a DOM geometry/focus surface, not terminal output text. Recovery selectors are `terminal-panel-dead-shell` (`data-exit-code`), `terminal-panel-restart-shell`, `terminal-panel-folder-required` (`data-refusal-reason`), `terminal-panel-link-folder`, `terminal-panel-failure`, `terminal-panel-retry`, `terminal-panel-pending`, `terminal-panel-empty` and `terminal-panel-no-shells`. Furniture selectors are `terminal-panel-header`, `terminal-panel-minimize`, `terminal-panel-maximize` and `terminal-panel-resize-grip`; check the separator's `aria-valuenow` and action names.
+
+Existing coverage, rather than a claim that these checks ran for this map:
+
+- `studio/src-tauri/tests/terminal_cleanup.rs`, case `explicit_termination_waits_for_a_concurrent_writer_instead_of_failing_storage`, deterministically reproduces the CODING-2751 refusal: termination while another connection holds the SQLite writer. Run `cargo test --test terminal_cleanup` from `studio/src-tauri`.
+- `studio/src/test/overhaulTerminalPanelAcceptance.test.tsx`: numbered cases **144–149** cover toggle/focus, engaged typing, folder refusal, lazy attachment, separate input owners and renderer routing. Run `bun run --cwd studio test -- src/test/overhaulTerminalPanelAcceptance.test.tsx`.
+- `studio/src/test/overhaulTerminalPanelTabsAcceptance.test.tsx`: **150–152, 99–101** cover membership, cap, module switching, rediscovery/active memory, termination and lazy viewers. Run `bun run --cwd studio test -- src/test/overhaulTerminalPanelTabsAcceptance.test.tsx`.
+- `studio/src/test/overhaulTerminalPanelExitAcceptance.test.tsx`: **105–107** cover clean exit, failed exit/restart and exclusion from agent counts/live-terminal cycling. Run `bun run --cwd studio test -- src/test/overhaulTerminalPanelExitAcceptance.test.tsx`.
+- `studio/src/test/overhaulTerminalPanelFurnitureAcceptance.test.tsx`: **102, 119, 121** cover pointer/keyboard resizing, minimize, maximize/restore and persisted furniture. `studio/src/test/overhaulTerminalPanelModuleScopeAcceptance.test.tsx`: **120** covers per-module open persistence. Run `bun run --cwd studio test -- src/test/overhaulTerminalPanelFurnitureAcceptance.test.tsx src/test/overhaulTerminalPanelModuleScopeAcceptance.test.tsx`.
+- `studio/src/test/overhaulTerminalPanelZoneAcceptance.test.tsx`: **103–104** cover joining the zone cycle and leaving typing without closing. `studio/src/test/overhaulTerminalPanelNativeChordAcceptance.test.tsx` exercises the host subscription and native chord bridge. Run `bun run --cwd studio test -- src/test/overhaulTerminalPanelZoneAcceptance.test.tsx src/test/overhaulTerminalPanelNativeChordAcceptance.test.tsx`. These use mocked native boundaries and do not prove native pixels.
+- `studio/src/test/overhaulDesktopTerminalTransportAcceptance.test.tsx`: **153–155**, including **153a/153b**, cover fallback transport, mutation/refresh boundaries and shared Rust control/output projections. Run `bun run --cwd studio test -- src/test/overhaulDesktopTerminalTransportAcceptance.test.tsx`. The full numbered gate is `bun run --cwd studio test:overhaul`.
+- `studio/e2e/web-app.spec.ts` drives real Rust-backed browser shells: opens/hides/restores/closes, creates/selects/caps, repairs missing/stale folders, persists folder selection and observes failed-exit tmux text. Narrow selection: `bun run --cwd studio test:e2e -- e2e/web-app.spec.ts --grep 'Rust-backed.*shell|refused module shell|persisted module link|failed Rust shell exit|keyboard-selected module folder'`. Read back the module-link GraphQL rows after repair; verify `pwd`, output retention and selected tab after reload. The failed-exit test checks **Pane is dead (status 7**, not the structured dead-shell/restart UI.
+- Native checks: `studio/scripts/test-native-ghostty-command-routing.sh`, `studio/scripts/test-native-ghostty-studio-chords.sh` and `studio/scripts/test-native-ghostty-webview-composition.sh`; run the corresponding `bun run --cwd studio test:native-ghostty-command-routing`, `test:native-ghostty-studio-chords` and `test:native-ghostty-webview-composition` scripts separately. They cover AppKit command routing, chord recognition and composition, not the whole module shell journey.
+- The [desktop harness](../../studio/e2e-desktop/README.md), run with `bun run --cwd studio test:e2e:desktop`, proves the disposable agent's real desktop launch/lifecycle, tmux and completed-terminal reload/restart path. It also opens the module panel, closes Shell 1, minimizes the panel and checks the footer before reload. It does not cover New shell, restart, maximize/resize or native shell input. Pending/no-module bodies, generic launch/retry errors and close/restart failures are source-grounded here without dedicated end-to-end proof; native shell typing, terminal pixels and complete panel recovery also remain uncovered by these journeys.
+
+## End-to-end suite
+
+Suite: studio/e2e/features/module-terminal-panel.spec.ts
+
+Run `bun run --cwd studio test:e2e:feature module-terminal-panel`. Each case links its own disposable module and folder through `studio/e2e/module-terminal-panel-support.ts`; after every case the suite terminates each surviving shell through `UpdateTerminalSession` and polls `ModuleShellSessions` until it is empty, so no private tmux session outlives the case. The five moved `studio/e2e/web-app.spec.ts` shell cases keep their titles and run against the footer and module-tab setup instead of the retired Modules pane. They remain in the legacy file until CODING-2720 removes it. **surfaces a failed Rust shell exit status** now asserts the structured dead-shell body (`data-exit-code="7"`, **Shell exited with code 7.**, `Shell 1 · exit 7`) instead of tmux's transient **Pane is dead** text. Failures are injected only at the GraphQL network boundary (`CreateModuleShell`, `UpdateTerminalSession`, `ModuleShellSessions`). Browser cases render xterm over `browserTerminalClient`; native libghostty shell input, pixels and chord bridging remain desktop evidence under Verifying it. Where Verifying it or Gotchas call the browser shell cases stale, or call pending, no-module, launch, close or restart failures source-only, this suite supersedes them for the browser.
+
+| Sub-feature | Success | Cancel | Error | Empty | Entry points | Persistence |
+| --- | --- | --- | --- | --- | --- | --- |
+| `module-terminal-toggle` | @case-module-shell-open-hide-restore @case-module-panel-toggle-entry | n/a: opening commits immediately; Minimize, its reverse, is proven under Success | n/a: toggling writes local presentation state with no request that can fail | @case-module-panel-toggle-entry | @case-module-shell-open-hide-restore @case-module-panel-toggle-entry | @case-module-shell-open-hide-restore |
+| `module-terminal-shell-tabs` | @case-module-shell-tabs-cap @case-module-shell-close-while-starting | n/a: New shell and Close act without a confirmation step | @case-module-shell-close-refusal | @case-module-shell-close-while-starting @case-module-shell-open-hide-restore | @case-module-shell-tabs-cap @case-module-shell-close-refusal | @case-module-shell-tabs-cap @case-module-shell-close-refusal @case-module-shell-rediscovery |
+| `module-terminal-shell-recovery` | @case-module-shell-clean-exit @case-module-shell-restart-recovery | n/a: Restart shell and dead-tab dismissal act without a confirmation step | @case-module-shell-failed-exit @case-module-shell-restart-recovery | @case-module-shell-clean-exit | @case-module-shell-restart-recovery @case-module-shell-failed-exit | @case-module-shell-clean-exit @case-module-shell-restart-recovery |
+| `module-terminal-furniture` | @case-module-shell-open-hide-restore @case-module-panel-furniture | n/a: furniture changes commit immediately without confirmation | n/a: furniture changes are synchronous local preferences with no request that can fail | @case-module-shell-close-while-starting @case-module-shell-launch-failure | @case-module-shell-open-hide-restore @case-module-panel-furniture | @case-module-shell-open-hide-restore @case-module-panel-furniture |
+| `module-terminal-folder-recovery` | @case-module-shell-folder-refusal @case-module-shell-keyboard-folder | @case-module-shell-keyboard-folder | @case-module-shell-folder-refusal | @case-module-shell-folder-refusal @case-module-shell-folder-persistence | @case-module-shell-folder-refusal @case-module-shell-keyboard-folder | @case-module-shell-folder-persistence @case-module-shell-keyboard-folder |
+| `module-terminal-body-states` | @case-module-shell-open-hide-restore | n/a: body states have no confirmation step | @case-module-shell-launch-failure | @case-module-shell-close-while-starting @case-module-panel-toggle-entry @case-module-shell-rediscovery | @case-module-shell-launch-failure @case-module-shell-rediscovery | @case-module-shell-folder-persistence |
+| `module-terminal-persistence` | @case-module-shell-rediscovery | n/a: rediscovery and remembered preferences have no confirmation step | @case-module-shell-rediscovery | @case-module-shell-clean-exit | @case-module-shell-rediscovery @case-module-shell-open-hide-restore | @case-module-shell-rediscovery @case-module-shell-open-hide-restore @case-module-panel-furniture |
+
+Empty for `module-terminal-body-states` covers three bodies: **No shells in this module. Use + to start one.**, the pending body while discovery is refused, and the disabled footer (**Select a module to open a terminal panel**) once every module tab is hidden. Rediscovered shells return in run-id order rather than creation order, because Seaography applies `orderBy` keys in entity column order (CODING-2870). `@case-module-shell-rediscovery` therefore asserts rediscovered membership and the remembered active run by run ID, not by `Shell N` position. The defensive `terminal-panel-empty` body is unreachable through the disabled toggle and remains source-only. Pressing Ctrl+backtick while xterm owns typing proves the capture route in the browser. The native AppKit chord bridge is desktop-only.
+
+## Relevant code
+
+- `studio/src/features/terminal-panel`: shell membership, lifecycle projection, panel rendering, folder recovery, furniture and persistence.
+- `studio/src/features/agents/terminal/Terminal.tsx`: shared native/xterm renderer selection and fallback.
+- `studio/src/features/agents/terminal/internal/browserTerminalClient.ts`: browser WebSocket terminal transport.
+- `studio/src/app/navigation/keymapBindings.ts`, `studio/src/app/navigation/nativeTerminalChords.ts` and `studio/src/app/navigation/workspaceNavigation.ts`: default chords, native bridge and agent-terminal cycling.
+- `studio/src/app/shell/ticket-workspace/TicketWorkspace.tsx` and `studio/src/app/shell/StudioFooterActions.tsx`: panel placement and footer entry.
+
+## Gotchas
+
+The browser shell cases inherit the retired Modules-pane path in shared onboarding/module setup, and the desktop agent harness still clicks **+ Add Module** rather than footer Module Manager → **New module**. See [Onboarding gotchas](onboarding.md#gotchas). Their authored assertions are coverage pointers, not current passing shell proof until setup succeeds.
+
+Terminal lifecycle, native viewer state and tmux liveness are separate axes: a viewer detaching is not a shell exit, and rendering or retaining a native view does not prove the process is live. Native libghostty terminal output never enters the WebView; only lifecycle/layout/visibility/focus controls cross that boundary. Desktop compatibility fallback is a distinct xterm path. Browser output and tmux persistence evidence make no native-rendering claim. See [current runtime facts](../../CLAUDE.md#runtime-validation).
+
+Do not assert native output by reading `terminal-host` text. Shell tabs belong to the module rather than the ticket's workspace tab strip, and their clean-exit behavior differs from retained agent terminals. Folder refusal reason text may be generic (`module_folder_unusable`), so check the refusal attribute as well as the visible remedy. Rediscovery is authoritative; local active-tab memory alone cannot establish that a tmux session survived.
+
+The renderer-strategy link is explicitly historical: its WASM-first title and old decision are not shipping policy. No live walkthrough was performed for this entry; runnable native module-panel recovery and the source-only states named above remain unverified at the end-to-end level.

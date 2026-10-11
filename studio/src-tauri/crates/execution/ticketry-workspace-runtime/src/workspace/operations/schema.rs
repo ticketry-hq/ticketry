@@ -13,15 +13,15 @@ use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement, Transac
 use super::{WorkspaceOperationError, WorkspaceOperationErrorCode};
 
 /// Version of the authored journal schema.
-pub const VERSION: i32 = 1;
+pub(crate) const VERSION: i32 = 1;
 
 /// The tables this capability authors outright.
-pub const AUTHORED_TABLES: &[&str] = &[
+pub(crate) const AUTHORED_TABLES: &[&str] = &[
     "workspace_operations",
     "ticketry_workspace_operations_schema",
 ];
 
-pub const OPERATION_COLUMNS: &[&str] = &[
+pub(crate) const OPERATION_COLUMNS: &[&str] = &[
     "operation_id",
     "kind",
     "intent_version",
@@ -98,7 +98,7 @@ pub async fn verify(database: &DatabaseConnection) -> Result<(), WorkspaceOperat
     Ok(())
 }
 
-pub async fn columns(
+pub(crate) async fn columns(
     database: &impl ConnectionTrait,
     table: &str,
 ) -> Result<BTreeSet<String>, WorkspaceOperationError> {

@@ -29,7 +29,7 @@ properties:
     type: array
     items:
       type: string
-    description: Skills the runtime must have available before launch. This list neither supplies nor limits Stage skills.
+    description: Exact identifiers from the pinned required-skill allow-list, validated on save and launch materialization. Provider-specific disk availability is displayed separately. This list neither supplies nor limits Stage skills.
   - name: stageSkills
     type: array
     items:
@@ -51,5 +51,21 @@ properties:
 
 The existence of a row is not the same as configured launch policy: a row may
 exist only to carry the subtree-run flag.
+
+The reachable state configuration panel exposes **Required skills** beside
+**Stage skills**. Both lists show the resolved provider's read-only disk check,
+missing-name warnings with searched locations, and an accessible Recheck action.
+Existing bindings, including `grill-with-docs`, are inspected when opened;
+inspection and Recheck never rewrite a binding or a skill directory.
+
+Disk availability and catalog validity are separate contracts. The pinned
+`studio/src-tauri/resources/launch/skills.lock.json` allow-list remains the save
+and materialization gate: a disk-visible identifier outside it is rejected with
+`invalid_required_skills`. An allowed identifier missing from disk is warned
+about and can still be saved. Required identifiers retain their exact configured
+spelling even when the availability check finds a case-only match. Stage skill
+edits may adopt installed spelling; they never rename Required identifiers.
+Editing either list preserves the other and unrelated launch-binding fields.
+No migration or automatic rewrite accompanies opening this editor.
 
 <EntityPropertiesTable />

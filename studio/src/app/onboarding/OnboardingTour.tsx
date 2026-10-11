@@ -7,6 +7,7 @@ import CoachMark from "./CoachMark";
 import { StoryHandoffGuidance } from "./StoryHandoffGuidance";
 import { acknowledgeOnboarding } from "./onboardingStore";
 import { useOnboardingTourStore } from "./onboardingTourStore";
+import { useModuleManagerStore } from "../../features/module-manager/state";
 
 interface Props {
   onSelectStory: (storyId: string) => void;
@@ -24,9 +25,12 @@ export default function OnboardingTour({ onSelectStory }: Props) {
   const guideOpen = useModalStore(
     (state) => state.modalStack.at(-1)?.type === "story-workflow-guide",
   );
-  const addModuleOpen = useModalStore(
+  const modalCreationOpen = useModalStore(
     (state) => state.modalStack.at(-1)?.type === "add-module",
   );
+  const managerOpen = useModuleManagerStore((state) => state.active);
+  const inlineCreationOpen = useModuleManagerStore((state) => state.active && state.creationActive);
+  const addModuleOpen = modalCreationOpen || inlineCreationOpen;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [moduleGuide, setModuleGuide] = useState<"name" | "folder" | "done">(
@@ -120,9 +124,11 @@ export default function OnboardingTour({ onSelectStory }: Props) {
     if (addModuleOpen) return null;
     return (
       <CoachMark
-        anchor="module-add"
+        anchor={managerOpen ? "module-add" : "module-manager"}
         title="Add your first module"
-        description="A module groups related stories and sets where their work runs. Select + Add Module to choose its working directory (CWD). Multiple modules can use the same folder."
+        description={managerOpen
+          ? "Select New module to choose its working directory (CWD). Multiple modules can use the same folder."
+          : "A module groups related stories and sets where their work runs. Open Modules in the footer, then select New module to choose its working directory (CWD). Multiple modules can use the same folder."}
         focusDialog={false}
       >
         {errorNode}

@@ -30,8 +30,5 @@
 mod publish;
 mod scope;
 
-pub use publish::{
-    record_worktree, WorktreeChange, WorktreeFact, PAYLOAD_VERSION, WORKTREE_CHANGED,
-    WORKTREE_DELETED,
-};
-pub use scope::{resolve as resolve_scope, WorktreeFactScope};
+pub(crate) use publish::{record_worktree, WorktreeChange, WorktreeFact};
+pub(crate) use scope::{resolve as resolve_scope, WorktreeFactScope};

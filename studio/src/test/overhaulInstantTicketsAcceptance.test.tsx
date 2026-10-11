@@ -16,7 +16,6 @@ import {
   type SessionMeta,
 } from "../features/agents/terminal";
 import { modalOcclusionActive } from "../features/agents/terminal/internal/modalOcclusion";
-import { registerTerminalFocus } from "../features/agents/terminal/internal/terminalRegistry";
 import { TEMP_TASK_ID } from "../features/agents/types";
 import { seedModuleLinks } from "../features/module-links";
 import { setStatesSorted } from "../features/projects";
@@ -38,7 +37,7 @@ function ConversationKeymapHarness() {
 }
 
 vi.mock(
-  "../app/shell/ticket-workspace/selected-ticket/terminals/selectedTicketTerminalLoader",
+  "../features/task-workspace/terminals/selectedTicketTerminalLoader",
   () => ({
     loadSelectedTicketTerminal: async () => {},
     LazySelectedTicketTerminal: () => (
@@ -108,12 +107,14 @@ describe("overhaul acceptance — Conversations", () => {
           tickets: [
             {
               __typename: "InstantRunTicket",
+              user_title: null,
               agent_run_id: "instant-run-2",
               title: "Tighten the launch prompt",
               started_at: "2026-08-30T11:00:00Z",
             },
             {
               __typename: "InstantRunTicket",
+              user_title: null,
               agent_run_id: "instant-run-1",
               title: "Itemize temporary chats",
               started_at: "2026-08-30T10:00:00Z",
@@ -422,9 +423,6 @@ describe("overhaul acceptance — Conversations", () => {
     const configure = await screen.findByRole("button", {
       name: "Configure Conversations",
     });
-    const restoredFocus = vi.fn();
-    const releaseFocus = registerTerminalFocus("session-2", restoredFocus);
-    restoredFocus.mockClear();
     fireEvent.click(configure);
 
     const panel = await screen.findByRole("region", {
@@ -455,7 +453,10 @@ describe("overhaul acceptance — Conversations", () => {
     expect(useClientStore.getState().selectedTaskId).toBe(TEMP_TASK_ID);
     expect(useClientStore.getState().workspaces[bucket]?.active).toBe("terminal");
     expect(operations).not.toContain("UpdateInstantLaunchSetting");
-    await waitFor(() => expect(restoredFocus).toHaveBeenCalledTimes(1));
+    // This fixture substitutes the terminal renderer. Native and fallback
+    // return focus are covered by the rendered workspace terminal-focus suite.
+    expect(useClientStore.getState().workspaceSelection).toEqual({ kind: "task" });
+    expect(useClientStore.getState().activeByTask[bucket]).toBe("session-2");
 
     fireEvent.click(configure);
     await screen.findByRole("region", { name: "Conversation configuration" });
@@ -463,8 +464,8 @@ describe("overhaul acceptance — Conversations", () => {
     await waitFor(() => expect(screen.queryByRole("region", {
       name: "Conversation configuration",
     })).toBeNull());
-    await waitFor(() => expect(restoredFocus).toHaveBeenCalledTimes(2));
-    releaseFocus();
+    expect(useClientStore.getState().workspaceSelection).toEqual({ kind: "task" });
+    expect(useClientStore.getState().activeByTask[bucket]).toBe("session-2");
   });
 
   it("[overhaul-406] exits Conversation configuration through workspace navigation", async () => {
@@ -485,12 +486,14 @@ describe("overhaul acceptance — Conversations", () => {
           tickets: [
             {
               __typename: "InstantRunTicket",
+              user_title: null,
               agent_run_id: "instant-run-2",
               title: "Tighten the launch prompt",
               started_at: "2026-08-30T11:00:00Z",
             },
             {
               __typename: "InstantRunTicket",
+              user_title: null,
               agent_run_id: "instant-run-1",
               title: "Itemize temporary chats",
               started_at: "2026-08-30T10:00:00Z",
@@ -641,6 +644,7 @@ describe("overhaul acceptance — Conversations", () => {
   it("creates and selects a conversation when Enter activates New conversation", async () => {
     const tickets: Array<{
       __typename: "InstantRunTicket";
+      user_title: string | null;
       agent_run_id: string;
       title: string;
       started_at: string;
@@ -656,6 +660,7 @@ describe("overhaul acceptance — Conversations", () => {
       if (operationName === "CreateTerminalSession") {
         tickets.push({
           __typename: "InstantRunTicket",
+          user_title: null,
           agent_run_id: "instant-run-new",
           title: "Untitled instant chat",
           started_at: "2026-08-30T12:00:00Z",
@@ -821,6 +826,7 @@ describe("overhaul acceptance — Conversations", () => {
         return {
           tickets: [{
             __typename: "InstantRunTicket",
+            user_title: null,
             agent_run_id: "instant-run-2",
             title: "Safe launch title",
             started_at: "2026-08-30T11:00:00Z",
@@ -831,7 +837,8 @@ describe("overhaul acceptance — Conversations", () => {
         titleReads += 1;
         if (titleReads === 3) throw new Error("app-server unavailable");
         return {
-          title: titleReads === 1 ? null : "Name the selected Codex thread",
+          // Delivery fixture only; the real Codex smoke test verifies naming.
+          title: titleReads === 1 ? null : titleReads === 4 ? "   " : "Terminal Issue Investigation",
         } as never;
       }
       if (operationName === "WorkTrackerModuleOpen") {
@@ -890,6 +897,9 @@ describe("overhaul acceptance — Conversations", () => {
       });
     });
 
+    const sessions = structuredClone(useTerminalStore.getState().sessions);
+    const sessionByRun = structuredClone(useTerminalStore.getState().sessionByRun);
+    const runs = structuredClone(useAgentStatusStore.getState().runs);
     await waitFor(() => expect(operations.filter(
       ({ operationName }) => operationName === "InstantRunTicketTitle",
     )).toHaveLength(1));
@@ -913,16 +923,16 @@ describe("overhaul acceptance — Conversations", () => {
           variables: { agentRunId: "instant-run-2" },
         },
       ]);
-      expect(screen.getAllByText("Name the selected Codex thread")).toHaveLength(3);
+      expect(screen.getAllByText("Terminal Issue Investigation")).toHaveLength(3);
     });
     expect(screen.getByTestId("details-or-terminal-pane-title")).toHaveAttribute(
       "data-title-casing",
       "preserve",
     );
-    expect(JSON.stringify(localStorage)).not.toContain("Name the selected Codex thread");
+    expect(JSON.stringify(localStorage)).not.toContain("Terminal Issue Investigation");
 
     await act(refreshTerminalHoldings);
-    expect(screen.getAllByText("Name the selected Codex thread")).toHaveLength(3);
+    expect(screen.getAllByText("Terminal Issue Investigation")).toHaveLength(3);
 
     view.unmount();
     render(
@@ -935,7 +945,19 @@ describe("overhaul acceptance — Conversations", () => {
     await waitFor(() => expect(operations.filter(
       ({ operationName }) => operationName === "InstantRunTicketTitle",
     )).toHaveLength(3));
-    expect(screen.getAllByText("Name the selected Codex thread")).toHaveLength(3);
+    expect(screen.getAllByText("Terminal Issue Investigation")).toHaveLength(3);
+
+    // A blank read after the unavailable service cannot erase the accepted name.
+    act(() => useClientStore.getState().setActive(scratchBucketId("module-1"), "details"));
+    fireEvent.click(screen.getByRole("treeitem", { name: /Terminal Issue Investigation/ }));
+    await waitFor(() => expect(operations.filter(
+      ({ operationName }) => operationName === "InstantRunTicketTitle",
+    )).toHaveLength(4));
+    expect(screen.getAllByText("Terminal Issue Investigation")).toHaveLength(3);
+    expect(useTerminalStore.getState().sessions).toEqual(sessions);
+    expect(useTerminalStore.getState().sessionByRun).toEqual(sessionByRun);
+    expect(useAgentStatusStore.getState().runs).toEqual(runs);
+    expect(operations.some(({ operationName }) => operationName === "UpdateInstantConversationTitle")).toBe(false);
   });
 
   it("[overhaul-261] refreshes the settled Codex conversation on return and startup", async () => {
@@ -953,12 +975,14 @@ describe("overhaul acceptance — Conversations", () => {
           tickets: [
             {
               __typename: "InstantRunTicket",
+              user_title: null,
               agent_run_id: "instant-run-2",
               title: "Safe launch title",
               started_at: "2026-08-30T11:00:00Z",
             },
             {
               __typename: "InstantRunTicket",
+              user_title: null,
               agent_run_id: "instant-run-1",
               title: "Other conversation",
               started_at: "2026-08-30T10:00:00Z",
@@ -1033,11 +1057,14 @@ describe("overhaul acceptance — Conversations", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Renamed in Codex")).toHaveLength(3);
     });
+    await waitFor(() => expect(titleReads).toEqual([
+      "instant-run-2", "instant-run-2", "instant-run-2",
+    ]));
 
     document.dispatchEvent(new Event("visibilitychange"));
     screen.getByTestId("selected-conversation-terminal").focus();
     await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(titleReads).toEqual(["instant-run-2", "instant-run-2"]);
+    expect(titleReads).toEqual(["instant-run-2", "instant-run-2", "instant-run-2"]);
 
     view.unmount();
     useClientStore.setState({
@@ -1058,14 +1085,20 @@ describe("overhaul acceptance — Conversations", () => {
       "instant-run-2",
       "instant-run-2",
       "instant-run-2",
+      "instant-run-2",
     ]));
     await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(titleReads).toHaveLength(3);
+    expect(titleReads).toHaveLength(4);
   });
 
-  it("[CODING-1512] rereads the selected conversation's title when its run changes lifecycle state", async () => {
+  it.each([
+    { caseName: "[CODING-1512] rereads the selected conversation's title when its run changes lifecycle state", pendingInitialRead: false },
+    { caseName: "[overhaul-598] displays the first terminal request name when its lifecycle refresh overlaps an earlier neutral read", pendingInitialRead: true },
+  ])("$caseName", async ({ pendingInitialRead }) => {
     const titleReads: string[] = [];
     let codexTitle: string | null = null;
+    let releaseInitialRead!: () => void;
+    const initialReadGate = new Promise<void>((resolve) => { releaseInitialRead = resolve; });
     const terminalExecutor = terminalSessionReadExecutor(emptyTerminalReads);
     installDesktopGraphQlRuntime(async (document, variables) => {
       const operationName = documentOperationName(document);
@@ -1073,6 +1106,7 @@ describe("overhaul acceptance — Conversations", () => {
         return {
           tickets: [{
             __typename: "InstantRunTicket",
+            user_title: null,
             agent_run_id: "instant-run-2",
             title: "Safe launch title",
             started_at: "2026-08-30T11:00:00Z",
@@ -1081,7 +1115,9 @@ describe("overhaul acceptance — Conversations", () => {
       }
       if (operationName === "InstantRunTicketTitle") {
         titleReads.push((variables as { agentRunId: string }).agentRunId);
-        return { title: codexTitle } as never;
+        const response = { title: codexTitle };
+        if (pendingInitialRead && titleReads.length === 1) await initialReadGate;
+        return response as never;
       }
       if (operationName === "WorkTrackerModuleOpen") {
         return {
@@ -1118,34 +1154,47 @@ describe("overhaul acceptance — Conversations", () => {
       automationAttempts: {},
       automationByTask: {},
     }));
+    const sessions = structuredClone(useTerminalStore.getState().sessions);
+    const sessionByRun = structuredClone(useTerminalStore.getState().sessionByRun);
     fireEvent.click(selected);
     await waitFor(() => expect(titleReads).toEqual(["instant-run-2"]));
     expect(screen.getAllByText("Safe launch title").length).toBeGreaterThan(0);
 
-    // Codex names the thread during its first turn; the run settles afterwards.
-    codexTitle = "Named by Codex after the first turn";
+    // A first substantive request arrives in the existing terminal, and Codex
+    // names its thread before the turn settles. The earlier blank read may
+    // still be pending; this lifecycle refresh must read the new provider name.
+    codexTitle = "Terminal Issue Investigation";
     act(() => useAgentStatusStore.setState({
       runs: { "instant-run-2": run("turn_complete") },
     }));
-    await waitFor(() => expect(titleReads).toEqual([
-      "instant-run-2",
-      "instant-run-2",
-    ]));
+    if (pendingInitialRead) {
+      // Let the debounced lifecycle refresh meet the still-pending read.
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 150)); });
+      expect(screen.getAllByText("Safe launch title").length).toBeGreaterThan(0);
+      await act(async () => { releaseInitialRead(); });
+    }
     await waitFor(() => {
-      expect(screen.getAllByText("Named by Codex after the first turn").length)
-        .toBeGreaterThan(0);
+      expect(selected).toHaveTextContent("Terminal Issue Investigation");
+      expect(screen.getByTestId("details-or-terminal-pane-title"))
+        .toHaveTextContent("Terminal Issue Investigation");
     });
+    expect(titleReads).toEqual(["instant-run-2", "instant-run-2"]);
 
-    // A later turn may rename the thread; every settle rereads it.
-    codexTitle = "Renamed on a later turn";
+    // A later lifecycle refresh retains the first request's provider name.
+    codexTitle = "Terminal Issue Investigation";
     act(() => useAgentStatusStore.setState({
       runs: { "instant-run-2": run("needs_input") },
     }));
     await waitFor(() => {
-      expect(screen.getAllByText("Renamed on a later turn").length)
+      expect(titleReads).toHaveLength(3);
+      expect(screen.getAllByText("Terminal Issue Investigation").length)
         .toBeGreaterThan(0);
     });
     expect(titleReads).toHaveLength(3);
+    expect(useAgentStatusStore.getState().runs["instant-run-2"].provider_session_id)
+      .toBe("codex-thread-2");
+    expect(useTerminalStore.getState().sessions).toEqual(sessions);
+    expect(useTerminalStore.getState().sessionByRun).toEqual(sessionByRun);
   });
 
   it("waits for the selected conversation's Apollo cache row before reading its title", async () => {
@@ -1213,6 +1262,7 @@ describe("overhaul acceptance — Conversations", () => {
     await act(async () => resolveTickets({
       tickets: [{
         __typename: "InstantRunTicket",
+        user_title: null,
         agent_run_id: "instant-run-2",
         title: "Safe launch title",
         started_at: "2026-08-30T11:00:00Z",
@@ -1235,6 +1285,7 @@ describe("overhaul acceptance — Conversations", () => {
         return {
           tickets: [{
             __typename: "InstantRunTicket",
+            user_title: null,
             agent_run_id: "instant-run-2",
             title: "Safe launch title",
             started_at: "2026-08-30T11:00:00Z",
@@ -1309,8 +1360,13 @@ describe("overhaul acceptance — Conversations", () => {
     ).toHaveTextContent("Ended Codex thread name"));
   });
 
-  it("[overhaul-264] refreshes the selected Codex conversation after its title reader restarts", async () => {
+  it.each([
+    { caseName: "[overhaul-264] refreshes the selected Codex conversation after its title reader restarts", pendingUnavailableRead: false },
+    { caseName: "[overhaul-599] retains the safe conversation through a pending failed read and accepts its first-request title after resident recovery", pendingUnavailableRead: true },
+  ])("$caseName", async ({ pendingUnavailableRead }) => {
     let titleReads = 0;
+    let releaseUnavailableRead!: () => void;
+    const unavailableReadGate = new Promise<void>((resolve) => { releaseUnavailableRead = resolve; });
     let publishRestart: (() => void) | undefined;
     const terminalExecutor = terminalSessionReadExecutor(emptyTerminalReads);
     installDesktopGraphQlRuntime(
@@ -1320,6 +1376,7 @@ describe("overhaul acceptance — Conversations", () => {
           return {
             tickets: [{
               __typename: "InstantRunTicket",
+              user_title: null,
               agent_run_id: "instant-run-2",
               title: "Safe launch title",
               started_at: "2026-08-30T11:00:00Z",
@@ -1328,8 +1385,12 @@ describe("overhaul acceptance — Conversations", () => {
         }
         if (operationName === "InstantRunTicketTitle") {
           titleReads += 1;
+          if (pendingUnavailableRead && titleReads === 1) {
+            await unavailableReadGate;
+            throw new Error("resident title service unavailable");
+          }
           return {
-            title: titleReads === 1 ? null : "Recovered Codex title",
+            title: titleReads === 1 ? null : "Terminal Issue Investigation",
           } as never;
         }
         if (operationName === "WorkTrackerModuleOpen") {
@@ -1388,9 +1449,15 @@ describe("overhaul acceptance — Conversations", () => {
     act(() => publishRestart?.());
 
     expect(titleReads).toBe(1);
+    if (pendingUnavailableRead) {
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 150)); });
+      expect(screen.getAllByText("Safe launch title")).toHaveLength(3);
+      expect(screen.getByTestId("selected-conversation-terminal")).toBeVisible();
+      await act(async () => { releaseUnavailableRead(); });
+    }
 
     await waitFor(() => {
-      expect(screen.getAllByText("Recovered Codex title")).toHaveLength(3);
+      expect(screen.getAllByText("Terminal Issue Investigation")).toHaveLength(3);
     });
     expect(titleReads).toBe(2);
   });

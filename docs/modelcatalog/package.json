@@ -6,12 +6,13 @@
   "type": "module",
   "scripts": {
     "sync": "node scripts/sync-language.mjs",
-    "dev": "npm run sync && node scripts/run-eventcatalog.mjs dev",
-    "build": "npm run sync && node scripts/run-eventcatalog.mjs build",
+    "dev": "bun run sync && node scripts/run-eventcatalog.mjs dev",
+    "build": "bun run sync && node scripts/run-eventcatalog.mjs build",
     "preview": "node scripts/run-eventcatalog.mjs preview"
   },
   "dependencies": {
     "@eventcatalog/core": "4.3.3",
     "vite": "8.1.5"
-  }
+  },
+  "packageManager": "bun@1.4.2"
 }

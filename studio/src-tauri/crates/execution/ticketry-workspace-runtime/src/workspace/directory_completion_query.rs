@@ -15,7 +15,7 @@ use ticketry_entities::StringList;
 
 use ticketry_documents::complete_directories;
 
-pub struct DirectoryCompletionQueries;
+pub(crate) struct DirectoryCompletionQueries;
 
 #[CustomFields]
 impl DirectoryCompletionQueries {

@@ -11,7 +11,7 @@ use super::{
 };
 use ticketry_launch::{TerminalLaunchError, TerminalLaunchErrorCode};
 
-const LEASE_SECONDS: i64 = 120;
+pub(super) const LEASE_SECONDS: i64 = 120;
 const RECOVERY_BATCH: u64 = 200;
 
 impl TerminalLaunchService {
@@ -50,11 +50,32 @@ impl TerminalLaunchService {
         &self,
         material: launch_material::Model,
     ) -> Result<session::Model, TerminalLaunchError> {
-        let claim = self
+        let claim = match self
             .runs
             .effects()
             .claim(&material.effect_id, &self.lease_owner, LEASE_SECONDS)
-            .await?;
+            .await
+        {
+            Ok(claim) => claim,
+            Err(error)
+                if error.code() == ticketry_runs::RunsPersistenceErrorCode::LaunchConflict =>
+            {
+                let effect = launch_effect::Entity::find_by_id(&material.effect_id)
+                    .one(&self.database)
+                    .await
+                    .map_err(super::service::storage)?;
+                if effect
+                    .is_some_and(|effect| matches!(effect.state.as_str(), "leased" | "applied"))
+                {
+                    return Err(TerminalLaunchError::new(
+                        TerminalLaunchErrorCode::EffectBusy,
+                        error.to_string(),
+                    ));
+                }
+                return Err(error.into());
+            }
+            Err(error) => return Err(error.into()),
+        };
         self.checkpoints
             .checkpoint(TerminalLaunchBoundary::EffectClaimed)
             .await?;

@@ -96,6 +96,14 @@ export interface DeleteProjectResult {
   targetId: string | null;
 }
 
+// Request identity only; project and module state remains in Apollo.
+let projectSelectionGeneration = 0;
+
+/** Current project visit identity; returning to a project invalidates previous navigation. */
+export function getProjectSelectionGeneration(): number {
+  return projectSelectionGeneration;
+}
+
 export const useStudioStore = createApolloStore<StudioState>("studio", (set, get) => ({
   selectedProjectId: null,
   activeView: "backlog",
@@ -112,6 +120,8 @@ export const useStudioStore = createApolloStore<StudioState>("studio", (set, get
 
   async selectProject(id) {
     if (get().selectedProjectId === id) return;
+    const attempt = ++projectSelectionGeneration;
+    const isCurrent = () => attempt === projectSelectionGeneration && get().selectedProjectId === id;
     set({ selectedProjectId: id, error: null });
     useClientStore.setState({
       selectedModuleId: null,
@@ -120,12 +130,13 @@ export const useStudioStore = createApolloStore<StudioState>("studio", (set, get
     });
     try {
       await loadModules(id);
+      if (!isCurrent()) return;
       const startupModule = startupModuleId(id);
       if (startupModule) {
-        await useClientStore.getState().selectModule(startupModule);
+        await useClientStore.getState().selectModule(startupModule, { isCurrent });
       }
     } catch (e) {
-      set({ error: errMessage(e) });
+      if (isCurrent()) set({ error: errMessage(e) });
     }
   },
 
@@ -167,7 +178,7 @@ export const useStudioStore = createApolloStore<StudioState>("studio", (set, get
       parent_id: null,
     });
     // Reload so every surface adopts the server's canonical presentation order.
-    await loadModules(projectId).catch(() => {});
+    await loadModules(projectId, { queryDeduplication: false }).catch(() => {});
     return created;
   },
 

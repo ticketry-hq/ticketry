@@ -1,12 +1,37 @@
-use sea_orm::{DatabaseConnection, EntityTrait};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 use serde_json::{json, Map, Value};
-use ticketry_entities::sprint;
+use ticketry_entities::{sprint, SPRINT_ACTIVE, SPRINT_PLANNED};
 use ticketry_work_management::{
-    commands::CommandError, goals_for_sprint, record_for_run, RecordSprintSuggestion,
-    SprintStorySuggestion,
+    goals_for_sprint, record_for_run, CommandError, RecordSprintSuggestion, SprintStorySuggestion,
 };
 
-use super::{dispatch::DispatchOutput, scope, workflow_tools::string, RunPrincipal};
+use super::{
+    dispatch::DispatchOutput, public_id::hyphenate, scope, workflow_tools::string, RunPrincipal,
+};
+
+pub(super) async fn list_sprints(
+    database: &DatabaseConnection,
+    principal: &RunPrincipal,
+    arguments: &Map<String, Value>,
+) -> Result<DispatchOutput, CommandError> {
+    let project = scope::project(database, principal, string(arguments, "project_id")?).await?;
+    let sprints = sprint::Entity::find()
+        .filter(sprint::Column::ProjectId.eq(project.replace('-', "")))
+        .filter(sprint::Column::Status.is_in([SPRINT_PLANNED, SPRINT_ACTIVE]))
+        .order_by_asc(sprint::Column::Rank)
+        .order_by_asc(sprint::Column::Id)
+        .all(database)
+        .await?;
+    let next = sprints
+        .iter()
+        .position(|sprint| sprint.status == SPRINT_PLANNED);
+    Ok(DispatchOutput::direct(json!({
+        "sprints": sprints.iter().enumerate().map(|(index, sprint)| json!({
+            "id": hyphenate(&sprint.id), "name": sprint.name, "status": sprint.status,
+            "is_current": sprint.status == SPRINT_ACTIVE, "is_next": next == Some(index),
+        })).collect::<Vec<_>>(),
+    })))
+}
 
 async fn scoped_sprint(
     database: &DatabaseConnection,

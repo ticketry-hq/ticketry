@@ -91,7 +91,7 @@ async fn prepare_projects(directory: &Path) {
                 lifecycle_updated_at varchar, design_dir varchar, resumed_from varchar,
                 scope varchar NOT NULL, launch_state varchar, launch_model varchar,
                 initial_prompt text, launch_reasoning varchar,
-                launch_unattended bool NOT NULL DEFAULT 0, attention_reason text
+                launch_unattended bool NOT NULL DEFAULT 0, attention_reason text, conversation_title text, stage_skill_availability text
             );
             INSERT INTO worktracker_project VALUES
                 ('10000000000000000000000000000000',
@@ -114,7 +114,7 @@ async fn prepare_projects(directory: &Path) {
         )
         .await
         .expect("create MCP project fixture");
-    ticketry_work_management::module_presentation_migration::install(&database)
+    ticketry_work_management::install_module_presentation_schema(&database)
         .await
         .expect("install final module-presentation shape");
     let table = sea_orm::Schema::new(sea_orm::DbBackend::Sqlite)
@@ -406,7 +406,7 @@ async fn global_connections_read_everything_while_run_connections_stay_scoped() 
     let listed = global
         .request(json!({"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}))
         .await;
-    assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 35);
+    assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 36);
     assert_eq!(listed["result"]["ttlMs"], 0, "{listed:#}");
     assert_eq!(listed["result"]["cacheScope"], "private", "{listed:#}");
     let projects = global.structured(2, "list_projects", json!({})).await;
@@ -649,8 +649,8 @@ fn mcp_write_adapters_do_not_own_seaorm_queries_or_domain_sequencing() {
             );
         }
     }
-    assert!(!dependency.contains("blockers::replace"));
-    assert_eq!(dependency.matches("blockers::change(").count(), 2);
+    assert!(!dependency.contains("replace_blockers"));
+    assert_eq!(dependency.matches("change_blockers(").count(), 2);
 
     let append = work_items
         .split("async fn append_description")
@@ -659,8 +659,13 @@ fn mcp_write_adapters_do_not_own_seaorm_queries_or_domain_sequencing() {
         .split("async fn update_status")
         .next()
         .unwrap();
-    assert_eq!(append.matches("work_items::append_description(").count(), 1);
-    assert!(!append.contains("work_items::update("));
+    assert_eq!(
+        append
+            .matches("ticketry_work_management::append_description(")
+            .count(),
+        1
+    );
+    assert!(!append.contains("update_work_item("));
 
     let finding = work_items
         .split("async fn create_review_finding")
@@ -668,11 +673,16 @@ fn mcp_write_adapters_do_not_own_seaorm_queries_or_domain_sequencing() {
         .unwrap();
     assert_eq!(
         finding
-            .matches("work_items::create_review_finding(")
+            .matches("ticketry_work_management::create_review_finding(")
             .count(),
         1
     );
-    assert!(!finding.contains("read_queries"));
+    for read in ["work_item(", "work_items(", "transitions("] {
+        assert!(
+            !finding.contains(read),
+            "review-finding adapter sequences root read capability {read}"
+        );
+    }
 
     let launch = workflow
         .split("async fn upsert_launch_binding")
@@ -681,13 +691,13 @@ fn mcp_write_adapters_do_not_own_seaorm_queries_or_domain_sequencing() {
         .split("pub fn rejection")
         .next()
         .unwrap();
-    assert_eq!(launch.matches("workflow::patch_launch_binding(").count(), 1);
-    assert!(!launch.contains("read_queries::launch_bindings"));
+    assert_eq!(launch.matches("patch_launch_binding(").count(), 1);
+    assert!(!launch.contains("launch_bindings("));
 }
 
 #[test]
 fn a_launch_profile_is_refused_for_every_provider_but_codex() {
-    use ticketry_work_management::commands::workflow::PatchValue;
+    use ticketry_work_management::PatchValue;
     use workflow_tools::ensure_profile_supported;
 
     let profile = PatchValue::Value("x".to_owned());

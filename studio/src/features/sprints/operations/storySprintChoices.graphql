@@ -1,0 +1,36 @@
+fragment SprintChoiceFields on WorktrackerSprint {
+  __typename
+  id
+  projectId
+  name
+  status
+  createdAt
+  rank
+}
+
+query SprintChoicePage(
+  $filters: WorktrackerSprintFilterInput!
+  $order: WorktrackerSprintOrderInput!
+  $pagination: PaginationInput!
+) {
+  sprints: worktrackerSprint(filters: $filters, orderBy: $order, pagination: $pagination) {
+    __typename
+    nodes { ...SprintChoiceFields }
+    paginationInfo { total }
+    pageInfo { hasNextPage }
+  }
+}
+
+query StoryActiveSprint($projectId: String!) {
+  sprints: worktrackerSprint(
+    filters: { projectId: { eq: $projectId }, status: { eq: "active" } }
+    pagination: { offset: { limit: 2, offset: 0 } }
+  ) { __typename nodes { ...SprintChoiceFields } }
+}
+
+query StorySelectedSprint($projectId: String!, $sprintId: String!) {
+  sprints: worktrackerSprint(
+    filters: { projectId: { eq: $projectId }, id: { eq: $sprintId } }
+    pagination: { offset: { limit: 1, offset: 0 } }
+  ) { __typename nodes { ...SprintChoiceFields } }
+}

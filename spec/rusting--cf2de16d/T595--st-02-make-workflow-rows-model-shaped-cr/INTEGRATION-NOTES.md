@@ -57,7 +57,7 @@ row, so no Studio save path changes.
 
 ## Studio failures this story did not cause
 
-`npx vitest run` has three failures, all in provider-catalogue territory owned
+`bunx vitest run` has three failures, all in provider-catalogue territory owned
 by the settings slice, none touching workflow rows:
 
 * `src/app/__tests__/moduleBoundaries.test.ts` — three imports reach into
@@ -69,4 +69,4 @@ by the settings slice, none touching workflow rows:
 The rest of the suite (103 files, 455 tests) is green, as are
 `cargo test --lib`, `--test work_management_commands`,
 `--test work_management_graphql`, `--test work_management_shape_parity`,
-`--test graphql_foundation`, and `npm run graphql:drift`.
+`--test graphql_foundation`, and `bun run graphql:drift`.

@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { dragEvent, dataTransfer } from "./moduleDragGestures";
@@ -36,20 +36,31 @@ function storyDropTarget(id: string): HTMLElement {
 }
 
 describe("story list reorder acceptance", () => {
-  it("[overhaul-181] reorders root tasks through the GraphQL write path", async () => {
+  it("[overhaul-181] reorders root tasks through GraphQL and retains expanded branches after cancellation and drop", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const http = fixture();
     const items = [
       workItem({ id: "story-a", name: "Story A", sequence_id: 1, rank: "a" }),
       workItem({ id: "story-b", name: "Story B", sequence_id: 2, rank: "b" }),
-      workItem({ id: "story-c", name: "Story C", sequence_id: 3, rank: "c" }),
+      workItem({ id: "story-c", name: "Story C", sequence_id: 3, rank: "c", sub_issues_count: 1 }),
     ];
+    const child = workItem({
+      id: "child-c",
+      name: "Implementation child of C",
+      sequence_id: 4,
+      parent_id: "story-c",
+    });
     http.tree("module-1", {
       rootIds: items.map((item) => item.id),
-      children: Object.fromEntries(items.map((item) => [item.id, []])),
-      order: items.map((item) => item.id),
+      children: {
+        "story-a": [],
+        "story-b": [],
+        "story-c": [child.id],
+        [child.id]: [],
+      },
+      order: [...items.map((item) => item.id), child.id],
     });
-    http.workItems(items);
+    http.workItems([...items, child]);
     mountStudio({ http });
 
     await screen.findByRole("treeitem", { name: /Story C/ });
@@ -59,11 +70,25 @@ describe("story list reorder acceptance", () => {
         .filter((id) => id?.startsWith("story-")),
     ).toEqual(["story-a", "story-b", "story-c"]);
     layoutStoryRows(items.map((item) => item.id));
-    const transfer = dataTransfer();
     const source = storyRow("story-c");
     const target = storyDropTarget("story-a");
+    fireEvent.click(within(source).getByRole("button", { name: "Expand subtasks" }));
+    expect(await screen.findByRole("treeitem", { name: /Implementation child of C/ })).toBeVisible();
+    expect(source).toHaveAttribute("aria-expanded", "true");
 
+    const cancelledTransfer = dataTransfer();
+    dragEvent(source, "dragstart", cancelledTransfer);
+    expect(screen.queryByRole("treeitem", { name: /Implementation child of C/ })).toBeNull();
+    dragEvent(target, "dragover", cancelledTransfer, { clientY: 2 });
+    fireEvent.keyDown(window, { key: "Escape" });
+    dragEvent(source, "dragend", cancelledTransfer);
+    expect(await screen.findByRole("treeitem", { name: /Implementation child of C/ })).toBeVisible();
+    expect(source).toHaveAttribute("aria-expanded", "true");
+    expect(http.reorderBodies("story-c")).toEqual([]);
+
+    const transfer = dataTransfer();
     dragEvent(source, "dragstart", transfer);
+    expect(screen.queryByRole("treeitem", { name: /Implementation child of C/ })).toBeNull();
     dragEvent(target, "dragover", transfer, { clientY: 2 });
     dragEvent(target, "drop", transfer, { clientY: 2 });
 
@@ -86,6 +111,8 @@ describe("story list reorder acceptance", () => {
         .map((row) => row.dataset.taskId)
         .filter((id) => id?.startsWith("story-")),
     ).toEqual(["story-c", "story-a", "story-b"]));
+    expect(await screen.findByRole("treeitem", { name: /Implementation child of C/ })).toBeVisible();
+    expect(storyRow("story-c")).toHaveAttribute("aria-expanded", "true");
   });
 
   it("[overhaul-182] sends a reorder when imported neighbors share a rank", async () => {

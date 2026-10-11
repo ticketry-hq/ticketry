@@ -11,7 +11,9 @@ use seaolim::{
 };
 
 use super::super::mutation_error::{require_write_ownership, store_error};
-use crate::module_links::{entities::module_link, store};
+use ticketry_entities::module_link;
+
+use crate::module_links::store;
 
 struct ClearModuleLink;
 

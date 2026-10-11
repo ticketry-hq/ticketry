@@ -31,13 +31,22 @@ pub async fn latest_attempts(
     let mut resolved = HashSet::<String>::new();
     rows.into_iter()
         .filter(|attempt| resolved.insert(lineage(attempt)))
-        .filter(|attempt| {
-            !matches!(attempt.status.as_str(), "succeeded" | "skipped")
-                && attempt.dismissed_at.is_none()
-        })
+        .filter(|attempt| attempt.dismissed_at.is_none() && still_visible(attempt))
         .map(automation_attempt)
         .map(project)
         .collect()
+}
+
+/// An unresolved lineage stays visible until it settles. A settled success
+/// stays visible only once it recorded how it reached its agent: a continued
+/// handoff mints no run, so the attempt is the sole durable evidence of the
+/// delivery that a reloaded status snapshot must still show.
+fn still_visible(attempt: &automation_attempt_entity::Model) -> bool {
+    match attempt.status.as_str() {
+        "skipped" => false,
+        "succeeded" => attempt.delivery_mode.is_some(),
+        _ => true,
+    }
 }
 
 fn lineage(attempt: &automation_attempt_entity::Model) -> String {

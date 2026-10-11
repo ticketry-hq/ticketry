@@ -1,19 +1,21 @@
 import { useModalStore } from "../../../../app/modal/modalStore";
 import { useDialogStore } from "../../../../app/shell/dialogStore";
 import { useClientStore } from "../../../../state/clientStore";
+import { useModuleManagerStore } from "../../../module-manager/state";
 
 /**
  * The single window-level occlusion condition (CODING-718, CODING-733).
  *
  * Studio raises WebView surfaces above the native terminal from the modal
- * stack, `DialogHost`, and the state-configuration workspace overlay. Any one
+ * stack, `DialogHost`, Module Manager, and the state-configuration overlay. Any one
  * of them owns the foreground, so the condition is centralized here rather
  * than bolted onto each terminal gate. While it holds, terminals stay
- * presented beneath the overlay as WebView siblings but none may take the
- * window's focus or keyboard ownership (CODING-1497).
+ * presented beneath dialogs as WebView siblings; Module Manager additionally
+ * suppresses visibility. None may take focus or keyboard ownership.
  */
 export function modalOcclusionActive(): boolean {
   return (
+    useModuleManagerStore.getState().active ||
     useModalStore.getState().modalStack.length > 0 ||
     useDialogStore.getState().dialogs.length > 0 ||
     useClientStore.getState().workspaceSelection.kind.endsWith("-configuration")
@@ -26,11 +28,12 @@ export function modalOcclusionActive(): boolean {
  */
 export function useModalOcclusionActive(): boolean {
   const modalOpen = useModalStore((state) => state.modalStack.length > 0);
+  const managerOpen = useModuleManagerStore((state) => state.active);
   const dialogOpen = useDialogStore((state) => state.dialogs.length > 0);
   const workspaceOverlayOpen = useClientStore(
     (state) => state.workspaceSelection.kind.endsWith("-configuration"),
   );
-  return modalOpen || dialogOpen || workspaceOverlayOpen;
+  return modalOpen || dialogOpen || workspaceOverlayOpen || managerOpen;
 }
 
 /**
@@ -51,6 +54,7 @@ export function onModalOcclusionBegin(listener: () => void): () => void {
     useModalStore.subscribe(observe),
     useDialogStore.subscribe(observe),
     useClientStore.subscribe(observe),
+    useModuleManagerStore.subscribe(observe),
   ];
   return () => {
     for (const release of releases) release();

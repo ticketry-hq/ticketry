@@ -73,8 +73,8 @@ export class ModalErrorBoundary extends Component<
           </p>
           <p className="mt-2 text-xs text-text-muted">
             This usually means the application was updated in the background or
-            the network dropped. Retrying reloads the window; closing returns
-            you to Studio.
+            the network dropped. Retrying downloads it again; closing returns you
+            to Studio.
           </p>
           <div className="mt-4 flex justify-end gap-2">
             <button

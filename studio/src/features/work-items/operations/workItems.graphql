@@ -1,3 +1,15 @@
+fragment GeneratedWorkTrackerOpenedModuleFields on WorktrackerIssue {
+  id
+  name
+  project_id: projectId
+  sequence_id: sequenceId
+  is_archived: isArchived
+  issue_type: issueTypeId
+  rank
+  project { id slug }
+  state_revision: stateRevision
+}
+
 fragment GeneratedWorkTrackerWorkItemFields on WorktrackerIssue {
   id
   name
@@ -35,16 +47,7 @@ query WorkTrackerModuleOpen($moduleId: String!) {
   module: worktrackerIssue(
     filters: { id: { eq: $moduleId }, type: { eq: "module" } }
   ) {
-    nodes {
-      id
-      name
-      project_id: projectId
-      sequence_id: sequenceId
-      is_archived: isArchived
-      issue_type: issueTypeId
-      rank
-      project { id slug }
-    }
+    nodes { ...GeneratedWorkTrackerOpenedModuleFields }
   }
   work_items: worktrackerIssue(
     filters: {
@@ -56,6 +59,7 @@ query WorkTrackerModuleOpen($moduleId: String!) {
   ) {
     nodes {
       ...GeneratedWorkTrackerWorkItemFields @nonreactive
+      sprint_id: sprintId
       id
       name
       project_id: projectId
@@ -71,9 +75,34 @@ query WorkTrackerModuleOpen($moduleId: String!) {
   }
 }
 
+# Review findings are a Story's direct task children. Unlike module membership,
+# archived (cancelled) children stay listed so resolved findings remain visible.
+query WorkTrackerReviewFindings($parentId: String!) {
+  findings: worktrackerIssue(
+    filters: { parentId: { eq: $parentId }, type: { eq: "task" } }
+    orderBy: { rank: ASC, sequenceId: ASC }
+  ) {
+    nodes { ...GeneratedWorkTrackerWorkItemFields }
+  }
+}
+
 query WorkTrackerWorkItem($id: String!) {
   work_item: worktrackerIssue(filters: { id: { eq: $id }, type: { eq: "task" } }) {
     nodes { ...GeneratedWorkTrackerWorkItemFields }
+  }
+}
+
+fragment WorkItemSprintAssignment on WorktrackerIssue {
+  id
+  sprintId
+  stateRevision
+}
+
+query WorkItemSprint($id: String!) {
+  worktrackerIssue(filters: { id: { eq: $id }, type: { eq: "task" } }) {
+    nodes {
+      ...WorkItemSprintAssignment
+    }
   }
 }
 
@@ -100,8 +129,8 @@ query WorkTrackerAttachments($issueId: String!) {
   }
 }
 
-mutation CreateWorkTrackerWorkItem($projectId: String!, $name: String!, $issueTypeId: String!, $description: String, $stateId: String, $parentId: String) {
-  create_work_item(project_id: $projectId, name: $name, issue_type_id: $issueTypeId, description: $description, state_id: $stateId, parent_id: $parentId) {
+mutation CreateWorkTrackerWorkItem($projectId: String!, $name: String!, $issueTypeId: String!, $description: String, $stateId: String, $parentId: String, $sprintId: String) {
+  create_work_item(project_id: $projectId, name: $name, issue_type_id: $issueTypeId, description: $description, state_id: $stateId, parent_id: $parentId, sprint_id: $sprintId) {
     ...GeneratedWorkTrackerWorkItemFields
   }
 }

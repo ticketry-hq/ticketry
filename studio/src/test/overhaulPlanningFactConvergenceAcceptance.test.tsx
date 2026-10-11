@@ -47,8 +47,8 @@ function planner() {
       ] },
       issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [{ __typename: "WorktrackerIssuetype", id: "story", name: "Story", level: "task" }] },
       sprints: { __typename: "WorktrackerSprintConnection", nodes: [
-        { __typename: "WorktrackerSprint", id: "active-sprint", name: "Current", status: "active", createdAt: "2026-10-01" },
-        { __typename: "WorktrackerSprint", id: "next-sprint", name: "Next", status: "planned", createdAt: "2026-10-02" },
+        { __typename: "WorktrackerSprint", id: "active-sprint", name: "Current", status: "active", rank: "V", createdAt: "2026-10-01" },
+        { __typename: "WorktrackerSprint", id: "next-sprint", name: "Next", status: "planned", rank: "V", createdAt: "2026-10-02" },
       ] },
       modules: { __typename: "WorktrackerIssueConnection", nodes: hasEpic ? [{ __typename: "WorktrackerIssue", id: "module-1", name: epicName, sequenceId: 1, presentation: { __typename: "WorktrackerModulepresentationConnection", nodes: [] } }] : [] },
       workItems: { __typename: "WorktrackerIssueConnection", nodes: [...http.items.values()].filter((item) => !item.is_archived && item.project_id === projectId)

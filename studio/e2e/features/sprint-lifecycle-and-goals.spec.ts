@@ -1,0 +1,290 @@
+import { test, expect } from "../planning-module-test";
+import { cardNamed, createSprint, graph, moduleFixture, openSprint, selectEpic, stateFixture, storyNamed, storyRow } from "../planning-module-support";
+import { addGoal, reopenSprints, sprintState, sprintThroughUi } from "../sprint-planning-support";
+import { getWorkItem, graphql } from "../support";
+import { PlanWorkItemDocument } from "../../src/features/work-items/generated/workItems.documents";
+
+import { goals } from "../sprint-planning-support";
+import { featureSuite } from "./featureSuite";
+
+featureSuite("sprint-lifecycle-and-goals", { test, isolation: "case" }, () => {
+
+test("sprint lifecycle enforces one active sprint and carries only unfinished Stories", { tag: ["@case-sprint-lifecycle"] }, async ({ page, request }, info) => {
+  const fixture = await moduleFixture(request, "Lifecycle");
+  const current = await sprintThroughUi(page, fixture, "Lifecycle current");
+  const destination = await createSprint(page, "Lifecycle next");
+  await page.getByRole("button", { name: "New sprint", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Sprint name" })).toHaveValue(/^Sprint \d+$/);
+  await page.getByRole("textbox", { name: "Sprint name" }).fill("Discarded sprint");
+  await page.keyboard.press("Escape");
+  expect((await graph(request, fixture.projectId)).sprints.nodes.some((row) => row.name === "Discarded sprint")).toBe(false);
+  // Public fixture setup supplies completed/cancelled states that manual planning cannot add.
+  const doneState = fixture.catalog.states.nodes.find((row) => row.group === "completed");
+  const cancelledState = fixture.catalog.states.nodes.find((row) => row.group === "cancelled");
+  if (!doneState || !cancelledState) throw new Error("Missing done states");
+  const done = await stateFixture(request, fixture, "Lifecycle done", doneState.id);
+  const cancelled = await stateFixture(request, fixture, "Lifecycle cancelled", cancelledState.id);
+  const pending = fixture.stories.find((row) => row.name === "Lifecycle existing")!;
+  for (const row of [done, cancelled, pending]) await graphql(request, PlanWorkItemDocument, { id: row.id, sprintId: current.id });
+  await reopenSprints(page);
+  await addGoal(current.card, "Lifecycle goal stays in history");
+  // Cancelling archives the Story; archived rows stay out of visible planning counts.
+  expect(await getWorkItem(request, cancelled.id)).toMatchObject({ is_archived: true, sprint_id: current.id });
+  await expect(current.card.getByText("Lifecycle cancelled", { exact: true })).toHaveCount(0);
+  await expect(current.card.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "1");
+  await expect(current.card.getByRole("progressbar")).toHaveAttribute("aria-valuemax", "2");
+  await expect(current.card.getByRole("heading", { name: "No epic", exact: true })).toBeVisible();
+  await current.card.getByText("Lifecycle done", { exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Selected ticket" }).getByTestId("issue-name")).toContainText("Lifecycle done");
+  await page.keyboard.press("Escape");
+  await current.card.getByRole("button", { name: "Start", exact: true }).click();
+  let dialog = page.getByRole("dialog", { name: "Start Lifecycle current", exact: true });
+  await expect(dialog.getByRole("textbox")).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  expect((await sprintState(request, current.id))?.status).toBe("planned");
+  await current.card.getByRole("button", { name: "Start", exact: true }).click();
+  let reject = true;
+  await page.route("**/graphql", async (route) => {
+    if (reject && route.request().postDataJSON()?.operationName === "UpdateSprint") { reject = false; return route.abort("failed"); }
+    return route.continue();
+  });
+  await dialog.getByRole("button", { name: "Start sprint", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toBeVisible();
+  expect((await sprintState(request, current.id))?.status).toBe("planned");
+  await dialog.getByRole("button", { name: "Start sprint", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.unroute("**/graphql");
+  await expect.poll(async () => (await sprintState(request, current.id))?.status).toBe("active");
+  await expect(destination.card.getByRole("button", { name: "Start", exact: true })).toBeDisabled();
+  await expect(destination.card.getByRole("button", { name: "Start", exact: true })).toHaveAttribute("title", "Complete the active sprint first");
+  await current.card.getByRole("button", { name: "Complete", exact: true }).click();
+  dialog = page.getByRole("dialog", { name: "Complete Lifecycle current", exact: true });
+  await expect(dialog.getByText("1 done · 1 unfinished", { exact: true })).toBeVisible();
+  await dialog.getByRole("combobox").selectOption(destination.id);
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  expect((await sprintState(request, current.id))?.status).toBe("active");
+  expect((await storyNamed(request, fixture.projectId, pending.name))?.sprintId).toBe(current.id);
+  await current.card.getByRole("button", { name: "Complete", exact: true }).click();
+  await dialog.getByRole("combobox").selectOption(destination.id);
+  await dialog.getByRole("button", { name: "Complete sprint", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(async () => (await sprintState(request, current.id))?.status).toBe("completed");
+  expect((await storyNamed(request, fixture.projectId, pending.name))?.sprintId).toBe(destination.id);
+  expect((await storyNamed(request, fixture.projectId, done.name))?.sprintId).toBe(current.id);
+  expect(await getWorkItem(request, cancelled.id)).toMatchObject({ is_archived: true, sprint_id: current.id });
+  await reopenSprints(page);
+  await page.getByText(/\d+ completed sprints?$/, { exact: true }).click();
+  await expect(current.card.getByText("Lifecycle goal stays in history", { exact: true })).toBeVisible();
+  await expect(current.card.getByRole("button", { name: "Plan", exact: true })).toHaveCount(0);
+  await expect(current.card.getByRole("button", { name: "+ Goal", exact: true })).toHaveCount(0);
+  await destination.card.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Start sprint", exact: true }).click();
+  await destination.card.getByRole("button", { name: "Complete", exact: true }).click();
+  await expect(page.getByRole("dialog").getByRole("combobox")).toHaveValue("");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Complete sprint", exact: true })).toBeInViewport();
+  await page.screenshot({ path: info.outputPath("lifecycle-narrow.png"), fullPage: true });
+  await page.getByRole("dialog").getByRole("button", { name: "Complete sprint", exact: true }).click();
+  await expect.poll(async () => (await sprintState(request, destination.id))?.status).toBe("completed");
+  expect((await storyNamed(request, fixture.projectId, pending.name))?.sprintId).toBeNull();
+  const empty = await createSprint(page, "Lifecycle empty");
+  await empty.card.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Start sprint", exact: true }).click();
+  await empty.card.getByRole("button", { name: "Complete", exact: true }).click();
+  await expect(page.getByRole("dialog").getByText("Everything in this sprint is done.")).toBeVisible();
+  await expect(page.getByRole("dialog").getByRole("combobox")).toHaveCount(0);
+  await page.getByRole("dialog").getByRole("button", { name: "Complete sprint", exact: true }).click();
+  await expect.poll(async () => (await sprintState(request, empty.id))?.status).toBe("completed");
+});
+
+test("a live Plan responds to sprint completion and still permits returning old work", { tag: ["@case-live-completion"] }, async ({ page, context, request }) => {
+  const fixture = await moduleFixture(request, "Closed");
+  const current = await sprintThroughUi(page, fixture, "Closed release");
+  const doneState = fixture.catalog.states.nodes.find((row) => row.group === "completed")!;
+  const done = await stateFixture(request, fixture, "Closed done", doneState.id, fixture.epic.id);
+  await graphql(request, PlanWorkItemDocument, { id: done.id, sprintId: current.id });
+  await reopenSprints(page);
+  await openSprint(page, "Closed release");
+  await selectEpic(page, fixture.epic.name);
+  const sprint = page.getByTestId("plan-sprint-items");
+  const backlog = page.getByTestId("plan-backlog");
+  await storyRow(backlog, "Closed existing").getByRole("button", { name: /^Plan / }).click();
+  await expect(storyRow(sprint, "Closed existing")).toBeVisible();
+  const other = await context.newPage();
+  await other.routeWebSocket((url) => url.pathname === "/" && url.searchParams.has("token"), () => {});
+  await other.goto("/");
+  await other.getByTestId("workspace-tab-plan").click();
+  await expect(other.getByTestId("plan-sprint").or(other.getByTestId("sprints-list"))).toBeVisible();
+  if (await other.getByRole("button", { name: "Back to sprints" }).count()) await other.getByRole("button", { name: "Back to sprints" }).click();
+  const card = cardNamed(other, "Closed release");
+  await card.getByRole("button", { name: "Start", exact: true }).click();
+  await other.getByRole("dialog").getByRole("button", { name: "Start sprint", exact: true }).click();
+  await card.getByRole("button", { name: "Complete", exact: true }).click();
+  await other.getByRole("dialog").getByRole("button", { name: "Complete sprint", exact: true }).click();
+  await expect.poll(async () => (await sprintState(request, current.id))?.status).toBe("completed");
+  await expect(storyRow(backlog, "Closed waiting").getByRole("button", { name: /^Plan / })).toBeDisabled();
+  await expect(backlog.getByRole("button", { name: "Add story", exact: true })).toBeDisabled();
+  await expect(sprint.getByRole("button", { name: "Add story", exact: true })).toBeDisabled();
+  await storyRow(sprint, "Closed done").getByRole("button", { name: /^Return / }).click();
+  await expect.poll(async () => (await storyNamed(request, fixture.projectId, done.name))?.sprintId).toBeNull();
+  await expect(page.getByTestId("plan-undo")).toBeDisabled();
+  await expect(page.getByTestId("plan-undo-hint")).toHaveText("This sprint is completed and closed to new work.");
+  await other.close();
+});
+
+test("sprint goals preserve numbering and recover read create and delete failures", { tag: "@case-sprint-goals-recovery" }, async ({ page, request }) => {
+  const fixture = await moduleFixture(request, "Goals");
+  const current = await sprintThroughUi(page, fixture, "Goals release");
+  const card = current.card;
+  await expect(card.getByRole("button", { name: "Find stories for these goals", exact: true })).toBeDisabled();
+  await expect(card.getByText("Add goals, then an agent can look for stories that fit them.")).toBeVisible();
+  await card.getByRole("button", { name: "+ Goal", exact: true }).click();
+  const input = card.getByRole("textbox", { name: "New sprint goal" });
+  await input.fill("Discarded goal");
+  await input.press("Escape");
+  expect(await goals(request, current.id)).toEqual([]);
+  let failingOperation = "CreateSprintGoal";
+  await page.route("**/graphql", async (route) => {
+    if (route.request().postDataJSON()?.operationName === failingOperation) return route.abort("failed");
+    return route.continue();
+  });
+  await card.getByRole("button", { name: "+ Goal", exact: true }).click();
+  await input.fill("  First goal  ");
+  await input.press("Enter");
+  await expect(card.getByRole("alert")).toBeVisible();
+  await expect(input).toHaveValue("  First goal  ");
+  expect(await goals(request, current.id)).toEqual([]);
+  failingOperation = "";
+  await input.press("Enter");
+  await expect(card.getByText("First goal", { exact: true })).toBeVisible();
+  await addGoal(card, "Second goal");
+  expect((await goals(request, current.id)).map(({ text, position }) => ({ text, position }))).toEqual([
+    { text: "First goal", position: 1 }, { text: "Second goal", position: 2 },
+  ]);
+  failingOperation = "DeleteSprintGoal";
+  await card.getByRole("button", { name: "Remove goal: First goal", exact: true }).click();
+  await expect(card.getByRole("alert")).toBeVisible();
+  expect((await goals(request, current.id)).map((row) => row.text)).toEqual(["First goal", "Second goal"]);
+  failingOperation = "";
+  await card.getByRole("button", { name: "Remove goal: First goal", exact: true }).click();
+  await expect.poll(async () => (await goals(request, current.id)).map((row) => row.text)).toEqual(["Second goal"]);
+  failingOperation = "SprintGoals";
+  await reopenSprints(page);
+  await expect(card.getByRole("button", { name: "Retry goals", exact: true })).toBeVisible();
+  await expect(card.getByRole("button", { name: "+ Goal", exact: true })).toBeDisabled();
+  failingOperation = "";
+  await card.getByRole("button", { name: "Retry goals", exact: true }).click();
+  await expect(card.getByText("Second goal", { exact: true })).toBeVisible();
+  await page.unroute("**/graphql");
+  await reopenSprints(page);
+  await expect(card.getByText("Second goal", { exact: true })).toBeVisible();
+  expect((await goals(request, current.id)).map((row) => row.text)).toEqual(["Second goal"]);
+});
+
+test("new sprint retries creation and refresh using one committed identity", { tag: "@case-sprint-identity-recovery" }, async ({ page, request }) => {
+  const fixture = await moduleFixture(request, "SprintIdentity");
+  await sprintThroughUi(page, fixture, "SprintIdentity first");
+  let failCreate = true;
+  let failGraph = false;
+  let creates = 0;
+  await page.route("**/graphql", async (route) => {
+    const operation = route.request().postDataJSON()?.operationName;
+    if (operation === "CreateSprint") {
+      creates++;
+      if (failCreate) return route.abort("failed");
+    }
+    if (operation === "PlanningGraph" && failGraph) return route.abort("failed");
+    return route.continue();
+  });
+  await page.getByRole("button", { name: "New sprint", exact: true }).click();
+  const input = page.getByRole("textbox", { name: "Sprint name" });
+  await input.fill("SprintIdentity saved");
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  expect((await graph(request, fixture.projectId)).sprints.nodes.filter((row) => row.name === "SprintIdentity saved")).toHaveLength(0);
+  failCreate = false;
+  failGraph = true;
+  await input.press("Enter");
+  await expect(page.getByRole("button", { name: "Retry refresh", exact: true })).toBeVisible();
+  const committed = (await graph(request, fixture.projectId)).sprints.nodes.find((row) => row.name === "SprintIdentity saved")!;
+  expect(committed).toBeTruthy();
+  await expect(input).toBeDisabled();
+  failGraph = false;
+  await page.getByRole("button", { name: "Retry refresh", exact: true }).click();
+  await expect(page.getByTestId("plan-sprint").getByRole("heading", { name: "SprintIdentity saved", exact: true, level: 1 })).toBeVisible();
+  expect(creates).toBe(2);
+  await page.unroute("**/graphql");
+  await reopenSprints(page);
+  expect((await graph(request, fixture.projectId)).sprints.nodes.filter((row) => row.name === "SprintIdentity saved")).toEqual([committed]);
+});
+
+test("planned sprint reorder persists and completion failure keeps membership recoverable", { tag: "@case-sprint-reorder-completion-recovery" }, async ({ page, request }) => {
+  const fixture = await moduleFixture(request, "Ordering");
+  const first = await sprintThroughUi(page, fixture, "Ordering first");
+  const second = await createSprint(page, "Ordering second");
+  await expect(first.card.getByRole("button", { name: "Move sprint earlier", exact: true })).toBeDisabled();
+  await expect(second.card.getByRole("button", { name: "Move sprint later", exact: true })).toBeDisabled();
+  let failingOperation = "ReorderSprint";
+  await page.route("**/graphql", async (route) => {
+    if (route.request().postDataJSON()?.operationName === failingOperation) return route.abort("failed");
+    return route.continue();
+  });
+  const order = async () => (await graph(request, fixture.projectId)).sprints.nodes.filter((row) => row.status === "planned").map((row) => row.id);
+  await second.card.getByRole("button", { name: "Move sprint earlier", exact: true }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  expect(await order()).toEqual([first.id, second.id]);
+  failingOperation = "";
+  await second.card.getByRole("button", { name: "Move sprint earlier", exact: true }).click();
+  await expect.poll(order).toEqual([second.id, first.id]);
+  await second.card.getByRole("button", { name: "Move sprint later", exact: true }).click();
+  await expect.poll(order).toEqual([first.id, second.id]);
+  await reopenSprints(page);
+  expect(await order()).toEqual([first.id, second.id]);
+  const story = fixture.stories.find((row) => row.name === "Ordering existing")!;
+  await graphql(request, PlanWorkItemDocument, { id: story.id, sprintId: first.id });
+  await reopenSprints(page);
+  await first.card.getByRole("button", { name: "Start", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Start sprint", exact: true }).click();
+  await first.card.getByRole("button", { name: "Complete", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Complete Ordering first", exact: true });
+  await dialog.getByRole("combobox").selectOption(second.id);
+  failingOperation = "UpdateSprint";
+  await dialog.getByRole("button", { name: "Complete sprint", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toBeVisible();
+  expect((await sprintState(request, first.id))?.status).toBe("active");
+  expect((await storyNamed(request, fixture.projectId, story.name))?.sprintId).toBe(first.id);
+  failingOperation = "";
+  await dialog.getByRole("button", { name: "Complete sprint", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(async () => (await sprintState(request, first.id))?.status).toBe("completed");
+  expect((await storyNamed(request, fixture.projectId, story.name))?.sprintId).toBe(second.id);
+});
+
+test("empty sprint collection creation cancels and recovers a failed collection read", { tag: "@case-sprint-collection-recovery" }, async ({ page, request }) => {
+  const fixture = await moduleFixture(request, "Collection");
+  await page.goto("/");
+  await page.getByTestId("workspace-tab-plan").click();
+  await expect(page.getByTestId("sprints-list").getByText("Create a sprint to begin planning.")).toBeVisible();
+  await page.getByRole("button", { name: "New sprint", exact: true }).click();
+  await page.getByRole("textbox", { name: "Sprint name" }).fill("Collection cancelled");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  expect((await graph(request, fixture.projectId)).sprints.nodes).toEqual([]);
+  let failRead = true;
+  await page.route("**/graphql", async (route) => {
+    if (failRead && route.request().postDataJSON()?.operationName === "PlanningGraph") return route.abort("failed");
+    return route.continue();
+  });
+  await page.reload();
+  await page.getByTestId("workspace-tab-plan").click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  failRead = false;
+  await page.reload();
+  await page.getByTestId("workspace-tab-plan").click();
+  await expect(page.getByTestId("sprints-list").getByText("Create a sprint to begin planning.")).toBeVisible();
+  const created = await createSprint(page, "Collection release");
+  await reopenSprints(page);
+  await expect(created.card).toBeVisible();
+  expect((await graph(request, fixture.projectId)).sprints.nodes).toMatchObject([{ id: created.id, name: "Collection release", status: "planned" }]);
+});
+
+});

@@ -93,6 +93,7 @@ describe("desktop shell security contract", () => {
         "allow-viewer-detach",
         "allow-viewer-status",
         "allow-native-terminal-available",
+        "allow-native-terminal-set-module-manager-shortcut",
         "allow-native-terminal-attach",
         "allow-native-terminal-set-frame",
         "allow-native-terminal-hide",
@@ -385,9 +386,15 @@ describe("desktop shell security contract", () => {
     );
     const desktop = await text("../../src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs");
     const build = await text("../../src-tauri/build.rs");
+    const capability = await json("../../src-tauri/capabilities/studio-main.json");
 
     expect(build).toContain('"native_terminal_hide"');
     expect(build).toContain('"native_terminal_show"');
+    expect(build).toContain('"native_terminal_set_module_manager_shortcut"');
+    expect(desktop).toContain("native_terminal::native_terminal_set_module_manager_shortcut");
+    expect(capability.local).toBe(true);
+    expect(capability.windows).toEqual(["main"]);
+    expect(capability.permissions).toContain("allow-native-terminal-set-module-manager-shortcut");
     expect(nativeTerminal).toContain("native_terminal_hide");
     expect(nativeTerminal).toContain("native_terminal_show");
     expect(desktop).toContain("native_terminal::native_terminal_hide");
@@ -461,16 +468,16 @@ describe("desktop shell security contract", () => {
     const configuration = await json("../../src-tauri/tauri.conf.json");
 
     expect(rootPackage.scripts).toMatchObject({
-      "dev": "npm run desktop:dev",
-      "web": "node scripts/web-dev.mjs",
-      "web:dev": "node scripts/web-dev.mjs --development-profile",
-      "desktop:dev": "npm run desktop:dev --workspace @worktracker/studio --",
-      "desktop:build": "npm run desktop:build --workspace @worktracker/studio",
-      "desktop:deploy": "npm run desktop:deploy --workspace @worktracker/studio",
-      "deploy": "npm run desktop:deploy --workspace @worktracker/studio",
-      "desktop:smoke": "npm run desktop:smoke --workspace @worktracker/studio",
-      "desktop:smoke:dev": "npm run desktop:smoke:dev --workspace @worktracker/studio",
-      "desktop:smoke:packaged": "npm run desktop:smoke:packaged --workspace @worktracker/studio",
+      "dev": "bun run desktop:dev",
+      "web": "bun scripts/web-dev.mjs",
+      "web:dev": "bun scripts/web-dev.mjs --development-profile",
+      "desktop:dev": "bun run --cwd studio desktop:dev",
+      "desktop:build": "bun run --cwd studio desktop:build",
+      "desktop:deploy": "bun run --cwd studio desktop:deploy",
+      "deploy": "bun run --cwd studio desktop:deploy",
+      "desktop:smoke": "bun run --cwd studio desktop:smoke",
+      "desktop:smoke:dev": "bun run --cwd studio desktop:smoke:dev",
+      "desktop:smoke:packaged": "bun run --cwd studio desktop:smoke:packaged",
     });
     expect(studioPackage.scripts).toMatchObject({
       "desktop:dev": "node scripts/desktop-dev.mjs",
@@ -478,7 +485,7 @@ describe("desktop shell security contract", () => {
       "desktop:deploy": "node scripts/desktop-deploy.mjs",
       "release:build": "node scripts/release-build.mjs",
       "release:validate": "node scripts/release-build.mjs --validate",
-      "release:test": "node --test scripts/release-build.test.mjs scripts/release-provenance.test.mjs scripts/desktop-deploy.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/packaged-update-build.test.mjs scripts/packaged-update-feed.test.mjs scripts/packaged-update-acceptance.test.mjs scripts/packaged-update-acceptance-command.test.mjs scripts/packaged-update-acceptance-environment.test.mjs scripts/packaged-update-acceptance-driver.test.mjs scripts/packaged-update-acceptance-runner.test.mjs scripts/packaged-update-webdriver.test.mjs scripts/release-publish.test.mjs scripts/public-update-publisher.test.mjs scripts/update-acceptance.test.mjs scripts/update-acceptance-driver.test.mjs",
+      "release:test": "node --test scripts/release-build.test.mjs scripts/release-roadmap-build.test.mjs scripts/roadmap-frontend-build.test.mjs scripts/release-provenance.test.mjs scripts/desktop-deploy.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/packaged-update-build.test.mjs scripts/packaged-update-feed.test.mjs scripts/packaged-update-acceptance.test.mjs scripts/packaged-update-acceptance-command.test.mjs scripts/packaged-update-acceptance-environment.test.mjs scripts/packaged-update-acceptance-driver.test.mjs scripts/packaged-update-acceptance-runner.test.mjs scripts/packaged-update-webdriver.test.mjs scripts/release-publish.test.mjs scripts/public-update-publisher.test.mjs scripts/update-acceptance.test.mjs scripts/update-acceptance-driver.test.mjs",
       "release:acceptance": "node scripts/installed-artifact-acceptance.mjs",
       "release:acceptance:update": "node scripts/packaged-update-acceptance.mjs",
       "desktop:smoke": "vitest run src/test/desktopShellContract.test.ts src/test/nativeLibghosttyShippingContract.test.ts && node --test scripts/desktop-concurrent-smoke.test.mjs && node scripts/desktop-smoke.mjs && cargo test --manifest-path src-tauri/Cargo.toml",
@@ -486,9 +493,9 @@ describe("desktop shell security contract", () => {
       "desktop:smoke:packaged": "node scripts/desktop-smoke.mjs packaged",
     });
     expect(configuration.build).toEqual({
-      beforeDevCommand: "npm run dev -- --host 127.0.0.1",
+      beforeDevCommand: "bun run dev -- --host 127.0.0.1",
       devUrl: "http://127.0.0.1:5174",
-      beforeBuildCommand: "npm run build",
+      beforeBuildCommand: "bun run build",
       frontendDist: "../dist",
     });
     expect(configuration.bundle).toEqual({

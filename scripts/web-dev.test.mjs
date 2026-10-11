@@ -123,7 +123,7 @@ test("web development accepts the disposable-data and file-logging options", () 
     temporarySqlite: false,
     logToFile: false,
   });
-  assert.throws(() => parseWebDevOptions(["--unknown"]), /usage: npm run web/);
+  assert.throws(() => parseWebDevOptions(["--unknown"]), /usage: bun run web/);
 });
 
 test("web file logging reaches the browser and Rust adapter only when requested", () => {
@@ -306,7 +306,7 @@ test("web shutdown leaves the shared product profile in place", () => {
 
 test("frontend command opens a strict local Vite port", () => {
   assert.deepEqual(buildWebFrontendCommand(5191), [
-    "npm", "run", "dev", "--workspace", "@worktracker/studio", "--",
+    "bun", "run", "--bun", "--cwd", "studio", "dev",
     "--host", "127.0.0.1", "--port", "5191", "--strictPort", "--open",
   ]);
 });

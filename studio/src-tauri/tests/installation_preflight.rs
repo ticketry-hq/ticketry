@@ -696,13 +696,13 @@ fn corrupt_a_content_page(database: &Path) {
 /// launch, every subsequent one preflights a Rust-owned database whose
 /// status-event ledger and effect journals a Django-era source never had.
 async fn adopt_every_capability(data_directory: &Path) {
-    ticketry_work_management::adoption::adopt(data_directory)
+    ticketry_work_management::adopt(data_directory)
         .await
         .expect("adopt Work Management");
     ticketry_runs::adopt(data_directory)
         .await
         .expect("adopt Runs");
-    ticketry_agent_execution::persistence::adopt(data_directory)
+    ticketry_agent_execution::adopt_execution(data_directory)
         .await
         .expect("adopt graph execution");
     ticketry_terminal::adopt_terminal_persistence(data_directory)

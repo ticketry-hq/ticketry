@@ -24,13 +24,13 @@ pub async fn update(
     let existing = issue::Entity::find_by_id(&id)
         .one(database)
         .await?
-        .filter(|row| row.r#type == "task")
+        .filter(|row| matches!(row.r#type.as_str(), "task" | "module"))
         .ok_or_else(|| CommandError::NotFound("Work item not found.".to_owned()))?;
     let name = input.name.as_deref().map(valid_name).transpose()?;
     let selected_type = match input.issue_type_id {
         Some(value) => {
             let type_id = database_uuid(&value, "issue_type_id")?;
-            Some(resolve_type(database, &existing.project_id, &type_id, "task").await?)
+            Some(resolve_type(database, &existing.project_id, &type_id, &existing.r#type).await?)
         }
         None => None,
     };

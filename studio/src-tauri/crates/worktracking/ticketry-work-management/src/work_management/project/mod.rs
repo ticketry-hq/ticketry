@@ -7,7 +7,7 @@
 //! | Create one | `name`, `slug`, `description` | seeds the Project catalogue in one aggregate transaction | authored aggregate remains at `create_project` |
 //! | Create batch | none | no caller contract exists | private |
 //! | Update | `name`, `description`; acknowledgement writes only `onboarding_required` | both fields require one concrete Project identity and authored command ownership | restricted Seaolim views |
-//! | Delete | none | tears down WorkItems before protected catalogue rows | authored aggregate remains at `delete_project` |
+//! | Delete | none | tears down WorkItems, blocker edges, workflow policy, issue types and states before the Project row in one transaction | authored aggregate remains at `delete_project` |
 //!
 //! Generated update cannot express the two distinct allowlists while binding
 //! one required identity. These views prepare one Project ActiveModel each;

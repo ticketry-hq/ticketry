@@ -6,6 +6,8 @@ import { createFoundationErrorLink } from "./errorLink";
 import { createIssueRevisionGuardLink } from "./issueRevisionGuardLink";
 import { createTaurpcLink } from "./taurpcLink";
 import { typePolicies } from "./typePolicies";
+import { createConversationTitleGuardLink } from "./conversationTitleGuardLink";
+import { createAgentRunStageSkillGuardLink } from "./agentRunStageSkillGuardLink";
 
 export function createStudioApolloClient(createProxy: CreateGraphQlTransportProxy) {
   const cache = new InMemoryCache({ typePolicies });
@@ -14,6 +16,8 @@ export function createStudioApolloClient(createProxy: CreateGraphQlTransportProx
     link: ApolloLink.from([
       createFoundationErrorLink(),
       createIssueRevisionGuardLink(cache),
+      createConversationTitleGuardLink(cache),
+      createAgentRunStageSkillGuardLink(cache),
       createTaurpcLink(createProxy),
     ]),
     defaultOptions: {

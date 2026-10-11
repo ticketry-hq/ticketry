@@ -237,7 +237,7 @@ describe("overhaul acceptance - Changes diff keyboard reading", () => {
     first.focus();
     fireEvent.click(first);
     expect(first).toHaveFocus();
-    expect(await screen.findByRole("status", { name: "" })).toHaveTextContent("Loading diff");
+    expect(await within(screen.getByRole("region", { name: "Selected file diff" })).findByRole("status")).toHaveTextContent("Loading diff");
     expect(first).toHaveFocus();
     releaseFirstDiff?.();
     await screen.findByTestId("highlighted-patch");

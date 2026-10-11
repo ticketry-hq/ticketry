@@ -40,6 +40,7 @@ mod records;
 mod repositories;
 mod schema;
 mod services;
+mod stage_skill_availability;
 mod status_compaction;
 mod status_compaction_schedule;
 mod status_frames;
@@ -101,8 +102,8 @@ pub use status_compaction::{
 };
 pub use status_compaction_schedule::{CompactionSchedule, COMPACTION_INTERVAL};
 pub use status_frames::{
-    failure_code, reset_reason, RunStatusCaughtUp, RunStatusEvent, RunStatusFailed, RunStatusFrame,
-    RunStatusResetRequired, RunStatusSnapshot, StatusEventPayload, SUPPORTED_PAYLOAD_VERSION,
+    RunStatusCaughtUp, RunStatusEvent, RunStatusFailed, RunStatusFrame, RunStatusResetRequired,
+    RunStatusSnapshot, StatusEventPayload, SUPPORTED_PAYLOAD_VERSION,
 };
 pub use status_stream::{StatusStreamRequest, MAX_REPLAY_BYTES, MAX_REPLAY_EVENTS};
 
@@ -127,3 +128,14 @@ pub fn open_status_stream(
 ) -> impl futures_util::Stream<Item = RunStatusFrame> + Send + 'static {
     status_stream::open(service.clone(), request)
 }
+
+pub use status_frames::failure_code::{
+    BAD_REQUEST as STATUS_STREAM_BAD_REQUEST, EVENT_VERSION as STATUS_EVENT_VERSION_UNSUPPORTED,
+    UNAVAILABLE as STATUS_STREAM_UNAVAILABLE,
+};
+pub use status_frames::reset_reason::{
+    AHEAD_OF_SERVER as STATUS_CURSOR_AHEAD_OF_SERVER, COMPACTED as STATUS_CURSOR_COMPACTED,
+    EVENT_VERSION_INCOMPATIBLE as STATUS_EVENT_VERSION_INCOMPATIBLE,
+    REPLAY_BOUNDED as STATUS_REPLAY_BOUNDED,
+};
+pub(crate) use status_frames::{failure_code, reset_reason};

@@ -8,8 +8,20 @@ on `127.0.0.1:5174`. Work-item planning, agent lifecycle, terminals,
 worktrees, documents, prompts, modals, and launch flows belong to this
 application.
 
-Use the application's canonical runtime scripts. `npm run desktop:dev` and
-`pnpm dev` rebuild and launch the desktop application. `npm run web` starts the
+Before changing or verifying a feature, read the
+[feature map](docs/feature-map/README.md) for its entry points, surfaces,
+verification paths and known coverage gaps. Update the map in the same change
+that alters behavior.
+
+Each mapped feature has a browser suite at
+`studio/e2e/features/<feature-id>.spec.ts`. Run
+`bun run --cwd studio test:e2e:feature <feature-id>` for the feature being built
+or changed, and `bun run --cwd studio test:e2e:features` for the full app. Keep
+the entry and its suite aligned; the drift check
+(`bun run --cwd studio test:e2e:features --check`) enforces that alignment.
+
+Use the application's canonical runtime scripts. `bun run desktop:dev` and
+`bun run dev` rebuild and launch the desktop application. `bun run web` starts the
 frontend with the supporting Rust GraphQL adapter.
 
 Embedded native libghostty is the terminal renderer on supported macOS desktop
@@ -83,7 +95,7 @@ Ticketry's Rust GraphQL surface is migration-first and generated-contract-first:
   model CRUD may be a named domain operation. Record every exception and its
   reason in the route/operation registry; keep that registry exactly equal to
   the live GraphQL mutation surface. The current exceptions are work-item
-  reorder, module-presentation reorder, state reorder, issue-type reorder,
+  reorder, module-presentation reorder, sprint reorder, state reorder, issue-type reorder,
   remove-state-from-workflow, and onboarding acknowledgement.
 - **Require evidence for deviations.** Stop before adding replacement CRUD,
   per-field/per-relationship RPCs, a DAO or repository that mirrors SeaORM,
@@ -108,6 +120,27 @@ The MCP listener binds `<data-directory>/mcp.sock` under the data-directory
 ownership guard. Provider MCP uses the packaged `ticketry-hook mcp` stdio bridge;
 there is no MCP TCP port or port override.
 
+On startup, installed, packaged Ticketry registers a user-level global
+`ticketry` stdio server for Claude Code and Codex against the product data
+directory. Plain CLI sessions can read and update work across all projects,
+manage dependencies, and launch work from any folder. Workflow gates
+and agent-allowed transition permissions still apply; `terminate_current_run`
+and other run-only controls are refused. Ticketry-launched agents use their
+credentialed, run-scoped `ticketry` server instead, preserving project scope
+and run controls. Run mode never falls back to global authority.
+
+Development builds, the GraphQL development adapter, and launches with
+`TICKETRY_DATA_DIR`, `TICKETRY_PRODUCT_DATA_DIR`, `MUXED_DATA_DIR`, or
+`TICKETRY_DATA_DIR_NAME` set never register globally. To register by hand, add
+a user-level stdio server named `ticketry` with the absolute packaged hook path
+and arguments matching `ticketry-hook mcp --data-dir <absolute-data-directory>
+--global`. This command runs the bridge; it does not edit provider configuration.
+Global mode requires no authorization secret and cannot be combined with
+`--agent-run-id`. Registration persists on quit: offline calls return
+`service_unavailable` while CLI sessions keep running. Restart Ticketry and
+reconnect through the CLI's MCP controls (Claude `/mcp`) to restore access.
+See [`docs/plans/CODING-2533-global-mcp-spec.md`](docs/plans/CODING-2533-global-mcp-spec.md).
+
 ## Runtime validation
 
 Embedded native libghostty is the terminal renderer in development desktop and
@@ -123,9 +156,9 @@ tmux owns durable terminal sessions under every renderer.
 Install from the repository root, then run:
 
 ```bash
-npm run typecheck
-npm run test --workspace @worktracker/studio
-npm run build --workspace @worktracker/studio
+bun run typecheck
+bun run --cwd studio test
+bun run --cwd studio build
 ```
 
 Keep the runtime facts here and in [`AGENTS.md`](AGENTS.md) consistent.

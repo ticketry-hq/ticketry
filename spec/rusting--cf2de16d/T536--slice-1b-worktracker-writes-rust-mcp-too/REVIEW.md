@@ -188,7 +188,7 @@ reject extra, duplicated, or unreasoned fields.
 The following command caught the initial schema drift:
 
 ```text
-npm run graphql:drift --workspace @worktracker/studio
+bun run --cwd studio graphql:drift
 ```
 
 It failed with `schema.graphql drift differs`. After concurrent regeneration,

@@ -9,6 +9,7 @@
 
 mod graphql;
 pub mod operation;
+pub(crate) mod ship_receipt;
 pub mod ship_record;
 
 pub use graphql::register_entity_modules;

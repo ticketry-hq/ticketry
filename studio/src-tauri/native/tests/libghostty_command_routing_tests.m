@@ -40,6 +40,10 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags,
              : MUXED_GHOSTTY_CHORD_NONE;
 }
 
+uint8_t muxed_ghostty_event_studio_chord(NSEvent *event) {
+  return muxed_ghostty_studio_chord(event.modifierFlags, event.keyCode);
+}
+
 bool ghostty_surface_key_is_binding(ghostty_surface_t surface,
                                     ghostty_input_key_s key,
                                     ghostty_binding_flags_e *flags) {

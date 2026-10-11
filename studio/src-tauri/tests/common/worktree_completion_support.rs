@@ -222,7 +222,7 @@ pub async fn fixture(scenario: Scenario) -> Fixture {
         ))
         .await
         .expect("create completion fixture schema");
-    ticketry_work_management::schema::install(&writer)
+    ticketry_work_management::install_module_links_schema(&writer)
         .await
         .expect("install Module Link schema");
     ticketry_work_management::ModuleLinkStore::new(writer.clone())

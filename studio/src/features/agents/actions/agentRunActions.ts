@@ -1,4 +1,6 @@
-import { useStudioStore } from "../../projects";
+import { useStudioStore, setModuleTabHidden } from "../../projects";
+import { getEffectiveModuleTabsSnapshot, getModulePresentationsSnapshot, hiddenModuleIds } from "../../module-tabs";
+import { prepareExplicitStoryReveal, getStorySprintFilterGeneration } from "../../work-items";
 import { readAgentRun } from "../status";
 import {
   bucketFor,
@@ -31,17 +33,29 @@ async function focusAgentRun(payload?: unknown): Promise<boolean> {
   const run = readAgentRun(runId);
   if (!run) return false;
   const selectedProjectId = useStudioStore.getState().selectedProjectId;
+  if (!selectedProjectId) return false;
   if (run.project_id && run.project_id !== selectedProjectId) return false;
-
-  let workspace = useClientStore.getState();
-  if (workspace.selectedModuleId !== run.module_id) {
-    await workspace.selectModule(run.module_id);
-    workspace = useClientStore.getState();
-    if (workspace.selectedModuleId !== run.module_id) return false;
-  }
 
   const taskId = run.scope === "task" ? run.task_id : null;
   if (run.scope === "task" && !taskId) return false;
+  prepareExplicitStoryReveal(selectedProjectId, run.module_id, taskId);
+  useClientStore.getState().setStorySearchQuery("");
+  const generation = getStorySprintFilterGeneration(selectedProjectId);
+  const isCurrent = () => useStudioStore.getState().selectedProjectId === selectedProjectId
+    && getStorySprintFilterGeneration(selectedProjectId) === generation;
+  if (!getEffectiveModuleTabsSnapshot(selectedProjectId).restricted
+    && hiddenModuleIds(getModulePresentationsSnapshot(selectedProjectId)).has(run.module_id)) {
+    try { await setModuleTabHidden(selectedProjectId, run.module_id, false); }
+    catch { return false; }
+    if (!isCurrent()) return false;
+  }
+
+  let workspace = useClientStore.getState();
+  if (workspace.selectedModuleId !== run.module_id) {
+    await workspace.selectModule(run.module_id, { isCurrent });
+    workspace = useClientStore.getState();
+    if (workspace.selectedModuleId !== run.module_id || !isCurrent()) return false;
+  }
 
   const terminal = useTerminalStore.getState();
   let sessionId = terminal.sessionByRun[runId] ?? null;
@@ -63,12 +77,8 @@ async function focusAgentRun(payload?: unknown): Promise<boolean> {
   workspace.setActive(bucket, "terminal");
   workspace.selectTask(taskId ?? TEMP_TASK_ID);
   if (taskId) revealRunStory(selectedProjectId, run.module_id, taskId);
-  if (workspace.sidebarVisible) {
-    workspace.setFocusedPane("details-or-terminal");
-  } else {
-    workspace.setEditViewZone("active-tab-body");
-    workspace.setEditViewBodyEngaged(true);
-  }
+  workspace.setEditViewZone("active-tab-body");
+  workspace.setEditViewBodyEngaged(true);
   useTerminalForegroundStore
     .getState()
     .acquire(foregroundKey(session), "studio");

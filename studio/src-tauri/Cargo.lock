@@ -7136,8 +7136,12 @@ dependencies = [
  "futures-util",
  "http",
  "log",
+ "proc-macro2",
+ "quote",
  "reqwest",
+ "schemars 1.2.1",
  "sea-orm",
+ "sea-orm-migration",
  "seaography",
  "seaolim",
  "serde_json",
@@ -7146,6 +7150,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-graphql",
+ "tauri-macros",
  "tauri-plugin-launchkey-adaptor",
  "tauri-plugin-opener",
  "tempfile",
@@ -7210,6 +7215,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "toml_edit 0.25.13+spec-1.1.0",
 ]
 
 [[package]]
@@ -7436,6 +7442,7 @@ dependencies = [
  "ticketry-work-management",
  "ticketry-workspace-runtime",
  "tokio",
+ "toml_edit 0.25.13+spec-1.1.0",
  "uuid",
 ]
 
@@ -7562,6 +7569,7 @@ dependencies = [
  "ticketry-documents",
  "ticketry-entities",
  "ticketry-launch",
+ "ticketry-provider",
  "ticketry-runs",
  "ticketry-settings",
  "ticketry-tool-discovery",

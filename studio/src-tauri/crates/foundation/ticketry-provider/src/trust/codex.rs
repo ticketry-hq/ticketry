@@ -105,7 +105,7 @@ fn validated_paths(context: DirectoryTrustContext<'_>) -> io::Result<(PathBuf, P
     Ok((directory, config_file(context.trust_file)?))
 }
 
-fn config_file(configured: Option<&Path>) -> io::Result<PathBuf> {
+pub(crate) fn config_file(configured: Option<&Path>) -> io::Result<PathBuf> {
     let config = if let Some(configured) = configured {
         configured.to_path_buf()
     } else if let Some(home) = std::env::var_os("CODEX_HOME").filter(|value| !value.is_empty()) {
@@ -129,7 +129,7 @@ fn config_file(configured: Option<&Path>) -> io::Result<PathBuf> {
     Ok(config)
 }
 
-fn read_document(file: &Path) -> io::Result<(Vec<u8>, DocumentMut)> {
+pub(crate) fn read_document(file: &Path) -> io::Result<(Vec<u8>, DocumentMut)> {
     if let Ok(metadata) = fs::symlink_metadata(file) {
         if metadata.file_type().is_symlink() || !metadata.is_file() {
             return Err(io::Error::new(
@@ -188,6 +188,13 @@ fn trust_level(document: &DocumentMut, directory: &Path) -> io::Result<Option<bo
 }
 
 fn write_trust(file: &Path, directory: &Path) -> io::Result<DirectoryTrustPreparation> {
+    write_configuration(file, |source| trust_edit(source, directory))
+}
+
+pub(crate) fn write_configuration<T>(
+    file: &Path,
+    edit: impl Fn(&[u8]) -> io::Result<(Vec<u8>, T)>,
+) -> io::Result<T> {
     let parent = file.parent().unwrap();
     ensure_file(file)?;
     let (mut installed, _) = read_document(file)?;
@@ -197,7 +204,7 @@ fn write_trust(file: &Path, directory: &Path) -> io::Result<DirectoryTrustPrepar
 
     // ponytail: bounded retries avoid livelock; use the resident app-server if sustained churn matters.
     for _ in 0..16 {
-        let (contents, outcome) = match trust_edit(&source, directory) {
+        let (contents, outcome) = match edit(&source) {
             Ok((contents, outcome)) => (contents, Ok(outcome)),
             Err(error) => (source.clone(), Err(error)),
         };
@@ -319,10 +326,10 @@ fn pause_before_replace() {
 #[cfg(not(test))]
 fn pause_before_replace() {}
 
-struct DirectoryLock(PathBuf);
+pub(crate) struct DirectoryLock(PathBuf);
 
 impl DirectoryLock {
-    fn acquire(config: &Path) -> io::Result<Self> {
+    pub(crate) fn acquire(config: &Path) -> io::Result<Self> {
         let mut path = config.as_os_str().to_os_string();
         path.push(".lock");
         let path = PathBuf::from(path);

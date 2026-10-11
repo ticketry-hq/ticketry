@@ -1,0 +1,125 @@
+# Module Manager
+
+The Module Manager inspects every module in the selected project and provides explicit tab presentation, record management and inline creation actions.
+
+Surfaces: browser, desktop
+
+## Sub-features
+
+- `manager-footer-entry`: Open the work-area takeover from the Modules footer, keyboard shortcut or empty-workspace recovery.
+- `manager-groups`: Explain module status through Open, Hidden, Not in sprint and Archived groups.
+- `manager-search`: Search names, keys and linked local folders across all groups without changing tabs.
+- `manager-inspection`: Inspect module metadata and expand ordinary Stories without opening or restoring a module.
+- `manager-open`: Select an available module and close the manager without silently unhiding it.
+- `manager-close-tab`: Hide presentation while retaining the module and its work.
+- `manager-restore`: Explicitly restore visibility without selecting the module or closing the manager.
+- `manager-rename`: Edit the module name in a row or detail panel with cancel and retry.
+- `manager-archive`: Confirm the named module's server-side archive cascade and retain inspection access.
+- `manager-reorder`: Drag Open rows using the tab strip's canonical project order in an unrestricted scope.
+- `manager-inline-creation`: Create from either New module entry using validated folders, provider trust and one retry-safe identity.
+- `manager-keyboard-focus`: Route row navigation, edit/dialog Escape precedence and return focus safely.
+- `manager-narrow-layout`: Drill into full-width details and return to the retained list state on narrow windows.
+
+## How to get to it
+
+Click the footer **Modules** button, accessible as **Open Module Manager** when closed and **Close Module Manager** when open. The global keymap action `toggle-module-manager` defaults to Cmd+Shift+M; retained `toggle-sidebar` defaults to backslash and opens the same manager. Empty/all-hidden workspace recovery also leads here. The module tab strip and footer remain available above and below the takeover.
+
+Use the **Search modules** searchbox, group header buttons, **Inspect <name>**, and **Expand <name> stories** / **Collapse <name> stories**. Row/detail actions are **Open <name>**, **Close <name> tab**, **Restore <name>**, **Rename <name>** and **Archive <name>**. The header and Open group's inline **New module** buttons both expose the **Create module** form. On narrow windows, **Back to modules** returns from details.
+
+Unmodified Up/Down navigate group/module/Story controls; Left/Right collapse/expand groups or Story collections. Enter on a focused inspect control opens a non-hidden, non-archived module once eligibility is complete; Enter on an action button activates that button. These manager-local keys are routed by the application keymap, rather than separate configurable manager actions. Escape cancels rename or inline creation first, otherwise closes the manager; an open trust/archive dialog owns its Escape before the manager does. Creation inputs also use `modal.confirm` (Enter). Tab reaches individual controls; editing fields retain caret arrows.
+
+## Prerequisites
+
+Select a project to manage its modules; without one the manager says **Choose a project to manage its modules.** A selected module is unnecessary for opening the manager. Use active, hidden, archived and out-of-sprint fixture modules to exercise all groups. Definitive Open/Restore/Close tab navigation waits for complete module/presentation and applicable sprint-eligibility reads. Reorder requires an unrestricted, complete projection and no active search, rename or pending manager action.
+
+The build-time `TICKETRY_ROADMAP_ENABLED` gate requires rebuilding to change. With Roadmap on, select a restricted or unsprinted sprint intent to exercise Not in sprint and filter clearing. With it off, effective tabs use all modules regardless of retained sprint intent, and details omit Sprint membership. Inline creation additionally needs an absolute usable folder and any provider trust approval; see [module folders and trust](module-folders-and-trust.md).
+
+## Expected behavior
+
+- Opening focuses search. The manager covers the work area while retaining the underlying workspace; closing restores the invoking focus target if connected, otherwise the footer. Successful Open and creation focus the selected module's workspace instead. A project change resets manager inspection/search/edit scope and prevents abandoned navigation from taking over the new project.
+- Display order is Open, Hidden, Not in sprint, Archived; classification precedence is Archived → Hidden → Not in sprint → Open. A hidden out-of-sprint module stays in Hidden. Open equals the effective tab projection. Archived starts collapsed and its rows/details are inspection-only: no Open, Close tab, Restore, Rename or repeat Archive.
+- Search is trimmed and case-insensitive over name, key and linked folder. Matching collapsed groups temporarily expand; clearing restores their prior collapse preferences. Counts show matching/total modules. Empty groups show **No modules**; a search without matches shows **No matching modules**. Search and inspection emit no presentation write and do not clear a sprint filter.
+- Inspect shows name, key, local profile folder or **Folder not linked**, agents/lifecycle and, with Roadmap on, derived Story sprint memberships. Story expansion reads all ordinary Story pages lazily in canonical order. Metadata distinguishes unknown/loading/unavailable from authoritative zero; incomplete/error reads offer retry instead of inventing counts or activity timestamps.
+- Open never changes `tab_hidden`; hidden modules have Restore, without an Open button. Restore unhides explicitly and leaves current selection and manager visibility intact. Explicit Open or Restore of an out-of-sprint module clears the filter with **Clears sprint filter to show all modules**; hidden eligible Restore preserves it. After Restore, Open is a separate selection action. With Roadmap off, these remain ordinary presentation actions without sprint clearing behavior.
+- Close tab writes presentation `tab_hidden=true`, retaining the module, descendants and lifecycle; it can run under a sprint restriction. If the selected tab closes, ordinary tab fallback chooses the next visible, folder-linked tab to the right, then left, or clears selection. Saved hidden flags survive reload and agent activity does not restore them. Presentation failures roll back with explicit action retry.
+- Rename uses **Module name**, **Save module name** and **Cancel module rename**. Trimmed empty names produce **Enter a module name.**; unchanged names cancel without writing. Save converges manager, picker and tabs; refusal preserves the editable draft. Pending row/detail writes prevent duplicate submission. Cancel/Escape restores the initiating rename action focus without a write.
+- Archive opens **Archive <name>?**, explains that descendant Stories/work items leave active lists and sprint membership, and requires **Archive module**. Cancel performs no write. Confirm uses the restricted WorkItem update; the server owns the cascade. Active/archived membership converges, selected-module fallback is repaired, and failed refreshes must not reissue a committed archive. Refused writes retain context for explicit retry.
+- Only Open rows can drag, and only without sprint restriction, incomplete reads, search, rename or pending actions. Reorder shares canonical project-wide presentation order, including hidden neighbors, with tabs. A pending reorder disables additional drags; refusal rolls back and reports an alert. Project/sprint changes or archive confirmation cancel an accepted drag.
+- Either New module entry clears search, expands Open and places creation inline there. The form uses **Module name**, **Module folder**, **Create module**, **Save folder** after partial creation, and **Cancel**. Folder validation precedes trust, which precedes model creation. Cancel/trust refusal before creation writes no module. Link-save or refresh retry retains the created ID rather than duplicating it; completion clears applicable sprint intent, selects the appended module and closes the manager. Initial active-sprint discovery may finish during creation without interrupting folder setup. Explicit sprint intent changes and later changes to an established active sprint still cancel stale setup. Late completion after cancellation/project or sprint changes cannot select into a new scope or close a reopened manager.
+- Above 760px, selected details sit in a 360px side panel. At 760px or narrower, Inspect opens full-width details and focuses Back to modules; Back restores search, collapse preferences and the inspected row's keyboard cursor. Escape outside an edit/dialog still closes the whole manager.
+
+## Verifying it
+
+Scope accessible queries within the **Module Manager** region and its **Open**, **Hidden**, **Not in sprint**, **Archived** regions. Group buttons include counts (for example **Open 1 modules**); prefer region names when fixture counts vary. Details use the **Module details: <name>** region. Stable DOM selectors include `data-module-manager-toggle`, `data-module-manager-row="<id>"`, `data-module-manager-inspect="<id>"`, `data-module-manager-group` and `data-module-manager-stories`; the drag indicator's real test ID is `module-manager-drop-seam`. Do not invent manager test IDs for its accessible controls.
+
+Observe module tabs' `aria-selected`, footer `aria-expanded`/`aria-pressed`, focus, group membership, alerts and retry controls. Read back presentation `tab_hidden`/rank and WorkItem name/`is_archived` through authoritative GraphQL; inspect descendants after confirmed archive. Reload to verify saved presentation visibility and order. Search/Inspect/Cancel should cause no Update/Reorder write. Loading reads expose **Loading module eligibility…**, **Retry module eligibility**, **Loading archived modules…** or **Retry archived modules** as applicable.
+
+Existing runnable coverage uses the production shell/keymap with generated GraphQL and native adapter fixtures:
+
+| Existing file and cases | Covers | Narrow command |
+| --- | --- | --- |
+| `studio/src/test/overhaulModuleManagerAcceptance.test.tsx`: overhaul-611, 615, 616 | Entry, groups/search focus, pure inspection, explicit Restore/Close/Open, late completion | `bun run --cwd studio test src/test/overhaulModuleManagerAcceptance.test.tsx` |
+| `studio/src/features/module-manager/projection.test.ts` | Name/key/folder case-insensitive search, temporary group expansion | `bun run --cwd studio test src/features/module-manager/projection.test.ts` |
+| `studio/src/test/overhaulModuleManagerKeyboardAcceptance.test.tsx`: overhaul-617 | Shortcut overrides, group arrows, Enter, caret/dialog Escape precedence | `bun run --cwd studio test src/test/overhaulModuleManagerKeyboardAcceptance.test.tsx` |
+| `studio/src/test/overhaulModuleManagerRecoveryAcceptance.test.tsx`: overhaul-621, 654; `studio/src/test/overhaulModuleManagerLayoutAcceptance.test.tsx`: overhaul-655 | Footer counts/attention, all-hidden/empty recovery, sidebar replacement | `bun run --cwd studio test src/test/overhaulModuleManagerRecoveryAcceptance.test.tsx src/test/overhaulModuleManagerLayoutAcceptance.test.tsx` |
+| `studio/src/test/overhaulModuleManagerEligibilityAcceptance.test.tsx`: overhaul-618; `studio/src/test/overhaulModuleManagerWritesAcceptance.test.tsx`: overhaul-619 | Incomplete eligibility retry, rollback and project-scope late-write guards | `bun run --cwd studio test src/test/overhaulModuleManagerEligibilityAcceptance.test.tsx src/test/overhaulModuleManagerWritesAcceptance.test.tsx` |
+| `studio/src/test/overhaulModuleManagerArchiveAcceptance.test.tsx`: overhaul-612; `studio/src/test/overhaulModuleManagerArchiveScopeAcceptance.test.tsx`: overhaul-614 | Paginated archived reads/search, retry and stale-project read rejection | `bun run --cwd studio test src/test/overhaulModuleManagerArchiveAcceptance.test.tsx src/test/overhaulModuleManagerArchiveScopeAcceptance.test.tsx` |
+| `studio/src/test/overhaulModuleManagerDetailAcceptance.test.tsx`: overhaul-631–634 | Pure hidden/archive inspection, paginated membership and retry, narrow Back focus/state | `bun run --cwd studio test src/test/overhaulModuleManagerDetailAcceptance.test.tsx` |
+| `studio/src/test/overhaulModuleManagerMetadataAcceptance.test.tsx`: overhaul-635–638; `studio/src/test/overhaulModuleManagerResetAcceptance.test.tsx`: overhaul-630 | Complete/failed metadata, subscription changes and read/reset scope guards | `bun run --cwd studio test src/test/overhaulModuleManagerMetadataAcceptance.test.tsx src/test/overhaulModuleManagerResetAcceptance.test.tsx` |
+| `studio/src/test/overhaulModuleManagerStoriesAcceptance.test.tsx`: overhaul-639–642 | Lazy Story expansion, pagination failures/retry, keyboard and subscription changes | `bun run --cwd studio test src/test/overhaulModuleManagerStoriesAcceptance.test.tsx` |
+| `studio/src/test/overhaulModuleCreationFilterResolutionAcceptance.test.tsx`: overhaul-811, 812 | Delayed initial active-filter resolution preserves setup; explicit intent changes cancel late setup and retry retains one identity | `bun run --cwd studio test -- src/test/overhaulModuleCreationFilterResolutionAcceptance.test.tsx` |
+| `studio/src/test/overhaulModuleManagerCreationAcceptance.test.tsx`: overhaul-623–629, 643 | Both creation entries, validation/trust cancellation, explicit retry, one identity, native picker fixture and stale navigation | `bun run --cwd studio test src/test/overhaulModuleManagerCreationAcceptance.test.tsx` |
+| `studio/src/test/overhaulModuleManagerRenameAcceptance.test.tsx`: overhaul-644–646 | Rename retry/deduplication/caret/cancel, detail actions and archive read-only | `bun run --cwd studio test src/test/overhaulModuleManagerRenameAcceptance.test.tsx` |
+| `studio/src/test/overhaulModuleManagerRecordArchiveAcceptance.test.tsx`: overhaul-647–649 | Named cascade confirmation, cancellation/refusal, selected fallback, refresh/stale-read convergence | `bun run --cwd studio test src/test/overhaulModuleManagerRecordArchiveAcceptance.test.tsx` |
+| `studio/src/test/overhaulModuleManagerReorderAcceptance.test.tsx`: overhaul-650–653 | Shared order/pending state, restrictions, rollback/retry and canceled drags | `bun run --cwd studio test src/test/overhaulModuleManagerReorderAcceptance.test.tsx` |
+| `studio/src/test/overhaulModuleVisibilityAcceptance.test.tsx`: overhaul-175–177 | Reload persistence, no activity-driven restore, explicit manager recovery and close fallback/rollback | `bun run --cwd studio test src/test/overhaulModuleVisibilityAcceptance.test.tsx` |
+| `studio/src/test/overhaulRoadmapOffModulesAcceptance.test.tsx`: overhaul-573–576 | OFF order/hidden state/navigation, explicit Restore/Open and recovery under retained sprint intent | `bun run --cwd studio test:roadmap-off src/test/overhaulRoadmapOffModulesAcceptance.test.tsx` |
+| `studio/src/test/overhaulModuleManagerSurfacesAcceptance.test.tsx`: overhaul-622; `studio/src/test/overhaulModuleManagerNativeAcceptance.test.tsx`: overhaul-613 | Mounted Plan/Changes retention and native visibility/focus/session adapter calls | `bun run --cwd studio test src/test/overhaulModuleManagerSurfacesAcceptance.test.tsx src/test/overhaulModuleManagerNativeAcceptance.test.tsx` |
+
+All listed sub-features have automated fixture or projection coverage; this is not proof of a live browser or desktop walkthrough. The current browser journeys are in `studio/e2e/features/module-manager.spec.ts`; runner evidence determines their pass status. The targeted CODING-2713 probe passed workspace, entry/focus, search/inspection, presentation, archive/cascade, reorder, creation, narrow layout and empty-workspace recovery. CODING-2754 lets the restricted `update_work_item` details path address Module identities (classification stays level-matched), so Manager rename passes in the browser; `studio/src-tauri/crates/surfaces/ticketry-graphql-schema/tests/module_rename_graphql.rs` guards the GraphQL seam. No dedicated desktop agent-acceptance scenario was found. Native occlusion/session retention has adapter-fixture coverage, with actual native pixels/focus and real desktop narrow geometry requiring manual isolated desktop verification. The 760px threshold and 360px panel sizing are source-grounded; the narrow acceptance case stubs the media query rather than measuring rendered pixels. Provider-directory trust has additional coverage and desktop-harness limitations in [module folders and trust](module-folders-and-trust.md). Run the structural map check with `bun run --cwd studio test src/test/featureMapContract.test.ts`; the complete numbered gate is `bun run --cwd studio test:overhaul`.
+
+## End-to-end suite
+
+Suite: studio/e2e/features/module-manager.spec.ts
+
+Browser cases use the production Module Manager and typed folder paths. Browser prevalidation checks absolute-path syntax only; a missing absolute directory is refused when its link is saved, potentially after record creation, so that recovery belongs to the folder-link suite. CODING-2708's baseline stopped in stale onboarding before these legacy cases ran; CODING-2643 removed the Modules pane. The migrated workspace and drag cases retain their exact titles and behavioral assertions while the drag case drives current Manager rows. Their originals remain in `studio/e2e/web-app.spec.ts` until the final migration ticket.
+
+| Sub-feature | Success | Cancel | Error | Empty | Entry points | Persistence |
+| --- | --- | --- | --- | --- | --- | --- |
+| manager-footer-entry | @case-manager-entry-keyboard @case-manager-empty-entry | @case-manager-entry-keyboard | n/a: opening the local takeover has no independent server write | @case-manager-empty-entry | @case-manager-entry-keyboard @case-manager-empty-entry | n/a: takeover visibility and invoking focus are transient |
+| manager-groups | @case-manager-presentation @case-manager-archive @case-manager-sprint-groups | n/a: groups are read-only classification | @case-manager-read-recovery | @case-manager-read-recovery | @case-manager-search-inspect @case-manager-presentation @case-manager-archive | @case-manager-presentation @case-manager-archive |
+| manager-search | @case-manager-search-inspect | @case-manager-search-inspect | n/a: filtering loaded rows is local and has no request | @case-manager-search-inspect | @case-manager-search-inspect | n/a: manager search is intentionally transient |
+| manager-inspection | @case-manager-search-inspect | @case-manager-search-inspect | @case-manager-read-recovery | @case-manager-read-recovery | @case-manager-search-inspect @case-manager-narrow | n/a: inspection does not write server records |
+| manager-open | @case-manager-workspace @case-manager-presentation @case-manager-sprint-groups | n/a: immediate selection has no confirmation step | @case-manager-read-recovery | n/a: no row offers Open in an empty group | @case-manager-workspace @case-manager-entry-keyboard | @case-manager-presentation |
+| manager-close-tab | @case-manager-presentation | n/a: immediate presentation action has no confirmation step | @case-manager-presentation | n/a: no row offers Close tab in an empty group | @case-manager-presentation | @case-manager-presentation |
+| manager-restore | @case-manager-presentation @case-manager-sprint-groups | n/a: immediate presentation action has no confirmation step | @case-manager-presentation | @case-manager-read-recovery | @case-manager-presentation | @case-manager-presentation |
+| manager-rename | @case-manager-rename | @case-manager-rename @case-manager-entry-keyboard | @case-manager-rename | @case-manager-rename | @case-manager-rename | @case-manager-rename |
+| manager-archive | @case-manager-archive | @case-manager-archive | @case-manager-archive | @case-manager-read-recovery | @case-manager-archive | @case-manager-archive |
+| manager-reorder | @case-manager-reorder | @case-manager-reorder | @case-manager-reorder | n/a: empty groups have no draggable module rows | @case-manager-reorder | @case-manager-reorder |
+| manager-inline-creation | @case-manager-creation | @case-manager-creation | @case-manager-creation | @case-manager-creation | @case-manager-creation | @case-manager-creation |
+| manager-keyboard-focus | @case-manager-entry-keyboard | @case-manager-entry-keyboard | n/a: key routing has no independent server request | n/a: empty group focus follows the same group header controls | @case-manager-entry-keyboard | n/a: keyboard cursor and caret focus are transient |
+| manager-narrow-layout | @case-manager-narrow | @case-manager-narrow | n/a: responsive details layout has no independent server request | n/a: details require an inspected module row | @case-manager-narrow | n/a: details/list navigation is transient and retains same-visit search |
+
+Run `bun run --cwd studio test:e2e:feature module-manager` for browser evidence and `bun run --cwd studio test:e2e:features --check` for map/suite drift. Native folder picker and native provider trust approval are covered as desktop-only capabilities in [module folders and trust](module-folders-and-trust.md); this suite uses typed paths.
+
+## Relevant code
+
+- `studio/e2e/features/module-manager.spec.ts` and `studio/e2e/module-manager-support.ts`: browser journeys and uniquely named real GraphQL fixture helper.
+
+- `studio/src/features/module-manager`: Manager projection, Apollo view state, grouped rows, inspection reads, creation caller, keyboard/focus routing and actions.
+- `studio/src/features/module-tabs/useModuleNavigation.ts`, `studio/src/features/module-tabs/moduleTabProjection.ts`, `studio/src/features/module-tabs/effectiveModuleTabs.ts`, `studio/src/features/module-tabs/useCloseModuleTab.ts`: Shared explicit navigation, precedence, Roadmap behavior and close fallback.
+- `studio/src/features/projects/internal/moduleReorderDrag.ts`: Shared canonical reorder guards and mutation.
+- `studio/src/features/module-creation`: Shared fields, validation, trust, identity-safe creation, folder-save/refresh retry and completion.
+- `studio/src/app/navigation/keymapBindings.ts`, `studio/src/app/navigation/useGlobalKeymap.ts`: Default chords and precedence.
+- `studio/src/shared/config/roadmapAvailability.ts`: Build-time Roadmap gate.
+- [Approved Module Manager specification](../../spec/0-2-0--d3bee32f/T2643--replace-the-modules-sidebar-with-a-full/SPEC.md).
+- [Context map](../../CONTEXT-MAP.md), [Studio glossary](../../studio/CONTEXT.md#language) and [Work Management glossary](../../studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/CONTEXT.md#language): Existing ownership and terminology references.
+
+## Gotchas
+
+- Close tab hides a presentation; Archive archives the record and its descendants. Archived is inspection-only here; Restore applies to hidden/out-of-sprint active modules, not archived records. The approved CODING-2643 behavior intentionally supersedes older sidebar selection and sprint visibility rules.
+- Group classification is provisional while eligibility is loading. Wait for complete reads before asserting Not in sprint, navigation availability or reorder. Retry failed reads explicitly; unavailable metadata does not mean zero.
+- Search and group collapse are manager view state, not durable module presentation. Same-project reopen retains search/collapse/inspection state in the running Apollo cache; project changes reset it. Restart persistence of manager view state is not asserted.
+- A row and its detail can expose the same accessible action name: scope queries to the row or details. Escape cancels edit/dialog before manager close; successful Open intentionally changes workspace focus instead of restoring the footer.
+- Roadmap OFF removes sprint restriction and detail membership, not module hiding/order. Change the build flag and rebuild before testing OFF; merely changing persisted sprint intent does not alter build availability.
+- Historical sidebar selectors such as `pane-modules`, `modules-pane-toggle` and **+ Add Module** do not drive this manager. The [keyboard reference](../../studio/KEYBOARD_NAVIGATION_CURRENT.md) and linked context/glossary documents retain old sidebar/store wording and moved internal links; current source and this entry govern those details. No ungrounded behavior claim is asserted here.

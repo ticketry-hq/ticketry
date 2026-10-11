@@ -1,4 +1,5 @@
 import type { Move, MoveEligibility, MoveFeedback } from "./moveFeedback";
+import type { DecisionFailure, DecisionRecovery } from "./usePlanSuggestionDecisions";
 
 const action = "font-semibold text-focus-accent hover:underline";
 
@@ -8,6 +9,15 @@ const action = "font-semibold text-focus-accent hover:underline";
 // Dismiss still clears a failure.
 export function PlanFeedback({
   feedback,
+  decision,
+  decisionBusy,
+  decisionUndoDisabled,
+  onUndoDecision,
+  decisionFailure,
+  onRetryDecision,
+  decisionRetryDisabled,
+  decisionRecovery,
+  onRetryDecisionRefresh,
   place,
   eligibility,
   undoEligibility,
@@ -17,6 +27,15 @@ export function PlanFeedback({
   onHoldUndo,
 }: {
   feedback: MoveFeedback;
+  decision?: { name: string; status: "accepted" | "dismissed" } | null;
+  decisionBusy?: boolean;
+  decisionUndoDisabled?: boolean;
+  onUndoDecision?: () => void;
+  decisionFailure?: DecisionFailure | null;
+  onRetryDecision?: () => void;
+  decisionRetryDisabled?: boolean;
+  decisionRecovery?: DecisionRecovery | null;
+  onRetryDecisionRefresh?: () => void;
   place: (sprintId: string | null) => string;
   eligibility: (move: Move) => MoveEligibility;
   undoEligibility: MoveEligibility;
@@ -79,7 +98,22 @@ export function PlanFeedback({
           </div>
         );
       })}
-      {success && (
+      {decisionRecovery && <div className={toast}>
+        <span>{decisionRecovery.kind === "refreshFailed" ? "Suggestion saved, but the view could not refresh." : "Could not confirm the suggestion decision. Inspect before trying again."}</span>
+        <button type="button" disabled={decisionBusy} aria-label="Retry suggestion refresh" onClick={onRetryDecisionRefresh} className={action}>{decisionRecovery.kind === "refreshFailed" ? "Retry refresh" : "Inspect suggestion"}</button>
+      </div>}
+      {decisionFailure && <div className={toast}>
+        <span>Couldn't {decisionFailure.status === "accepted" ? "accept" : decisionFailure.status === "dismissed" ? "dismiss" : "undo"} {decisionFailure.suggestion.issue?.name ?? decisionFailure.suggestion.proposedName ?? "proposed story"} suggestion</span>
+        <button type="button" disabled={decisionBusy || decisionRetryDisabled}
+          aria-label={`Retry ${decisionFailure.status === "accepted" ? "accepting" : decisionFailure.status === "dismissed" ? "dismissing" : "undoing"} ${decisionFailure.suggestion.issue?.name ?? decisionFailure.suggestion.proposedName ?? "proposed story"} suggestion`}
+          onClick={onRetryDecision} className={action}>Retry</button>
+      </div>}
+      {decision && <div data-testid="plan-toast" className={toast}>
+        <span>{decision.name} {decision.status === "accepted" ? "added to the sprint" : "dismissed"}</span>
+        <button type="button" disabled={decisionBusy || decisionUndoDisabled} aria-label={`Undo ${decision.name} suggestion`}
+          data-testid="plan-undo" onClick={onUndoDecision} className={action}>Undo</button>
+      </div>}
+      {!decision && success && (
         <div data-testid="plan-toast" className={toast}>
           <span>
             {success.move.key}{" "}
@@ -119,6 +153,7 @@ function recoveryHint(eligibility: MoveEligibility, action: "retry" | "undo"): s
     case "focus": return `Focus ${eligibility.epicName} to show this Story in the Backlog and ${action}.`;
     case "workflow": return `This Story is in ${eligibility.stateName}, outside the planning Backlog. Epic focus cannot make it eligible for ${action}.`;
     case "hierarchy": return `Nested Stories are outside the planning Backlog. Epic focus cannot make this Story eligible for ${action}.`;
+    case "closed": return "This sprint is completed and closed to new work.";
     case "unavailable": return `This Story is unavailable for ${action}.`;
     default: {
       const exhaustive: never = eligibility;

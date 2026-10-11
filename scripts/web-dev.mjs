@@ -51,7 +51,7 @@ export function parseWebDevOptions(args = []) {
   ]);
   if (normalized.some((option) => !supported.has(option))) {
     throw new Error(
-      "usage: npm run web or npm run web:dev -- [--temp-sqlite] [--log-to-file]",
+      "usage: bun run web or bun run web:dev -- [--temp-sqlite] [--log-to-file]",
     );
   }
   return {
@@ -111,7 +111,7 @@ export async function waitUntilGraphqlReady(
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (shouldStop()) {
-      throw new Error("GraphQL adapter stopped before it became ready; run npm run logs");
+      throw new Error("GraphQL adapter stopped before it became ready; run bun run logs");
     }
     if (await isGraphqlReady(port)) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -143,8 +143,17 @@ export function configuredWebPort(value, name) {
 }
 
 export function buildWebFrontendCommand(frontendPort) {
-  return ["npm", "run", "dev", "--workspace", "@worktracker/studio", "--",
+  return ["bun", "run", "--bun", "--cwd", "studio", "dev",
     "--host", "127.0.0.1", "--port", String(frontendPort), "--strictPort", "--open"];
+}
+
+export const graphqlAdapterCargoArguments = ["--locked", "--manifest-path",
+  "studio/src-tauri/Cargo.toml", "-p", "ticketry-dev-tools", "--bin", "ticketry_graphql_adapter"];
+
+/** A caller that built the adapter once (the e2e warm pool) skips Cargo per launch. */
+export function buildGraphqlAdapterCommand(environment = process.env) {
+  const binary = environment.TICKETRY_GRAPHQL_ADAPTER_BINARY;
+  return binary ? [binary] : ["cargo", "run", ...graphqlAdapterCargoArguments];
 }
 
 export function buildWebHookRunnerCommand({
@@ -281,7 +290,7 @@ export async function main() {
     requestedPort: defaults.environment.MUXED_FRONTEND_PORT,
     firstPort: 5174,
   });
-  const hookRunner = defaults.reuseGraphqlAdapter
+  const hookRunner = defaults.reuseGraphqlAdapter || defaults.environment.TICKETRY_GRAPHQL_ADAPTER_BINARY
     ? defaults.environment.TICKETRY_GRAPHQL_ADAPTER_HOOK_RUNNER
     : prepareWebHookRunner();
   const logs = createDevelopmentLogCapture();
@@ -315,8 +324,8 @@ export async function main() {
   process.once("SIGINT", () => stop("SIGINT"));
   process.once("SIGTERM", () => stop("SIGTERM"));
   if (!defaults.reuseGraphqlAdapter) {
-    start("rust-graphql", "cargo", ["run", "--locked", "--manifest-path",
-      "studio/src-tauri/Cargo.toml", "-p", "ticketry-dev-tools", "--bin", "ticketry_graphql_adapter"], environment, logs);
+    const [adapterCommand, ...adapterArguments] = buildGraphqlAdapterCommand(defaults.environment);
+    start("rust-graphql", adapterCommand, adapterArguments, environment, logs);
   }
   await waitUntilGraphqlReady(adapterPort, 180_000, () => stopping);
   const [frontend, ...frontendArgs] = buildWebFrontendCommand(frontendPort);

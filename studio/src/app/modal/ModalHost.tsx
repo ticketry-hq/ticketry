@@ -10,6 +10,7 @@ import {
   createLazyModalComponents,
   type LazyModalComponents,
 } from "./lazyModalComponents";
+import { createChunkRecovery } from "./recoverableChunkImport";
 import { ModalErrorBoundary } from "./ModalErrorBoundary";
 import { useModalStore, type ModalDescriptor } from "./modalStore";
 
@@ -101,8 +102,9 @@ export function ModalHost() {
   useRuntimeUserNotices();
   const top = useModalStore((state) => state.modalStack.at(-1));
   const [attempt, setAttempt] = useState(0);
-  const [modals, setModals] = useState<LazyModalComponents>(
-    createLazyModalComponents,
+  const [recovery] = useState(createChunkRecovery);
+  const [modals, setModals] = useState<LazyModalComponents>(() =>
+    createLazyModalComponents(recovery),
   );
   if (!top) return null;
 
@@ -112,7 +114,7 @@ export function ModalHost() {
       label={label}
       resetKey={`${top.type}:${attempt}`}
       onRetry={() => {
-        setModals(createLazyModalComponents());
+        setModals(createLazyModalComponents(recovery));
         setAttempt((value) => value + 1);
       }}
     >

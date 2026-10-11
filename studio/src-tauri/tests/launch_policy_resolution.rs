@@ -1,7 +1,10 @@
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 use ticketry_work_management::{
-    launch_policy::{self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver},
-    open_for_commands,
+    mark_delivered, pending, prepare_pending_auto_starts, prepare_pending_retries, record,
+    rejections_for_work_item,
+};
+use ticketry_work_management::{
+    open_for_commands, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 
 const PROJECT: &str = "20000000000000000000000000000000";
@@ -167,7 +170,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, LaunchPolicyResolv
     let database = open_for_commands(&path).await.unwrap();
     // The folder a launch runs in is the Module's typed link, and it is the
     // only thing that decides where a launch may run.
-    ticketry_work_management::schema::install(&database)
+    ticketry_work_management::install_module_links_schema(&database)
         .await
         .unwrap();
     link(&database, &directory.path().display().to_string()).await;
@@ -329,6 +332,7 @@ async fn resolution_rejects_every_established_policy_failure_code() {
         ("UPDATE worktracker_launchbinding SET prompt = '', required_skills = '[]', stage_skills = '[]', model_id = NULL, reasoning_id = NULL", "binding_not_configured"),
         (&format!("UPDATE worktracker_launchbinding SET prompt = '', model_id = '{GPT}'"), "prompt_not_configured"),
         ("UPDATE worktracker_launchbinding SET required_skills = '[\"future\"]'", "invalid_required_skills"),
+        ("UPDATE worktracker_launchbinding SET required_skills = '[\"TDD\"]'", "invalid_required_skills"),
         (&format!("UPDATE worktracker_launchbinding SET model_id = '{DISABLED_MODEL}'"), "provider_not_activated"),
         (&format!("UPDATE worktracker_launchbinding SET model_id = '{GPT}', reasoning_id = '{LOW}'"), "unsupported_reasoning"),
     ];
@@ -510,28 +514,22 @@ async fn compatibility_failure_and_restart_keep_one_pending_identity() {
         .resolve(request(CallerScope::Interactive, "request-1"))
         .await
         .unwrap();
-    let recorded = launch_policy::record(&database, &decision).await.unwrap();
-    let duplicate = launch_policy::record(&database, &decision).await.unwrap();
+    let recorded = record(&database, &decision).await.unwrap();
+    let duplicate = record(&database, &decision).await.unwrap();
     assert_eq!(recorded.decision_id, duplicate.decision_id);
-    assert_eq!(
-        launch_policy::pending(&database, 10).await.unwrap().len(),
-        1
-    );
+    assert_eq!(pending(&database, 10).await.unwrap().len(), 1);
     database.close().await.unwrap();
 
     let reopened = open_for_commands(&directory.path().join("state.db"))
         .await
         .unwrap();
-    let pending = launch_policy::pending(&reopened, 10).await.unwrap();
-    assert_eq!(pending.len(), 1);
-    assert_eq!(pending[0].idempotency_key, "request-1");
-    launch_policy::mark_delivered(&reopened, &pending[0].decision_id)
+    let pending_decisions = pending(&reopened, 10).await.unwrap();
+    assert_eq!(pending_decisions.len(), 1);
+    assert_eq!(pending_decisions[0].idempotency_key, "request-1");
+    mark_delivered(&reopened, &pending_decisions[0].decision_id)
         .await
         .unwrap();
-    assert!(launch_policy::pending(&reopened, 10)
-        .await
-        .unwrap()
-        .is_empty());
+    assert!(pending(&reopened, 10).await.unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -556,7 +554,7 @@ async fn auto_start_occurrences_become_decisions_or_recoverable_rejections() {
         .await
         .unwrap();
 
-    let decisions = launch_policy::prepare_pending_auto_starts(&database, &resolver, 10)
+    let decisions = prepare_pending_auto_starts(&database, &resolver, 10)
         .await
         .unwrap();
     assert_eq!(decisions.len(), 1);
@@ -605,7 +603,7 @@ async fn auto_start_occurrences_become_decisions_or_recoverable_rejections() {
         ))
         .await
         .unwrap();
-    let immutable = launch_policy::prepare_pending_auto_starts(&database, &resolver, 10)
+    let immutable = prepare_pending_auto_starts(&database, &resolver, 10)
         .await
         .unwrap();
     assert_eq!(immutable.len(), 1);
@@ -630,12 +628,10 @@ async fn auto_start_occurrences_become_decisions_or_recoverable_rejections() {
         ))
         .await
         .unwrap();
-    assert!(
-        launch_policy::prepare_pending_auto_starts(&database, &resolver, 10)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert!(prepare_pending_auto_starts(&database, &resolver, 10)
+        .await
+        .unwrap()
+        .is_empty());
     let row = database
         .query_one_raw(sea_orm::Statement::from_string(
             sea_orm::DbBackend::Sqlite,
@@ -653,9 +649,7 @@ async fn auto_start_occurrences_become_decisions_or_recoverable_rejections() {
     // The rejection is a diagnosis, not a verdict: it is readable against the
     // work item it blocks, and repairing the binding re-queues the occurrence
     // instead of leaving it filtered out forever.
-    let rejections = launch_policy::rejections_for_work_item(&database, TASK)
-        .await
-        .unwrap();
+    let rejections = rejections_for_work_item(&database, TASK).await.unwrap();
     assert_eq!(rejections.len(), 1);
     assert_eq!(rejections[0].code, "prompt_not_configured");
     assert!(rejections[0].recoverable);
@@ -674,7 +668,7 @@ async fn auto_start_occurrences_become_decisions_or_recoverable_rejections() {
         )
         .await
         .unwrap();
-    let recovered = launch_policy::prepare_pending_auto_starts(&database, &resolver, 10)
+    let recovered = prepare_pending_auto_starts(&database, &resolver, 10)
         .await
         .unwrap();
     assert_eq!(recovered.len(), 1);
@@ -682,7 +676,7 @@ async fn auto_start_occurrences_become_decisions_or_recoverable_rejections() {
         recovered[0].idempotency_key,
         "cccccccccccccccccccccccccccccccc"
     );
-    assert!(launch_policy::rejections_for_work_item(&database, TASK)
+    assert!(rejections_for_work_item(&database, TASK)
         .await
         .unwrap()
         .is_empty());
@@ -715,7 +709,7 @@ async fn manual_auto_start_leaves_a_live_agent_alone_except_for_handoffs() {
         .await
         .unwrap();
 
-    let decisions = launch_policy::prepare_pending_auto_starts(&database, &resolver, 10)
+    let decisions = prepare_pending_auto_starts(&database, &resolver, 10)
         .await
         .unwrap();
     assert_eq!(
@@ -756,7 +750,7 @@ async fn manual_auto_start_leaves_a_live_agent_alone_except_for_handoffs() {
         ))
         .await
         .unwrap();
-    let decisions = launch_policy::prepare_pending_auto_starts(&database, &resolver, 10)
+    let decisions = prepare_pending_auto_starts(&database, &resolver, 10)
         .await
         .unwrap();
     assert_eq!(decisions.len(), 1);
@@ -788,7 +782,7 @@ async fn auto_start_backlog_is_bounded_and_ordered_by_commit_then_identity() {
         .await
         .unwrap();
 
-    let first = launch_policy::prepare_pending_auto_starts(&database, &resolver, 2)
+    let first = prepare_pending_auto_starts(&database, &resolver, 2)
         .await
         .unwrap();
     assert_eq!(
@@ -801,7 +795,7 @@ async fn auto_start_backlog_is_bounded_and_ordered_by_commit_then_identity() {
             "22222222222222222222222222222222"
         ]
     );
-    let second = launch_policy::prepare_pending_auto_starts(&database, &resolver, 2)
+    let second = prepare_pending_auto_starts(&database, &resolver, 2)
         .await
         .unwrap();
     assert_eq!(second.len(), 1);
@@ -820,7 +814,7 @@ async fn a_pending_retry_child_becomes_exactly_one_launch_decision() {
     let (_directory, database, resolver) = fixture().await;
     seed_attempts(&database).await;
 
-    let decisions = launch_policy::prepare_pending_retries(&database, &resolver, 10)
+    let decisions = prepare_pending_retries(&database, &resolver, 10)
         .await
         .unwrap();
 
@@ -835,16 +829,11 @@ async fn a_pending_retry_child_becomes_exactly_one_launch_decision() {
 
     // A second pass owes nothing: the recorded decision is what makes the
     // retry launch exactly once, however often the reconciler runs.
-    assert!(
-        launch_policy::prepare_pending_retries(&database, &resolver, 10)
-            .await
-            .unwrap()
-            .is_empty()
-    );
-    assert_eq!(
-        launch_policy::pending(&database, 10).await.unwrap().len(),
-        1
-    );
+    assert!(prepare_pending_retries(&database, &resolver, 10)
+        .await
+        .unwrap()
+        .is_empty());
+    assert_eq!(pending(&database, 10).await.unwrap().len(), 1);
 }
 
 /// A retry whose configuration is broken is diagnosed, not retired: repairing
@@ -858,12 +847,10 @@ async fn a_rejected_retry_is_re_resolved_once_its_configuration_is_repaired() {
         .await
         .unwrap();
 
-    assert!(
-        launch_policy::prepare_pending_retries(&database, &resolver, 10)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert!(prepare_pending_retries(&database, &resolver, 10)
+        .await
+        .unwrap()
+        .is_empty());
 
     database
         .execute_unprepared(
@@ -875,7 +862,7 @@ async fn a_rejected_retry_is_re_resolved_once_its_configuration_is_repaired() {
         )
         .await
         .unwrap();
-    let recovered = launch_policy::prepare_pending_retries(&database, &resolver, 10)
+    let recovered = prepare_pending_retries(&database, &resolver, 10)
         .await
         .unwrap();
 
@@ -899,7 +886,7 @@ async fn a_handoff_delivery_retry_preserves_handoff_delivery() {
         .await
         .unwrap();
 
-    let decisions = launch_policy::prepare_pending_retries(&database, &resolver, 10)
+    let decisions = prepare_pending_retries(&database, &resolver, 10)
         .await
         .unwrap();
 

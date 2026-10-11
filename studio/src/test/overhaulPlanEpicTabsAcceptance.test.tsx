@@ -4,7 +4,7 @@ import NewEpicChip from "../features/sprints/planning/NewEpicChip";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { PlanningGraph } from "../features/planning-graph";
-import { EpicTabStrip } from "../features/sprints/planning/EpicTabStrip";
+import { MountedPlanEpicTabs } from "./mountedPlanEpicTabs";
 import { closePlanSprint, leavePlanWorkspace, openPlanSprint, openPlanWorkspace, setPlanVisit, usePlanWorkspace } from "../features/sprints/planWorkspaceState";
 import SprintsList from "../features/sprints/SprintsList";
 import { sprint } from "../features/planning-graph/testGraph";
@@ -12,11 +12,11 @@ import { fixture, mountStudio, workItem } from "./seam";
 import { workItem as planningWorkItem } from "../features/planning-graph/testGraph";
 
 const graph: PlanningGraph = { project: { id: "project-1", name: "Project", slug: "PROJ" }, states: [], stateById: new Map(), storyType: { id: "story-type" }, epicType: { id: "epic-type" }, sprints: [], modules: [{ id: "a", name: "Alpha", key: "P-1" }, { id: "b", name: "Beta", key: "P-2" }], workItems: [] };
-beforeEach(() => usePlanWorkspace.setState(usePlanWorkspace.getInitialState(), true));
+beforeEach(() => usePlanWorkspace.setState({ ...usePlanWorkspace.getInitialState(), active: true, projectId: "project-1", sprintId: "s" }, true));
 it("[overhaul-461] lets a waiting suggestion without an epic be found again after closing its tab", () => {
   const http = fixture();
   http.tree("module-1", { rootIds: [], children: {}, order: [] });
-  mountStudio({ http, children: <EpicTabStrip graph={graph} suggestions={[
+  mountStudio({ http, children: <MountedPlanEpicTabs graph={graph} suggestions={[
     { sprintId: "s", status: "waiting", proposedEpicId: null, issue: { moduleId: null } },
   ]} sprintId="s" /> });
   expect(screen.queryAllByRole("tab")).toHaveLength(0);
@@ -34,11 +34,11 @@ it("[overhaul-464] keeps a removed epic's stories and suggestions reachable unde
   const planningGraph = { ...graph, states: [{ id: "idea", name: "Implement", group: "backlog", color: "" }],
     workItems: [planningWorkItem({ id: "story", moduleId: "b" })] };
   const suggestions = [{ sprintId: "s", status: "waiting", proposedEpicId: null, issue: { moduleId: "b" } }];
-  const view = mountStudio({ http, children: <EpicTabStrip graph={planningGraph} suggestions={suggestions} sprintId="s" /> });
+  const view = mountStudio({ http, children: <MountedPlanEpicTabs graph={planningGraph} suggestions={suggestions} sprintId="s" /> });
   fireEvent.click(screen.getByRole("button", { name: "Add epic" }));
   fireEvent.click(screen.getByRole("button", { name: "Beta, 1 backlog stories, 1 waiting suggestions" }));
   expect(screen.getByRole("tab", { name: "Beta, 1 backlog stories, 1 waiting suggestions" })).toHaveAttribute("aria-selected", "true");
-  view.rerender(<EpicTabStrip graph={{ ...planningGraph, modules: [graph.modules[0]] }} suggestions={suggestions} sprintId="s" />);
+  view.rerender(<MountedPlanEpicTabs graph={{ ...planningGraph, modules: [graph.modules[0]] }} suggestions={suggestions} sprintId="s" />);
   expect(screen.getByRole("tab", { name: "No epic, 1 backlog stories, 1 waiting suggestions" })).toHaveAttribute("aria-selected", "true");
   expect(screen.queryByRole("tab", { name: /Beta/ })).not.toBeInTheDocument();
 });
@@ -49,7 +49,7 @@ it("[overhaul-458] restores each sprint's chosen tabs and active epic after leav
       <button onClick={() => openPlanWorkspace("first")}>First sprint</button>
       <button onClick={() => openPlanWorkspace("second")}>Second sprint</button>
       <button onClick={leavePlanWorkspace}>Leave Plan</button>
-      {active && sprintId && <EpicTabStrip graph={graph} suggestions={[]} sprintId={sprintId} />}
+      {active && sprintId && <MountedPlanEpicTabs graph={graph} suggestions={[]} sprintId={sprintId} />}
     </>;
   }
   const http = fixture();
@@ -80,7 +80,7 @@ it("[overhaul-458] restores each sprint's chosen tabs and active epic after leav
 it("[overhaul-434] adds, steps and closes epic tabs while preserving the sprint's visit", () => {
   const http = fixture();
   http.tree("module-1", { rootIds: [], children: {}, order: [] });
-  mountStudio({ http, children: <EpicTabStrip graph={graph} suggestions={[]} sprintId="s" /> });
+  mountStudio({ http, children: <MountedPlanEpicTabs graph={graph} suggestions={[]} sprintId="s" /> });
   expect(screen.queryAllByRole("tab")).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "Add epic" }));
   fireEvent.click(screen.getByRole("button", { name: "Alpha, 0 backlog stories" }));
@@ -100,7 +100,7 @@ it("[overhaul-434] adds, steps and closes epic tabs while preserving the sprint'
 it("[overhaul-435] offers real new epic creation and reports missing project type before a write", () => {
   const http = fixture();
   http.tree("module-1", { rootIds: [], children: {}, order: [] });
-  mountStudio({ http, children: <EpicTabStrip graph={{ ...graph, epicType: { error: "Configure an Epic type" } }} suggestions={[]} sprintId="s" /> });
+  mountStudio({ http, children: <MountedPlanEpicTabs graph={{ ...graph, epicType: { error: "Configure an Epic type" } }} suggestions={[]} sprintId="s" /> });
   fireEvent.click(screen.getByRole("button", { name: "Add epic" }));
   fireEvent.click(screen.getByRole("button", { name: "+ New epic" }));
   fireEvent.change(screen.getByRole("textbox", { name: "New epic name" }), { target: { value: "New epic" } });
@@ -131,9 +131,9 @@ it("[overhaul-436] creates an epic once through the model write and opens its re
 
 it("[overhaul-437] waits for suggestions before seeding and supports roving tab focus", () => {
   const http = fixture(); http.tree("module-1", { rootIds: [], children: {}, order: [] });
-  const view = mountStudio({ http, children: <EpicTabStrip graph={graph} suggestions={[]} sprintId="s" ready={false} /> });
+  const view = mountStudio({ http, children: <MountedPlanEpicTabs graph={graph} suggestions={[]} sprintId="s" ready={false} /> });
   expect(usePlanWorkspace.getState().visits.s).toBeUndefined();
-  view.rerender(<EpicTabStrip graph={graph} suggestions={[]} sprintId="s" ready />);
+  view.rerender(<MountedPlanEpicTabs graph={graph} suggestions={[]} sprintId="s" ready />);
   expect(screen.queryAllByRole("tab")).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "Add epic" }));
   fireEvent.click(screen.getByRole("button", { name: "Alpha, 0 backlog stories" }));
@@ -148,7 +148,7 @@ it("[overhaul-437] waits for suggestions before seeding and supports roving tab 
 
 it("[overhaul-438] keeps waiting suggestions visible in the add menu after closing their epic", () => {
   const http = fixture(); http.tree("module-1", { rootIds: [], children: {}, order: [] });
-  mountStudio({ http, children: <EpicTabStrip graph={graph} suggestions={[{ sprintId: "s", status: "waiting", proposedEpicId: "b", issue: null }]} sprintId="s" /> });
+  mountStudio({ http, children: <MountedPlanEpicTabs graph={graph} suggestions={[{ sprintId: "s", status: "waiting", proposedEpicId: "b", issue: null }]} sprintId="s" /> });
   expect(screen.queryAllByRole("tab")).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "Add epic" }));
   fireEvent.click(screen.getByRole("button", { name: "Beta, 0 backlog stories, 1 waiting suggestions" }));
@@ -162,7 +162,7 @@ it("[overhaul-438] keeps waiting suggestions visible in the add menu after closi
 it("[overhaul-465] a new sprint opens with the last sprint's selected epics and active epic", async () => {
   const http = fixture();
   http.tree("module-1", { rootIds: [], children: {}, order: [] });
-  const onCreateSprint = vi.fn(async () => "new-sprint");
+  const onCreateSprint = vi.fn(async () => ({ kind: "created" as const, id: "new-sprint" }));
   mountStudio({ http, children: <SprintsList graph={{ ...graph, sprints: [sprint({ id: "old-sprint" })] }}
     openStoryId={null} onOpenStory={vi.fn()} onOpenSprint={openPlanSprint}
     onCreateSprint={onCreateSprint} onUpdateSprint={vi.fn(async () => true)}

@@ -101,6 +101,26 @@ describe("terminal output activity projection", () => {
     vi.advanceTimersByTime(STALL_AFTER_MS * 10);
     expect(projectRunPresentation(run({ last_output_at: null }))).toBe("working");
   });
+
+  it("reads a zone-less output timestamp as UTC, as the server does", () => {
+    // The server stores the launch baseline as a SQLite `datetime` and
+    // projects it as UTC. A browser east of UTC must not read the same instant
+    // as hours old and present a working run as stalled (#2762).
+    const zone = process.env.TZ;
+    process.env.TZ = "Asia/Kolkata";
+    try {
+      const record = run({ last_output_at: "2026-08-15 12:00:00.000000" });
+      expect(stallDeadlineAt(record)).toBe(Date.parse(OBSERVED_AT) + STALL_AFTER_MS);
+      expect(projectRunPresentation(record)).toBe("working");
+      expect(selectTaskLifecycleChips(
+        { ...holding(), runs: { "run-1": record } },
+        "story-1",
+      )).toEqual([{ state: "working", count: 1, agent: "codex" }]);
+    } finally {
+      if (zone === undefined) delete process.env.TZ;
+      else process.env.TZ = zone;
+    }
+  });
 });
 
 describe("independently ordered lifecycle and activity axes", () => {

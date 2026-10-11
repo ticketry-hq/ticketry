@@ -9,8 +9,9 @@ use std::time::Duration;
 use futures_util::{Stream, StreamExt};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement};
 use ticketry_runs::{
-    failure_code, open_status_stream, reset_reason, LifecycleFact, RunStatusFrame, RunsServices,
-    StatusStreamRequest, TerminalFact, TerminalOutcome,
+    open_status_stream, LifecycleFact, RunStatusFrame, RunsServices, StatusStreamRequest,
+    TerminalFact, TerminalOutcome, STATUS_CURSOR_AHEAD_OF_SERVER, STATUS_CURSOR_COMPACTED,
+    STATUS_EVENT_VERSION_INCOMPATIBLE, STATUS_EVENT_VERSION_UNSUPPORTED, STATUS_STREAM_BAD_REQUEST,
 };
 
 mod common;
@@ -200,6 +201,42 @@ async fn lifecycle_event_and_snapshot_share_the_effective_stall_projection() {
         holding(&snapshot, "run-effective").effective_state,
         "stalled"
     );
+}
+
+/// Launch settlement stores the terminal baseline in the SQLite `datetime`
+/// shape, which carries no zone. Clients re-derive the stall deadline from
+/// `last_output_at`, so the contract must say UTC explicitly or a browser in a
+/// non-UTC zone reads a working run as hours old (#2762).
+#[tokio::test]
+async fn snapshot_and_event_publish_last_output_at_as_explicit_utc() {
+    let (_directory, database, services) = fixture().await;
+    insert_run(&database, "run-naive", TASK, "2026-08-20T10:00:00Z").await;
+    insert_terminal_baseline(&database, "run-naive", "2026-08-20 10:00:00.123456").await;
+
+    commit_lifecycle(&services, "run-naive", "turn_start", "2026-08-20T10:00:01Z").await;
+    let payload: String = database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT payload FROM runs_status_events ORDER BY cursor DESC LIMIT 1".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get("", "payload")
+        .unwrap();
+    let event: serde_json::Value = serde_json::from_str(&payload).unwrap();
+    let snapshot = services
+        .queries()
+        .run_holdings_at(PUBLIC_PROJECT, None, "2026-08-20T10:00:02Z")
+        .await
+        .unwrap();
+
+    let expected = "2026-08-20T10:00:00.123456+00:00";
+    assert_eq!(event["run"]["last_output_at"], expected);
+    assert_eq!(event["effectiveState"], "working");
+    let held = holding(&snapshot, "run-naive");
+    assert_eq!(held.last_output_at.as_deref(), Some(expected));
+    assert_eq!(held.effective_state, "working");
 }
 
 #[tokio::test]
@@ -411,7 +448,7 @@ async fn a_compacted_cursor_requires_reset_rather_than_a_partial_history() {
     let RunStatusFrame::RunStatusResetRequired(reset) = &opening[1] else {
         panic!("a compacted cursor resets, received {:?}", opening[1]);
     };
-    assert_eq!(reset.reason, reset_reason::COMPACTED);
+    assert_eq!(reset.reason, STATUS_CURSOR_COMPACTED);
     assert_eq!(reset.project_id, PUBLIC_PROJECT);
     assert!(
         cursors(&opening).is_empty(),
@@ -447,7 +484,7 @@ async fn a_cursor_ahead_of_the_server_requires_reset() {
             opening[1]
         );
     };
-    assert_eq!(reset.reason, reset_reason::AHEAD_OF_SERVER);
+    assert_eq!(reset.reason, STATUS_CURSOR_AHEAD_OF_SERVER);
     assert_eq!(reset.cursor, high_water);
 }
 
@@ -469,7 +506,7 @@ async fn an_unsupported_event_version_in_replay_requires_a_reset() {
     let RunStatusFrame::RunStatusResetRequired(reset) = &opening[1] else {
         panic!("an unreadable version resets, received {:?}", opening[1]);
     };
-    assert_eq!(reset.reason, reset_reason::EVENT_VERSION_INCOMPATIBLE);
+    assert_eq!(reset.reason, STATUS_EVENT_VERSION_INCOMPATIBLE);
     assert!(
         matches!(&opening[2], RunStatusFrame::RunStatusCaughtUp(caught_up)
             if caught_up.cursor == reset.cursor),
@@ -492,7 +529,7 @@ async fn an_unsupported_event_version_after_catch_up_ends_the_stream_with_a_stru
     let RunStatusFrame::RunStatusFailed(failure) = &frames[0] else {
         panic!("an unreadable live version fails, received {:?}", frames[0]);
     };
-    assert_eq!(failure.code, failure_code::EVENT_VERSION);
+    assert_eq!(failure.code, STATUS_EVENT_VERSION_UNSUPPORTED);
     assert!(
         !failure.message.contains("runs_status_events"),
         "structured failures do not leak storage detail: {}",
@@ -520,7 +557,7 @@ async fn an_invalid_project_or_backwards_cursor_fails_before_any_snapshot() {
         let RunStatusFrame::RunStatusFailed(failure) = &frames[0] else {
             panic!("a bad request fails first, received {:?}", frames[0]);
         };
-        assert_eq!(failure.code, failure_code::BAD_REQUEST);
+        assert_eq!(failure.code, STATUS_STREAM_BAD_REQUEST);
         assert!(stream.next().await.is_none(), "the failure is terminal");
     }
 }

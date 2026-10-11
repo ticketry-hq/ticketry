@@ -5,11 +5,18 @@
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, EntityTrait, Statement};
 use ticketry_entities::{issue, project, worktree};
 use ticketry_runs::{outbox_adopted, RunsServices};
-use ticketry_work_management::commands::status_facts::WorkFactRecorder;
-use ticketry_work_management::commands::{catalog, hierarchy, reorder, work_items, workflow};
+use ticketry_work_management::WorkFactRecorder;
 use ticketry_work_management::{
-    module_presentation_migration, open_for_commands, workspace_tab_order_migration,
+    archive_work_item, create_state, create_work_item, delete_work_item, reorder_states,
+    reorder_work_item, reparent_work_item, transition, update_state, update_work_item, CreateState,
+    CreateWorkItem, ReorderWorkItem, ReparentWorkItem, TransitionOrigin, TransitionWorkItem,
+    UpdateState, UpdateWorkItem,
 };
+use ticketry_work_management::{
+    install_module_presentation_schema, install_workspace_tab_order_schema,
+};
+
+use ticketry_work_management::open_for_commands;
 
 const PROJECT: &str = "10000000000000000000000000000000";
 const TASK_TYPE: &str = "30000000000000000000000000000001";
@@ -155,10 +162,10 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, WorkFactRecorder) 
         .expect("create the WorkTracker fixture");
     drop(writer);
     let database = open_for_commands(&path).await.expect("open the database");
-    workspace_tab_order_migration::install(&database)
+    install_workspace_tab_order_schema(&database)
         .await
         .expect("install workspace-tab ordering");
-    module_presentation_migration::install(&database)
+    install_module_presentation_schema(&database)
         .await
         .expect("install module presentation");
     let recorder = WorkFactRecorder::new(
@@ -170,8 +177,9 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, WorkFactRecorder) 
     (directory, database, recorder)
 }
 
-fn create_input(name: &str, parent_id: Option<&str>) -> work_items::CreateWorkItem {
-    work_items::CreateWorkItem {
+fn create_input(name: &str, parent_id: Option<&str>) -> CreateWorkItem {
+    CreateWorkItem {
+        sprint_id: None,
         project_id: PROJECT.to_owned(),
         name: name.to_owned(),
         issue_type_id: TASK_TYPE.to_owned(),
@@ -185,7 +193,7 @@ fn create_input(name: &str, parent_id: Option<&str>) -> work_items::CreateWorkIt
 async fn creating_a_work_item_publishes_a_versioned_membership_fact() {
     let (_directory, database, recorder) = fixture().await;
 
-    let id = work_items::create(&database, create_input("First", None), Some(&recorder))
+    let id = create_work_item(&database, create_input("First", None), Some(&recorder))
         .await
         .expect("create the work item");
 
@@ -209,13 +217,13 @@ async fn creating_a_work_item_publishes_a_versioned_membership_fact() {
 #[tokio::test]
 async fn an_ordinary_field_edit_claims_no_membership_change() {
     let (_directory, database, recorder) = fixture().await;
-    let id = work_items::create(&database, create_input("First", None), Some(&recorder))
+    let id = create_work_item(&database, create_input("First", None), Some(&recorder))
         .await
         .unwrap();
 
-    work_items::update(
+    update_work_item(
         &database,
-        work_items::UpdateWorkItem {
+        UpdateWorkItem {
             id: id.clone(),
             name: Some("Renamed".to_owned()),
             description: None,
@@ -238,16 +246,16 @@ async fn an_ordinary_field_edit_claims_no_membership_change() {
 #[tokio::test]
 async fn moving_and_removing_items_publish_explicit_collection_changes() {
     let (_directory, database, recorder) = fixture().await;
-    let parent = work_items::create(&database, create_input("Parent", None), Some(&recorder))
+    let parent = create_work_item(&database, create_input("Parent", None), Some(&recorder))
         .await
         .unwrap();
-    let child = work_items::create(&database, create_input("Child", None), Some(&recorder))
+    let child = create_work_item(&database, create_input("Child", None), Some(&recorder))
         .await
         .unwrap();
 
-    hierarchy::reparent(
+    reparent_work_item(
         &database,
-        hierarchy::ReparentWorkItem {
+        ReparentWorkItem {
             id: child.clone(),
             parent_id: Some(parent.clone()),
             before_id: None,
@@ -257,9 +265,9 @@ async fn moving_and_removing_items_publish_explicit_collection_changes() {
     )
     .await
     .expect("reparent the child");
-    reorder::reorder_work_item(
+    reorder_work_item(
         &database,
-        reorder::ReorderWorkItem {
+        ReorderWorkItem {
             id: child.clone(),
             before_id: None,
             after_id: Some(parent.clone()),
@@ -269,7 +277,7 @@ async fn moving_and_removing_items_publish_explicit_collection_changes() {
     )
     .await
     .expect("reorder the child");
-    work_items::archive(&database, &parent, Some(&recorder))
+    archive_work_item(&database, &parent, Some(&recorder))
         .await
         .expect("archive the parent");
 
@@ -308,11 +316,11 @@ async fn moving_and_removing_items_publish_explicit_collection_changes() {
 #[tokio::test]
 async fn deleting_a_work_item_publishes_its_own_removal_family() {
     let (_directory, database, recorder) = fixture().await;
-    let id = work_items::create(&database, create_input("Doomed", None), Some(&recorder))
+    let id = create_work_item(&database, create_input("Doomed", None), Some(&recorder))
         .await
         .unwrap();
 
-    work_items::delete(&database, &id, Some(&recorder))
+    delete_work_item(&database, &id, Some(&recorder))
         .await
         .expect("delete the work item");
 
@@ -326,9 +334,9 @@ async fn deleting_a_work_item_publishes_its_own_removal_family() {
 async fn workflow_state_writes_publish_the_whole_row() {
     let (_directory, database, recorder) = fixture().await;
 
-    let created = catalog::create_state(
+    let created = create_state(
         &database,
-        catalog::CreateState {
+        CreateState {
             project_id: PROJECT.to_owned(),
             name: "In review".to_owned(),
             group: "started".to_owned(),
@@ -338,9 +346,9 @@ async fn workflow_state_writes_publish_the_whole_row() {
     )
     .await
     .expect("create the state");
-    catalog::update_state(
+    update_state(
         &database,
-        catalog::UpdateState {
+        UpdateState {
             id: created.clone(),
             name: Some("Reviewing".to_owned()),
             group: None,
@@ -351,7 +359,7 @@ async fn workflow_state_writes_publish_the_whole_row() {
     )
     .await
     .expect("rename and recolour the state");
-    catalog::reorder_states(
+    reorder_states(
         &database,
         PROJECT,
         vec![created.clone(), BACKLOG.to_owned(), DONE.to_owned()],
@@ -385,16 +393,16 @@ async fn workflow_state_writes_publish_the_whole_row() {
 #[tokio::test]
 async fn a_rejected_write_publishes_nothing() {
     let (_directory, database, recorder) = fixture().await;
-    let id = work_items::create(&database, create_input("Kept", None), Some(&recorder))
+    let id = create_work_item(&database, create_input("Kept", None), Some(&recorder))
         .await
         .unwrap();
     let before = facts(&database).await.len();
 
-    let rejected = work_items::create(&database, create_input("   ", None), Some(&recorder)).await;
+    let rejected = create_work_item(&database, create_input("   ", None), Some(&recorder)).await;
     assert!(rejected.is_err());
-    let cycle = hierarchy::reparent(
+    let cycle = reparent_work_item(
         &database,
-        hierarchy::ReparentWorkItem {
+        ReparentWorkItem {
             id: id.clone(),
             parent_id: Some(id.clone()),
             before_id: None,
@@ -429,14 +437,14 @@ async fn a_descendant_live_worktree_makes_cross_module_reparent_atomic() {
         ))
         .await
         .unwrap();
-    let parent = work_items::create(
+    let parent = create_work_item(
         &database,
         create_input("Parent", Some("20000000000000000000000000000001")),
         Some(&recorder),
     )
     .await
     .unwrap();
-    let child = work_items::create(
+    let child = create_work_item(
         &database,
         create_input("Child", Some(&parent)),
         Some(&recorder),
@@ -472,9 +480,9 @@ async fn a_descendant_live_worktree_makes_cross_module_reparent_atomic() {
         .unwrap();
     let facts_before = facts(&database).await;
 
-    let error = hierarchy::reparent(
+    let error = reparent_work_item(
         &database,
-        hierarchy::ReparentWorkItem {
+        ReparentWorkItem {
             id: parent.clone(),
             parent_id: Some("20000000000000000000000000000002".to_owned()),
             before_id: None,
@@ -529,10 +537,10 @@ async fn a_descendant_live_worktree_makes_cross_module_reparent_atomic() {
 async fn a_command_without_the_outbox_still_applies_every_invariant() {
     let (_directory, database, _recorder) = fixture().await;
 
-    let id = work_items::create(&database, create_input("Unpublished", None), None)
+    let id = create_work_item(&database, create_input("Unpublished", None), None)
         .await
         .expect("create without a recorder");
-    let rejected = work_items::create(&database, create_input("", None), None).await;
+    let rejected = create_work_item(&database, create_input("", None), None).await;
 
     assert!(rejected.is_err());
     assert!(facts(&database).await.is_empty());
@@ -542,16 +550,16 @@ async fn a_command_without_the_outbox_still_applies_every_invariant() {
 #[tokio::test]
 async fn a_workflow_transition_publishes_the_committed_destination() {
     let (_directory, database, recorder) = fixture().await;
-    let id = work_items::create(&database, create_input("Moving", None), Some(&recorder))
+    let id = create_work_item(&database, create_input("Moving", None), Some(&recorder))
         .await
         .unwrap();
 
-    workflow::transition(
+    transition(
         &database,
-        workflow::TransitionWorkItem {
+        TransitionWorkItem {
             id: id.clone(),
             target_state_id: DONE.to_owned(),
-            origin: workflow::TransitionOrigin::Human,
+            origin: TransitionOrigin::Human,
         },
         Some(&recorder),
     )

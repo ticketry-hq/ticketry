@@ -22,14 +22,27 @@ mod graph_run_service;
 mod sprint_suggestions;
 pub use sprint_suggestions::{register_sprint_execution_graphql, SprintSuggestionExecutor};
 
-// `execution` is the private implementation root. The capability modules
-// below are the stable facade used by desktop, MCP, GraphQL, and integration
-// tests. In particular, `graph_run` and `run_now` retain their authored
-// GraphQL registration seams, while `persistence` retains its feature-free
-// adoption seam for installation tests.
-pub use execution::{
-    graph, graph_run, launch_delivery, merge_preparation_launcher, persistence, reconciliation,
-    run_now,
+// Each facade names the externally consumed capability and its signature types.
+pub use execution::graph::{
+    dependency_graph, relevant_armed_roots, scheduling_facts, ChildSchedulingFacts,
+    DependencyGraph, DependencyGraphNode, ExecutionMode, GraphAccess, GraphFactsError,
+    GraphFactsErrorCode, WorkItemFact,
+};
+pub use execution::graph_run::register_graphql as register_graph_run_graphql;
+pub use execution::launch_delivery::execute as execute_launch_delivery;
+pub use execution::merge_preparation_launcher::TerminalMergePreparationLauncher;
+pub use execution::persistence::{
+    adopt as adopt_execution, preflight as preflight_execution, AdoptionEvidence,
+    ExecutionPersistenceError, ExecutionPersistenceErrorCode, SourceClassification, TableEvidence,
+    EMPTY_DJANGO_LEAF as EXECUTION_EMPTY_DJANGO_LEAF, VERSION as EXECUTION_SCHEMA_VERSION,
+};
+pub use execution::reconciliation::{
+    ExecutionReconciliationConfig, ExecutionReconciliationError, ExecutionReconciliationReport,
+    ExecutionReconciliationRuntime, ExecutionReconciliationService, RootReconciliation,
+};
+pub use execution::run_now::{
+    register_graphql as register_run_now_graphql, RunNowCaller, RunNowIssueType, RunNowLauncher,
+    RunNowRefusal, RunNowRequest, RunNowRun, RunNowService, RunNowState, RunNowSuccess,
 };
 pub use graph_run_service::{
     DeletedGraphRunResult, GraphRunAdvanceResult, GraphRunCaller, GraphRunReadScope,

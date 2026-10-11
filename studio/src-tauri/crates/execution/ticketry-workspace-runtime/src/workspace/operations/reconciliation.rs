@@ -30,10 +30,10 @@ const RECONCILE_LEASE_SECONDS: i64 = 120;
 
 /// One pass reconciles a bounded batch. Whatever is left is picked up by the
 /// next pass, so a large backlog cannot stall startup.
-pub const MAX_RECONCILIATION_BATCH: u64 = 200;
+pub(crate) const MAX_RECONCILIATION_BATCH: u64 = 200;
 
 /// The typed conflict recorded when external state contradicts the intent.
-pub const EXTERNAL_CONFLICT_CODE: &str = "workspace_external_conflict";
+pub(crate) const EXTERNAL_CONFLICT_CODE: &str = "workspace_external_conflict";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReconciliationDecision {

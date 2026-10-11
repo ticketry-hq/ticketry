@@ -39,7 +39,11 @@ impl InstantRunTicketQuery {
             .filter_map(|(material, run)| {
                 run.map(|run| InstantRunTicket {
                     agent_run_id: run.id,
-                    title: title::from_prompt(material.prompt.as_deref()),
+                    title: run
+                        .conversation_title
+                        .clone()
+                        .unwrap_or_else(|| title::from_prompt(material.prompt.as_deref())),
+                    user_title: run.conversation_title,
                     started_at: run.started_at,
                 })
             })

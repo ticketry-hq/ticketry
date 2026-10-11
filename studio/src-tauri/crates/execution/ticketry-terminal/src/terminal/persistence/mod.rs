@@ -53,7 +53,7 @@ pub fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
     seaography::register_entity!(builder, agent_run, mutation: false);
     seaography::register_entity!(builder, session, mutation: false);
     seaography::register_entity!(builder, viewer_lease, mutation: false);
-    builder
+    super::instant_run_ticket::register_title_update(builder)
 }
 
 pub use graphql_scope::TerminalReadScope;

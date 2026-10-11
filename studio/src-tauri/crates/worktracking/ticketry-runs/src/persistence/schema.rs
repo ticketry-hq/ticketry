@@ -41,10 +41,15 @@ pub const AGENT_RUN_COLUMNS: &[&str] = &[
     "launch_reasoning",
     "launch_unattended",
     "attention_reason",
+    "conversation_title",
+    "stage_skill_availability",
 ];
 
-pub(crate) const AGENT_RUN_RECONCILED_COLUMNS: &[(&str, &str)] =
-    &[("attention_reason", "text NULL")];
+pub(crate) const AGENT_RUN_RECONCILED_COLUMNS: &[(&str, &str)] = &[
+    ("attention_reason", "text NULL"),
+    ("conversation_title", "text NULL"),
+    ("stage_skill_availability", "text NULL"),
+];
 
 pub(crate) async fn reconcile_agent_run_columns(
     database: &impl ConnectionTrait,
@@ -437,7 +442,9 @@ CREATE TABLE agent_runs__rust (
     initial_prompt text NULL,
     launch_reasoning varchar NULL,
     launch_unattended bool NOT NULL DEFAULT 0,
-    attention_reason text NULL
+    attention_reason text NULL,
+    conversation_title text NULL,
+    stage_skill_availability text NULL
 );
 "#;
 
@@ -450,6 +457,85 @@ mod tests {
     use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 
     use super::*;
+
+    #[tokio::test]
+    async fn stage_skill_reconciliation_preserves_existing_run_history_and_warning() {
+        let database = Database::connect("sqlite::memory:").await.unwrap();
+        database
+            .execute_unprepared(
+                "CREATE TABLE agent_runs (id TEXT PRIMARY KEY, status TEXT);
+            INSERT INTO agent_runs VALUES ('run-1', 'running');",
+            )
+            .await
+            .unwrap();
+        reconcile_agent_run_columns(&database).await.unwrap();
+        database
+            .execute_unprepared("UPDATE agent_runs SET stage_skill_availability='missing-tdd'")
+            .await
+            .unwrap();
+        reconcile_agent_run_columns(&database).await.unwrap();
+        let row = database
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT status, stage_skill_availability FROM agent_runs".to_owned(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.try_get::<String>("", "status").unwrap(), "running");
+        assert_eq!(
+            row.try_get::<String>("", "stage_skill_availability")
+                .unwrap(),
+            "missing-tdd"
+        );
+    }
+
+    #[tokio::test]
+    async fn conversation_title_reconciliation_preserves_rows_and_existing_overrides() {
+        let database = Database::connect("sqlite::memory:").await.unwrap();
+        database.execute_unprepared(
+            "CREATE TABLE agent_runs (id TEXT PRIMARY KEY, status TEXT, provider_session_id TEXT);
+             INSERT INTO agent_runs VALUES ('run-1', 'running', 'thread-1');"
+        ).await.unwrap();
+        reconcile_agent_run_columns(&database).await.unwrap();
+        let row = database
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT id, status, provider_session_id, conversation_title FROM agent_runs"
+                    .to_owned(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.try_get::<String>("", "id").unwrap(), "run-1");
+        assert_eq!(row.try_get::<String>("", "status").unwrap(), "running");
+        assert_eq!(
+            row.try_get::<String>("", "provider_session_id").unwrap(),
+            "thread-1"
+        );
+        assert_eq!(
+            row.try_get::<Option<String>>("", "conversation_title")
+                .unwrap(),
+            None
+        );
+        database
+            .execute_unprepared("UPDATE agent_runs SET conversation_title='My chat'")
+            .await
+            .unwrap();
+        reconcile_agent_run_columns(&database).await.unwrap();
+        let row = database
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT conversation_title FROM agent_runs".to_owned(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            row.try_get::<String>("", "conversation_title").unwrap(),
+            "My chat"
+        );
+    }
 
     #[tokio::test]
     async fn version_one_upgrade_preserves_launch_material_and_relabels_ownership() {

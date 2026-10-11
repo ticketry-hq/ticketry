@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { studioKeymapRegistry } from "../app/navigation/keymapRegistry";
@@ -46,6 +46,11 @@ function hasToast(kind: "success" | "error", text: string): boolean {
   return useClientStore
     .getState()
     .toasts.some((toast) => toast.kind === kind && toast.message.includes(text));
+}
+
+async function selectStory(details: HTMLElement, id: string, name: string) {
+  act(() => useClientStore.getState().selectTask(id));
+  await within(details).findByRole("heading", { name });
 }
 
 describe("overhaul acceptance — Run Now", () => {
@@ -130,7 +135,7 @@ describe("overhaul acceptance — Run Now", () => {
       .toBeTruthy();
     expect(hasToast("success", "Run now started.")).toBe(true);
 
-    useClientStore.getState().selectTask("key-idea");
+    await selectStory(details, "key-idea", "Keyboard idea");
     await within(details).findByRole("button", { name: "Run now" });
     fireEvent.keyDown(window, { key: "r" });
     await waitFor(() =>
@@ -139,7 +144,7 @@ describe("overhaul acceptance — Run Now", () => {
     );
     expect(http.runNowCount("key-idea")).toBe(1);
 
-    useClientStore.getState().selectTask("refusal-idea");
+    await selectStory(details, "refusal-idea", "Refusal idea");
     const refusalRunNow = await within(details).findByRole("button", { name: "Run now" });
     http.failNextRunNow(409, {
       target_id: "refusal-idea",
@@ -208,7 +213,7 @@ describe("overhaul acceptance — Run Now", () => {
     );
     expect(http.runNowCount("refusal-idea")).toBe(4);
 
-    useClientStore.getState().selectTask("ticketed-story");
+    await selectStory(details, "ticketed-story", "Ticketed story");
     await waitFor(() =>
       expect(within(details).queryByRole("button", { name: "Run now" }))
         .toBeNull(),
@@ -216,7 +221,7 @@ describe("overhaul acceptance — Run Now", () => {
     fireEvent.keyDown(window, { key: "r" });
     expect(http.runNowCount("ticketed-story")).toBe(0);
 
-    useClientStore.getState().selectTask("implementation-idea");
+    await selectStory(details, "implementation-idea", "Implementation idea");
     await waitFor(() =>
       expect(within(details).queryByRole("button", { name: "Run now" }))
         .toBeNull(),
@@ -224,7 +229,7 @@ describe("overhaul acceptance — Run Now", () => {
     fireEvent.keyDown(window, { key: "r" });
     expect(http.runNowCount("implementation-idea")).toBe(0);
 
-    useClientStore.getState().selectTask("refresh-idea");
+    await selectStory(details, "refresh-idea", "Refresh idea");
     await within(details).findByRole("button", { name: "Run now" });
     http.setRunNowTransitionEnabled(false);
     await http.refreshRunNowCapabilities("story");
@@ -306,8 +311,12 @@ describe("overhaul acceptance — Run Now", () => {
     const details = await screen.findByRole("region", { name: "Details" });
     await within(details).findByRole("button", { name: "Run now" });
 
-    for (const id of ["active-parent", "completed-parent", "archived-parent"]) {
-      useClientStore.getState().selectTask(id);
+    for (const [id, name] of [
+      ["active-parent", "Active parent"],
+      ["completed-parent", "Completed parent"],
+      ["archived-parent", "Archived parent"],
+    ]) {
+      await selectStory(details, id, name);
       await waitFor(() =>
         expect(within(details).queryByRole("button", { name: "Run now" }))
           .toBeNull(),
@@ -316,7 +325,7 @@ describe("overhaul acceptance — Run Now", () => {
       expect(http.runNowCount(id)).toBe(0);
     }
 
-    useClientStore.getState().selectTask("stale-story");
+    await selectStory(details, "stale-story", "Stale story");
     const staleRunNow = await within(details).findByRole("button", { name: "Run now" });
     http.failNextRunNow(409, {
       target_id: "stale-story",
@@ -418,13 +427,13 @@ describe("overhaul acceptance — Run Now", () => {
     expect(hasToast("success", "Converted to Implementation in Implement. Run now started."))
       .toBe(true);
 
-    useClientStore.getState().selectTask("key-story");
+    await selectStory(details, "key-story", "Keyboard story");
     await within(details).findByRole("button", { name: "Run now" });
     fireEvent.keyDown(window, { key: "r" });
     await expectConverted("key-story", "Keyboard story", 12);
     expect(http.runNowCount("key-story")).toBe(1);
 
-    useClientStore.getState().selectTask("late-story");
+    await selectStory(details, "late-story", "Late story");
     const lateRunNow = await within(details).findByRole("button", { name: "Run now" });
     http.failNextRunNow(503, {
       target_id: "late-story",
@@ -445,7 +454,7 @@ describe("overhaul acceptance — Run Now", () => {
       .not.toBe("terminal");
     expect(http.runNowCount("late-story")).toBe(1);
 
-    useClientStore.getState().selectTask("unconfigured-story");
+    await selectStory(details, "unconfigured-story", "Unconfigured story");
     const unconfiguredRunNow = await within(details).findByRole("button", { name: "Run now" });
     http.failNextRunNow(422, {
       target_id: "unconfigured-story",

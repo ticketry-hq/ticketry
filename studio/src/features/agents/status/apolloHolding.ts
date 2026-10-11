@@ -1,6 +1,8 @@
 import { gql } from "@apollo/client";
 
 import { studioApolloClient } from "../../../shared/apollo/client";
+import { stageSkillObservationGeneration } from "../../../shared/apollo/agentRunStageSkillGuardLink";
+import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
 import {
   isAwaitingUser,
   isTerminalOutcome,
@@ -18,6 +20,7 @@ const ActiveProjectRunStatusDocument = gql`
       __typename
       projectId
       stallEpoch
+      complete @client
       runs {
         __typename
         id
@@ -28,6 +31,8 @@ const ActiveProjectRunStatusDocument = gql`
         scope
         launchState
         launchModel
+        stageSkillAvailability
+        stageSkillObservationGeneration @client
         providerSessionId
         attentionReason @client
         startedAt
@@ -67,6 +72,8 @@ const AgentRunStatusFragment = gql`
     scope
     launchState
     launchModel
+    stageSkillAvailability
+    stageSkillObservationGeneration @client
     providerSessionId
     attentionReason @client
     startedAt
@@ -89,6 +96,8 @@ interface CachedRun {
   scope: string;
   launchState: string | null;
   launchModel: string | null;
+  stageSkillAvailability: string | null;
+  stageSkillObservationGeneration: number;
   providerSessionId: string | null;
   attentionReason: string | null;
   startedAt: string | null;
@@ -116,6 +125,7 @@ interface CachedAttempt {
 }
 
 interface CachedHolding {
+  complete: boolean;
   __typename: "ProjectRunStatus";
   projectId: string;
   stallEpoch: number;
@@ -129,6 +139,7 @@ interface HoldingQueryData {
 
 const EMPTY_HOLDING: AgentStatusData = {
   projectId: null,
+  complete: false,
   runs: {},
   automationAttempts: {},
   automationByTask: {},
@@ -138,10 +149,10 @@ const EMPTY_HOLDING: AgentStatusData = {
 let lastCachedHolding: CachedHolding | null = null;
 let lastHolding: AgentStatusData = EMPTY_HOLDING;
 
-function cacheRun(run: RunRecord): CachedRun {
+function cacheRun(run: RunRecord, observeStageSkills = true): CachedRun {
   return {
     __typename: "AgentRuns",
-    id: run.agent_run_id,
+    id: compactWorktrackerId(run.agent_run_id),
     projectId: run.project_id ?? null,
     taskId: run.task_id,
     moduleId: run.module_id,
@@ -149,6 +160,9 @@ function cacheRun(run: RunRecord): CachedRun {
     scope: run.scope,
     launchState: run.launch_state ?? null,
     launchModel: run.launch_model ?? null,
+    stageSkillAvailability: run.stage_skill_availability ?? null,
+    stageSkillObservationGeneration: stageSkillObservationGeneration(studioApolloClient().cache, run.agent_run_id)
+      + (observeStageSkills ? 1 : 0),
     providerSessionId: run.provider_session_id ?? null,
     attentionReason: run.attention_reason ?? null,
     startedAt: run.started_at ?? null,
@@ -163,7 +177,7 @@ function cacheRun(run: RunRecord): CachedRun {
 
 function runRecord(run: CachedRun): RunRecord {
   return {
-    agent_run_id: run.id,
+    agent_run_id: compactWorktrackerId(run.id),
     project_id: run.projectId ?? undefined,
     task_id: run.taskId,
     module_id: run.moduleId,
@@ -171,6 +185,7 @@ function runRecord(run: CachedRun): RunRecord {
     scope: run.scope as RunRecord["scope"],
     launch_state: run.launchState,
     launch_model: run.launchModel,
+    stage_skill_availability: run.stageSkillAvailability,
     provider_session_id: run.providerSessionId,
     attention_reason: run.attentionReason,
     started_at: run.startedAt ?? undefined,
@@ -229,12 +244,12 @@ function writeHolding(holding: CachedHolding): void {
   client.cache.gc();
 }
 
-function writeRun(run: RunRecord): void {
+function writeRun(run: RunRecord, observeStageSkills = false): void {
   const client = studioApolloClient();
   client.cache.writeFragment<CachedRun>({
     id: client.cache.identify({ __typename: "AgentRuns", id: run.agent_run_id }),
     fragment: AgentRunStatusFragment,
-    data: cacheRun(run),
+    data: cacheRun(run, observeStageSkills),
   });
 }
 
@@ -249,12 +264,16 @@ export function readAgentStatusHolding(): AgentStatusData {
   if (!holding) return EMPTY_HOLDING;
   if (holding === lastCachedHolding) return lastHolding;
   const runs = Object.fromEntries(
-    holding.runs.map((run) => [run.id, runRecord(run)]),
+    holding.runs.map((run) => {
+      const record = runRecord(run);
+      return [record.agent_run_id, record];
+    }),
   );
   const attempts = holding.automationAttempts.map(attemptRecord);
   lastCachedHolding = holding;
   lastHolding = {
     projectId: holding.projectId,
+    complete: holding.complete,
     runs,
     automationAttempts: Object.fromEntries(
       attempts.map((attempt) => [attempt.root_attempt_id, attempt]),
@@ -282,7 +301,7 @@ export function readAgentStatusHolding(): AgentStatusData {
  * `readAgentStatusHolding().runs`.
  */
 export function readAgentRun(runId: string): RunRecord | null {
-  const held = readAgentStatusHolding().runs[runId];
+  const held = readAgentStatusHolding().runs[compactWorktrackerId(runId)];
   if (held) return held;
   const client = studioApolloClient();
   const cached = client.cache.readFragment<CachedRun>({
@@ -317,6 +336,7 @@ export function switchAgentStatusProject(projectId: string): void {
   writeHolding({
     __typename: "ProjectRunStatus",
     projectId,
+    complete: false,
     stallEpoch: 0,
     runs: [],
     automationAttempts: [],
@@ -333,8 +353,9 @@ export function replaceAgentStatusSnapshot(
   writeHolding({
     __typename: "ProjectRunStatus",
     projectId,
+    complete: true,
     stallEpoch: current.stallEpoch,
-    runs: runs.map(cacheRun),
+    runs: runs.map((run) => cacheRun(run)),
     automationAttempts: attempts.map(cacheAttempt),
   });
   return true;
@@ -426,7 +447,7 @@ export function upsertAgentRun(incoming: RunRecord): void {
       }
     : incoming;
   if (held) {
-    writeRun(merged);
+    writeRun(merged, true);
     return;
   }
   writeHolding({
@@ -473,8 +494,9 @@ export function replaceAgentStatusHolding(data: AgentStatusData): void {
   writeHolding({
     __typename: "ProjectRunStatus",
     projectId: data.projectId,
+    complete: data.complete ?? true,
     stallEpoch: data.stallEpoch,
-    runs: Object.values(data.runs).map(cacheRun),
+    runs: Object.values(data.runs).map((run) => cacheRun(run)),
     automationAttempts: Object.values(data.automationAttempts).map(cacheAttempt),
   });
 }

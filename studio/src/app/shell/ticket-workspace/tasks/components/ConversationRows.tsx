@@ -9,7 +9,7 @@ import {
   providerToneClasses,
 } from "../../../../../features/agents/terminal";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
-import { openConversationComposer } from "../../../../../features/conversations";
+import { ConversationTitle, openConversationComposer } from "../../../../../features/conversations";
 import { globalShortcutLabel as shortcutLabel } from "../../../../navigation/useGlobalShortcutLabel";
 import type { DragSourceProps } from "../../../../../shared/dragDrop/useAxisDragAndDrop";
 import { instantRunPlanningRowId } from "../internal/instantRunTicketNavigation";
@@ -79,12 +79,12 @@ export function InstantRunPlanningRow({
               selected: true,
             })}`}
           />
-          <span
-            data-task-name
-            className={`truncate ${untitled ? "italic text-text-secondary" : ""}`}
-          >
-            {row.name}
-          </span>
+          <ConversationTitle
+            agentRunId={row.runId}
+            title={row.name}
+            selected={isSelected}
+            untitled={untitled}
+          />
         </span>
       }
       trailing={

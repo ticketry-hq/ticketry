@@ -240,7 +240,7 @@ five documented exceptions. CODING-609 must not create a rival registry module.
 
 Removing mutations is not just a Rust edit. The committed snapshot
 `studio/src/graphql-foundation/generated/schema.graphql:230-240` enumerates the
-live WorkItem mutation surface, and `npm run graphql:drift`
+live WorkItem mutation surface, and `bun run graphql:drift`
 (`studio/scripts/verify-generated.mjs:55`) fails the build on any drift in
 `schema.graphql`, `taurpc.ts`, `operations.ts`, or the per-feature operation
 manifests.
@@ -254,8 +254,8 @@ Exact worklist for CODING-607 in
 `archive_work_item`, `add_work_item_blocker`, or `add_work_item_dependent` —
 independent corroboration of pass 2's zero-caller finding.
 
-607 must run `npm run graphql:generate` in the same commit as its removals, and
-609 should include a green `npm run graphql:drift` in its evidence.
+607 must run `bun run graphql:generate` in the same commit as its removals, and
+609 should include a green `bun run graphql:drift` in its evidence.
 
 ### Integration risk 7 — D2 is task-shaped placement only (correctness hazard)
 

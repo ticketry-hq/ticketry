@@ -16,10 +16,10 @@ async fn ensure_all(path: &std::path::Path) {
 
 async fn evidence(path: &std::path::Path) -> serde_json::Value {
     serde_json::json!({
-        "work": ticketry_work_management::adoption::adopt(path).await.unwrap(),
+        "work": ticketry_work_management::adopt(path).await.unwrap(),
         "runs": ticketry_runs::adopt(path).await.unwrap(),
         "terminal": ticketry_terminal::adopt_terminal_persistence(path).await.unwrap(),
-        "execution": ticketry_agent_execution::persistence::adopt(path).await.unwrap(),
+        "execution": ticketry_agent_execution::adopt_execution(path).await.unwrap(),
     })
 }
 
@@ -134,9 +134,7 @@ async fn compare_adoption_startup_cost() {
         .starts_with(std::env::temp_dir().canonicalize().unwrap()));
     for iteration in 0..3 {
         let started = std::time::Instant::now();
-        ticketry_work_management::adoption::adopt(&directory)
-            .await
-            .unwrap();
+        ticketry_work_management::adopt(&directory).await.unwrap();
         ticketry_runs::preflight(&directory).await.unwrap();
         ticketry_runs::adopt(&directory).await.unwrap();
         ticketry_terminal::preflight_terminal_persistence(&directory)
@@ -145,10 +143,10 @@ async fn compare_adoption_startup_cost() {
         ticketry_terminal::adopt_terminal_persistence(&directory)
             .await
             .unwrap();
-        ticketry_agent_execution::persistence::preflight(&directory)
+        ticketry_agent_execution::preflight_execution(&directory)
             .await
             .unwrap();
-        ticketry_agent_execution::persistence::adopt(&directory)
+        ticketry_agent_execution::adopt_execution(&directory)
             .await
             .unwrap();
         let before = started.elapsed();

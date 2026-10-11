@@ -1,5 +1,7 @@
 //! Sprint lifecycle and project-scoped Work Item membership writes.
 
+mod lifecycle;
+
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection,
     DatabaseTransaction, EntityTrait, IntoActiveModel, QueryFilter, QuerySelect, QueryTrait, Set,
@@ -8,18 +10,20 @@ use sea_orm::{
 
 use super::{
     identifiers::database_uuid,
+    sprint_selector::{self, SprintSelector},
+    sprint_sequence,
     status_facts::{record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemIdentity},
     timestamp,
     work_items::next_revision,
     workflow::PatchValue,
     CommandError,
 };
-use ticketry_entities::{agent_run, issue, project, sprint, sprint_suggestion, state};
+use ticketry_entities::{agent_run, issue, project, sprint, sprint_suggestion};
 
-pub(crate) async fn plan_work_item(
+pub async fn plan_work_item(
     database: &DatabaseConnection,
     id: &str,
-    sprint_id: PatchValue<String>,
+    sprint_id: PatchValue<SprintSelector>,
     facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
     let transaction = database.begin().await?;
@@ -36,7 +40,7 @@ pub(crate) async fn plan_work_item(
 pub(crate) async fn assign_work_item_sprint(
     transaction: &DatabaseTransaction,
     id: &str,
-    sprint_id: PatchValue<String>,
+    sprint_id: PatchValue<SprintSelector>,
     facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
     let id = database_uuid(id, "id")?;
@@ -63,7 +67,7 @@ pub(crate) async fn assign_work_item_sprint(
         .ok_or_else(|| CommandError::NotFound("Work item not found.".to_owned()))?;
     let target = match sprint_id {
         PatchValue::Value(sprint_id) => Some(
-            open_sprint(transaction, &sprint_id, &current.project_id)
+            sprint_selector::resolve(transaction, &current.project_id, sprint_id)
                 .await?
                 .id,
         ),
@@ -87,7 +91,7 @@ pub(crate) async fn assign_work_item_sprint(
     record_work_item(
         facts,
         transaction,
-        identity.fact(WorkItemChange::Updated, revision, &occurred_at),
+        identity.fact(WorkItemChange::SprintChanged, revision, &occurred_at),
     )
     .await?;
     Ok(id)
@@ -129,17 +133,26 @@ pub(crate) async fn prepare_sprint_update(
         .ok_or_else(|| CommandError::NotFound("Sprint not found.".to_owned()))?;
     let name = non_nullable_patch(input.name, "name")?;
     let status = non_nullable_patch(input.status, "status")?;
-    if current.status == sprint::COMPLETED {
+    if current.status == ticketry_entities::SPRINT_COMPLETED {
         return Err(CommandError::validation(
             "A completed sprint is closed and cannot change.",
         ));
     }
-    if !input.carryover_sprint_id.is_unset() && status.as_deref() != Some(sprint::COMPLETED) {
+    // A nullable GraphQL variable may arrive as null when the caller supplies
+    // no destination. Only an actual destination requires completion.
+    if matches!(input.carryover_sprint_id, PatchValue::Value(_))
+        && status.as_deref() != Some(ticketry_entities::SPRINT_COMPLETED)
+    {
         return Err(CommandError::field(
             "carryover_sprint_id",
             "Carry-over applies only when completing a sprint.",
         ));
     }
+    let sequence = sprint_sequence::ordered(transaction, &current.project_id).await?;
+    let current = sequence
+        .iter()
+        .find(|row| row.id == id)
+        .ok_or_else(|| CommandError::NotFound("Sprint not found.".to_owned()))?;
     let mut active = current.clone().into_active_model();
     if let Some(name) = name {
         active.name = Set(name);
@@ -158,7 +171,10 @@ pub(crate) async fn prepare_sprint_update(
         if current.suggestion_run_id != run_id {
             sprint_suggestion::Entity::delete_many()
                 .filter(sprint_suggestion::Column::SprintId.eq(&current.id))
-                .filter(sprint_suggestion::Column::Status.eq(sprint_suggestion::WAITING))
+                .filter(
+                    sprint_suggestion::Column::Status
+                        .eq(ticketry_entities::SPRINT_SUGGESTION_WAITING),
+                )
                 .exec(transaction)
                 .await?;
             active.suggestion_run_id = Set(run_id);
@@ -166,13 +182,18 @@ pub(crate) async fn prepare_sprint_update(
     }
     if let Some(status) = status.filter(|status| *status != current.status) {
         match (current.status.as_str(), status.as_str()) {
-            (sprint::PLANNED, sprint::ACTIVE) => start(transaction, &current).await?,
-            (sprint::ACTIVE, sprint::COMPLETED) => {
+            (ticketry_entities::SPRINT_PLANNED, ticketry_entities::SPRINT_ACTIVE) => {
+                lifecycle::start(transaction, current).await?;
+                if let Some(rank) = sprint_sequence::rank_for_start(&sequence, current)? {
+                    active.rank = Set(rank);
+                }
+            }
+            (ticketry_entities::SPRINT_ACTIVE, ticketry_entities::SPRINT_COMPLETED) => {
                 let carryover = match input.carryover_sprint_id {
                     PatchValue::Value(id) => Some(id),
                     PatchValue::Null | PatchValue::Unset => None,
                 };
-                complete(transaction, &current, carryover, facts).await?;
+                lifecycle::complete(transaction, current, carryover, facts).await?;
             }
             (from, to) => {
                 return Err(CommandError::field(
@@ -218,105 +239,29 @@ async fn validated_suggestion_run(
     }
 }
 
-async fn start(
-    transaction: &DatabaseTransaction,
-    current: &sprint::Model,
-) -> Result<(), CommandError> {
-    if let Some(running) = sprint::Entity::find()
-        .filter(sprint::Column::ProjectId.eq(&current.project_id))
-        .filter(sprint::Column::Status.eq(sprint::ACTIVE))
-        .one(transaction)
-        .await?
-    {
-        return Err(CommandError::Conflict(format!(
-            "'{}' is already active; complete it first.",
-            running.name
-        )));
-    }
-    Ok(())
-}
-
-async fn complete(
-    transaction: &DatabaseTransaction,
-    current: &sprint::Model,
-    carryover_sprint_id: Option<String>,
-    facts: Option<&WorkFactRecorder>,
-) -> Result<(), CommandError> {
-    let target = match carryover_sprint_id {
-        Some(target_id) => {
-            let target = open_sprint(transaction, &target_id, &current.project_id).await?;
-            if target.id == current.id || target.status != sprint::PLANNED {
-                return Err(CommandError::field(
-                    "carryover_sprint_id",
-                    "Carry unfinished work into a planned sprint.",
-                ));
-            }
-            Some(target.id)
-        }
-        None => None,
-    };
-    let finished_states = state::Entity::find()
-        .filter(state::Column::ProjectId.eq(&current.project_id))
-        .filter(state::Column::Group.is_in(["completed", "cancelled"]))
-        .all(transaction)
-        .await?
-        .into_iter()
-        .map(|row| row.id)
-        .collect::<Vec<_>>();
-    let unfinished = issue::Entity::find()
-        .filter(issue::Column::SprintId.eq(&current.id))
-        .filter(issue::Column::Type.eq("task"))
-        .filter(
-            sea_orm::Condition::any()
-                .add(issue::Column::StateId.is_null())
-                .add(issue::Column::StateId.is_not_in(finished_states)),
-        )
-        .all(transaction)
-        .await?;
-    if unfinished.is_empty() {
-        return Ok(());
-    }
-    let revision = next_revision(transaction, &current.project_id).await?;
-    let now = timestamp::now();
-    let occurred_at = stamp(now);
-    for work_item in unfinished {
-        let identity = WorkItemIdentity::of(&work_item);
-        let mut active: issue::ActiveModel = work_item.into();
-        active.sprint_id = Set(target.clone());
-        active.state_revision = Set(revision);
-        active.updated_at = Set(now);
-        active.update(transaction).await?;
-        record_work_item(
-            facts,
-            transaction,
-            identity.fact(WorkItemChange::Updated, revision, &occurred_at),
-        )
-        .await?;
-    }
-    Ok(())
-}
-
 pub(crate) async fn open_sprint<C: ConnectionTrait>(
     database: &C,
     sprint_id: &str,
     project_id: &str,
 ) -> Result<sprint::Model, CommandError> {
-    let sprint_id = database_uuid(sprint_id, "sprint_id")?;
+    let sprint_id = database_uuid(sprint_id, "sprint")?;
     let sprint = sprint::Entity::find_by_id(&sprint_id)
         .one(database)
         .await?
         .ok_or_else(|| CommandError::NotFound("Sprint not found.".to_owned()))?;
     if sprint.project_id != project_id {
-        return Err(CommandError::field(
-            "sprint_id",
-            "The sprint belongs to another project.",
-        ));
+        return Err(CommandError::Rejected {
+            message: "The sprint belongs to another project.".to_owned(),
+            code: "foreign_sprint",
+            field: Some("sprint"),
+        });
     }
-    if sprint.status == sprint::COMPLETED {
-        return Err(CommandError::field(
-            "sprint_id",
-            "A completed sprint is closed to new work.",
-        ));
+    if sprint.status == ticketry_entities::SPRINT_COMPLETED {
+        return Err(CommandError::Rejected {
+            message: "A completed sprint is closed to new work.".to_owned(),
+            code: "completed_sprint",
+            field: Some("sprint"),
+        });
     }
     Ok(sprint)
 }

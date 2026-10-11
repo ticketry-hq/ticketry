@@ -9,16 +9,17 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use ticketry_work_management::{
+    install_module_links_schema, link_id_for_module, module_links_owned_tables,
+    verify_module_links_schema, MODULE_LINKS_OWNED_TABLES, PRESERVED_PROFILES,
+};
 
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use ticketry_work_management as module_links;
 use ticketry_work_management::open_for_commands;
 use ticketry_work_management::{
-    self, legacy_source, receipt::ImportReceipt, ImportOutcome, LinkStatus, LocalModulePath,
-    ModuleLinkErrorCode, ModuleLinkStore, SkipReason,
-};
-use ticketry_work_management::{
-    identity, module_links_ownership_manifest as ownership_manifest, schema,
+    ImportOutcome, ImportReceipt, LinkStatus, LocalModulePath, ModuleLinkErrorCode,
+    ModuleLinkStore, SkipReason,
 };
 
 const PROJECT: &str = "10000000000000000000000000000000";
@@ -92,7 +93,7 @@ async fn installation() -> (tempfile::TempDir, DatabaseConnection) {
     let database = open_for_commands(&path)
         .await
         .expect("open the fixture for commands");
-    schema::install(&database)
+    install_module_links_schema(&database)
         .await
         .expect("install the typed Module Link schema");
     (directory, database)
@@ -472,7 +473,7 @@ async fn an_import_reads_the_preserved_snapshot_when_the_live_file_is_gone() {
     let (directory, database) = installation().await;
     write_profiles(
         directory.path(),
-        legacy_source::PRESERVED_PROFILES[0],
+        PRESERVED_PROFILES[0],
         &format!(
             r#"{{"recent_profile_index": 0, "profiles": [
                 {{"name": "Local", "workspace_slug": "tic", "module_links": [
@@ -492,7 +493,7 @@ async fn an_import_reads_the_preserved_snapshot_when_the_live_file_is_gone() {
             .source
             .as_ref()
             .map(|source| source.name.as_str()),
-        Some(legacy_source::PRESERVED_PROFILES[0])
+        Some(PRESERVED_PROFILES[0])
     );
     assert_eq!(
         stored_paths(&database).await,
@@ -580,14 +581,14 @@ async fn the_installed_schema_is_the_one_the_ownership_manifest_declares() {
     let (directory, database) = installation().await;
 
     // Installing twice is a no-op rather than a migration.
-    schema::install(&database)
+    install_module_links_schema(&database)
         .await
         .expect("install the schema again");
-    schema::verify(&database)
+    verify_module_links_schema(&database)
         .await
         .expect("verify the installed schema");
 
-    for (table, columns) in ownership_manifest::OWNED_TABLES {
+    for (table, columns) in MODULE_LINKS_OWNED_TABLES {
         let installed = database
             .query_all_raw(Statement::from_string(
                 DbBackend::Sqlite,
@@ -627,7 +628,7 @@ fn no_supported_django_generation_or_postgresql_staging_schema_carries_these_tab
     .expect("read the checked fresh-provisioning schema");
     let classification = ticketry_installation::manifest();
 
-    for table in ownership_manifest::owned_tables() {
+    for table in module_links_owned_tables() {
         assert!(
             !classification.has_current_table(table),
             "{table} is recorded as a Django-owned product table"
@@ -689,10 +690,10 @@ fn collect_rust_sources(directory: &Path, found: &mut Vec<PathBuf>) {
 
 #[test]
 fn a_link_identity_is_derived_from_its_module_rather_than_minted() {
-    let first = identity::link_id_for_module(STUDIO);
-    let second = identity::link_id_for_module(STUDIO);
+    let first = link_id_for_module(STUDIO);
+    let second = link_id_for_module(STUDIO);
     assert_eq!(first, second);
-    assert_ne!(first, identity::link_id_for_module(SERVICE));
+    assert_ne!(first, link_id_for_module(SERVICE));
 }
 
 #[test]
@@ -755,9 +756,7 @@ async fn executable_contract(
     let builder = ticketry_work_management::register_graphql(builder);
     let mut schema = builder.schema_builder().data(database.clone());
     if writable {
-        schema = schema.data(ticketry_work_management::commands::CommandDatabase(
-            database,
-        ));
+        schema = schema.data(ticketry_work_management::CommandDatabase(database));
     }
     schema
         .finish()
@@ -839,7 +838,7 @@ async fn set_view_derives_server_fields_and_returns_the_persisted_row() {
     let first_stored = stored_link(&database, STUDIO)
         .await
         .expect("stored first link");
-    assert_eq!(first_result["id"], identity::link_id_for_module(STUDIO));
+    assert_eq!(first_result["id"], link_id_for_module(STUDIO));
     assert_eq!(first_result["moduleId"], STUDIO);
     assert_eq!(first_result["path"], first_stored.1);
     assert_eq!(first_result["id"], first_stored.0);

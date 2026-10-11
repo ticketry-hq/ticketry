@@ -12,3 +12,4 @@ export {
 } from "./moduleLinkStore";
 export { eraseModuleLink, writeModuleLink } from "./moduleLinkTransport";
 export { moduleFolderSaveError, prepareDirectoryTrust } from "./moduleFolderTrust";
+export { validateModuleFolder, type ModuleFolderRefusal, type ModuleFolderValidation } from "./moduleFolderValidation";

@@ -4,10 +4,10 @@
 use std::sync::atomic::Ordering;
 
 use sea_orm::{ConnectionTrait, EntityTrait, PaginatorTrait};
-use ticketry_agent_execution::run_now::RunNowRefusal;
+use ticketry_agent_execution::RunNowRefusal;
 use ticketry_entities::{issue, launch_policy_decision, transition_occurrence};
-use ticketry_work_management::commands::workflow::{self, TransitionOrigin, TransitionWorkItem};
-use ticketry_work_management::launch_policy::LaunchPolicyDecision;
+use ticketry_work_management::LaunchPolicyDecision;
+use ticketry_work_management::{transition, TransitionOrigin, TransitionWorkItem};
 
 use super::run_now_fixture::*;
 
@@ -320,7 +320,7 @@ async fn concurrent_requests_convert_once() {
 async fn an_ordinary_story_transition_keeps_the_story_type() {
     let fixture = fixture(None).await;
 
-    workflow::transition(
+    transition(
         &fixture.database,
         TransitionWorkItem {
             id: TASK.to_owned(),

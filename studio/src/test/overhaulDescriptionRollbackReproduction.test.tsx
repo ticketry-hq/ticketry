@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
  * CODING-1524 — instrumented reproduction of the saved-description rollback.
  *
  * Observed sequence (recorded by the `journal` in each scenario; the evidence
- * tests assert it verbatim):
+ * tests assert the causal request/response order):
  *
  *   1. fact      work_item.changed for a Story in the open module (agent write)
  *   2. request   WorkTrackerWorkItem / WorkTrackerModuleOpen (network-only,
@@ -141,6 +141,16 @@ async function expectDescription(details: HTMLElement, text: string) {
   await waitFor(() => expect(within(details).getByLabelText("Story description")).toHaveValue(text));
 }
 
+/** Project membership refreshes may interleave without changing this race. */
+function expectJournalOrder(journal: string[], events: string[]) {
+  let previous = -1;
+  for (const event of events) {
+    const index = journal.indexOf(event, previous + 1);
+    expect(index, `Expected next wire event: ${event}\n${journal.join("\n")}`).toBeGreaterThan(previous);
+    previous = index;
+  }
+}
+
 async function saveDescription(details: HTMLElement, wire: ReturnType<typeof instrument>) {
   const editor = await within(details).findByLabelText("Story description");
   fireEvent.change(editor, { target: { value: SAVED } });
@@ -223,17 +233,16 @@ describe("CODING-1524 reproduction — description rollback under live fact traf
   it("[evidence B] a stale module-open read landing after a save leaves the saved description in place", async () => {
     const { wire, details } = await dirtyEditorThenStaleModuleRead();
 
-    await waitFor(() => expect(wire.journal).toHaveLength(6));
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(within(details).getByLabelText("Story description")).toHaveValue(SAVED);
-    expect(wire.journal).toEqual([
+    await waitFor(() => expectJournalOrder(wire.journal, [
       'request  WorkTrackerWorkItem {"id":"story-b"}',
       'request  WorkTrackerModuleOpen {"moduleId":"module-1"}',
       'request  UpdateWorkTrackerWorkItemDetails {"id":"story-a","description":"Saved description"}',
       'response UpdateWorkTrackerWorkItemDetails story-a.description="Saved description"',
       'response WorkTrackerWorkItem',
       'response WorkTrackerModuleOpen story-a.description="Original description"',
-    ]);
+    ]));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(within(details).getByLabelText("Story description")).toHaveValue(SAVED);
   });
 
   it("[convergence A] a just-saved description survives a late per-item read", async () => {

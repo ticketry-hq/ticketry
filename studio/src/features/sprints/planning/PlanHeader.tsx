@@ -17,7 +17,7 @@ export function PlanHeader({ sprintName, storyCount, goals, waitingCount, agentR
     <h1 title={sprintName} className="max-w-64 shrink-0 truncate text-base font-semibold text-text-primary">{sprintName}</h1>
     <span className="shrink-0 text-xs text-text-muted">{storyCount} {storyCount === 1 ? "story" : "stories"}</span>
     <span className="shrink-0 border-l border-pane-border pl-3 text-xs text-text-muted"
-      title={goals.map((goal, index) => `G${index + 1}. ${goal.text}`).join("\n")}>
+      title={goals.map((goal) => `G${goal.position}. ${goal.text}`).join("\n")}>
       {goals.length} {goals.length === 1 ? "goal" : "goals"}
     </span>
     {agentRunning ? <span role="status" className="shrink-0 text-xs text-text-muted">Agent still working…</span>

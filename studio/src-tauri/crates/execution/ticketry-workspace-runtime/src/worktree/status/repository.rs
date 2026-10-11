@@ -18,7 +18,7 @@ use super::error::WorktreeStatusError;
 use super::git::GitPort;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum RepositoryResolution {
+pub(crate) enum RepositoryResolution {
     /// The canonical toplevel of the repository enclosing the module folder.
     Repository(PathBuf),
     /// No repository can enclose this Work Item, with the reason a caller may
@@ -26,7 +26,7 @@ pub enum RepositoryResolution {
     NoRepository(&'static str),
 }
 
-pub async fn resolve(
+pub(crate) async fn resolve(
     database: &DatabaseConnection,
     git: &GitPort,
     module_id: Option<&str>,
@@ -51,7 +51,7 @@ pub async fn resolve(
 
 /// The repository enclosing an existing directory, canonicalized so one
 /// repository has exactly one lock key regardless of how it was reached.
-pub async fn discover(
+pub(crate) async fn discover(
     git: &GitPort,
     folder: &Path,
 ) -> Result<RepositoryResolution, WorktreeStatusError> {
@@ -74,9 +74,9 @@ pub async fn discover(
 /// disagree about which folder a Module is checked out into.
 ///
 /// Shared with the launch slice's path resolution through
-/// [`ticketry_work_management::resolution`].
+/// [`ticketry_work_management::linked_folder`].
 pub async fn module_folder(database: &DatabaseConnection, module_id: &str) -> Option<PathBuf> {
-    ticketry_work_management::resolution::linked_folder(database, module_id)
+    ticketry_work_management::linked_folder(database, module_id)
         .await
         .ok()
         .flatten()
@@ -86,7 +86,10 @@ pub async fn module_folder(database: &DatabaseConnection, module_id: &str) -> Op
 mod tests {
     use sea_orm::Database;
 
-    use ticketry_work_management::test_support;
+    use ticketry_work_management::{
+        create_module_link_test_link, create_module_link_test_module,
+        install_module_link_test_schema,
+    };
 
     use super::*;
 
@@ -97,8 +100,8 @@ mod tests {
         let database = Database::connect("sqlite::memory:")
             .await
             .expect("open an in-memory installation");
-        test_support::install(&database).await;
-        test_support::module(&database, MODULE, "Studio").await;
+        install_module_link_test_schema(&database).await;
+        create_module_link_test_module(&database, MODULE, "Studio").await;
         database
     }
 
@@ -120,7 +123,7 @@ mod tests {
     async fn a_linked_folder_that_moved_never_falls_back_to_another_directory() {
         let directory = tempfile::tempdir().expect("create a fixture root");
         let database = installation().await;
-        test_support::link(
+        create_module_link_test_link(
             &database,
             MODULE,
             &directory
@@ -147,7 +150,8 @@ mod tests {
     async fn either_identity_spelling_resolves_the_same_link() {
         let directory = tempfile::tempdir().expect("create a fixture root");
         let database = installation().await;
-        test_support::link(&database, MODULE, &directory.path().display().to_string()).await;
+        create_module_link_test_link(&database, MODULE, &directory.path().display().to_string())
+            .await;
 
         assert_eq!(
             module_folder(&database, MODULE).await,

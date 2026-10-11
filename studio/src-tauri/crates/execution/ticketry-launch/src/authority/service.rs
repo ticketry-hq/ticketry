@@ -11,9 +11,7 @@ use crate::planning::{
 };
 use crate::terminal_session::{CreateTerminalSession, TerminalLaunchKind};
 use ticketry_entities::{agent_run, launch_material};
-use ticketry_work_management::launch_policy::{
-    CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
-};
+use ticketry_work_management::{CallerScope, LaunchPolicyRequest, LaunchPolicyResolver};
 
 use super::error::{LaunchAuthorityError, LaunchAuthorityErrorCode};
 use super::facts;
@@ -225,6 +223,7 @@ impl LaunchAuthorityService {
             policy_reference: Some(decision.policy_identity),
             prompt: Some(prompt),
             required_skills: decision.required_skills,
+            stage_skills: decision.stage_skills,
             design_directory_identity: None,
             document_relative_path: None,
         })
@@ -274,10 +273,14 @@ impl LaunchAuthorityService {
         .await?;
         let settings = ticketry_settings::load_instant_launch_settings(&self.database).await?;
         let prompt = build_instant_prompt(&InstantPrompt {
-            user_input,
+            user_input: user_input.clone(),
             initial_prompt: Some(settings.initial_prompt),
         });
+        let policy_reference = (provider == "codex").then(|| {
+            crate::planning::codex_instant_source_reference(&prompt, user_input.as_deref())
+        });
         let mut material = self.scratch_material(provider, prompt);
+        material.policy_reference = policy_reference;
         if let Some(default) = default {
             material.model = default.model;
             material.reasoning = default.reasoning;
@@ -351,6 +354,7 @@ impl LaunchAuthorityService {
             policy_reference: None,
             prompt: None,
             required_skills: Vec::new(),
+            stage_skills: Vec::new(),
             design_directory_identity: (request.kind == TerminalLaunchKind::DocumentChat)
                 .then(|| facts::compact(&request.issue_id)),
             document_relative_path,

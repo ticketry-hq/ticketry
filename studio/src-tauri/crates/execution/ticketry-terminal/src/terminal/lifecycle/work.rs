@@ -455,8 +455,12 @@ impl TerminalLaunchRuntime for InteractiveTerminalLaunchRuntime {
             })?,
             authorization,
             available_skills(),
-            registered_profiles,
+            registered_profiles.clone(),
         );
+        let execution =
+            super::instant_naming::attach_source(&authority.database, material, execution).await;
+        let execution =
+            super::codex_mcp_profile::prepare(&durable, execution, &registered_profiles)?;
         let mut launch =
             ticketry_launch::materialize(&durable, &execution).map_err(planning_error)?;
         if let Some(settings) = launch.settings.take() {

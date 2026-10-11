@@ -1,0 +1,9 @@
+# Persisted availability for the acknowledged run, including ended-run revisits.
+query AgentRunStageSkillAvailability($agentRunId: String!) {
+  agent_runs: agentRuns(filters: { id: { eq: $agentRunId } }) {
+    nodes {
+      id
+      stage_skill_availability: stageSkillAvailability
+    }
+  }
+}

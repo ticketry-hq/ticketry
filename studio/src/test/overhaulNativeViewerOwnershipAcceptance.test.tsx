@@ -1,7 +1,7 @@
 import { render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SelectedTicketTerminal } from "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal";
+import { SelectedTicketTerminal } from "../features/task-workspace/terminals/SelectedTicketTerminal";
 import { useModalStore } from "../app/modal/modalStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";

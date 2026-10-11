@@ -11,7 +11,7 @@ import {
 import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../navigation/three-zone/threeZoneNavigation";
 import { KeyChordHint } from "../../shared/ui/KeyChordHint";
 import { useChangesWorkspace } from "../../features/agents/worktrees";
-import { usePlanWorkspace } from "../../features/sprints";
+import { selectPlanWorkspaceActive, usePlanWorkspace } from "../../features/sprints";
 
 type FooterHint = {
   key: string;
@@ -53,14 +53,13 @@ export function StudioFooterHints() {
     studioKeymapRegistry.subscribe,
     studioKeymapRegistry.getRevision,
   );
-  const sidebarVisible = useClientStore((state) => state.sidebarVisible);
   const bodyEngaged = useClientStore((state) => state.editViewBodyEngaged);
   const zone = useClientStore((state) => state.editViewZone);
   const changesActive = useChangesWorkspace((state) => state.active);
-  const planActive = usePlanWorkspace((state) => state.active);
+  const planActive = usePlanWorkspace(selectPlanWorkspaceActive);
   const hints = changesActive || planActive
     ? []
-    : getFooterHints(sidebarVisible, zone, bodyEngaged);
+    : getEditViewHints(getEffectiveChords(), zone, bodyEngaged);
 
   return hints.map((hint) => (
     <KeyChordHint
@@ -70,15 +69,6 @@ export function StudioFooterHints() {
       tone={hint.tone}
     />
   ));
-}
-
-function getFooterHints(
-  sidebarVisible: boolean,
-  zone: EditViewZone,
-  bodyEngaged: boolean,
-): FooterHint[] {
-  if (sidebarVisible) return [];
-  return getEditViewHints(getEffectiveChords(), zone, bodyEngaged);
 }
 
 function getEditViewHints(

@@ -93,7 +93,7 @@ async fn an_empty_installation_classifies_idempotently() {
 #[tokio::test]
 async fn an_already_rust_owned_installation_classifies_idempotently() {
     let installation = corpus::install("django-current");
-    ticketry_work_management::adoption::adopt(installation.path())
+    ticketry_work_management::adopt(installation.path())
         .await
         .expect("adopt Work Management, so Rust owns the installation");
 
@@ -233,21 +233,29 @@ async fn a_future_django_generation_is_refused() {
 
 #[tokio::test]
 async fn a_future_rust_ownership_version_is_refused() {
-    let installation = corpus::install("django-current");
-    ticketry_work_management::adoption::adopt(installation.path())
-        .await
-        .expect("adopt Work Management first");
-    corpus::execute(
-        installation.path(),
-        "UPDATE ticketry_worktracker_adoption SET version = version + 1 WHERE singleton = 1",
-    )
-    .await;
+    for future_ledger in [
+        "UPDATE ticketry_worktracker_adoption SET version = version + 1 WHERE singleton = 1"
+            .to_owned(),
+        format!(
+            "CREATE TABLE {} (singleton INTEGER PRIMARY KEY, version INTEGER NOT NULL);
+             INSERT INTO {} VALUES (1, {})",
+            ticketry_work_management::SPRINT_RANK_MIGRATION_LEDGER_TABLE,
+            ticketry_work_management::SPRINT_RANK_MIGRATION_LEDGER_TABLE,
+            ticketry_work_management::SPRINT_RANK_MIGRATION_VERSION + 1,
+        ),
+    ] {
+        let installation = corpus::install("django-current");
+        ticketry_work_management::adopt(installation.path())
+            .await
+            .expect("adopt Work Management first");
+        corpus::execute(installation.path(), &future_ledger).await;
 
-    let refusal = classification::classify(installation.path())
-        .await
-        .expect_err("a newer ownership version must be refused");
+        let refusal = classification::classify(installation.path())
+            .await
+            .expect_err("a newer ownership version must be refused");
 
-    assert_eq!(refusal.reason(), Refusal::FutureGeneration);
+        assert_eq!(refusal.reason(), Refusal::FutureGeneration);
+    }
 }
 
 #[tokio::test]

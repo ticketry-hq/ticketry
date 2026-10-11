@@ -8,7 +8,7 @@ use sea_orm::DatabaseConnection;
 
 use ticketry_runs::{AttemptOutcome, RunsServices};
 use ticketry_terminal::{CleanupCause, TerminalCleanupService};
-use ticketry_work_management::launch_policy::{mark_delivered, CallerScope, LaunchPolicyDecision};
+use ticketry_work_management::{mark_delivered, CallerScope, LaunchPolicyDecision};
 
 use super::handoff;
 

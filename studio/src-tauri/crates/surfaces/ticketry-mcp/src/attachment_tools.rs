@@ -4,11 +4,13 @@ use super::{
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
 use std::path::Path;
-use ticketry_work_management::commands::{attachments, CommandError};
+use ticketry_work_management::{
+    create_attachment, AttachmentStorage, CommandError, CreateAttachment,
+};
 
 pub(super) async fn attach_file(
     database: &DatabaseConnection,
-    storage: &attachments::AttachmentStorage,
+    storage: &AttachmentStorage,
     principal: &RunPrincipal,
     arguments: &Map<String, Value>,
 ) -> Result<DispatchOutput, CommandError> {
@@ -27,10 +29,10 @@ pub(super) async fn attach_file(
         .to_owned();
     let content = std::fs::read(path)
         .map_err(|_| CommandError::Storage("Could not read attachment file.".to_owned()))?;
-    let row = attachments::create(
+    let row = create_attachment(
         database,
         storage,
-        attachments::CreateAttachment {
+        CreateAttachment {
             issue_id: task.id,
             filename,
             mime_type: Some("application/octet-stream".to_owned()),

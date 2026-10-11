@@ -14,32 +14,32 @@ Run from the repository root.
 
 ```sh
 # Build everything a run measures. A run never builds.
-npm run perf:prepare
+bun run perf:prepare
 
 # Low-overhead timing runs
-npm run perf:run -- --engine chromium --scenario idle
-npm run perf:run -- --engine webkit   --scenario module-picker
+bun run perf:run -- --engine chromium --scenario idle
+bun run perf:run -- --engine webkit   --scenario module-picker
 
 # Diagnostic modes (they perturb the timings in the same run, by design)
-npm run perf:run -- --engine chromium --scenario module-picker --capture cpu
-npm run perf:run -- --engine chromium --scenario retention --capture heap-snapshot
+bun run perf:run -- --engine chromium --scenario module-picker --capture cpu
+bun run perf:run -- --engine chromium --scenario retention --capture heap-snapshot
 
 # The real macOS WKWebView, through the test-only embedded WebDriver
-npm run perf:desktop -- --scenario idle
+bun run perf:desktop -- --scenario idle
 
 # Changes: open the workspace, switch checkout, and select a changed file.
 # This seeds a dirty module checkout and one indexed task worktree, records one
 # fresh-app observation, then records five repeated interactions per path.
-npm run perf:desktop -- --scenario changes-loading
+bun run perf:desktop -- --scenario changes-loading
 
 # Compare two completed runs
-npm run perf:compare -- --baseline <run-dir> --candidate <run-dir>
+bun run perf:compare -- --baseline <run-dir> --candidate <run-dir>
 
 # Prove the collectors detect causes that are already known
-npm run perf:verify
+bun run perf:verify
 
 # Unit tests for the summarization, comparison, option and lock logic
-npm run perf:test
+bun run perf:test
 ```
 
 `perf:prepare` also installs the Chromium and WebKit builds Playwright needs,
@@ -148,7 +148,7 @@ Reading these reports correctly matters more than collecting them.
   importing a saved profile:
 
   ```sh
-  npx --prefix studio -- vite preview --config vite.performance.config.ts --port 4273
+  bun run --cwd studio vite preview --config vite.performance.config.ts --port 4273
   ```
 - **Heap growth is a lead, not a leak.** Cache warmup grows a heap too; only
   continued growth across settled batches after the warmup batch distinguishes
@@ -194,11 +194,11 @@ the frontend.
 
 ```bash
 # Which content process belongs to a running packaged window?
-npm run perf:webcontent --workspace @worktracker/studio -- attribute \
+bun run --cwd studio perf:webcontent attribute \
   --executable /Applications/Ticketry.app/Contents/MacOS/ticketry
 
 # Sample a running window for three minutes, with a mid-capture stackshot.
-npm run perf:webcontent --workspace @worktracker/studio -- capture \
+bun run --cwd studio perf:webcontent capture \
   --executable /Applications/Ticketry.app/Contents/MacOS/ticketry \
   --gui-pid 66450 --scenario packaged-live-workspace \
   --workload "..." --seconds 180 --interval-ms 2000 --settle-seconds 30 \
@@ -206,11 +206,11 @@ npm run perf:webcontent --workspace @worktracker/studio -- capture \
   --stacks --output captures/live.json
 
 # Launch a throwaway isolated instance and capture it (control condition).
-npm run perf:webcontent:packaged --workspace @worktracker/studio -- \
+bun run --cwd studio perf:webcontent:packaged \
   --output-dir captures --seconds 180
 
-npm run perf:webcontent --workspace @worktracker/studio -- report -- captures/*.json
-npm run perf:webcontent --workspace @worktracker/studio -- compare \
+bun run --cwd studio perf:webcontent report -- captures/*.json
+bun run --cwd studio perf:webcontent compare \
   --baseline captures/a.json --candidate captures/b.json
 ```
 
@@ -242,7 +242,7 @@ build with the test-only WebDriver enabled.
 
 ## Before you trust a number
 
-1. `npm run perf:verify` — the CPU collector must name a deliberately busy
+1. `bun run perf:verify` — the CPU collector must name a deliberately busy
    function, and the memory collector must see deliberately retained growth.
    These are collector checks. They say nothing about Ticketry.
 2. Three independent runs on the same idle host, to establish local variance.

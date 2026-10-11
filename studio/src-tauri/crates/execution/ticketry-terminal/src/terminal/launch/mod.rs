@@ -6,6 +6,7 @@
 //! first, creates only after proved absence, verifies again, then commits the
 //! authoritative Terminal Session with the effect and running fact.
 
+mod acknowledgement;
 mod action_compatibility;
 mod authority;
 mod checkpoint;
@@ -16,6 +17,7 @@ mod material;
 mod runtime;
 mod service;
 mod settlement;
+mod stage_skills;
 
 pub use action_compatibility::{
     ActionCompatibilityStage as LaunchActionCompatibilityStage, STAGES as LAUNCH_ACTION_STAGES,

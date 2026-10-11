@@ -1,4 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
+import { useStudioStore } from "../../projects";
+import { StorySprintFilterController } from "../filter/StorySprintFilterController";
 import { useDerivedStoriesTree } from "./useStoriesTree";
 
 const StoriesTreeContext = createContext<ReturnType<typeof useDerivedStoriesTree> | null>(null);
@@ -6,7 +8,8 @@ const StoriesTreeContext = createContext<ReturnType<typeof useDerivedStoriesTree
 /** React owns this derived view; normalized records remain in Apollo. */
 export function StoriesTreeProvider({ children }: { children: ReactNode }) {
   const inherited = useContext(StoriesTreeContext);
-  return inherited ? children : <StoriesTreeOwner>{children}</StoriesTreeOwner>;
+  const projectId = useStudioStore((state) => state.selectedProjectId);
+  return inherited ? children : <StorySprintFilterController projectId={projectId}><StoriesTreeOwner>{children}</StoriesTreeOwner></StorySprintFilterController>;
 }
 
 function StoriesTreeOwner({ children }: { children: ReactNode }) {

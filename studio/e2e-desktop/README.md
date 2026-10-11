@@ -3,7 +3,7 @@
 Run the frontend-to-agent proof from the repository root:
 
 ```sh
-npm run test:e2e:desktop --workspace @worktracker/studio
+bun run --cwd studio test:e2e:desktop
 ```
 
 The command builds a debug Tauri application with the test-only embedded
@@ -63,10 +63,26 @@ The embedded WebDriver is enabled only by the Rust `desktop-acceptance` feature
 and is absent from production builds. The harness exposes no REST service,
 database API, or unrestricted shell endpoint.
 
+For the focused stage-skill launch case (CODING-2724), run:
+
+```sh
+bun run --cwd studio test:e2e:desktop -- --stage-skills
+```
+
+It configures a skill through the Ideas state editor, creates and trusts a
+disposable git worktree, then launches the fixture through Run item. A skill
+present only in the module checkout must still produce a warning for the
+provider running in the worktree. The warning remains visible after a tab
+revisit and webview reload. Installing the skill in that checkout makes a fresh
+run launch without warning. The provider records its actual CWD and unchanged
+stage-skill prompt; skill-tree snapshots ensure launch checks never write them.
+This case uses the same isolated app, provider, tmux and failure-artifact cleanup
+as the lifecycle scenario and never calls a paid provider.
+
 For browser compatibility and GraphQL behavior, run instead:
 
 ```sh
-npm run test:e2e --workspace @worktracker/studio
+bun run --cwd studio test:e2e
 ```
 
 That Playwright suite intentionally expects agent launch to be unavailable in

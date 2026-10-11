@@ -7,7 +7,7 @@ import { sprint } from "../features/planning-graph/testGraph";
 
 describe("sprint lifecycle dialogs acceptance", () => {
   it("creates a named sprint and reports its id without dates or a goal field", async () => {
-    const onCreate = vi.fn(async () => "new-sprint");
+    const onCreate = vi.fn(async () => ({ kind: "created" as const, id: "new-sprint" }));
     const onCreated = vi.fn();
     render(<NewSprintButton sprints={[sprint({ id: "old", name: "Sprint 3" })]} onCreate={onCreate} onCreated={onCreated} />);
     fireEvent.click(screen.getByRole("button", { name: "New sprint" }));
@@ -38,8 +38,20 @@ describe("sprint lifecycle dialogs acceptance", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(onComplete).toHaveBeenCalledWith("next");
   });
+  it("[overhaul-657] lists carryover targets by base-62 rank and id while keeping Backlog selected", () => {
+    render(<CompleteSprintDialog sprint={sprint({ id: "active", status: "active" })} done={0} total={1}
+      plannedSprints={[
+        sprint({ id: "later", name: "Later", rank: "a0", createdAt: "2026-01-01" }),
+        sprint({ id: "b", name: "Second", rank: "Z0", createdAt: "2026-01-02" }),
+        sprint({ id: "a", name: "First", rank: "Z0", createdAt: "2026-01-03" }),
+        sprint({ id: "completed", status: "completed", rank: "A0" }),
+      ]} onComplete={async () => true} onClose={() => {}} />);
+    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["Backlog", "First", "Second", "Later"]);
+    expect(screen.getByRole("combobox")).toHaveValue("");
+  });
+
   it("keeps creation open on server rejection so the name can be retried", async () => {
-    const onCreate = vi.fn().mockRejectedValueOnce(new Error("Name is already used")).mockResolvedValueOnce("new");
+    const onCreate = vi.fn().mockRejectedValueOnce(new Error("Name is already used")).mockResolvedValueOnce({ kind: "created", id: "new" });
     render(<NewSprintButton sprints={[]} onCreate={onCreate} />);
     fireEvent.click(screen.getByRole("button", { name: "New sprint" }));
     fireEvent.click(screen.getByRole("button", { name: "Create" }));

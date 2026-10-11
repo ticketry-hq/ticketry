@@ -1,0 +1,6 @@
+mutation UpdateInstantConversationTitle($agentRunId: String!, $title: String!) {
+  run: update_agent_run(id: $agentRunId, input: {conversationTitle: $title}) {
+    id
+    conversationTitle
+  }
+}

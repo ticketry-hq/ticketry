@@ -1,0 +1,50 @@
+//! Reviewed, compiler-visible Tauri macro leaves on the actual desktop facade.
+#![allow(unused_imports)]
+
+use ticketry_desktop::{
+    __cmd__desktop_append_frontend_log, __cmd__desktop_approve_executable_path,
+    __cmd__desktop_file_logging_enabled, __cmd__desktop_latest_crash_collection_outcome,
+    __cmd__desktop_launch_default_coding_agent, __cmd__desktop_pick_folder,
+    __cmd__desktop_preflight_report, __cmd__desktop_prepare_directory_trust,
+    __cmd__desktop_retry_services, __cmd__desktop_reveal_crash_report_folder,
+    __cmd__desktop_runtime_configuration, __cmd__desktop_toggle_handy_transcription,
+    __cmd__desktop_update_check, __cmd__desktop_update_download_and_install,
+    __cmd__desktop_update_restart, __cmd__desktop_validate_module_folder,
+    __cmd__native_terminal_attach, __cmd__native_terminal_available, __cmd__native_terminal_detach,
+    __cmd__native_terminal_focus, __cmd__native_terminal_hide,
+    __cmd__native_terminal_reconcile_frame, __cmd__native_terminal_set_frame,
+    __cmd__native_terminal_set_webview_interaction, __cmd__native_terminal_show,
+    __cmd__native_terminal_trace, __cmd__viewer_attach, __cmd__viewer_detach, __cmd__viewer_input,
+    __cmd__viewer_resize, __cmd__viewer_scroll, __cmd__viewer_status,
+    __tauri_command_name_desktop_append_frontend_log,
+    __tauri_command_name_desktop_approve_executable_path,
+    __tauri_command_name_desktop_file_logging_enabled,
+    __tauri_command_name_desktop_latest_crash_collection_outcome,
+    __tauri_command_name_desktop_launch_default_coding_agent,
+    __tauri_command_name_desktop_pick_folder, __tauri_command_name_desktop_preflight_report,
+    __tauri_command_name_desktop_prepare_directory_trust,
+    __tauri_command_name_desktop_retry_services,
+    __tauri_command_name_desktop_reveal_crash_report_folder,
+    __tauri_command_name_desktop_runtime_configuration,
+    __tauri_command_name_desktop_toggle_handy_transcription,
+    __tauri_command_name_desktop_update_check,
+    __tauri_command_name_desktop_update_download_and_install,
+    __tauri_command_name_desktop_update_restart,
+    __tauri_command_name_desktop_validate_module_folder,
+    __tauri_command_name_native_terminal_attach, __tauri_command_name_native_terminal_available,
+    __tauri_command_name_native_terminal_detach, __tauri_command_name_native_terminal_focus,
+    __tauri_command_name_native_terminal_hide,
+    __tauri_command_name_native_terminal_reconcile_frame,
+    __tauri_command_name_native_terminal_set_frame,
+    __tauri_command_name_native_terminal_set_webview_interaction,
+    __tauri_command_name_native_terminal_show, __tauri_command_name_native_terminal_trace,
+    __tauri_command_name_viewer_attach, __tauri_command_name_viewer_detach,
+    __tauri_command_name_viewer_input, __tauri_command_name_viewer_resize,
+    __tauri_command_name_viewer_scroll, __tauri_command_name_viewer_status,
+};
+
+#[cfg(feature = "desktop-acceptance")]
+use ticketry_desktop::{
+    __cmd__native_terminal_retention_benchmark,
+    __tauri_command_name_native_terminal_retention_benchmark,
+};

@@ -13,6 +13,7 @@ import type {
   RunStatusEventFrame,
 } from "../types";
 import { toAutomationAttemptRecord, toRunRecord } from "./statusHoldingAdapters";
+import { compactWorktrackerId } from "../../../../shared/api/generatedWorktracker";
 import type {
   AutomationAttemptRecord,
   RawLifecycleState,
@@ -25,6 +26,7 @@ export const AGENT_RUN_TERMINAL = "agent_run.terminal";
 export const AGENT_RUN_TERMINAL_ACTIVITY = "agent_run.terminal_activity";
 export const WORK_ITEM_CHANGED = "work_item.changed";
 export const WORK_ITEM_DELETED = "work_item.deleted";
+export const SPRINT_CHANGED = "sprint.changed";
 export const WORKFLOW_STATE_CHANGED = "workflow_state.changed";
 export const WORKFLOW_STATE_DELETED = "workflow_state.deleted";
 export const DOCUMENT_CHANGED = "document.changed";
@@ -73,6 +75,12 @@ export interface WorkflowStateFact {
   readonly stateId: string;
   readonly removed: boolean;
   readonly state: WorkflowStateRow | null;
+}
+
+export interface SprintFact {
+  readonly family: "sprint";
+  readonly sprintId: string;
+  readonly projectId: string;
 }
 
 export interface WorkflowStateRow {
@@ -128,6 +136,7 @@ export type StatusFact =
   | AgentRunFact
   | AgentRunActivityFact
   | WorkItemFact
+  | SprintFact
   | WorkflowStateFact
   | AutomationAttemptFact
   | DocumentFact
@@ -268,6 +277,12 @@ export function readStatusFact(frame: RunStatusEventFrame): StatusFact | null {
       // it is skipped rather than applied as a partial state.
       if (!removed && state === null) return null;
       return { family: "workflow_state", stateId, removed, state };
+    }
+    case SPRINT_CHANGED: {
+      const sprintId = text(payload.sprintId);
+      const projectId = text(payload.projectId);
+      if (!sprintId || !projectId || compactWorktrackerId(projectId) !== compactWorktrackerId(frame.project_id)) return null;
+      return { family: "sprint", sprintId, projectId };
     }
     case DOCUMENT_CHANGED:
     case DOCUMENT_DELETED: {

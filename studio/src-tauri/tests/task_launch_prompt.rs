@@ -1,6 +1,7 @@
 mod common;
 
 use std::sync::Arc;
+use ticketry_work_management::record;
 
 use common::submitted_launch_authority::launch_service;
 use common::terminal_lifecycle_harness::{TerminalLifecycleHarness, MODULE_ID, TASK_ID};
@@ -12,9 +13,7 @@ use ticketry_agent_execution::{
 };
 use ticketry_entities::launch_material;
 use ticketry_terminal::TerminalCleanupService;
-use ticketry_work_management::launch_policy::{
-    self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
-};
+use ticketry_work_management::{CallerScope, LaunchPolicyRequest, LaunchPolicyResolver};
 
 const IMPLEMENT: &str = "00000000000000000000000000008959";
 const MODEL: &str = "00000000000000000000000000008958";
@@ -68,7 +67,7 @@ async fn policy_driven_task_launches_include_the_work_item_description() {
             })
             .await
             .unwrap();
-        launch_policy::record(&database, &decision).await.unwrap();
+        record(&database, &decision).await.unwrap();
         let report = ExecutionReconciliationService::with_cleanup(
             database.clone(),
             resolver.clone(),
@@ -251,7 +250,7 @@ async fn seed(database: &sea_orm::DatabaseConnection, directory: &std::path::Pat
     .unwrap();
     // The folder the prompt names is the Module's typed link. The profile above
     // still decides which workspace may launch at all.
-    ticketry_work_management::schema::install(database)
+    ticketry_work_management::install_module_links_schema(database)
         .await
         .unwrap();
     ticketry_work_management::ModuleLinkStore::new(database.clone())

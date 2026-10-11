@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use chrono::{Duration, SecondsFormat, Utc};
 use sea_orm::{
-    sea_query::Expr, ActiveModelTrait, ColumnTrait, EntityTrait, ExprTrait, QueryFilter,
-    TransactionTrait,
+    sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, ExprTrait,
+    QueryFilter, SqliteTransactionMode, TransactionOptions, TransactionTrait,
 };
 use serde_json::{json, Value};
 
@@ -19,6 +19,21 @@ use super::{
 const LEASE_SECONDS: i64 = 60;
 
 impl TerminalCleanupService {
+    /// Every journal transaction reads before it writes. A deferred WAL
+    /// transaction cannot wait to upgrade: SQLite skips the busy handler and
+    /// refuses at once while another connection writes, as happens while a
+    /// shell is still starting (CODING-2751). Reserve the writer first so the
+    /// pool's busy timeout queues cleanup behind that writer.
+    async fn begin_write(&self) -> Result<DatabaseTransaction, TerminalCleanupError> {
+        Ok(self
+            .database
+            .begin_with_options(TransactionOptions {
+                sqlite_transaction_mode: Some(SqliteTransactionMode::Immediate),
+                ..TransactionOptions::default()
+            })
+            .await?)
+    }
+
     pub(super) async fn authoritative(
         &self,
         run_id: &str,
@@ -33,7 +48,7 @@ impl TerminalCleanupService {
         &self,
         identity: &CleanupEffectIdentity,
     ) -> Result<cleanup_effect::Model, TerminalCleanupError> {
-        let transaction = self.database.begin().await?;
+        let transaction = self.begin_write().await?;
         if let Some(existing) = cleanup_effect::Entity::find()
             .filter(cleanup_effect::Column::AgentRunId.eq(&identity.agent_run_id))
             .one(&transaction)
@@ -84,7 +99,7 @@ impl TerminalCleanupService {
         &self,
         effect_id: &str,
     ) -> Result<cleanup_effect::Model, TerminalCleanupError> {
-        let transaction = self.database.begin().await?;
+        let transaction = self.begin_write().await?;
         let current = cleanup_effect::Entity::find_by_id(effect_id)
             .one(&transaction)
             .await?
@@ -145,7 +160,7 @@ impl TerminalCleanupService {
         evidence: Value,
     ) -> Result<session::Model, TerminalCleanupError> {
         self.require_lease(claim)?;
-        let transaction = self.database.begin().await?;
+        let transaction = self.begin_write().await?;
         let settled_at = now();
         session::Entity::update_many()
             .col_expr(

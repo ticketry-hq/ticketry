@@ -299,6 +299,7 @@ fn resume_request(id: &str, source: &str, kind: TerminalLaunchKind) -> CreateTer
         resume_from_agent_run_id: Some(source.to_owned()),
         automation_attempt_id: None,
         required_skills: Vec::new(),
+        stage_skills: Vec::new(),
         working_directory_identity: if scratch {
             format!("module:{}", compact(MODULE_ID))
         } else {

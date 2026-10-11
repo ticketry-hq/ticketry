@@ -289,8 +289,13 @@ impl Connection {
     }
 
     async fn spawn(executable: &Path) -> Result<Self, CodexAppServerError> {
-        let mut child = Command::new(executable)
-            .args(["app-server", "--stdio"])
+        let mut command = Command::new(executable);
+        // The empty table merges rather than replacing user configuration.
+        command.args(["app-server", "--stdio", "-c", "mcp_servers={}"]);
+        if let Some(mcp_override) = crate::mcp_configuration::user_mcp_override()? {
+            command.args(["-c", &mcp_override]);
+        }
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())

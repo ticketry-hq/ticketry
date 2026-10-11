@@ -8,7 +8,7 @@ import { developmentProxy } from "./vite.proxy";
  * profiling suite (`studio/performance`).
  *
  * It writes `dist-performance` instead of `dist`, so a profiling run never
- * overwrites the bundle an ordinary `npm run build` or release workflow owns,
+ * overwrites the bundle an ordinary `bun run build` or release workflow owns,
  * and the recorded source maps always match the recorded bundle.
  *
  * `vite preview` serves that directory through the same development proxy

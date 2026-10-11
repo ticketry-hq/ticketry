@@ -12,12 +12,12 @@
 
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, DbErr, Statement, TransactionTrait};
 
-pub const VERSION: i32 = 1;
+pub(crate) const VERSION: i32 = 1;
 pub const MIGRATION_ID: &str = "20260915-0054-ship-record-v1";
 pub const LEDGER_TABLE: &str = "ticketry_ship_record_migration";
-pub const SOURCE_COMMIT: &str = "23d143fab160d13f739d93652a20553deb05f5f3";
-pub const SHIP_RECORD_TABLE: &str = "ticketry_shiprecords";
-pub const SHIP_RECORD_COLUMNS: &[&str] = &[
+pub(crate) const SOURCE_COMMIT: &str = "23d143fab160d13f739d93652a20553deb05f5f3";
+pub(crate) const SHIP_RECORD_TABLE: &str = "ticketry_shiprecords";
+pub(crate) const SHIP_RECORD_COLUMNS: &[&str] = &[
     "id",
     "module_id",
     "task_id",
@@ -53,7 +53,7 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
 }
 
 /// Whether the ship-record ledger has been installed in this database.
-pub async fn installed(database: &impl ConnectionTrait) -> bool {
+pub(crate) async fn installed(database: &impl ConnectionTrait) -> bool {
     table_exists(database, LEDGER_TABLE).await.unwrap_or(false)
 }
 

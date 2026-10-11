@@ -1,0 +1,24 @@
+fragment ModuleManagerArchivedModuleFields on WorktrackerIssue {
+  __typename
+  id
+  name
+  project_id: projectId
+  sequence_id: sequenceId
+  is_archived: isArchived
+  issue_type: issueTypeId
+  state_revision: stateRevision
+  project { __typename id slug }
+}
+
+query ModuleManagerArchivedModules($projectId: String!, $offset: Int!, $limit: Int!) {
+  modules: worktrackerIssue(
+    filters: { projectId: { eq: $projectId }, type: { eq: "module" }, isArchived: { eq: true } }
+    orderBy: { sequenceId: ASC, id: ASC }
+    pagination: { offset: { offset: $offset, limit: $limit } }
+  ) {
+    __typename
+    nodes { ...ModuleManagerArchivedModuleFields }
+    pageInfo { __typename hasNextPage }
+    paginationInfo { __typename total }
+  }
+}

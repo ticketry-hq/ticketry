@@ -50,6 +50,7 @@ macro_rules! native_invoke_handler {
             commands::terminal_viewer::viewer_detach,
             commands::terminal_viewer::viewer_status,
             native_terminal::native_terminal_available,
+            native_terminal::native_terminal_set_module_manager_shortcut,
             native_terminal::native_terminal_attach,
             native_terminal::native_terminal_reconcile_frame,
             native_terminal::native_terminal_set_frame,
@@ -167,6 +168,7 @@ pub fn run(context: tauri::Context, file_logging_requested: bool, app_version: &
         .manage(crash_reports)
         .manage(file_log)
         .manage(startup_trace)
+        .manage(crate::desktop::global_mcp_registration::GlobalMcpStartupRegistration::default())
         .manage(DesktopServiceState::new())
         .manage(DesktopLaunchRuntime::new())
         .manage(ViewerCommandState::new())
@@ -215,7 +217,13 @@ pub fn run(context: tauri::Context, file_logging_requested: bool, app_version: &
 
     application.run(|application, event| {
         let lifecycle_event = match &event {
-            tauri::RunEvent::Ready => Some(DesktopLifecycleEvent::StartupReady),
+            tauri::RunEvent::Ready => {
+                #[cfg(target_os = "macos")]
+                if !automated_startup_exit_requested() {
+                    crate::desktop::microphone_permission::request();
+                }
+                Some(DesktopLifecycleEvent::StartupReady)
+            }
             tauri::RunEvent::WindowEvent {
                 label,
                 event: tauri::WindowEvent::CloseRequested { api, .. },

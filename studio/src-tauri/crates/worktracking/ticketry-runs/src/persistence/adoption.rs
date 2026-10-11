@@ -404,6 +404,8 @@ async fn validate_adopted_column_shapes(
         ("launch_reasoning", "varchar"),
         ("launch_unattended", "bool"),
         ("attention_reason", "text"),
+        ("conversation_title", "text"),
+        ("stage_skill_availability", "text"),
     ] {
         let Some((observed_type, not_null, default)) = facts.get(column) else {
             continue;

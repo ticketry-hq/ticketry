@@ -1,5 +1,5 @@
 use sea_orm::DatabaseConnection;
-use ticketry_work_management::commands::status_facts::WorkFactRecorder;
+use ticketry_work_management::WorkFactRecorder;
 
 /// The MCP transport publishes through the same durable outbox as the GraphQL
 /// surface. It composes its own recorder over its own connection: the committed

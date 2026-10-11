@@ -40,6 +40,7 @@ export {
 } from "./queries";
 export { StoriesTreeProvider, useStoriesTree } from "./queries/StoriesTreeProvider";
 export { getModuleTaskOrderSnapshot } from "./queries/moduleTaskOrderSnapshot";
+export { useReviewFindingChildren } from "./queries/useReviewFindingChildren";
 export {
   deriveEpic,
   orderedTaskSections,
@@ -68,15 +69,30 @@ export type {
 export { formatWorkItemDisplayIdentifier } from "./displayIdentifier";
 export { recordStoryMove } from "./internal/storyMoveDiagnostics";
 export { usePlanningFilterStore } from "./internal/planningFilterStore";
+export {
+  clearStorySprintFilter,
+  getStorySprintFilterIntent,
+  getStorySprintFilterGeneration,
+  useStorySprintFilterGeneration,
+  setStorySprintFilterIntent,
+  useStorySprintFilterIntent,
+  setStorySprintFilterNotice,
+  useStorySprintFilterNotice,
+} from "./internal/storySprintFilterStore";
+export type { StorySprintIntent } from "./internal/storySprintFilterStore";
+export { resolveStorySprintFilter, filterStoryRoots, selectStorySprintResults, projectRootSprintCounts } from "./selectors/storySprintFilter";
+export type { StorySprintSelection, StorySprintResolution } from "./selectors/storySprintFilter";
 export { useClientStore } from "../../state/clientStore";
 export type { SelectionSurface } from "../../state/clientStore";
 export { rankBetween } from "./utilities/rank";
 export { reachable } from "./utilities/dependencyGraph";
 export type { DependencyEdgeField } from "./utilities/dependencyGraph";
 export {
+  ArchiveWorkTrackerWorkItemDocument,
   GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
   UpdateWorkTrackerWorkspaceTabOrderDocument,
   WorkTrackerModuleOpenDocument,
+  WorkTrackerReviewFindingsDocument,
   WorkTrackerWorkItemDocument,
   WorkTrackerWorkItemsDocument,
 } from "./generated/workItems.documents";
@@ -114,3 +130,26 @@ export { watchNewTaskRunTab, type NewTaskRunTabWatch } from "./taskRunTabActivat
 export { consumeLocalWorkItemConvergence } from "./workItemConvergence";
 export { usePlanWorkItem } from "./planMutation";
 export { usePlanWritePending } from "./planWriteGuard";
+
+export { useStoryReorderController, stateDropTargetId } from "./useStoryReorderController";
+export type { TicketDragPayload } from "./useStoryReorderController";
+export { resolveTicketReorderNeighbors } from "./internal/ticketReorder";
+export type { VisibleRootBlock, ReorderNeighbors } from "./internal/ticketReorder";
+
+export { StorySprintFilterController, useStorySprintFilter } from "./filter/StorySprintFilterController";
+export { StorySprintFilter } from "./filter/StorySprintFilter";
+export { StoriesFilterEmptyState } from "./filter/StoriesFilterEmptyState";
+export { SelectedStoryFilterNotice } from "./filter/SelectedStoryFilterNotice";
+export { useProjectStorySprintIndex, getProjectStorySprintIndexSnapshot } from "./queries/useProjectStorySprintIndex";
+
+export { SprintModuleRecovery } from "./filter/SprintModuleRecovery";
+export { CapturedIdeaRecovery } from "./filter/CapturedIdeaRecovery";
+export { capturedStoryOutsideResults, prepareExplicitStoryReveal } from "./filter/storySprintRecovery";
+export { refreshProjectStorySprintIndex } from "./queries/refreshProjectStorySprintIndex";
+
+export { useStoryCreation, type CreateOutcome, type AssignOutcome, type RefreshOutcome } from "./storyCreation";
+
+export { PlanningRowView } from "./components/PlanningRowView";
+export type { PlanningRowViewProps } from "./components/PlanningRowView";
+export { WorkItemRowLabel } from "./components/WorkItemRowLabel";
+export { orderedWorkItems } from "./issueAdapter";

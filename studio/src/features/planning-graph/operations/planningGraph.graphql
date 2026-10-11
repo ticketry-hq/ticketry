@@ -31,13 +31,14 @@ query PlanningGraph($projectId: String!) {
   }
   sprints: worktrackerSprint(
     filters: { projectId: { eq: $projectId } }
-    orderBy: { createdAt: ASC }
+    orderBy: { rank: ASC, id: ASC }
   ) {
     nodes {
       id
       name
       status
       createdAt
+      rank
     }
   }
   modules: worktrackerIssue(

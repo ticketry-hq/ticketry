@@ -22,10 +22,12 @@ import {
 export default function DocViewer({
   doc,
   focusSignal = 0,
+  canFocus,
   editable = false,
 }: {
   doc: DesignDoc;
   focusSignal?: number;
+  canFocus?: (target?: HTMLElement | null) => boolean;
   editable?: boolean;
 }) {
   if (/\.md$/i.test(doc.rel_path)) {
@@ -34,11 +36,12 @@ export default function DocViewer({
         key={`${doc.id}:${doc.rel_path}`}
         doc={doc}
         focusSignal={focusSignal}
+        canFocus={canFocus}
         editable={editable}
       />
     );
   }
-  return <HtmlDocumentViewer doc={doc} focusSignal={focusSignal} />;
+  return <HtmlDocumentViewer doc={doc} focusSignal={focusSignal} canFocus={canFocus} />;
 }
 
 export function isFullHtmlDocument(source: string): boolean {
@@ -53,10 +56,12 @@ export function isFullHtmlDocument(source: string): boolean {
 function MarkdownDocViewer({
   doc,
   focusSignal,
+  canFocus,
   editable,
 }: {
   doc: DesignDoc;
   focusSignal: number;
+  canFocus?: (target?: HTMLElement | null) => boolean;
   editable: boolean;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -147,8 +152,8 @@ function MarkdownDocViewer({
   }, [doc.content_digest, doc.id, doc.rel_path, editable, loadLatestDocument]);
 
   useEffect(() => {
-    if (focusSignal > 0) contentRef.current?.focus();
-  }, [focusSignal]);
+    if (focusSignal > 0 && (canFocus?.(contentRef.current) ?? true)) contentRef.current?.focus();
+  }, [focusSignal, canFocus]);
 
   function applyExternal(loaded: LoadedMarkdown): void {
     setDigest(loaded.digest);
@@ -273,6 +278,8 @@ function MarkdownDocViewer({
   if (editing) {
     return (
       <MarkdownDocumentEditor
+        focusSignal={focusSignal}
+        canFocus={canFocus}
         doc={doc}
         digest={digest}
         draft={draft}

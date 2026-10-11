@@ -1,5 +1,7 @@
 //! Bounded startup, periodic recovery, and shutdown for the Rust terminal runtime.
 
+mod codex_mcp_profile;
+mod instant_naming;
 mod runtime;
 mod sweep;
 mod work;

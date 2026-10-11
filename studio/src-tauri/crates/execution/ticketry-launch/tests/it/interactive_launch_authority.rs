@@ -442,3 +442,18 @@ async fn the_global_profile_fills_a_binding_that_names_none() {
     resolved.apply(&mut request);
     assert_eq!(request.profile.as_deref(), Some("global"));
 }
+
+#[tokio::test]
+async fn task_launch_carries_stage_skill_names_from_policy_without_refusing_missing_names() {
+    let fixture = fixture().await;
+    fixture.database.execute_unprepared("UPDATE worktracker_launchbinding SET stage_skills = '[\"missing-stage-skill\",\"another-missing-skill\"]'").await.unwrap();
+    let material = fixture
+        .authority
+        .resolve(&caller_request(TerminalLaunchKind::Task))
+        .await
+        .unwrap();
+    assert_eq!(
+        material.stage_skills,
+        vec!["missing-stage-skill", "another-missing-skill"]
+    );
+}

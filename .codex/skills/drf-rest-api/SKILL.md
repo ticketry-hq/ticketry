@@ -11,7 +11,7 @@ custom code prove why it exists. The desired path is:
 ```text
 model + migration -> ModelSerializer -> ViewSet (mixins/generics)
                   -> path()/router binding -> drf-spectacular operation
-                  -> openapi.json -> npm run contract:generate -> generated SDKs
+                  -> openapi.json -> bun run contract:generate -> generated SDKs
 ```
 
 Do not begin with a handwritten view, ad-hoc dict payload, or manual
@@ -115,7 +115,7 @@ means the override is not ready to implement.
 
 - Annotate operations with `@extend_schema(operation_id=..., tags=...)` so the
   generated contract is stable and readable.
-- After any endpoint change run `npm run contract:generate` (exports
+- After any endpoint change run `bun run contract:generate` (exports
   `openapi.json`, regenerates the TypeScript and Python SDKs, and exports wire
   frames) and commit the results together.
 - Never hand-edit `openapi.json` or generated SDK files.
@@ -130,16 +130,16 @@ Test the boundary that made the design safe:
   ignored on write;
 - unauthorized and out-of-scope rows for permissions and queryset scoping;
 - service invariants and transaction rollback for invariant-heavy writes;
-- contract drift (`npm run contract:check` must pass);
+- contract drift (`bun run contract:check` must pass);
 - a Studio acceptance case for every user-visible behavior change.
 
 Run the smallest focused tests first, then at minimum:
 
 ```bash
 (cd backend && uv run --extra dev pytest -q)
-npm run contract:check
-npm run typecheck
-npm run test:overhaul --workspace @worktracker/studio
+bun run contract:check
+bun run typecheck
+bun run --cwd studio test:overhaul
 ```
 
 When handing off, state which endpoints now use plain DRF machinery, which

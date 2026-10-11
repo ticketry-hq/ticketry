@@ -11,7 +11,7 @@ use sea_orm::{
     EntityTrait, QueryFilter, Statement, TransactionTrait,
 };
 use ticketry_entities::{issue, ship_record};
-use ticketry_workspace_runtime::persistence::ship_record_migration;
+use ticketry_workspace_runtime::install_ship_record_migration;
 
 const MODULE_ID: &str = "00000000000000000000000000001001";
 const TASK_ID: &str = "00000000000000000000000000001002";
@@ -34,7 +34,7 @@ async fn database() -> DatabaseConnection {
         )
         .await
         .unwrap();
-    ship_record_migration::install(&database).await.unwrap();
+    install_ship_record_migration(&database).await.unwrap();
     database
 }
 
@@ -271,10 +271,10 @@ async fn commit_shas_are_full_and_lowercase() {
 #[tokio::test]
 async fn receipt_persistence_is_idempotent_by_operation_id() {
     let database = database().await;
-    let first = ship_record::append(&database, receipt(OPERATION_ID, false))
+    let first = ticketry_entities::append_ship_receipt(&database, receipt(OPERATION_ID, false))
         .await
         .unwrap();
-    let retry = ship_record::append(&database, receipt(OPERATION_ID, false))
+    let retry = ticketry_entities::append_ship_receipt(&database, receipt(OPERATION_ID, false))
         .await
         .unwrap();
     assert_eq!(first.id, retry.id);
@@ -284,14 +284,14 @@ async fn receipt_persistence_is_idempotent_by_operation_id() {
 #[tokio::test]
 async fn receipt_persistence_failure_is_typed() {
     let database = Database::connect("sqlite::memory:").await.unwrap();
-    let error = ship_record::append(&database, receipt(OPERATION_ID, false))
+    let error = ticketry_entities::append_ship_receipt(&database, receipt(OPERATION_ID, false))
         .await
         .unwrap_err();
     assert_eq!(error.code_str(), "ship_receipt_persistence_failed");
 }
 
-fn receipt(operation_id: &str, _failed: bool) -> ship_record::AppendReceipt {
-    ship_record::AppendReceipt {
+fn receipt(operation_id: &str, _failed: bool) -> ticketry_entities::AppendReceipt {
+    ticketry_entities::AppendReceipt {
         module_id: MODULE_ID.to_owned(),
         task_id: Some(TASK_ID.to_owned()),
         checkout_kind: "task_worktree".to_owned(),

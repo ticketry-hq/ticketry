@@ -32,6 +32,10 @@ pub struct Model {
     #[sea_orm(column_type = "Text", nullable)]
     #[seaography(ignore)]
     pub attention_reason: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub conversation_title: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub stage_skill_availability: Option<String>,
     #[sea_orm(belongs_to, from = "issue_id", to = "id")]
     pub issue: BelongsTo<crate::work_management::issue::Entity>,
     #[sea_orm(

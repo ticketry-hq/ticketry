@@ -1,7 +1,7 @@
-import { skipToken, useQuery } from "@apollo/client/react";
+import { useQuery } from "@apollo/client/react";
 import { useEffect, useState } from "react";
 import type { Module, Project, ProjectCreate, ProjectPatch } from "../../../shared/api/types";
-import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
+import { compactWorktrackerId, publicWorktrackerId } from "../../../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../../../shared/apollo/client";
 import {
   WorkTrackerProjectOpenDocument,
@@ -77,7 +77,7 @@ export function useCachedModules(projectId: string | null): Module[] {
           client: studioApolloClient(),
           fetchPolicy: "cache-only",
         }
-      : skipToken,
+      : { client: studioApolloClient(), skip: true, variables: { projectId: "" } },
   );
   return projectId && query.data
     ? modulesFromProjectOpen(query.data)
@@ -104,7 +104,7 @@ export function useModulesQuery(projectId: string | null) {
           client: studioApolloClient(),
           fetchPolicy: "cache-only",
         }
-      : skipToken,
+      : { client: studioApolloClient(), skip: true, variables: { projectId: "" } },
   );
   useEffect(() => {
     if (!projectId) {
@@ -182,7 +182,7 @@ export function seedProjects(projects: Project[]): void {
         __typename: "WorktrackerProjectConnection",
         nodes: projects.map((project, index) => ({
           __typename: "WorktrackerProject",
-          id: compactWorktrackerId(project.id),
+          id: publicWorktrackerId(project.id),
           name: project.name,
           slug: project.slug,
           description: project.description,
@@ -209,16 +209,17 @@ export function seedModules(projectId: string, modules: Module[]): void {
         ...current.modules,
         nodes: modules.map((module, index) => ({
           __typename: "WorktrackerIssue" as const,
-          id: compactWorktrackerId(module.id),
+          id: publicWorktrackerId(module.id),
           name: module.name,
-          project_id: compactWorktrackerId(module.project_id),
+          project_id: publicWorktrackerId(module.project_id),
           sequence_id: module.sequence_id,
           is_archived: module.is_archived,
-          issue_type: compactWorktrackerId(module.issue_type),
+          state_revision: current.modules.nodes.find((row) => publicWorktrackerId(row.id) === module.id)?.state_revision ?? 0,
+          issue_type: publicWorktrackerId(module.issue_type),
           rank: String(index),
           project: {
             __typename: "WorktrackerProject" as const,
-            id: compactWorktrackerId(projectId),
+            id: publicWorktrackerId(projectId),
             slug: current.project.nodes[0]?.slug ?? module.key.split("-")[0] ?? "",
           },
         })),

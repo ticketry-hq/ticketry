@@ -1,0 +1,95 @@
+# Module tabs
+
+The project module strip selects visible modules, persists explicit tab hiding and restoration, and projects the current sprint without changing module records.
+
+Surfaces: browser, desktop
+
+## Sub-features
+
+- `module-tabs-strip`: Scrollable, accessible module tabs share the top strip with available workspace surfaces.
+- `module-tabs-picker`: The top plus opens creation and searchable, explicit Restore choices.
+- `module-tabs-jump-badges`: Desktop position shortcuts and held-modifier badges follow visible module order.
+- `module-tabs-presentation-visibility`: Hide and Restore persist presentation visibility independently of archive and order.
+- `module-tabs-sprint-filtering`: Roadmap-enabled sprint membership limits visible modules and supports explicit recovery.
+- `module-tabs-reordering`: Dragging a tab changes canonical presentation order only when all sprints are shown.
+- `module-tabs-close-chord`: Close Tab targets ticket document or terminal tabs; module tabs use their separate Hide control.
+
+## How to get to it
+
+- Select a project, then click a module-named tab in **Project module tabs**. The containing scroller is **Scrollable project module tabs**. Focus a tab and use Left/Right to wrap and activate, or Home/End to select the first/last enabled tab, including available Plan and Changes tabs.
+- Click **Open module picker** (the top plus). The **Module picker** dialog focuses the **Search modules** combobox and exposes the **Module choices** listbox. Choose **Create new module**, **Restore <module name> module tab**, or, in a restricted sprint, **Show all sprints**. Up/Down wrap choices, Enter activates, and Escape closes and returns focus to the plus.
+- On desktop, capture actions `modules.select-position-1` through `modules.select-position-9` default to Cmd+1 through Cmd+9; `modules.select-position-10` defaults to Cmd+Shift+0. Hold matching modifiers to reveal `module-jump-badge` hints. Browser effective bindings omit these desktop-only actions.
+- Click **Hide <module name> tab** to close that module presentation. Footer **Modules** and `toggle-module-manager` (Cmd+Shift+M) provide the separate [Module Manager](module-manager.md) recovery path.
+- Action `close-tab` has fixed capture Cmd+W and global default Q. These close the active ticket document or terminal, leaving Details open; they do not hide the selected module tab. See [Keyboard navigation and shortcuts](keyboard-navigation-and-shortcuts.md).
+
+## Prerequisites
+
+Select a project with unarchived modules and wait for module/presentation reads. A linked folder is needed to complete module selection; folder setup is covered by [Module folders and trust](module-folders-and-trust.md). Hide at least one unarchived module to exercise Restore choices. Use a desktop runtime for position shortcuts and a Roadmap-enabled build with sprint-assigned root Stories for sprint filtering. Close modal and Module Manager takeovers before testing ordinary keyboard routing. Open a disposable ticket document or terminal for Close Tab.
+
+## Expected behavior
+
+- The strip includes only open modules in canonical order. Each module-named tab has `aria-selected` and `data-module-id`; the selected tab scrolls into view. Available Plan and module-scoped Changes surfaces precede modules. Clicking a module leaves those active surfaces. [ModuleTabStrip.tsx](../../studio/src/app/shell/ticket-workspace/ModuleTabStrip.tsx) and [useWorkspaceTabNavigation.ts](../../studio/src/app/shell/ticket-workspace/useWorkspaceTabNavigation.ts) own strip selection and roving focus.
+- Picker search matches hidden, non-archived module names case-insensitively and retains canonical order. Creation stays first even with no matching Restore choices. Search resets the active choice to creation; Up/Down update `aria-activedescendant` while focus remains in search. Clicking the trigger again, clicking outside, or moving focus outside dismisses it; Escape restores trigger focus. Long choice lists scroll beneath the stationary search field, with the dialog height bounded by the viewport. [ModulePicker.tsx](../../studio/src/features/module-tabs/ModulePicker.tsx) owns these paths.
+- Hide writes only `tab_hidden` through `UpdateWorkTrackerModulePresentation`, preserving module archive state and presentation rank. Closing the selected module prefers a visible, folder-linked module to its right, then its left; no linked fallback clears selection. Failure reports **Module tab could not be hidden: …** and restores the original selection only while its project/filter scope and fallback selection remain current. Reload preserves hidden tabs, and agent activity does not silently reopen them. Restore from the picker persists visibility before attempting selection; failure reports **Module tab could not be restored: …**. Ordinary Open refuses hidden modules, so recovery is explicit. See [useCloseModuleTab.ts](../../studio/src/features/module-tabs/useCloseModuleTab.ts), [useModuleNavigation.ts](../../studio/src/features/module-tabs/useModuleNavigation.ts), and [useSetModuleTabHidden.ts](../../studio/src/features/module-tabs/useSetModuleTabHidden.ts).
+- Visible positions exclude hidden and archived modules and use the same projection as badges. Only positions 1–10 have numeric actions; positions beyond ten have no badge. Modifier release, blur, visibility change, pointer interaction, native keyboard engagement and modal ownership clear hints. The native routing acceptance uses mocked host messages rather than proving installed desktop behavior.
+- With Roadmap enabled, the shared projection distinguishes archived, hidden, not-in-sprint and open, in that precedence. Selected-sprint eligibility comes from non-archived root Stories in that project. Hide remains available while filtered and does not clear the filter; Restore of an excluded module explicitly clears the filter before restoring/selecting. **Show all sprints** clears restriction without unhiding tabs. If matching tabs are all hidden, recovery says **All matching module tabs are hidden.**; if no modules match it says **No modules have stories in this sprint.** Late writes/selection do not override a newer project or filter generation. With Roadmap compiled off, tabs ignore remembered sprint intent and show all unhidden, unarchived modules; Plan is absent. See [effectiveModuleTabs.ts](../../studio/src/features/module-tabs/effectiveModuleTabs.ts), [moduleTabProjection.ts](../../studio/src/features/module-tabs/moduleTabProjection.ts), and [SprintModuleRecovery.tsx](../../studio/src/features/work-items/filter/SprintModuleRecovery.tsx).
+- Reorder is enabled only when reads are complete and the sprint projection is unrestricted. Dropping on a tab's near/far half sets the relative position; `module-tab-drop-seam` exposes `data-drop-intent`. The presentation reorder updates other consuming surfaces and persists across reload. Restore does not reorder. Close Tab follows its ticket workspace route, with Plan protected and terminal close refused in Changes; use disposable sessions because closing a terminal can stop its run.
+
+## Verifying it
+
+The browser suite below drives the current production journey. Observe module-named tabs, `aria-selected`, `[data-module-id]`, picker option names and `aria-activedescendant`; badges use test ID `module-jump-badge` and `data-module-jump-position`. Read back presentation `tab_hidden` and rank, then reload. Existing coverage and narrow commands are:
+
+| Sub-feature | Existing coverage | Narrow command |
+| --- | --- | --- |
+| Strip focus and workspace surfaces | `studio/src/test/overhaulWorkspaceSurfacesAcceptance.test.tsx`: `overhaul-453`, `overhaul-455`, `overhaul-456` cover surface order, arrow/Home/End activation and module-free Plan. | `bun run --cwd studio test src/test/overhaulWorkspaceSurfacesAcceptance.test.tsx` |
+| Picker, search, Restore, focus and bounded lists | `studio/src/test/overhaulModulePickerAcceptance.test.tsx`: `overhaul-237`, `overhaul-338`, `overhaul-660`, `overhaul-661`, plus named search, restore-before-selection, Escape and outside-dismiss cases. | `bun run --cwd studio test src/test/overhaulModulePickerAcceptance.test.tsx` |
+| Jump badges and desktop position routing | `studio/src/test/overhaulModuleJumpBadgesAcceptance.test.tsx`: `overhaul-179` plus modifier-boundary cases; WebView and mocked native-host routing. | `bun run --cwd studio test src/test/overhaulModuleJumpBadgesAcceptance.test.tsx` |
+| Native position/close chord classification | `studio/src-tauri/native/tests/libghostty_studio_chord_tests.m` checks Cmd+1–9, Cmd+Shift+0 and Cmd+W classification; this is a native unit binary, not an installed UI journey. | `bun run --cwd studio test:native-ghostty-studio-chords` |
+| Presentation persistence, last-tab empty state and failed hide | `studio/src/test/overhaulModuleVisibilityAcceptance.test.tsx`: `overhaul-175`–`overhaul-177` and named fallback, clear-selection, inspection and rollback cases. `studio/src/test/overhaulModuleTabCloseAcceptance.test.tsx`: `overhaul-183` covers compact close-target layout. | `bun run --cwd studio test src/test/overhaulModuleVisibilityAcceptance.test.tsx src/test/overhaulModuleTabCloseAcceptance.test.tsx` |
+| Sprint-filtered close and retry scope | `studio/src/test/overhaulSprintModuleCloseAcceptance.test.tsx`: `overhaul-600`–`overhaul-602` cover preserved records/order/filter, reload, rollback and newer navigation. | `bun run --cwd studio test src/test/overhaulSprintModuleCloseAcceptance.test.tsx` |
+| Explicit recovery and stale Restore results | `studio/src/test/overhaulExplicitModuleNavigationAcceptance.test.tsx`: `overhaul-604`–`overhaul-610` cover explicit filter clearing, hidden Open refusal, folder-required state, project/filter generations and hidden-match recovery. | `bun run --cwd studio test src/test/overhaulExplicitModuleNavigationAcceptance.test.tsx` |
+| Sprint membership repaint and projection | `studio/src/test/overhaulStorySprintMembershipAcceptance.test.tsx`: `overhaul-520`; `studio/src/features/module-tabs/moduleTabProjection.test.ts` covers precedence and membership. | `bun run --cwd studio test src/test/overhaulStorySprintMembershipAcceptance.test.tsx src/features/module-tabs/moduleTabProjection.test.ts` |
+| Reorder and picker preservation | `studio/src/test/overhaulModuleTabReorderAcceptance.test.tsx`: `overhaul-51`, `overhaul-52` and missing-host-drop recovery. | `bun run --cwd studio test src/test/overhaulModuleTabReorderAcceptance.test.tsx` |
+| Roadmap-off strip and selection | `studio/src/test/overhaulRoadmapOffAcceptance.test.tsx`: `overhaul-527`, `overhaul-530`, `overhaul-531`. | `bun run --cwd studio test:roadmap-off src/test/overhaulRoadmapOffAcceptance.test.tsx` |
+| Close Tab chord resolution | `studio/src/app/navigation/closeTabChord.test.ts`; ticket closure coverage is linked in the keyboard entry. | `bun run --cwd studio test src/app/navigation/closeTabChord.test.ts` |
+
+The current browser suite retains the historical hide/restore, reorder/reload and all-hidden recovery assertions using Module Manager where CODING-2643 removed the Modules pane. Supplementary tests above do not fill browser coverage cells. There is no identified installed-desktop journey proving numeric module shortcuts and badge behavior; mocked native coverage does not close that gap. Bounded-list coverage uses mocked geometry, so actual narrow-window clipping remains manual and unverified.
+
+## End-to-end suite
+
+Suite: studio/e2e/features/module-tabs.spec.ts
+
+| Sub-feature | Success | Cancel | Error | Empty | Entry points | Persistence |
+| --- | --- | --- | --- | --- | --- | --- |
+| `module-tabs-strip` | @case-module-tabs-strip-navigation | n/a: Selection activates immediately without a confirmation step. | @case-module-tabs-sprint-read-empty | @case-module-tabs-all-hidden-recovery | @case-module-tabs-strip-navigation | @case-module-tabs-strip-navigation |
+| `module-tabs-picker` | @case-module-tabs-hide-restore-reload | @case-module-tabs-picker-cancel-empty @case-module-tabs-hide-restore-reload | @case-module-tabs-visibility-errors | @case-module-tabs-picker-cancel-empty | @case-module-tabs-picker-cancel-empty @case-module-tabs-hide-restore-reload | @case-module-tabs-hide-restore-reload |
+| `module-tabs-jump-badges` | desktop-only: Browser effective bindings omit desktop module position actions and native modifier routing. | desktop-only: Browser effective bindings omit desktop module position actions and native modifier routing. | desktop-only: Browser effective bindings omit desktop module position actions and native modifier routing. | desktop-only: Browser effective bindings omit desktop module position actions and native modifier routing. | desktop-only: Browser effective bindings omit desktop module position actions and native modifier routing. | desktop-only: Browser effective bindings omit desktop module position actions and native modifier routing. |
+| `module-tabs-presentation-visibility` | @case-module-tabs-hide-restore-reload @case-module-tabs-all-hidden-recovery | n/a: Hide and Restore apply immediately without confirmation. | @case-module-tabs-visibility-errors | @case-module-tabs-all-hidden-recovery | @case-module-tabs-hide-restore-reload @case-module-tabs-all-hidden-recovery | @case-module-tabs-hide-restore-reload @case-module-tabs-visibility-errors |
+| `module-tabs-sprint-filtering` | @case-module-tabs-sprint-recovery | @case-module-tabs-sprint-recovery | @case-module-tabs-sprint-read-empty | @case-module-tabs-sprint-recovery @case-module-tabs-sprint-read-empty | @case-module-tabs-sprint-recovery @case-module-tabs-sprint-read-empty | @case-module-tabs-sprint-recovery |
+| `module-tabs-reordering` | @case-module-tabs-reorder-reload @case-module-tabs-sprint-recovery | @case-module-tabs-reorder-errors | @case-module-tabs-reorder-errors | n/a: Reordering requires at least two visible tabs; an empty strip exposes no drag target. | @case-module-tabs-reorder-reload | @case-module-tabs-reorder-reload @case-module-tabs-reorder-errors |
+| `module-tabs-close-chord` | @case-module-tabs-close-chord | n/a: Close Tab applies immediately without confirmation. | n/a: Closing a document or protecting Details is a local workspace action with no fallible server write. | @case-module-tabs-close-chord | @case-module-tabs-close-chord | @case-module-tabs-close-chord |
+
+The three historical titles remain exact, including the former Modules-pane recovery title. Their steps use the Module Manager introduced by CODING-2643; legacy cases remain unchanged in `studio/e2e/web-app.spec.ts`. CODING-2708's baseline classified these cases as unrun behind stale onboarding setup, rather than as product failures. The suite now uses the real browser UI, linked disposable folders, public GraphQL fixtures and network-boundary refusals. Runner IDs and passing/failing evidence belong to the handoff, not this source map.
+
+Sprint choice is intentionally session-only (`studio/src/features/work-items/internal/storySprintFilterStore.ts`). Its persistence case reloads and reapplies No sprint to prove persisted root membership, then restores hidden presentation and checks reload visibility. It does not claim the selected filter survives a page reload.
+
+## Relevant code
+
+- `studio/e2e/features/module-tabs.spec.ts`: browser suite, migrated assertions and network failure recovery.
+
+- `studio/src/features/module-tabs`: picker, visibility reads/writes, explicit navigation, sprint projection, modifier hints and tests.
+- `studio/src/app/shell/ticket-workspace/ModuleTabStrip.tsx`, `studio/src/app/shell/ticket-workspace/ModuleTab.tsx`, `studio/src/app/shell/ticket-workspace/useWorkspaceTabNavigation.ts`, and `studio/src/app/shell/ticket-workspace/WorkspaceTabs.tsx`: strip, selectors, close target, roving focus and workspace surfaces.
+- `studio/src/features/projects/internal/moduleReorderDrag.ts` and `studio/src/features/projects/internal/moduleReorder.ts`: presentation reorder controller and persistence shared with Module Manager.
+- `studio/src/features/projects/generated/projects.documents.ts`: generated module-presentation writes and project reads.
+- `studio/src/app/navigation/keymapBindings.ts`, `studio/src/app/navigation/sharedNavigation.ts`, `studio/src/app/navigation/useGlobalKeymap.ts`, and `studio/src/app/navigation/nativeTerminalChords.ts`: desktop numeric actions, capture ownership, native transport and ticket Close Tab.
+- `studio/src/features/work-items/filter/SprintModuleRecovery.tsx` and `studio/src/shared/config/roadmapAvailability.ts`: empty recovery copy and compiled Roadmap availability.
+- [Context map](../../CONTEXT-MAP.md) and [Studio glossary](../../studio/CONTEXT.md#language): existing domain ownership and terminology.
+
+## Gotchas
+
+- The plus is the module picker, not the footer Module Manager. **Create new module** from the picker opens the add-module modal; Module Manager's inline creation is a different entry point.
+- Module **Hide** / manager **Close tab** changes presentation; **Archive** changes the record. Cmd+W/Q belongs to ticket workspace tabs. Do not infer module closure from that chord or auto-unhide from Open.
+- Wait for complete sprint membership and visibility reads. Hidden has precedence over Not in sprint, and an empty filtered strip does not imply there are no project modules. A successful visibility write alone does not prove subsequent folder-dependent selection completed.
+- Position badges refer only to visible modules, excluding Plan/Changes tabs. Browser numeric shortcuts are deliberately unavailable. Saved global overrides can change Q and the manager chord, while numeric position actions and capture Cmd+W are fixed.
+- `studio/e2e/web-app.spec.ts` still uses `ensureModulesPane`, `modules-pane-toggle` and `pane-modules`; its shared fixture setup also depends on removed module-entry selectors. The [keyboard reference](../../studio/KEYBOARD_NAVIGATION_CURRENT.md) describes the retired sidebar. These are stale references, not evidence that the current manager/picker journey passed.
+- The context map's links still point to older pre-crate Rust paths; use it for ownership, with current implementation paths from the relevant entries. Browser outcomes are recorded by the feature runner; installed-desktop persistence, viewport-fit and native chord evidence remain separate.

@@ -24,9 +24,9 @@ async fn planning_reads_filter_by_hyphenated_sprint_ids_and_return_public_ids() 
     }
     database.execute_unprepared(
         "INSERT INTO worktracker_sprint
-         (id, project_id, name, status, suggestion_run_id, created_at, updated_at) VALUES
-         ('10000000000000000000000000000001', '20000000000000000000000000000001', 'First', 'planned', '60000000000000000000000000000001', '2026-10-03 00:00:00', '2026-10-03 00:00:00'),
-         ('10000000000000000000000000000002', '20000000000000000000000000000001', 'Other', 'planned', NULL, '2026-10-03 00:00:00', '2026-10-03 00:00:00');
+         (id, project_id, name, status, rank, suggestion_run_id, created_at, updated_at) VALUES
+         ('10000000000000000000000000000001', '20000000000000000000000000000001', 'First', 'planned', 'F', '60000000000000000000000000000001', '2026-10-03 00:00:00', '2026-10-03 00:00:00'),
+         ('10000000000000000000000000000002', '20000000000000000000000000000001', 'Other', 'planned', 'V', NULL, '2026-10-03 00:00:00', '2026-10-03 00:00:00');
          INSERT INTO worktracker_sprint_goal
          (id, sprint_id, position, text, created_at, updated_at) VALUES
          ('30000000000000000000000000000001', '10000000000000000000000000000001', 1, 'Ship planning', '2026-10-03 00:00:00', '2026-10-03 00:00:00'),

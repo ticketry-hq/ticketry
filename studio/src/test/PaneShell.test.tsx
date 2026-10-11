@@ -31,12 +31,12 @@ describe("PaneShell", () => {
     });
   });
 
-  it("keeps the focused pane undimmed and dims an unfocused pane", () => {
+  it("emphasizes Stories while leaving workspace focus chrome to its navigation zones", () => {
     const { stories, workspace } = renderPanePair();
 
     expect(stories).toHaveClass("ring-1");
     expect(stories).not.toHaveClass("opacity-[0.65]");
-    expect(workspace).toHaveClass("opacity-[0.65]");
+    expect(workspace).not.toHaveClass("opacity-[0.65]", "ring-1");
   });
 
   it("hides scrollbar chrome in every pane", () => {
@@ -66,10 +66,10 @@ describe("PaneShell", () => {
   it("swaps emphasis when the focused pane store value changes", () => {
     const { stories, workspace } = renderPanePair();
 
-    act(() => useClientStore.setState({ focusedPane: "details-or-terminal" }));
+    act(() => useClientStore.getState().setEditViewZone("active-tab-body"));
 
     expect(stories).toHaveClass("opacity-[0.65]");
-    expect(workspace).toHaveClass("ring-1");
+    expect(workspace).not.toHaveClass("ring-1");
     expect(workspace).not.toHaveClass("opacity-[0.65]");
   });
 

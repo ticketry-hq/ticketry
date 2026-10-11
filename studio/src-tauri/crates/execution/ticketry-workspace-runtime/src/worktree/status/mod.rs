@@ -26,15 +26,15 @@
 mod error;
 mod git;
 mod graphql;
-pub mod identity;
+pub(crate) mod identity;
 mod live_facts;
 // Ownership, repository resolution, and the checkout registry are the trusted
 // derivations every worktree capability shares, so `crate::worktree::create`
 // and `crate::worktree::discard` resolve through these rather than repeating
 // the Work Item graph, the link rules, or Git's own bookkeeping.
-pub mod owner;
-pub mod registry;
-pub mod repository;
+pub(crate) mod owner;
+pub(crate) mod registry;
+pub(crate) mod repository;
 mod repository_locks;
 mod service;
 mod view;
@@ -43,7 +43,8 @@ pub use error::{WorktreeStatusError, WorktreeStatusErrorCode};
 pub use git::{GitOutcome, GitPort, RunOptions};
 pub use repository_locks::RepositoryLocks;
 pub use service::WorktreeStatusService;
-pub use view::{WorktreeStatusView, KIND_NONE, KIND_NO_REPO, KIND_WORKTREE};
+pub use view::WorktreeStatusView;
+pub(crate) use view::KIND_WORKTREE;
 
 /// Register the authored live-status query in the product schema.
 pub fn register_graphql(builder: seaography::Builder) -> seaography::Builder {

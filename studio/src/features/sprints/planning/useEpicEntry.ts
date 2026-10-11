@@ -10,11 +10,13 @@ export function useEpicEntry({ projectId, epicType, onCreated }: EpicEntryProps)
   const [state, setState] = useState<EntryState>({ kind: "closed" });
   const [name, setName] = useState("");
   const pending = useRef(false);
+  // Read recovery keeps the original visit guard, even after another tab is selected.
+  const creationCompletion = useRef(onCreated);
   const close = () => { if (!pending.current) { setName(""); setState({ kind: "closed" }); } };
   async function refresh(id: string) {
     try {
       await convergePlanningCollections(studioApolloClient(), [projectId]);
-      onCreated(id);
+      creationCompletion.current(id);
       setName(""); setState({ kind: "closed" });
     } catch (cause) {
       setState({ kind: "refreshFailed", id, error: `Epic created. The view could not refresh: ${cause instanceof Error ? cause.message : "Try refreshing again."}` });
@@ -29,6 +31,7 @@ export function useEpicEntry({ projectId, epicType, onCreated }: EpicEntryProps)
     }
     if (state.kind !== "editing" || !name.trim()) return;
     if ("error" in epicType) { setState({ kind: "editing", error: epicType.error }); return; }
+    creationCompletion.current = onCreated;
     pending.current = true; setState({ kind: "creating" });
     try {
       const epic = await createWorkItem(projectId, { name: name.trim(), issue_type_id: epicType.id, parent_id: null });

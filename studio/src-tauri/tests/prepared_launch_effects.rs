@@ -18,6 +18,93 @@ use ticketry_runs::{
 
 const PROVIDER: &str = "codex";
 
+#[tokio::test]
+async fn stage_skill_warning_survives_replay_and_can_be_rechecked_for_handoff() {
+    let (_directory, _database, services) = adopted().await;
+    let mut launch = request(intent(9981, 800, None));
+    let warning = r#"{"provider":"codex","skills":[{"requested":"tdd","status":"missing"}]}"#;
+    launch.snapshot.stage_skill_availability = Some(warning.to_owned());
+    let run_id = launch.intent.agent_run_id.clone();
+    services
+        .effects()
+        .prepare_launch(launch.clone())
+        .await
+        .unwrap();
+    launch.snapshot.stage_skill_availability = None;
+    assert!(
+        services
+            .effects()
+            .prepare_launch(launch)
+            .await
+            .unwrap()
+            .reused
+    );
+    assert_eq!(
+        services
+            .queries()
+            .runs()
+            .find(&run_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .stage_skill_availability
+            .as_deref(),
+        Some(warning)
+    );
+    services
+        .lifecycle()
+        .apply_lifecycle_fact(ticketry_runs::LifecycleFact {
+            agent_run_id: run_id.clone(),
+            kind: "idle".to_owned(),
+            occurred_at: "2030-01-01T00:00:00.123456789+00:00".to_owned(),
+            provider_session_id: None,
+        })
+        .await
+        .unwrap();
+    let before = services
+        .queries()
+        .run_holdings(&id(801), None)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|run| run.agent_run_id == run_id)
+        .unwrap();
+    services
+        .lifecycle()
+        .set_stage_skill_availability(&run_id, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        services
+            .queries()
+            .runs()
+            .find(&run_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .stage_skill_availability,
+        None
+    );
+    let after = services
+        .queries()
+        .run_holdings(&id(801), None)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|run| run.agent_run_id == run_id)
+        .unwrap();
+    assert_eq!(after.state, before.state);
+    assert!(
+        chrono::DateTime::parse_from_rfc3339(&after.updated_at)
+            .unwrap()
+            .timestamp_millis()
+            > chrono::DateTime::parse_from_rfc3339(&before.updated_at)
+                .unwrap()
+                .timestamp_millis()
+    );
+    assert_eq!(after.stage_skill_availability, None);
+}
+
 mod common;
 
 async fn fixture(path: &Path) {

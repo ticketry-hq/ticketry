@@ -22,7 +22,7 @@ function required(name: string): string {
   if (!value) {
     throw new Error(
       `${name} is unset. Run the profiling suite through `
-      + "`npm run perf:run --workspace @worktracker/studio`, which prepares the "
+      + "`bun run --cwd studio perf:run`, which prepares the "
       + "isolated runtime, ports and artifact directory this suite expects.",
     );
   }

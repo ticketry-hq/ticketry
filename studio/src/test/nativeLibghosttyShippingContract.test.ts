@@ -48,12 +48,12 @@ describe("native libghostty shipping contract", () => {
 
     expect(studioPackage.scripts).toMatchObject({
       "libghostty:prepare": "sh scripts/prepare-libghostty.sh",
-      "predesktop:build": "npm run libghostty:prepare",
-      "predesktop:dev": "npm run libghostty:prepare",
-      "prerelease:build": "npm run libghostty:prepare",
-      // Every `npm run tauri -- build` path, including the packaged update
+      "predesktop:build": "bun run libghostty:prepare",
+      "predesktop:dev": "bun run libghostty:prepare",
+      "prerelease:build": "bun run libghostty:prepare",
+      // Every `bun run tauri -- build` path, including the packaged update
       // build, prepares the pinned library before cargo links it.
-      pretauri: "npm run libghostty:prepare",
+      pretauri: "bun run libghostty:prepare",
     });
     // CODING-1487 — the retired WASM renderer left no preparation step behind,
     // so a fresh clone can build the desktop app and the web bundle without

@@ -232,7 +232,7 @@ async fn fixture() -> Fixture {
 
     // The module's folder is a typed link, so a launch resolves it from the
     // installation rather than from whichever profile happens to be selected.
-    ticketry_work_management::schema::install(&database)
+    ticketry_work_management::install_module_links_schema(&database)
         .await
         .expect("install the Module Link schema");
     ticketry_work_management::ModuleLinkStore::new(database.clone())

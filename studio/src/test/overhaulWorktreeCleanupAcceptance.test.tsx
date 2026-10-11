@@ -196,7 +196,7 @@ describe("overhaul acceptance - merged worktree cleanup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm cleanup" }));
     await waitFor(() => expect(operations).toHaveLength(2));
     expect(operations[1]?.operationId).toBe(operations[0]?.operationId);
-    expect(await screen.findByRole("status")).toHaveTextContent("Local worktree cleanup completed.");
+    expect(await screen.findByText("Local worktree cleanup completed.", { selector: '[role="status"]' })).toHaveTextContent("Local worktree cleanup completed.");
   });
 
   it("[overhaul-354] owns cleanup confirmation focus, Escape, and one-shot submission", async () => {
@@ -268,7 +268,7 @@ describe("overhaul acceptance - merged worktree cleanup", () => {
     expect(screen.getByRole("group", { name: "Confirm local worktree cleanup" })).toBeVisible();
 
     await act(async () => { finish(); await pending; });
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Local worktree cleanup completed."));
+    await waitFor(() => expect(screen.getByText("Local worktree cleanup completed.", { selector: '[role="status"]' })).toHaveTextContent("Local worktree cleanup completed."));
     expect(document.activeElement).not.toBe(confirm);
     expect(screen.getByLabelText("Worktree lifecycle")).toHaveFocus();
   });

@@ -42,6 +42,10 @@ fn nullable_strings() -> Value {
     json!({"anyOf": [{"items": {"type": "string"}, "type": "array"}, {"type": "null"}], "default": null})
 }
 
+fn optional_nullable_string() -> Value {
+    json!({"anyOf": [{"type": "string"}, {"type": "null"}]})
+}
+
 pub fn tools() -> Vec<Tool> {
     vec![
         tool("mcp_ping", "Verify MCP transport and tool execution without touching a backend.", json!({}), &[]),
@@ -73,13 +77,13 @@ pub fn tools() -> Vec<Tool> {
             "project_id": {"type": "string"}, "parent_id": {"type": "string"}, "name": {"type": "string"},
             "path": {"type": "string"}, "line_start": {"type": "integer"}, "line_end": {"type": "integer"}, "note": nullable_string()
         }), &["project_id", "parent_id", "name", "path", "line_start", "line_end"]),
-        tool("create_sub_task", "Create a sub-task with an explicit type, optionally in a named state.", json!({
+        tool("create_sub_task", "Create a sub-task with an explicit type, optionally in a named state. Sprint accepts current, next, or a UUID (with or without hyphens); null or omitted means backlog and keeps the legacy id result. Supplying a sprint returns the assigned sprint with the task identity.", json!({
             "project_id": {"type": "string"}, "parent_id": {"type": "string"}, "name": {"type": "string"},
-            "issue_type": {"type": "string"}, "description": {"type": "string", "default": ""}, "state_name": nullable_string()
+            "issue_type": {"type": "string"}, "description": {"type": "string", "default": ""}, "state_name": nullable_string(), "sprint": optional_nullable_string()
         }), &["project_id", "parent_id", "name", "issue_type"]),
-        tool("create_task", "Create a task with an explicit type, optionally in a named state.", json!({
+        tool("create_task", "Create a task with an explicit type, optionally in a named state. Sprint accepts current, next, or a UUID (with or without hyphens); null or omitted means backlog and keeps the legacy id result. Supplying a sprint returns the assigned sprint with the task identity.", json!({
             "project_id": {"type": "string"}, "name": {"type": "string"}, "issue_type": {"type": "string"},
-            "description": {"type": "string", "default": ""}, "module_id": nullable_string(), "state_name": nullable_string()
+            "description": {"type": "string", "default": ""}, "module_id": nullable_string(), "state_name": nullable_string(), "sprint": optional_nullable_string()
         }), &["project_id", "name", "issue_type"]),
         tool("execute_dependency_graph", "Launch eligible direct children of a root task.\n\nOnly direct children participate. Each child launches once after every\nblocker reaches a satisfying workflow state; a durable ledger prevents\nlater re-launches.\n\nPassing ``reset=True`` clears that root's ledger first, then executes\nnewly launchable direct children. The default leaves the ledger intact.\n\nReturns ``root_id`` and task ids launched by this call.", json!({
             "root_task_id": {"type": "string"}, "agent": nullable_string(), "reset": {"type": "boolean", "default": false}
@@ -109,6 +113,9 @@ pub fn tools() -> Vec<Tool> {
             "project_id": {"type": "string"}
         }), &["project_id"]),
         tool("list_projects", "List all projects in the worktracker.", json!({}), &[]),
+        closed_tool("list_sprints", "Read your project's planned and active sprints in sequence order, with is_current and is_next flags. Completed sprints are omitted.", json!({
+            "project_id": {"type": "string"}
+        }), &["project_id"]),
         tool("list_tasks", "List tasks (work items) in a project, optionally filtered by module or state.", json!({
             "project_id": {"type": "string"}, "module_id": nullable_string(), "state_name": nullable_string(),
             "include_description": {"type": "boolean", "default": false}
@@ -143,8 +150,8 @@ pub fn tools() -> Vec<Tool> {
             "issue_id": nullable_string(), "proposed_name": nullable_string(),
             "proposed_epic_id": nullable_string(), "reason": {"type": "string"}
         }), &["sprint_id", "goal_id", "reason"]),
-        tool("update_task", "Replace a task's supplied title and/or full description.", json!({
-            "id_or_key": {"type": "string"}, "name": nullable_string(), "description": nullable_string()
+        tool("update_task", "Replace a task's supplied title and/or full description, or change its sprint. Sprint accepts current, next, or a UUID (with or without hyphens); null returns to backlog and omitted leaves membership unchanged. Sprint is an exclusive patch: do not supply name or description with sprint. The result returns the assigned sprint or null.", json!({
+            "id_or_key": {"type": "string"}, "name": optional_nullable_string(), "description": optional_nullable_string(), "sprint": optional_nullable_string()
         }), &["id_or_key"]),
         tool("update_task_status", "Update the status/state of a task (e.g. 'Todo', 'Done').\n\nReturns ``{\"ok\": True, ...}`` on success, or ``{\"ok\": False, ...}`` with\nthe gate's structured reason (``detail``/``code``/``from``/``to``) when\nthe backend refuses an illegal workflow move (#872).\n\nThis tool always identifies the write as agent-origin, so the configured\ngraph and its agent permissions govern the move.", json!({
             "project_id": {"type": "string"}, "task_id": {"type": "string"}, "status_name": {"type": "string"}
@@ -170,9 +177,44 @@ mod tests {
     use super::*;
 
     #[test]
-    fn registry_publishes_35_tools_with_run_scoped_sprint_contracts() {
+    fn sprint_assignment_schemas_preserve_omitted_update_membership() {
         let tools = tools();
-        assert_eq!(tools.len(), 35);
+        for name in ["create_task", "create_sub_task", "update_task"] {
+            let tool = tools.iter().find(|tool| tool.name == name).unwrap();
+            let sprint = &tool.input_schema["properties"]["sprint"];
+            assert_eq!(
+                sprint["anyOf"],
+                json!([{"type": "string"}, {"type": "null"}])
+            );
+            assert!(
+                sprint.get("default").is_none(),
+                "{name} must preserve omission"
+            );
+            assert!(!tool.input_schema["required"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("sprint")));
+            let description = tool.description.as_ref().unwrap();
+            assert!(
+                description.contains("current")
+                    && description.contains("next")
+                    && description.contains("UUID")
+            );
+            if name == "update_task" {
+                assert!(description.contains("exclusive") && description.contains("backlog"));
+                for field in ["name", "description"] {
+                    assert!(tool.input_schema["properties"][field]
+                        .get("default")
+                        .is_none());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn registry_publishes_36_tools_with_run_scoped_sprint_contracts() {
+        let tools = tools();
+        assert_eq!(tools.len(), 36);
         let names: Vec<&str> = tools.iter().map(|tool| tool.name.as_ref()).collect();
         assert_eq!(
             names,
@@ -199,6 +241,7 @@ mod tests {
                 "list_issue_types",
                 "list_modules",
                 "list_projects",
+                "list_sprints",
                 "list_tasks",
                 "remove_issue_type_workflow_transition",
                 "rename_codex_thread",
@@ -213,6 +256,21 @@ mod tests {
                 "update_task_status",
                 "upsert_issue_type_workflow_launch_binding",
             ]
+        );
+        let list_sprints = tools
+            .iter()
+            .find(|tool| tool.name == "list_sprints")
+            .expect("list_sprints tool");
+        assert_eq!(
+            list_sprints.input_schema.as_ref(),
+            json!({
+                "type": "object",
+                "properties": {"project_id": {"type": "string"}},
+                "required": ["project_id"],
+                "additionalProperties": false
+            })
+            .as_object()
+            .unwrap()
         );
         assert_eq!(
             tools

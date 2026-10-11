@@ -6,7 +6,9 @@ use std::time::Duration;
 use sea_orm::DatabaseConnection;
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri_graphql::{GraphQlEndpoint, TransportApi, TransportApiImpl};
-use ticketry_runs::{failure_code, LifecycleFact, RunsServices};
+use ticketry_runs::{
+    LifecycleFact, RunsServices, STATUS_STREAM_BAD_REQUEST, STATUS_STREAM_UNAVAILABLE,
+};
 
 mod common;
 use common::runs_status_fixture::{insert_run, PUBLIC_PROJECT, TASK};
@@ -199,7 +201,7 @@ async fn a_structured_failure_frame_carries_a_code_and_no_storage_detail() {
 
     let failure = next_frame(&mut frames).await;
     assert_eq!(failure["__typename"], "RunStatusFailed");
-    assert_eq!(failure["code"], failure_code::BAD_REQUEST);
+    assert_eq!(failure["code"], STATUS_STREAM_BAD_REQUEST);
     let message = failure["message"].as_str().expect("a message");
     for leak in ["runs_status_events", "sqlite", "/", "SELECT"] {
         assert!(!message.contains(leak), "message leaks {leak}: {message}");
@@ -271,5 +273,5 @@ async fn a_status_stream_without_installed_runs_services_reports_unavailable() {
 
     let failure = next_frame(&mut frames).await;
     assert_eq!(failure["__typename"], "RunStatusFailed");
-    assert_eq!(failure["code"], failure_code::UNAVAILABLE);
+    assert_eq!(failure["code"], STATUS_STREAM_UNAVAILABLE);
 }

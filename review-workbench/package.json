@@ -7,5 +7,6 @@
   "scripts": {
     "dev": "node server.mjs",
     "check": "node --check server.mjs && node --check app.js && node --test server.test.mjs app.test.mjs"
-  }
+  },
+  "packageManager": "bun@1.4.2"
 }

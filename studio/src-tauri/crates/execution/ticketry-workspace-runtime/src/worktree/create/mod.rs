@@ -33,7 +33,7 @@ mod git_effects;
 // The resource key and the path-free repository digest are the worktree
 // journal's shared identity vocabulary, so `crate::worktree::discard` names the
 // same subject rather than inventing a second spelling of it.
-pub mod identity;
+pub(crate) mod identity;
 mod naming;
 mod plan;
 mod probe;
@@ -41,7 +41,7 @@ mod service;
 mod settlement;
 
 #[cfg(test)]
-pub mod test_support;
+pub(crate) mod test_support;
 
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
@@ -52,7 +52,7 @@ pub use service::WorktreeCreateService;
 
 /// The index row for a plan's owning Work Item, if one exists. One Work Item
 /// owns at most one checkout, so this is the whole membership question.
-pub async fn row_for(
+pub(crate) async fn row_for(
     work_items: &DatabaseConnection,
     plan: &plan::CreatePlan,
 ) -> Result<Option<worktree::Model>, WorktreeCreateError> {

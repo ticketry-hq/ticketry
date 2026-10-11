@@ -11,6 +11,9 @@ import {
 import { LaunchConfigurationForm } from "./LaunchConfigurationForm";
 import { validateLaunchBindingOptions } from "./launchBindingValidation";
 import { useStudioStore } from "../projects";
+import { useClientStore } from "../../state/clientStore";
+import { useProviderCatalogQuery } from "./providerQueries";
+import { checkStageSkillAvailability } from "./skillAvailability";
 import { useWorkflowEditorStore } from "./workflowEditorStore";
 import { useProjectWorkflowSettings } from "./queries/workflowSnapshots";
 import { workflowMemberStateIds } from "./workflowMembership";
@@ -31,6 +34,9 @@ export function StateConfigurationPanel({
   onClose: () => void;
 }) {
   const selectedProjectId = useStudioStore((store) => store.selectedProjectId);
+  const selectedModuleId = useClientStore((store) => store.selectedModuleId);
+  const globalDefault = useProviderCatalogQuery().data?.global_default ?? null;
+  const launchDefaultKey = JSON.stringify(globalDefault);
   const issueTypes = useWorkflowEditorStore((store) => store.issueTypes);
   const states = useWorkflowEditorStore((store) => store.states);
   const workflows = useProjectWorkflowSettings(selectedProjectId);
@@ -151,6 +157,8 @@ export function StateConfigurationPanel({
           controlErrors={controlErrors}
           error={controlErrors[launchControl(selectedType.id, stateId)]}
           issueType={selectedType}
+          launchDefaultKey={launchDefaultKey}
+          moduleId={selectedModuleId}
           onSelectType={setSelectedTypeId}
           providerCapabilities={providerCapabilities}
           save={(input) => upsertLaunchBinding(
@@ -185,6 +193,8 @@ function StateLaunchBindingEditor({
   controlErrors,
   error,
   issueType,
+  launchDefaultKey,
+  moduleId,
   onSelectType,
   providerCapabilities,
   save,
@@ -203,6 +213,8 @@ function StateLaunchBindingEditor({
   controlErrors: Record<string, string>;
   error?: string;
   issueType: IssueType;
+  launchDefaultKey: string;
+  moduleId: string | null;
   onSelectType: (typeId: string) => void;
   providerCapabilities: ReturnType<typeof useWorkflowEditorStore.getState>["providerCapabilities"];
   save: Parameters<typeof LaunchConfigurationForm>[0]["save"];
@@ -247,8 +259,11 @@ function StateLaunchBindingEditor({
         </h2>
         <LaunchConfigurationForm
           binding={binding}
+          checkSkillAvailability={checkStageSkillAvailability}
           error={error}
           issueType={issueType}
+          launchDefaultKey={launchDefaultKey}
+          moduleId={moduleId}
           promptRows={14}
           providerCapabilities={providerCapabilities}
           save={save}

@@ -71,8 +71,8 @@ export function prepareAdapter(profile) {
 
 export function prepareFrontend() {
   const durationMs = run(
-    "npm",
-    ["exec", "--", "vite", "build", "--config", "vite.performance.config.ts"],
+    "bun",
+    ["run", "vite", "build", "--config", "vite.performance.config.ts"],
     { label: "vite build (performance)" },
   );
   return { outDir: performanceBuildDirectory, sourcemap: true, durationMs };
@@ -86,8 +86,8 @@ export function prepareFrontend() {
  */
 export function prepareEngines() {
   const durationMs = run(
-    "npm",
-    ["exec", "--", "playwright", "install", ...ENGINES],
+    "bun",
+    ["run", "playwright", "install", ...ENGINES],
     { label: `playwright install ${ENGINES.join(" ")}` },
   );
   return { engines: [...ENGINES], durationMs };

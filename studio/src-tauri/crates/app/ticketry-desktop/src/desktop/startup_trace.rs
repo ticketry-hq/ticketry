@@ -6,6 +6,7 @@ use std::time::Instant;
 use serde_json::json;
 
 use crate::desktop::environment::startup_trace_id;
+use crate::desktop::global_mcp_registration::GlobalMcpStartupEvent;
 
 /// A process-wide trace retained as managed Tauri state while services start.
 /// Clones share one timeline so background startup threads can record stages.
@@ -65,5 +66,27 @@ impl DesktopStartupTrace {
     /// Record the duration since the preceding startup boundary and process start.
     pub(crate) fn record(&self, stage: &str) {
         self.record_at(stage, Instant::now());
+    }
+
+    pub(crate) fn record_global_mcp_registration(&self, event: GlobalMcpStartupEvent) {
+        let started = self
+            .inner
+            .timing
+            .lock()
+            .expect("startup trace lock poisoned")
+            .started;
+        let _ = self.inner.log.record(
+            "startup",
+            "info",
+            "global-mcp-registration",
+            json!({
+                "startup_id": self.inner.id,
+                "stage": "global-mcp-registration",
+                "elapsed_ms": started.elapsed().as_millis(),
+                "provider": event.provider,
+                "outcome": event.outcome,
+                "reason": event.reason,
+            }),
+        );
     }
 }

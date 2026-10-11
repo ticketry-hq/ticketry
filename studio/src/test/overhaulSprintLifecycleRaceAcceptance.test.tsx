@@ -10,7 +10,7 @@ it("[overhaul-414] keeps a newly opened completion dialog when an older start re
     openStoryId: null,
     onOpenStory: vi.fn(),
     onOpenSprint: vi.fn(),
-    onCreateSprint: vi.fn(async () => null),
+    onCreateSprint: vi.fn(async () => ({ kind: "missing" as const })),
     onUpdateSprint,
     renderSprintGoals: () => null,
     renderSuggestionAgentBox: () => null,

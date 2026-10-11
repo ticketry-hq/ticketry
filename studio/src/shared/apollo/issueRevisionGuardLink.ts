@@ -16,6 +16,7 @@ interface RevisionFragment {
   fragmentName: string;
   /** The response key the fragment gives `stateRevision` (its alias, if any). */
   revisionKey: string;
+  archiveKey?: string;
 }
 
 const fragmentsByDocument = new WeakMap<DocumentNode, RevisionFragment[]>();
@@ -35,10 +36,13 @@ function revisionFragments(query: DocumentNode): RevisionFragment[] {
         selection.kind === Kind.FIELD && selection.name.value === REVISION_FIELD,
     );
     if (!revision) return [];
+    const archived = definition.selectionSet.selections.find((selection): selection is FieldNode =>
+      selection.kind === Kind.FIELD && selection.name.value === "isArchived");
     return [{
       document,
       fragmentName: definition.name.value,
       revisionKey: revision.alias?.value ?? revision.name.value,
+      archiveKey: archived ? archived.alias?.value ?? archived.name.value : undefined,
     }];
   });
   fragmentsByDocument.set(query, found);
@@ -61,6 +65,7 @@ function newerCachedRow(
 ): JsonObject | null {
   const cacheId = cache.identify({ __typename: ISSUE_TYPENAME, id: row.id as string });
   if (!cacheId) return null;
+  let newer: JsonObject | null = null;
   for (const fragment of fragments) {
     const arriving = row[fragment.revisionKey];
     if (typeof arriving !== "number") continue;
@@ -69,15 +74,21 @@ function newerCachedRow(
       fragment: fragment.document,
       fragmentName: fragment.fragmentName,
       returnPartialData: true,
+      optimistic: false,
     });
     const known = cached?.[fragment.revisionKey];
-    if (cached && typeof known === "number" && arriving < known) {
-      return Object.fromEntries(
+    // Cascade archives retain descendant revisions. Unarchive is unsupported,
+    // so an equally revised active snapshot cannot undo that canonical archive.
+    const archivedCascade = fragment.archiveKey && cached?.[fragment.archiveKey] === true && row[fragment.archiveKey] === false;
+    if (cached && typeof known === "number" && (arriving < known || (arriving === known && archivedCascade))) {
+      // One operation can select minimal module rows and complete Story
+      // rows through different fragments. Preserve every known selected field.
+      newer = Object.assign(newer ?? {}, Object.fromEntries(
         Object.entries(cached).filter(([, value]) => value !== undefined),
-      );
+      ));
     }
   }
-  return null;
+  return newer;
 }
 
 function guardedValue(

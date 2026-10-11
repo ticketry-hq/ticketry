@@ -25,7 +25,7 @@ Verification:
 
 ```sh
 cargo test --offline --manifest-path studio/src-tauri/Cargo.toml -p ticketry-planner
-npm run test:planner:desktop --workspace @worktracker/studio
+bun run --cwd studio test:planner:desktop
 ```
 
 The Rust integration test uses Ticketry's production adoption, installation, directory ownership and command-readiness gate on an isolated profile. It creates projects, Stories, sprints and goals across the native and HTTP transports, observes assignments and edits from both, restarts, and checks persistence and the absence of planner copies or Roadmap provenance. Lifecycle cases cover readiness, credentials, browser access, bind conflicts, request draining and port release.

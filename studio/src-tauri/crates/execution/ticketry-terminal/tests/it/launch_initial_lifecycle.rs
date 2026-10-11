@@ -63,10 +63,13 @@ async fn promptless_instant_launch_waits_for_the_first_request() {
     ))
     .await
     .unwrap();
-    ticketry_work_management::workspace_tab_order_migration::install(&database)
+    ticketry_work_management::install_workspace_tab_order_schema(&database)
         .await
         .unwrap();
-    ticketry_work_management::sprint_migration::install(&database)
+    ticketry_work_management::install_sprint_schema(&database)
+        .await
+        .unwrap();
+    ticketry_work_management::install_sprint_rank_schema(&database)
         .await
         .unwrap();
     let service = TerminalLaunchService::new(database.clone(), Arc::new(ExistingRuntime))
@@ -89,6 +92,7 @@ async fn promptless_instant_launch_waits_for_the_first_request() {
             resume_from_agent_run_id: None,
             automation_attempt_id: None,
             required_skills: Vec::new(),
+            stage_skills: Vec::new(),
             working_directory_identity: format!(
                 "module:{}",
                 super::execution_legacy_fixture::MODULE

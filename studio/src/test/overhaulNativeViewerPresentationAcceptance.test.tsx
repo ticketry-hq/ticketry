@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NativeGhosttyTerminal } from "../features/agents/terminal/NativeGhosttyTerminal";
 import { Terminal } from "../features/agents/terminal/Terminal";
-import { WorkspaceTabBody } from "../app/shell/ticket-workspace/selected-ticket/internal/WorkspaceTabBody";
+import { WorkspaceTabBody } from "../features/task-workspace/internal/WorkspaceTabBody";
 import { useModalStore } from "../app/modal/modalStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
@@ -378,6 +378,8 @@ describe("native viewer attachment acceptance", () => {
       terminalIds: ["session-1"],
       activeTerminalId: "session-1",
       requestedSurface: null,
+      canFocusSurface: null,
+      canFocusTerminal: null,
       surfaceFocusSignal: 0,
       requestedTerminalId: null,
       terminalFocusSignal: 0,
@@ -490,6 +492,8 @@ describe("native viewer attachment acceptance", () => {
       terminalIds: ["session-1"],
       activeTerminalId: "session-1",
       requestedSurface: null,
+      canFocusSurface: null,
+      canFocusTerminal: null,
       surfaceFocusSignal: 0,
       requestedTerminalId: null,
       terminalFocusSignal: 0,

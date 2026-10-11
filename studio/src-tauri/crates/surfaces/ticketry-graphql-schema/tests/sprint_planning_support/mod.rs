@@ -7,7 +7,7 @@ pub use suggestions::{input, proposal, record, snapshot, update, UPDATE};
 use ticketry_entities::{
     app_settings, issue, issue_type, project, sprint, sprint_goal, sprint_suggestion, state,
 };
-use ticketry_work_management::commands::{status_facts::WorkFactRecorder, CommandDatabase};
+use ticketry_work_management::{CommandDatabase, WorkFactRecorder};
 
 pub const PROJECT: &str = "20000000-0000-0000-0000-000000000001";
 pub const SPRINT: &str = "10000000-0000-0000-0000-000000000001";
@@ -56,8 +56,8 @@ pub async fn fixture() -> Fixture {
         ('80000000000000000000000000000001', '20000000000000000000000000000001', 'Ideas', 'backlog', '', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
         INSERT INTO worktracker_issuetype (id, project_id, name, level, color, sort_order, start_state_id, workflow_revision, is_pathfind, created_at, updated_at) VALUES
         ('70000000000000000000000000000001', '20000000000000000000000000000001', 'Story', 'task', '', 1, '80000000000000000000000000000001', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-        INSERT INTO worktracker_sprint (id, project_id, name, status, suggestion_run_id, created_at, updated_at) VALUES
-        ('10000000000000000000000000000001', '20000000000000000000000000000001', 'Sprint', 'planned', 'run-with-opaque-id', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+        INSERT INTO worktracker_sprint (id, project_id, name, status, rank, suggestion_run_id, created_at, updated_at) VALUES
+        ('10000000000000000000000000000001', '20000000000000000000000000000001', 'Sprint', 'planned', 'V', 'run-with-opaque-id', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
         INSERT INTO worktracker_sprint_goal (id, sprint_id, position, text, created_at, updated_at) VALUES
         ('30000000000000000000000000000001', '10000000000000000000000000000001', 1, 'Ship planning', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
         INSERT INTO worktracker_issue (id, project_id, type, issue_type_id, state_id, state_revision, name, sequence_id, is_archived, rank, description, workspace_tab_order, created_at, updated_at) VALUES

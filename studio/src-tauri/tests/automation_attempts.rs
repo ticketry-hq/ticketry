@@ -2,7 +2,8 @@ use std::path::Path;
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use ticketry_runs::{
-    adopt, AttemptOutcome, RunsPersistenceErrorCode, RunsServices, TransitionOccurrence,
+    adopt, AttemptOutcome, DeliveryMode, RunsPersistenceErrorCode, RunsServices,
+    TransitionOccurrence,
 };
 
 mod common;
@@ -124,6 +125,92 @@ async fn projections_publish_retryability_only_for_failures_and_list_newest_firs
     assert!(
         !retry.retryable,
         "a pending retry child is not itself retryable yet"
+    );
+}
+
+/// A delivered automated transition is durable history the status snapshot
+/// must carry across a reload: a continued handoff succeeds the moment typed
+/// delivery lands and mints no run, so its settled attempt is the only
+/// evidence of how the transition reached its agent. A success that never
+/// recorded a delivery still resolves out of the list.
+#[tokio::test]
+async fn delivered_successes_stay_listed_while_undelivered_successes_resolve() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.db");
+    fixture(&path).await;
+    adopt(directory.path()).await.unwrap();
+    let services = RunsServices::new(open(&path).await);
+    let succeed = |attempt_id: String| {
+        let services = services.clone();
+        async move {
+            services
+                .attempts()
+                .record_outcome(
+                    &attempt_id,
+                    AttemptOutcome::Succeeded {
+                        agent: "codex".to_owned(),
+                        agent_run_id: format!("run-{attempt_id}"),
+                    },
+                )
+                .await
+                .unwrap()
+        }
+    };
+
+    let continued = services
+        .attempts()
+        .materialize_root(&occurrence(900, 800))
+        .await
+        .unwrap();
+    services
+        .attempts()
+        .record_delivery_mode(&continued.attempt_id, DeliveryMode::Continued)
+        .await
+        .unwrap();
+    let continued = succeed(continued.attempt_id).await;
+
+    let fresh = services
+        .attempts()
+        .materialize_root(&occurrence(901, 800))
+        .await
+        .unwrap();
+    succeed(fresh.attempt_id.clone()).await;
+    let fresh = services
+        .attempts()
+        .record_delivery_mode(&fresh.attempt_id, DeliveryMode::StartedFresh)
+        .await
+        .unwrap();
+
+    let undelivered = services
+        .attempts()
+        .materialize_root(&occurrence(902, 800))
+        .await
+        .unwrap();
+    succeed(undelivered.attempt_id).await;
+
+    let listed = services.attempts().latest(&id(801), None).await.unwrap();
+    assert_eq!(
+        listed
+            .iter()
+            .map(|attempt| (
+                attempt.attempt_id.as_str(),
+                attempt.status.as_str(),
+                attempt.delivery_mode.as_deref()
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                fresh.attempt_id.as_str(),
+                "succeeded",
+                Some("started_fresh")
+            ),
+            (
+                continued.attempt_id.as_str(),
+                "succeeded",
+                Some("continued")
+            ),
+        ],
+        "delivered successes stay listed newest first; an undelivered success resolves"
     );
 }
 

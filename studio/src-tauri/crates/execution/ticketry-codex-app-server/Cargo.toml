@@ -8,6 +8,7 @@ publish = false
 async-trait.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+toml_edit.workspace = true
 tokio = { workspace = true, features = ["io-util", "process"] }
 
 [dev-dependencies]

@@ -195,9 +195,9 @@ Run the smallest focused tests first, then at minimum:
 
 ```bash
 cargo +1.95.0 check --locked --manifest-path studio/src-tauri/Cargo.toml
-npm run graphql:drift --workspace @worktracker/studio
-npm run typecheck --workspace @worktracker/studio
-npm run test:overhaul --workspace @worktracker/studio
+bun run --cwd studio graphql:drift
+bun run --cwd studio typecheck
+bun run --cwd studio test:overhaul
 ```
 
 When handing off, state which operations now use generated Seaography, which

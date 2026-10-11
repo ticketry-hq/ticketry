@@ -58,7 +58,7 @@ import {
   reorderWorkItem,
   resetModuleReorderHarness,
   rows,
-  sidebarOrder,
+  managerOrder,
   tabBadges,
   tabFor,
   tabStripOrder,
@@ -78,13 +78,13 @@ describe("module tab strip reorder acceptance", () => {
     listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
 
     // Before release, the strip promises the resolved edge — and only the strip:
-    // a gesture here must not make the sidebar advertise a drop it is not taking.
+    // a gesture here must not make the manager advertise a drop it is not taking.
     dragTab("module-c", "module-a", "near", { drop: false });
     expect(screen.getByTestId("module-tab-drop-seam")).toHaveAttribute(
       "data-drop-intent",
       "near",
     );
-    expect(screen.queryByTestId("module-drop-seam")).toBeNull();
+    expect(screen.queryByTestId("module-manager-drop-seam")).toBeNull();
 
     // The left half of a tab means "before it", and the baseline is the
     // canonical order the user could actually see.
@@ -97,10 +97,10 @@ describe("module tab strip reorder acceptance", () => {
       initial_order_ids: ["module-a", "module-b", "module-c"],
     });
 
-    // One cached order: the strip that was dragged, the sidebar, and a
+    // One cached order: the strip that was dragged, the manager, and a
     // read-only consumer all move at once, before the server has answered.
     expect(tabStripOrder()).toEqual(["C", "A", "B"]);
-    expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]);
+    expect(managerOrder()).toEqual(["module-c", "module-a", "module-b"]);
     expect(backlogGroupOrder()).toEqual(["C", "A", "B"]);
 
     // A reorder in flight disables dragging everywhere, not only on the surface
@@ -131,7 +131,7 @@ describe("module tab strip reorder acceptance", () => {
       initial_order_ids: ["module-c", "module-a", "module-b"],
     });
     expect(tabStripOrder()).toEqual(["A", "C", "B"]);
-    expect(sidebarOrder()).toEqual(["module-a", "module-c", "module-b"]);
+    expect(managerOrder()).toEqual(["module-a", "module-c", "module-b"]);
 
     // A tab drag that drifts above the strip is still pointing at a seam: the
     // horizontal position is what places a tab, so the vertical one must not
@@ -160,7 +160,7 @@ describe("module tab strip reorder acceptance", () => {
       initial_order_ids: ["module-a", "module-c", "module-b"],
     });
     expect(tabStripOrder()).toEqual(["B", "A", "C"]);
-    expect(sidebarOrder()).toEqual(["module-b", "module-a", "module-c"]);
+    expect(managerOrder()).toEqual(["module-b", "module-a", "module-c"]);
   });
 
   it("[overhaul-52] keeps tab navigation and the trailing module picker intact across a reorder", async () => {
@@ -183,14 +183,11 @@ describe("module tab strip reorder acceptance", () => {
     const pickerButton = screen.getByRole("button", {
       name: "Open module picker",
     });
-    const modulesToggle = screen.getByRole("button", {
-      name: /^(Open|Close) Modules pane$/,
-    });
     const tabScroller = screen.getByLabelText("Scrollable project module tabs");
 
-    // The sidebar toggle stays before the project's Modules and the picker
-    // stays after them. Neither control can be picked up or receive a tab.
-    expect(tabScroller.parentElement?.firstElementChild).toBe(modulesToggle);
+    // The scroller starts the strip; the picker remains after the tabs and
+    // cannot be picked up or receive a tab.
+    expect(tabScroller.parentElement?.firstElementChild).toBe(tabScroller);
     expect(tabScroller.firstElementChild).toBe(strip);
     expect(strip.nextElementSibling).toContainElement(pickerButton);
     expect(pickerButton.getAttribute("draggable")).toBeNull();
@@ -216,7 +213,7 @@ describe("module tab strip reorder acceptance", () => {
     expect(tabFor("module-c").getAttribute("aria-selected")).toBe("false");
     expect(tabBadges("module-c")).toHaveLength(1);
     expect(tabBadges("module-a")).toEqual([]);
-    expect(tabScroller.parentElement?.firstElementChild).toBe(modulesToggle);
+    expect(tabScroller.parentElement?.firstElementChild).toBe(tabScroller);
     expect(tabScroller.firstElementChild).toBe(strip);
     expect(strip.nextElementSibling).toContainElement(pickerButton);
 

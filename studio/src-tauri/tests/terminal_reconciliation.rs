@@ -653,6 +653,7 @@ fn launch_request(id: &str) -> CreateTerminalSession {
         resume_from_agent_run_id: None,
         automation_attempt_id: None,
         required_skills: Vec::new(),
+        stage_skills: Vec::new(),
         working_directory_identity: format!("task:{}", TASK_ID.replace('-', "")),
         design_directory_identity: None,
         document_relative_path: None,

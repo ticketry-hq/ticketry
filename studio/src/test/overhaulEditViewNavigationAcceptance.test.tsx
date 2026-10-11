@@ -39,7 +39,7 @@ vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
 }));
 
 vi.mock(
-  "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
+  "../features/task-workspace/terminals/SelectedTicketTerminal",
   () => ({
     SelectedTicketTerminal: ({ bucket }: { bucket: string }) => (
       <div className="xterm" data-testid="selected-ticket-terminal">
@@ -410,27 +410,14 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
     expect(bodyElement()).toHaveFocus();
   });
 
-  it("[CODING-1542] Right focuses the selected conversation's terminal in Full sidebar view", () => {
-    const bucket = scratchBucketId("module-1");
-    const focusSession = vi.fn();
-    useClientStore.setState({
-      sidebarVisible: true,
-      focusedPane: "tasks",
-      selectedTaskId: TEMP_TASK_ID,
-      workspaces: { [bucket]: { active: "terminal", activeDocId: null, closedDocIds: [] } },
-      activeByTask: { [bucket]: "session-instant" },
-    });
-    useTerminalStore.setState({
-      sessions: { "session-instant": instantSession() },
-      sessionByRun: { "instant-1": "session-instant" },
-      focusSession,
-    });
-    render(<KeymapHarness rows={[SCRATCH_ROW, INSTANT_ROW]} />);
-
+  it("[CODING-1542] Right enters a conversation despite a legacy sidebar visibility value", async () => {
+    await renderConversationWorkspace();
+    act(() => useClientStore.setState({ sidebarVisible: true }));
+    press("ArrowDown");
     press("ArrowRight");
-
-    expect(focusSession).toHaveBeenCalledWith("session-instant");
-    expect(useClientStore.getState().focusedPane).toBe("details-or-terminal");
+    expect(screen.getByRole("tab", { name: "instant codex terminal" })).toHaveAttribute("aria-selected", "true");
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(true);
   });
 
   it("keeps Right in the Stories zone when no navigable Task workspace is mounted", () => {
@@ -564,15 +551,15 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
     expect(useClientStore.getState().editViewZone).toBe("stories");
   });
 
-  it("leaves Full sidebar view pane navigation unchanged", async () => {
+  it("uses workspace zone navigation despite a legacy sidebar visibility value", async () => {
     useClientStore.setState({ sidebarVisible: true });
     await renderEditViewWorkspace(EXPANDED_ROWS);
     const zones = recordZones();
 
     press("ArrowRight");
 
-    expect(useClientStore.getState().selectedTaskId).toBe("child-1");
-    expect(useClientStore.getState().focusedPane).toBe("tasks");
-    expect(zones).toEqual([]);
+    expect(useClientStore.getState().selectedTaskId).toBe("story-1");
+    expect(useClientStore.getState().focusedPane).toBe("details-or-terminal");
+    expect(zones).toEqual(["active-tab-body"]);
   });
 });

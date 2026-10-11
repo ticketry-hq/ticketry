@@ -50,13 +50,14 @@ void ghostty_surface_ime_point(ghostty_surface_t surface, double *x, double *y,
   NSMutableAttributedString *_markedText;
   NSRange _markedSelectedRange;
   NSMutableArray<NSString *> *_keyTextAccumulator;
+  BOOL _keyInputOwned;
+  BOOL _keyCommandRequested;
 }
 @end
 
 @implementation MuxedGhosttyView
-@end
-
 #include "../libghostty_text_input.m"
+@end
 
 static void require(bool condition, const char *message) {
   if (condition) return;

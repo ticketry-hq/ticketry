@@ -12,7 +12,7 @@ test("uses the default frontend port and coordinates strict Vite with Tauri", as
     productName: "Ticketry Dev",
     identifier: "com.ticketry.desktop.dev",
     build: {
-      beforeDevCommand: "npm run dev -- --host 127.0.0.1 --port 5174 --strictPort",
+      beforeDevCommand: "bun run dev -- --host 127.0.0.1 --port 5174 --strictPort",
       devUrl: "http://127.0.0.1:5174",
     },
     app: {

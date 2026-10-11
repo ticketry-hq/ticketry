@@ -85,11 +85,17 @@ export async function runProvider(root, argv) {
       agent_run_id: launch.args[launch.args.indexOf("--agent-run-id") + 1],
       provider_session_id: "ticketry-acceptance-provider", cwd: process.cwd(), task_id: taskId, project_id: projectId,
       hook: true, mcp_data_directory: launch.args[launch.args.indexOf("--data-dir") + 1], mcp_authorization: true,
+      ...(existsSync(path.join(root, "provider-stage-skills")) ? { prompt, argv } : {}),
     };
     writeFileSync(path.join(root, "provider-started.json"), JSON.stringify(identity));
     console.log("Ticketry desktop acceptance provider started");
     emitHook("SessionStart");
     emitHook("UserPromptSubmit");
+    if (existsSync(path.join(root, "provider-stage-skills"))) {
+      await waitForSignal(`provider-exit-${identity.agent_run_id}`);
+      emitHook("Stop");
+      return;
+    }
     for (const mode of ["orderly", "sigkill"]) {
       await waitForSignal(`outage-${mode}`);
       const started = performance.now();

@@ -1,5 +1,5 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import type { ForegroundOwner } from "./internal/foregroundStore";
 import { LazyXtermTerminal } from "./xtermTerminalLoader";
@@ -11,22 +11,44 @@ import { ensureTerminalRunCreated } from "./internal/terminalRunCreation";
 import { currentTerminalRenderer } from "./internal/rendererSelection";
 import { useRunState } from "../status";
 import { TerminalEndedState } from "./TerminalEndedState";
+import { StageSkillWarning } from "./StageSkillWarning";
 
 type TerminalProps = {
   sessionId: string | null;
+  /** Workspace controls anchored to the renderer, below persistent notices. */
+  rendererOverlay?: ReactNode;
   owner?: ForegroundOwner;
   /** Whether this terminal is the workspace's currently presented surface. */
   active?: boolean;
   /** A controlled request to focus the currently presented terminal. */
   focusSignal?: number;
+  canFocus?: (target?: HTMLElement | null) => boolean;
   onNativeVisibilityPendingChange?: (runId: string, pending: boolean) => void;
 };
 
 /** Presents a pooled terminal session on one foreground surface. */
-export function Terminal({
+export function Terminal(props: TerminalProps) {
+  const session = useTerminalStore((state) =>
+    props.sessionId ? state.sessions[props.sessionId] ?? null : null,
+  );
+  return (
+    <div className="flex h-full w-full min-h-0 flex-col">
+      {session?.agentRunId && !session.viewerAttachmentDeferred && !session.isShell && (
+        <StageSkillWarning agentRunId={session.agentRunId} />
+      )}
+      <div className="relative min-h-0 flex-1">
+        <TerminalRenderer {...props} />
+        {props.rendererOverlay}
+      </div>
+    </div>
+  );
+}
+
+function TerminalRenderer({
   sessionId,
   owner = "studio",
   focusSignal,
+  canFocus,
   active = true,
   onNativeVisibilityPendingChange,
 }: TerminalProps) {
@@ -108,6 +130,7 @@ export function Terminal({
       <NativeGhosttyTerminal
         sessionId={sessionId}
         owner={owner}
+        canFocus={canFocus}
         focusSignal={focusSignal}
         active={active}
         onUnavailable={markNativeUnavailable}
@@ -119,6 +142,7 @@ export function Terminal({
     <LazyXtermTerminal
       sessionId={active || session?.status === "connecting" ? sessionId : null}
       owner={owner}
+      canFocus={canFocus}
       focusSignal={focusSignal}
     />
   );

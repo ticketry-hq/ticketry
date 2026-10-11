@@ -8,8 +8,8 @@ use sea_orm::DatabaseConnection;
 use serde_json::{Map, Value};
 use ticketry_agent_execution::GraphRunService;
 use ticketry_terminal::{TerminalCleanupService, TerminalLaunchService};
-use ticketry_work_management::commands::{attachments, CommandError};
-use ticketry_work_management::launch_policy::LaunchPolicyResolver;
+use ticketry_work_management::LaunchPolicyResolver;
+use ticketry_work_management::{AttachmentStorage, CommandError};
 
 pub struct DispatchOutput {
     pub value: Value,
@@ -34,7 +34,7 @@ impl DispatchOutput {
 
 pub async fn dispatch(
     database: &DatabaseConnection,
-    storage: &attachments::AttachmentStorage,
+    storage: &AttachmentStorage,
     launch_policy: &LaunchPolicyResolver,
     graph_runs: Option<&GraphRunService>,
     terminal_cleanup: &TerminalCleanupService,
@@ -65,7 +65,7 @@ pub async fn dispatch(
 
 async fn dispatch_checked(
     database: &DatabaseConnection,
-    storage: &attachments::AttachmentStorage,
+    storage: &AttachmentStorage,
     launch_policy: &LaunchPolicyResolver,
     graph_runs: Option<&GraphRunService>,
     terminal_cleanup: &TerminalCleanupService,
@@ -92,6 +92,7 @@ async fn dispatch_checked(
             .map(DispatchOutput::direct);
     }
     match name {
+        "list_sprints" => sprint_tools::list_sprints(database, principal, arguments).await,
         "get_sprint_goals" => sprint_tools::get_sprint_goals(database, principal, arguments).await,
         "suggest_sprint_story" => {
             sprint_tools::suggest_sprint_story(database, principal, arguments).await

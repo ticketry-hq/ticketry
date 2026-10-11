@@ -1,7 +1,7 @@
 use sea_orm::{
     ActiveModelTrait, ConnectionTrait, Database, DatabaseConnection, EntityTrait, NotSet, Set,
 };
-use ticketry_agent_execution::graph::{
+use ticketry_agent_execution::{
     dependency_graph, relevant_armed_roots, scheduling_facts, GraphAccess, GraphFactsErrorCode,
 };
 use ticketry_entities::{
@@ -315,7 +315,7 @@ async fn fixture() -> DatabaseConnection {
                 ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,
                 lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
                 scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT,
-                initial_prompt TEXT, launch_reasoning TEXT, attention_reason TEXT,
+                initial_prompt TEXT, launch_reasoning TEXT, attention_reason TEXT, conversation_title TEXT, stage_skill_availability TEXT,
                 launch_unattended BOOLEAN NOT NULL DEFAULT 0
             );
             CREATE TABLE agent_terminal_sessions (
@@ -581,6 +581,8 @@ async fn insert_run(
         launch_reasoning: Set(None),
         launch_unattended: Set(false),
         attention_reason: Set(None),
+        conversation_title: Set(None),
+        stage_skill_availability: Set(None),
     }
     .insert(database)
     .await

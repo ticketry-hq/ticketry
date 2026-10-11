@@ -30,7 +30,7 @@ export function latestStartupTrace(records) {
 }
 
 export function renderStartupTraceReport(records) {
-  if (records.length === 0) return "No desktop startup timeline found. Launch with npm run desktop:dev first.";
+  if (records.length === 0) return "No desktop startup timeline found. Launch with bun run desktop:dev first.";
   const trace = latestStartupTrace(records);
   const renderRows = (records) => records.map((record) => (
     `${String(record.elapsed_ms).padStart(7)} ms  +${String(record.duration_ms).padStart(6)} ms  ${record.stage}`

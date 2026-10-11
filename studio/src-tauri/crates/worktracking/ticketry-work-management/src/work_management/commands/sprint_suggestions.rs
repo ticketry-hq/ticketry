@@ -70,11 +70,12 @@ pub(crate) async fn set_status(
         PatchValue::Value(name) => {
             let name = name.trim().to_owned();
             validate_name(&name)?;
-            let same_accept = current.status == sprint_suggestion::ACCEPTED
-                && status == sprint_suggestion::ACCEPTED
+            let same_accept = current.status == ticketry_entities::SPRINT_SUGGESTION_ACCEPTED
+                && status == ticketry_entities::SPRINT_SUGGESTION_ACCEPTED
                 && current.proposed_name.as_deref() == Some(name.as_str());
             if !same_accept
-                && (current.status != sprint_suggestion::WAITING || current.issue_id.is_some())
+                && (current.status != ticketry_entities::SPRINT_SUGGESTION_WAITING
+                    || current.issue_id.is_some())
             {
                 return Err(CommandError::field(
                     "proposed_name",
@@ -88,7 +89,10 @@ pub(crate) async fn set_status(
     }
     match (current.status.as_str(), status) {
         (from, to) if from == to => {}
-        (sprint_suggestion::WAITING, sprint_suggestion::ACCEPTED) => {
+        (
+            ticketry_entities::SPRINT_SUGGESTION_WAITING,
+            ticketry_entities::SPRINT_SUGGESTION_ACCEPTED,
+        ) => {
             let id = match current.issue_id {
                 Some(id) => {
                     validate_story(txn, &sprint.project_id, &id).await?;
@@ -109,6 +113,7 @@ pub(crate) async fn set_status(
                     work_items::create_in(
                         txn,
                         CreateWorkItem {
+                            sprint_id: None,
                             project_id: sprint.project_id,
                             issue_type_id: kind.id,
                             name: active
@@ -127,10 +132,21 @@ pub(crate) async fn set_status(
                     .await?
                 }
             };
-            assign_work_item_sprint(txn, &id, PatchValue::Value(current.sprint_id), facts).await?;
+            assign_work_item_sprint(
+                txn,
+                &id,
+                PatchValue::Value(super::sprint_selector::SprintSelector::Explicit(
+                    current.sprint_id,
+                )),
+                facts,
+            )
+            .await?;
             active.issue_id = Set(Some(id));
         }
-        (sprint_suggestion::ACCEPTED, sprint_suggestion::WAITING) => {
+        (
+            ticketry_entities::SPRINT_SUGGESTION_ACCEPTED,
+            ticketry_entities::SPRINT_SUGGESTION_WAITING,
+        ) => {
             let id = current
                 .issue_id
                 .ok_or_else(|| CommandError::validation("Accepted suggestion has no story."))?;
@@ -149,8 +165,14 @@ pub(crate) async fn set_status(
             active.proposed_name = Set(None);
             active.proposed_epic_id = Set(None);
         }
-        (sprint_suggestion::WAITING, sprint_suggestion::DISMISSED)
-        | (sprint_suggestion::DISMISSED, sprint_suggestion::WAITING) => {}
+        (
+            ticketry_entities::SPRINT_SUGGESTION_WAITING,
+            ticketry_entities::SPRINT_SUGGESTION_DISMISSED,
+        )
+        | (
+            ticketry_entities::SPRINT_SUGGESTION_DISMISSED,
+            ticketry_entities::SPRINT_SUGGESTION_WAITING,
+        ) => {}
         _ => {
             return Err(CommandError::field(
                 "status",

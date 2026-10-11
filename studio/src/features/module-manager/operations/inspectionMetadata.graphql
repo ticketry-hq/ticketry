@@ -1,0 +1,27 @@
+fragment ModuleManagerInspectionStoryFields on WorktrackerIssue {
+  __typename id projectId parentId moduleId type isArchived updatedAt stateRevision sprintId sprint { __typename id name }
+}
+
+query ModuleManagerInspectionStories($projectId: String!, $moduleId: String!, $offset: Int!, $limit: Int!) {
+  stories: worktrackerIssue(
+    filters: { projectId: { eq: $projectId }, parentId: { eq: $moduleId }, type: { eq: "task" }, isArchived: { eq: false } }
+    orderBy: { rank: ASC, sequenceId: ASC, id: ASC }
+    pagination: { offset: { offset: $offset, limit: $limit } }
+  ) {
+    nodes { ...ModuleManagerInspectionStoryFields }
+    pageInfo { __typename hasNextPage }
+    paginationInfo { __typename total }
+  }
+}
+
+query ModuleManagerInspectionWorktrees($projectId: String!, $moduleId: String!, $offset: Int!, $limit: Int!) {
+  worktrees(
+    filters: { projectId: { eq: $projectId }, moduleId: { eq: $moduleId }, status: { is_in: ["active", "conflict"] } }
+    orderBy: { ticketSeq: ASC, id: ASC }
+    pagination: { offset: { offset: $offset, limit: $limit } }
+  ) {
+    nodes { __typename id projectId moduleId status updatedAt }
+    pageInfo { __typename hasNextPage }
+    paginationInfo { __typename total }
+  }
+}

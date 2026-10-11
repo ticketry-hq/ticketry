@@ -10,8 +10,9 @@ use std::time::Duration;
 use futures_util::{Stream, StreamExt};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, FromQueryResult, Statement};
 use ticketry_runs::{
-    open_status_stream, reset_reason, CompactionPolicy, RunStatusFrame, RunsServices,
-    StatusStreamRequest, MAX_REPLAY_EVENTS, RETAINED_EVENTS, RETENTION_DAYS,
+    open_status_stream, CompactionPolicy, RunStatusFrame, RunsServices, StatusStreamRequest,
+    MAX_REPLAY_EVENTS, RETAINED_EVENTS, RETENTION_DAYS, STATUS_CURSOR_AHEAD_OF_SERVER,
+    STATUS_CURSOR_COMPACTED, STATUS_EVENT_VERSION_INCOMPATIBLE, STATUS_REPLAY_BOUNDED,
 };
 
 mod common;
@@ -341,7 +342,7 @@ async fn a_current_cursor_replays_and_a_compacted_one_resets() {
     // A cursor at or below the watermark cannot be honoured.
     let mut reset = Box::pin(open_status_stream(services.stream(), request(Some(stale))));
     let frames = take(&mut reset, 3).await;
-    assert_eq!(reset_reason_of(&frames[1]), reset_reason::COMPACTED);
+    assert_eq!(reset_reason_of(&frames[1]), STATUS_CURSOR_COMPACTED);
     assert!(
         matches!(&frames[2], RunStatusFrame::RunStatusCaughtUp(caught_up)
             if caught_up.cursor == *survivors.last().unwrap()),
@@ -369,7 +370,7 @@ async fn a_future_cursor_resets_rather_than_waiting_for_the_server_to_catch_up()
         request(Some(high_water + 5_000)),
     ));
     let frames = take(&mut stream, 2).await;
-    assert_eq!(reset_reason_of(&frames[1]), reset_reason::AHEAD_OF_SERVER);
+    assert_eq!(reset_reason_of(&frames[1]), STATUS_CURSOR_AHEAD_OF_SERVER);
 }
 
 #[tokio::test]
@@ -384,7 +385,7 @@ async fn an_oversized_replay_costs_one_bounded_read_and_a_reset() {
 
     let mut stream = Box::pin(open_status_stream(services.stream(), request(Some(0))));
     let frames = take(&mut stream, 2).await;
-    assert_eq!(reset_reason_of(&frames[1]), reset_reason::REPLAY_BOUNDED);
+    assert_eq!(reset_reason_of(&frames[1]), STATUS_REPLAY_BOUNDED);
 
     // The read that made that decision is bounded by the replay cap, so a
     // severely lagged client cannot make the server materialize its backlog.
@@ -412,7 +413,7 @@ async fn incompatible_retained_versions_reset_instead_of_replaying_partial_histo
 
     assert_eq!(
         reset_reason_of(&frames[1]),
-        reset_reason::EVENT_VERSION_INCOMPATIBLE,
+        STATUS_EVENT_VERSION_INCOMPATIBLE,
     );
     assert!(
         event_cursors(&frames).is_empty(),

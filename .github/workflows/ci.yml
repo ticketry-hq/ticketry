@@ -19,19 +19,23 @@ jobs:
       # Zig 0.15.2 cannot link its build runner against the default Xcode
       # 26.6 SDK; 26.1.1 matches the development toolchain that builds it.
       DEVELOPER_DIR: /Applications/Xcode_26.1.1.app/Contents/Developer
+      # Fresh runners never reuse the incremental cache that profile.dev enables.
+      CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: package-lock.json
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
 
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Install JavaScript packages
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       # Rust terminal tests need tmux before desktop acceptance runs.
       - name: Install terminal prerequisite
@@ -42,14 +46,14 @@ jobs:
       # Studio acceptance tests compile native code against the prepared
       # libghostty headers, so preparation must come first.
       - name: Prepare native terminal renderer
-        run: npm run libghostty:prepare --workspace @worktracker/studio
+        run: bun run --cwd studio libghostty:prepare
 
       - name: Studio typecheck, tests, and build
         run: |
-          npm run typecheck
-          npm run test:overhaul --workspace @worktracker/studio
-          npm run test --workspace @worktracker/studio
-          npm run build
+          bun run typecheck
+          bun run --cwd studio test:overhaul
+          bun run --cwd studio test
+          bun run build
 
       # tauri-build requires the externalBin sidecar to exist; stage it the
       # same way desktop:dev does.
@@ -64,12 +68,12 @@ jobs:
 
       - name: Frontend-to-agent desktop acceptance
         timeout-minutes: 30
-        run: npm run test:e2e:desktop --workspace @worktracker/studio
+        run: bun run --cwd studio test:e2e:desktop
 
       - name: Release contract tests
         run: |
-          npm run release:test --workspace @worktracker/studio
-          npm run release:validate --workspace @worktracker/studio
+          bun run --cwd studio release:test
+          bun run --cwd studio release:validate
 
       - name: Preserve desktop acceptance diagnostics
         if: failure()

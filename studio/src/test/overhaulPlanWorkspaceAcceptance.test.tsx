@@ -13,7 +13,7 @@ import { getModuleTreeSnapshot, loadModuleTree } from "../features/work-items";
 import { TEMP_TASK_ID, scratchBucketId } from "../features/agents/terminal";
 import { fixture, mountStudio, workItem } from "./seam";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
-import { EpicTabStrip } from "../features/sprints/planning/EpicTabStrip";
+import { MountedPlanEpicTabs } from "./mountedPlanEpicTabs";
 import type { PlanningGraph } from "../features/planning-graph";
 
 const keyboardGraph: PlanningGraph = {
@@ -28,7 +28,7 @@ function KeyboardPlan() {
     <button onClick={() => openPlanWorkspace("sprint-1")}>Open keyboard Plan</button>
     <input aria-label="Plan typing" />
     {state.active && <>
-      <EpicTabStrip graph={keyboardGraph} suggestions={[]} sprintId="sprint-1" />
+      <MountedPlanEpicTabs graph={keyboardGraph} suggestions={[]} sprintId="sprint-1" />
       <button onClick={() => usePlanWorkspace.setState({ openItem: "suggestion:proposal-1" })}>Open proposal</button>
       {state.openItem && <output aria-label="Open Plan detail">Proposal</output>}
     </>}
@@ -50,9 +50,9 @@ function cachePlanningGraph(moduleId: string | null = "module-2") {
     project: { __typename: "WorktrackerProjectConnection", nodes: [{ __typename: "WorktrackerProject", id: "project-1", name: "Planner", slug: "PLAN" }] },
     states: { __typename: "WorktrackerStateConnection", nodes: [] }, issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [] },
     sprints: { __typename: "WorktrackerSprintConnection", nodes: [
-      { __typename: "WorktrackerSprint", id: "completed", name: "Completed", status: "completed", createdAt: "2026-01-01" },
-      { __typename: "WorktrackerSprint", id: "sprint-2", name: "Second", status: "planned", createdAt: "2026-03-01" },
-      { __typename: "WorktrackerSprint", id: "sprint-1", name: "First", status: "planned", createdAt: "2026-02-01" },
+      { __typename: "WorktrackerSprint", id: "completed", name: "Completed", status: "completed", rank: "A", createdAt: "2026-01-01" },
+      { __typename: "WorktrackerSprint", id: "sprint-2", name: "Second", status: "planned", rank: "a", createdAt: "2026-03-01" },
+      { __typename: "WorktrackerSprint", id: "sprint-1", name: "First", status: "planned", rank: "V", createdAt: "2026-02-01" },
     ] },
     modules: { __typename: "WorktrackerIssueConnection", nodes: [
       { __typename: "WorktrackerIssue", id: "module-1", name: "Origin", sequenceId: 1, presentation: { __typename: "WorktrackerModulepresentationConnection", nodes: [] } },
@@ -80,8 +80,8 @@ describe("overhaul acceptance, Plan workspace", () => {
       states: { __typename: "WorktrackerStateConnection", nodes: [] },
       issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [{ __typename: "WorktrackerIssuetype", id: "epic", name: "Epic", level: "module" }] },
       sprints: { __typename: "WorktrackerSprintConnection", nodes: [
-        { __typename: "WorktrackerSprint", id: "sprint-1", name: "First", status: "planned", createdAt: "2026-02-01" },
-        { __typename: "WorktrackerSprint", id: "sprint-2", name: "Second", status: "planned", createdAt: "2026-03-01" },
+        { __typename: "WorktrackerSprint", id: "sprint-1", name: "First", status: "planned", rank: "V", createdAt: "2026-02-01" },
+        { __typename: "WorktrackerSprint", id: "sprint-2", name: "Second", status: "planned", rank: "a", createdAt: "2026-03-01" },
       ] },
       modules: { __typename: "WorktrackerIssueConnection", nodes: modules },
       workItems: { __typename: "WorktrackerIssueConnection", nodes: [] },
@@ -128,6 +128,11 @@ describe("overhaul acceptance, Plan workspace", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     const delivery = await screen.findByRole("tab", { name: "Delivery, 0 backlog stories" });
     expect(delivery).toHaveAttribute("aria-selected", "true");
+    await waitFor(() => expect(delivery).toHaveFocus());
+    fireEvent.keyDown(delivery, { key: "ArrowLeft" });
+    expect(screen.getByRole("tab", { name: "Module 1, 0 backlog stories" })).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" });
+    expect(delivery).toHaveFocus();
     expect(screen.getByRole("tab", { name: "Module 1, 0 backlog stories" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("button", { name: "Add epic" })).toHaveAttribute("aria-expanded", "false");
     expect(writes).toEqual([{ projectId: "project-1", name: "Delivery", issueTypeId: "epic", parentId: null }]);

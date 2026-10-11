@@ -27,7 +27,7 @@ mod merge_result;
 mod message_generation;
 mod module_baseline;
 mod module_service;
-mod module_view;
+pub(crate) mod module_view;
 mod pull_request;
 mod pull_request_state;
 mod repository;
@@ -49,7 +49,7 @@ pub use view::{
     WorktreeCleanupStatusView, WorktreeMergePreviewView,
 };
 
-pub use github::GithubPort;
+pub(crate) use github::GithubPort;
 use module_view::{CurrentWorktreeView, ModuleCheckoutChangesView, ModuleVersionControlView};
 pub use pull_request::PullRequestCreationResult;
 
@@ -57,6 +57,6 @@ pub fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
     graphql::register(builder)
 }
 
-pub fn assert_merge_preparation_operation_registered() {
+pub(crate) fn assert_merge_preparation_operation_registered() {
     merge_preparation::assert_operation_registered();
 }

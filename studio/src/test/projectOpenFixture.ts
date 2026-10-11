@@ -32,6 +32,7 @@ export function projectOpenFixture(
           project_id: publicWorktrackerId(module.project_id),
           sequence_id: module.sequence_id,
           is_archived: module.is_archived,
+          state_revision: 1,
           issue_type: publicWorktrackerId(module.issue_type),
           rank: String(index),
           project: {

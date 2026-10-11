@@ -39,7 +39,7 @@ Inventory these before judging any endpoint:
   (`backend/worktracker/rest/domain_ops.py`);
 - service modules in `backend/worktracker/services/` and `backend/apps/*`;
 - `openapi.json`, the generated SDKs, and the contract scripts
-  (`npm run contract:generate`, `npm run contract:check`).
+  (`bun run contract:generate`, `bun run contract:check`).
 
 Use `rg` and the generated `openapi.json` as the first-pass inventory. Useful
 searches:
@@ -122,7 +122,7 @@ Flag:
 
 - hand-edited `openapi.json` or generated SDK files;
 - endpoint changes without regenerated contract artifacts
-  (`npm run contract:check` failing);
+  (`bun run contract:check` failing);
 - frontend callers bypassing the generated SDK with ad-hoc fetch shapes;
 - missing authorization, row-scope, rollback, or allowlist tests at the
   boundary that makes an override safe;

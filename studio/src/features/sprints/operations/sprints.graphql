@@ -4,6 +4,7 @@ mutation CreateSprint($data: WorktrackerSprintInsertInput!) {
     name
     status
     createdAt
+    rank
   }
 }
 
@@ -13,6 +14,17 @@ mutation UpdateSprint($id: String!, $status: String!, $carryoverSprintId: String
     name
     status
     createdAt
+    rank
+  }
+}
+
+mutation ReorderSprint($sprintId: String!, $beforeId: String, $afterId: String) {
+  reorder_sprint(sprint_id: $sprintId, before_id: $beforeId, after_id: $afterId) {
+    id
+    name
+    status
+    createdAt
+    rank
   }
 }
 
@@ -89,7 +101,7 @@ query SprintSuggestionExecution($sprintId: String!) {
       status
       goalsRevisedAt
       suggestionRunId
-      goals { nodes { id text } }
+      goals { nodes { id text position } }
       suggestions(filters: { status: { eq: "waiting" } }) { nodes { id } }
     }
   }

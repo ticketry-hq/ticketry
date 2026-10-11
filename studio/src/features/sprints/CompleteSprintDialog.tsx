@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { ModalSurface as ModalShell } from "../../shared/ui/ModalSurface";
-import type { PlanningSprint } from "../planning-graph";
+import { compareSprintSequence, type PlanningSprint } from "../planning-graph";
 
 export default function CompleteSprintDialog({ sprint, done, total, plannedSprints, onComplete, onClose }: {
   sprint: PlanningSprint;
@@ -15,7 +15,7 @@ export default function CompleteSprintDialog({ sprint, done, total, plannedSprin
   const [error, setError] = useState<string | null>(null);
   const pending = useRef(false);
   const unfinished = total - done;
-  const targets = plannedSprints.filter((planned) => planned.status === "planned" && planned.id !== sprint.id);
+  const targets = plannedSprints.filter((planned) => planned.status === "planned" && planned.id !== sprint.id).sort(compareSprintSequence);
   function close() { if (!pending.current) onClose(); }
   async function complete() {
     if (pending.current) return;

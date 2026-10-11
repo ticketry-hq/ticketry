@@ -2,13 +2,17 @@ use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 use ticketry_installation as provisioning;
-use ticketry_work_management::workflow_color_migration::{
-    install, LEDGER_TABLE, MIGRATION_ID, SOURCE_COMMIT,
+use ticketry_work_management::create_project;
+use ticketry_work_management::{
+    install_module_presentation_schema, install_project_onboarding_schema,
 };
 use ticketry_work_management::{
-    commands::catalog::{self, CreateProject},
-    module_presentation_migration, open_for_commands, project_onboarding_migration,
+    install_workflow_color_schema as install,
+    WORKFLOW_COLOR_MIGRATION_LEDGER_TABLE as LEDGER_TABLE,
+    WORKFLOW_COLOR_MIGRATION_MIGRATION_ID as MIGRATION_ID,
+    WORKFLOW_COLOR_MIGRATION_SOURCE_COMMIT as SOURCE_COMMIT,
 };
+use ticketry_work_management::{open_for_commands, CreateProject};
 
 async fn mixed_database() -> sea_orm::DatabaseConnection {
     let database = Database::connect("sqlite::memory:")
@@ -192,7 +196,7 @@ fn workflow_color_checkpoint_follows_entry_skill_in_the_rust_ledger() {
     let entry_skill = ledgers
         .iter()
         .position(|(table, _)| {
-            *table == ticketry_work_management::launch_binding_entry_skill_migration::LEDGER_TABLE
+            *table == ticketry_work_management::LAUNCH_BINDING_ENTRY_SKILL_MIGRATION_LEDGER_TABLE
         })
         .expect("entry-skill ledger");
     let colors = ledgers
@@ -243,13 +247,13 @@ async fn production_startup_adopts_old_colors_before_generated_state_reads() {
     let database = open_for_commands(&state_path)
         .await
         .expect("open profile database");
-    module_presentation_migration::install(&database)
+    install_module_presentation_schema(&database)
         .await
         .expect("remove the legacy project ordering flag");
-    project_onboarding_migration::install(&database)
+    install_project_onboarding_schema(&database)
         .await
         .expect("move onboarding onto the project");
-    let project_id = catalog::create_project(
+    let project_id = create_project(
         &database,
         CreateProject {
             name: "Upgraded".to_owned(),

@@ -1,9 +1,7 @@
-// Narrow public seam for app-level navigation. Selected-ticket UI imports its
-// implementation directly; the global keymap needs only these actions and
-// stores at startup.
+/** App startup routes actions through the feature's narrow navigation entry. */
 export {
   routeTaskWorkspaceEditViewAction,
   routeTaskWorkspaceTabAction,
-} from "./internal/useTaskWorkspaceTabNavigation";
+  closeTerminalTab,
+} from "../../../../features/task-workspace/navigation";
 export { useClientStore as useTicketWorkspaceStore } from "../../../../state/clientStore";
-export { closeTerminalTab } from "./internal/closeTerminalTab";

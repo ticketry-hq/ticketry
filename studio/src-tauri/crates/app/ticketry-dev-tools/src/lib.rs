@@ -7,7 +7,7 @@
 //! that stand up throwaway databases for `sea-orm-cli` to read entities out
 //! of, the two `export_foundation_*` binaries that write the GraphQL SDL and
 //! the taurpc bindings the frontend is typed against, the browser GraphQL
-//! adapter `npm run web` serves the Studio frontend from, and the current
+//! adapter `bun run web` serves the Studio frontend from, and the current
 //! slice-copy verifiers.
 //!
 //! The crate's own root is empty on purpose. Each tool is a `src/bin/`

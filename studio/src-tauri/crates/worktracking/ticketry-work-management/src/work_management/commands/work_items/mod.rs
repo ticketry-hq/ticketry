@@ -11,12 +11,13 @@ pub use archive::archive;
 pub use create::create;
 pub(crate) use create::create_in;
 pub use delete::delete;
-pub use revision::next_revision;
+pub(crate) use revision::next_revision;
 pub use update::update;
 pub(super) use validation::valid_name;
 
 #[derive(Debug, Clone)]
 pub struct CreateWorkItem {
+    pub sprint_id: Option<super::sprint_selector::SprintSelector>,
     pub project_id: String,
     pub name: String,
     pub issue_type_id: String,

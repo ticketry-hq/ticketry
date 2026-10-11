@@ -37,7 +37,17 @@ import {
 } from "../features/work-items/generated/workItems.documents";
 import { WorkTrackerProjectOpenDocument } from "../features/projects/generated/projects.documents";
 
+export interface FixtureStorySprint {
+  id: string;
+  projectId: string;
+  name: string;
+  status: string;
+  createdAt?: string;
+  rank?: string;
+}
+
 export interface HttpFixture {
+  storySprints(sprints: FixtureStorySprint[]): void;
   tree(moduleId: string, tree: ModuleTree): void;
   readonly items: ReadonlyMap<string, WorkItem>;
   workItems(items: WorkItem[]): void;
@@ -123,6 +133,12 @@ const json = (body: unknown, status = 200) =>
   });
 
 class BoundaryFixture implements StudioFixture {
+  private sprintRows: FixtureStorySprint[] = [];
+
+  storySprints(sprints: FixtureStorySprint[]): void {
+    this.sprintRows = sprints;
+  }
+
   readonly trees = new Map<string, ModuleTree>();
   readonly items = new Map<string, WorkItem>();
   /** Server `state_revision` per Work Item; every fixture write bumps it. */
@@ -449,7 +465,9 @@ class BoundaryFixture implements StudioFixture {
         state_id: item.state,
         issue_type_id: item.issue_type,
         module_id: moduleId,
-        sprint_id: this.sprintAssignments.get(item.id) ?? null,
+        sprint_id: this.sprintAssignments.has(item.id)
+          ? this.sprintAssignments.get(item.id)
+          : item.sprint_id,
         project: {
           __typename: "WorktrackerProject",
           id: this.projectId(),
@@ -555,7 +573,8 @@ class BoundaryFixture implements StudioFixture {
       name: `Module ${index + 1}`,
       project_id: this.projectId(),
       sequence_id: index + 1,
-      is_archived: false,
+      is_archived: fixtureItem(id)?.is_archived ?? false,
+      state_revision: this.revisions.get(id) ?? 1,
       issue_type: "module",
       rank: String(index),
       project: { __typename: "WorktrackerProject", id: this.projectId(), slug: "T" },
@@ -569,6 +588,33 @@ class BoundaryFixture implements StudioFixture {
       codex_profiles: [],
       global_default: null,
     };
+    if (["StoryActiveSprint", "StorySelectedSprint"].includes(documentOperationName(document))) {
+      const selectedId = (variables as { sprintId?: string }).sprintId;
+      return { sprints: { __typename: "WorktrackerSprintConnection", nodes: this.sprintRows
+        .filter((sprint) => compactWorktrackerId(sprint.projectId) === compactWorktrackerId(input.projectId ?? this.projectId()))
+        .filter((sprint) => documentOperationName(document) === "StoryActiveSprint"
+          ? sprint.status === "active"
+          : compactWorktrackerId(sprint.id) === compactWorktrackerId(selectedId ?? ""))
+        .map((sprint) => ({ __typename: "WorktrackerSprint", ...sprint, id: compactWorktrackerId(sprint.id), createdAt: sprint.createdAt ?? createdAt, rank: sprint.rank ?? "V" })) } } as TResult;
+    }
+    if (documentOperationName(document) === "ProjectStorySprintModules") {
+      const modules = moduleRows().filter((row) => compactWorktrackerId(row.project_id) === compactWorktrackerId(input.projectId ?? this.projectId()));
+      return { modules: { __typename: "WorktrackerIssueConnection", nodes: modules,
+        pageInfo: { __typename: "PageInfo", hasNextPage: false },
+        paginationInfo: { __typename: "PaginationInfo", total: modules.length } } } as TResult;
+    }
+    if (documentOperationName(document) === "ProjectStorySprintIndex") {
+      const roots = [...this.trees].flatMap(([moduleId, tree]) => tree.rootIds.flatMap((id) => {
+        const item = this.items.get(id);
+        return item && !item.is_archived && item.parent_id === moduleId
+          && ((variables as { moduleIds: string[] }).moduleIds ?? []).some((id) => compactWorktrackerId(id) === compactWorktrackerId(moduleId))
+          && compactWorktrackerId(item.project_id) === compactWorktrackerId(input.projectId ?? this.projectId())
+          ? [issueRow(item)] : [];
+      }));
+      return { roots: { __typename: "WorktrackerIssueConnection", nodes: roots,
+        pageInfo: { __typename: "PageInfo", hasNextPage: false },
+        paginationInfo: { __typename: "PaginationInfo", total: roots.length } } } as TResult;
+    }
     if (documentOperationName(document) === "WorkTrackerModuleOpen") {
       const moduleKey = fixtureKey(this.trees, input.moduleId);
       const ids = moduleKey ? [...(this.trees.get(moduleKey)?.order ?? [])].sort((leftId, rightId) => {
@@ -580,7 +626,7 @@ class BoundaryFixture implements StudioFixture {
       }) : [];
       return {
         module: { __typename: "WorktrackerIssueConnection", nodes: moduleRows().filter((row) => fixtureKey(this.trees, row.id) === moduleKey) },
-        work_items: { __typename: "WorktrackerIssueConnection", nodes: ids.flatMap((id) => this.items.has(id) ? [issueRow(this.items.get(id)!)] : []) },
+        work_items: { __typename: "WorktrackerIssueConnection", nodes: ids.flatMap((id) => this.items.has(id) && !this.items.get(id)!.is_archived ? [issueRow(this.items.get(id)!)] : []) },
       } as TResult;
     }
     if (documentOperationName(document) === "WorkTrackerProjectOpen") {
@@ -623,6 +669,14 @@ class BoundaryFixture implements StudioFixture {
     }
     if (documentOperationName(document) === "WorkTrackerWorkItems") {
       return { work_items: { nodes: [...this.items.values()].map(issueRow) } } as TResult;
+    }
+    if (documentOperationName(document) === "WorkTrackerReviewFindings") {
+      const parentKey = fixtureKey(this.items, (variables as { parentId: string }).parentId);
+      const nodes = [...this.items.values()]
+        .filter((item) => parentKey !== undefined && item.parent_id === parentKey)
+        .sort((left, right) => left.rank.localeCompare(right.rank) || left.sequence_id - right.sequence_id)
+        .map(issueRow);
+      return { findings: { __typename: "WorktrackerIssueConnection", nodes } } as TResult;
     }
     if (documentOperationName(document) === "WorkTrackerWorkItem") {
       const item = fixtureItem(input.id);
@@ -679,6 +733,10 @@ class BoundaryFixture implements StudioFixture {
         parent_id: body.parent_id === undefined ? current.parent_id : body.parent_id as string | null,
         blocked_by_ids: (body.blocked_by_ids as string[] | undefined) ?? current.blocked_by_ids,
         rank: body.state_id === undefined ? current.rank : this.transitionRanks.get(id) ?? current.rank,
+        // The backend archives a work item entering a cancelled-group state.
+        is_archived: body.state_id === undefined
+          ? current.is_archived
+          : this.states.get(body.state_id as string)?.group === "cancelled",
       };
       this.items.set(id, updated);
       this.revisions.set(id, (this.revisions.get(id) ?? 1) + 1);
@@ -1105,6 +1163,7 @@ export function workItem(overrides: WorkItemOverrides = {}): FixtureWorkItem {
     description: "",
     parent_id: "module-1",
     sub_issues_count: 0,
+    sprint_id: null,
     has_children: false,
     key: "MEML-1",
     is_archived: false,

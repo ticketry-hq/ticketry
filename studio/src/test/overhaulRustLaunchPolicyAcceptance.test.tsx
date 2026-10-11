@@ -37,6 +37,7 @@ function task(id = "task-1"): WorkItem {
     state: "state-1",
     description: "",
     parent_id: "module-1",
+    sprint_id: null,
     sub_issues_count: 0,
     has_children: false,
     key: "TEST-1",

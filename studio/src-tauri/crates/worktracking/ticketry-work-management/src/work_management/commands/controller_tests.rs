@@ -6,13 +6,13 @@ use super::{blockers, work_items, workflow};
 use crate::work_management::open_for_commands;
 use ticketry_entities::{issue, issue_type, launch_binding, project};
 
-const PROJECT: &str = "10000000000000000000000000000000";
+pub(super) const PROJECT: &str = "10000000000000000000000000000000";
 const STORY: &str = "30000000000000000000000000000001";
 const IMPLEMENTATION: &str = "30000000000000000000000000000002";
 const BACKLOG: &str = "40000000000000000000000000000001";
 const REVIEW: &str = "40000000000000000000000000000002";
 
-async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
+pub(super) async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.db");
     let writer = Database::connect(format!("sqlite:{}?mode=rwc", path.display()))
@@ -91,8 +91,9 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
     (directory, database)
 }
 
-fn create(name: &str) -> work_items::CreateWorkItem {
+pub(super) fn create(name: &str) -> work_items::CreateWorkItem {
     work_items::CreateWorkItem {
+        sprint_id: None,
         project_id: PROJECT.to_owned(),
         name: name.to_owned(),
         issue_type_id: STORY.to_owned(),

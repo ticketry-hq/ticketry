@@ -3,8 +3,8 @@ use sea_orm::{
     ActiveModelTrait, ConnectionTrait, DatabaseTransaction, DbBackend, NotSet, Set, Statement,
 };
 
-use crate::commands::workflow::TransitionOrigin;
 use crate::work_management::commands::CommandError;
+use crate::TransitionOrigin;
 use ticketry_entities::transition_occurrence;
 
 pub async fn ensure_schema(database: &impl ConnectionTrait) -> Result<(), sea_orm::DbErr> {

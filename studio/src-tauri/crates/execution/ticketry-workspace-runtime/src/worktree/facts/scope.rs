@@ -20,7 +20,7 @@ use ticketry_entities::issue;
 
 /// The authoritative addressing of one worktree fact.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct WorktreeFactScope {
+pub(crate) struct WorktreeFactScope {
     /// The owning top-level Work Item in public form — what the fact names and
     /// what a consumer keys its holding by.
     pub top_level_task_id: String,
@@ -35,7 +35,10 @@ pub struct WorktreeFactScope {
 /// `task_id` may be any Work Item that participates in the checkout — the
 /// owner itself or a descendant sharing it — in either spelling. `None` means
 /// the graph could not answer, which is a reason to publish nothing.
-pub async fn resolve(work_items: &DatabaseConnection, task_id: &str) -> Option<WorktreeFactScope> {
+pub(crate) async fn resolve(
+    work_items: &DatabaseConnection,
+    task_id: &str,
+) -> Option<WorktreeFactScope> {
     let owner = owner::resolve(work_items, task_id).await.ok()?;
     let top_level_row_id = owner.top_level_row_id();
     // The project comes off the owning row rather than off the worktree row's

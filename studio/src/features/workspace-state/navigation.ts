@@ -1,9 +1,9 @@
 import type { ClientState, SetWorkspaceState, GetWorkspaceState } from "./types";
-import { useStudioStore } from "../projects";
 import { isTerminalPanelOpen, useTerminalPanelStore } from "../terminal-panel/panelStore";
-import { writeSidebarVisible, isPanelLayout, persistPanelLayout } from "../../state/persistence";
+import { normalizePanelLayout, persistPanelLayout } from "../../state/persistence";
 import type { FocusedPane, EditViewZone } from "./types";
-const PANE_ORDER: FocusedPane[] = ["modules", "tasks", "details-or-terminal"];
+import { toggleModuleManager } from "../module-manager/state";
+const PANE_ORDER: FocusedPane[] = ["tasks", "details-or-terminal"];
 const BASE_EDIT_VIEW_ZONES: EditViewZone[] = [
   "stories",
   "tab-strip",
@@ -26,33 +26,20 @@ export function isEngageableZone(zone: EditViewZone): boolean {
 }
 
 function zoneEntryEngagement(
-  state: { editViewZone: EditViewZone; editViewBodyEngaged: boolean; sidebarVisible: boolean },
+  state: { editViewZone: EditViewZone; editViewBodyEngaged: boolean },
   entering: EditViewZone,
 ): boolean {
-  const inEditView = !state.sidebarVisible;
   // The panel holds nothing but a shell, so entering it commits to typing.
-  if (entering === "terminal-panel") return inEditView;
+  if (entering === "terminal-panel") return true;
   if (entering === "active-tab-body" && state.editViewZone === entering) {
     return state.editViewBodyEngaged;
   }
   return false;
 }
 
-/**
- * The panes a person can move focus between, left to right.
- *
- * The sidebar holds one pane — the installation project's modules — because
- * there is one project and therefore nothing to choose between. Hiding the
- * sidebar leaves the edit view's two panes.
- */
-export function visiblePaneOrder(
-  sidebarVisible: boolean,
-  hasSelectedProject: boolean,
-): FocusedPane[] {
-  if (!sidebarVisible) return ["tasks", "details-or-terminal"];
-  return PANE_ORDER.filter(
-    (pane) => hasSelectedProject || pane !== "modules",
-  );
+/** The remaining workspace panes; legacy sidebar flags have no effect. */
+export function visiblePaneOrder(_sidebarVisible?: boolean, _hasSelectedProject?: boolean): FocusedPane[] {
+  return PANE_ORDER;
 }
 
 export function resolveCursorId(
@@ -63,23 +50,6 @@ export function resolveCursorId(
     ? cursorId
     : orderedIds[0] ?? null;
 }
-
-function moveCursorId(
-  cursorId: string | null,
-  delta: -1 | 1,
-  orderedIds: readonly string[],
-): string | null {
-  if (orderedIds.length === 0) return null;
-  const index = cursorId ? orderedIds.indexOf(cursorId) : -1;
-  if (index === -1) return orderedIds[0];
-  return orderedIds[Math.max(0, Math.min(index + delta, orderedIds.length - 1))];
-}
-
-function hasProject(): boolean {
-  return useStudioStore.getState().selectedProjectId !== null;
-}
-
-
 
 export function navigationActions(set: SetWorkspaceState, get: GetWorkspaceState): Pick<ClientState,
   | "focusLeft"
@@ -97,30 +67,21 @@ export function navigationActions(set: SetWorkspaceState, get: GetWorkspaceState
 > {
   return {
     focusLeft() {
-      const { focusedPane, sidebarVisible } = get();
-      const order = visiblePaneOrder(sidebarVisible, hasProject());
-      const index = order.indexOf(focusedPane);
-      if (index > 0) {
-        set({ focusedPane: order[index - 1] });
-        return;
-      }
-      if (!sidebarVisible) {
-        writeSidebarVisible(true);
-        set({ sidebarVisible: true, focusedPane: "modules" });
-      }
+      get().setEditViewZone("stories");
     },
 
     focusRight() {
-      const { focusedPane, sidebarVisible } = get();
-      const order = visiblePaneOrder(sidebarVisible, hasProject());
-      const index = order.indexOf(focusedPane);
-      if (index >= 0 && index < order.length - 1) {
-        set({ focusedPane: order[index + 1] });
-      }
+      get().setEditViewZone("active-tab-body");
     },
 
     setFocusedPane(focusedPane) {
-      set({ focusedPane });
+      if (focusedPane === "modules") {
+        get().setEditViewZone("stories");
+        return;
+      }
+      get().setEditViewZone(focusedPane === "tasks"
+        ? "stories"
+        : get().editViewZone === "stories" ? "active-tab-body" : get().editViewZone);
     },
 
     setEditViewZone(editViewZone) {
@@ -142,7 +103,7 @@ export function navigationActions(set: SetWorkspaceState, get: GetWorkspaceState
       const state = get();
       set({
         editViewBodyEngaged:
-          engaged && !state.sidebarVisible && isEngageableZone(state.editViewZone),
+          engaged && isEngageableZone(state.editViewZone),
       });
     },
 
@@ -156,42 +117,23 @@ export function navigationActions(set: SetWorkspaceState, get: GetWorkspaceState
       get().setEditViewZone(order[next]);
     },
 
-    moveModulesCursor(delta, orderedIds) {
-      set((state) => ({
-        modulesCursorId: moveCursorId(state.modulesCursorId, delta, orderedIds),
-      }));
-    },
-
-    setModulesCursor(modulesCursorId) {
-      set({ modulesCursorId });
-    },
+    // Retired compatibility actions never route a Modules pane or cursor.
+    moveModulesCursor() {},
+    setModulesCursor() {},
 
     toggleSidebar() {
-      get().setSidebarVisible(!get().sidebarVisible);
+      toggleModuleManager();
     },
 
-    setSidebarVisible(sidebarVisible) {
-      writeSidebarVisible(sidebarVisible);
-      set(
-        sidebarVisible
-          ? {
-              sidebarVisible: true,
-              editViewBodyEngaged: false,
-              focusedPane: "modules",
-            }
-          : {
-              sidebarVisible: false,
-              editViewZone: "stories",
-              editViewBodyEngaged: false,
-              focusedPane: "tasks",
-            },
-      );
+    setSidebarVisible() {
+      set({ sidebarVisible: false });
     },
 
     setPanelLayout(panelLayout) {
-      if (!isPanelLayout(panelLayout)) return;
-      persistPanelLayout(panelLayout);
-      set({ panelLayout });
+      const normalized = normalizePanelLayout(panelLayout);
+      if (!normalized) return;
+      persistPanelLayout(normalized);
+      set({ panelLayout: normalized });
     },
 
   };

@@ -66,6 +66,7 @@ export function ChangesToolbar({
     <div
       ref={toolbarRef}
       role="toolbar"
+      data-changes-navigation
       tabIndex={-1}
       aria-label="Changes commands"
       className="flex h-10 shrink-0 items-center gap-2 border-b border-pane-border px-3"

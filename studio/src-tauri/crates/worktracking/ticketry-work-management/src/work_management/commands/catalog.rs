@@ -167,30 +167,6 @@ pub async fn prepare_update_project(
     Ok(active)
 }
 
-pub async fn delete_project(
-    database: &DatabaseConnection,
-    project_id: &str,
-) -> Result<(), CommandError> {
-    let id = database_uuid(project_id, "project_id")?;
-    let transaction = database.begin().await?;
-    if project::Entity::find_by_id(&id)
-        .one(&transaction)
-        .await?
-        .is_none()
-    {
-        return Err(CommandError::NotFound("Project not found.".to_owned()));
-    }
-    // Match Django's aggregate teardown: IssueType is protected by selected
-    // WorkItems, so delete the project's tree before cascading its catalogue.
-    issue::Entity::delete_many()
-        .filter(issue::Column::ProjectId.eq(&id))
-        .exec(&transaction)
-        .await?;
-    project::Entity::delete_by_id(id).exec(&transaction).await?;
-    transaction.commit().await?;
-    Ok(())
-}
-
 pub async fn create_state(
     database: &DatabaseConnection,
     input: CreateState,

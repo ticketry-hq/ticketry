@@ -3,9 +3,11 @@ use tauri_graphql::{TransportApi, TransportApiImpl};
 use ticketry_entities::{issue_type, issue_type_transition, launch_binding, project, state};
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 use ticketry_installation as provisioning;
-use ticketry_work_management::commands::catalog::{self, CreateProject};
+use ticketry_work_management::create_project as create_project_command;
+use ticketry_work_management::install_project_onboarding_schema;
 use ticketry_work_management::open_for_commands;
-use ticketry_work_management::project_onboarding_migration;
+
+use ticketry_work_management::CreateProject;
 
 const EXPECTED_STATES: [(&str, &str, &str, i32, bool); 8] = [
     ("Ideas", "backlog", "#60646C", 0, true),
@@ -19,7 +21,7 @@ const EXPECTED_STATES: [(&str, &str, &str, i32, bool); 8] = [
 ];
 
 async fn create_project(database: &sea_orm::DatabaseConnection, name: &str, slug: &str) -> String {
-    catalog::create_project(
+    create_project_command(
         database,
         CreateProject {
             name: name.to_owned(),
@@ -145,7 +147,7 @@ async fn fresh_install_projects_persist_and_read_the_reviewed_state_colors() {
     // Provisioning writes the Workspace-owned shape the adoption validator
     // still recognizes; startup moves onboarding onto the project before any
     // authored command runs, so these tests take the same order.
-    project_onboarding_migration::install(&database)
+    install_project_onboarding_schema(&database)
         .await
         .expect("move onboarding onto the project");
 
@@ -176,7 +178,7 @@ async fn a_catalog_insert_failure_rolls_back_the_whole_project() {
     let database = open_for_commands(&directory.path().join("state.db"))
         .await
         .expect("open provisioned database");
-    project_onboarding_migration::install(&database)
+    install_project_onboarding_schema(&database)
         .await
         .expect("move onboarding onto the project");
     let before = (
@@ -200,7 +202,7 @@ async fn a_catalog_insert_failure_rolls_back_the_whole_project() {
         .await
         .expect("install deterministic failure");
 
-    let error = catalog::create_project(
+    let error = create_project_command(
         &database,
         CreateProject {
             name: "Incomplete".to_owned(),

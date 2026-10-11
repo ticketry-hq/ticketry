@@ -27,8 +27,10 @@ export interface ClientState {
   editViewZone: EditViewZone;
   editViewBodyEngaged: boolean;
   navigationModality: NavigationModality;
+  /** @deprecated Inert value retained for legacy cache adapters. */
   modulesCursorId: string | null;
 
+  /** @deprecated Does not control the workspace or keyboard routing. */
   sidebarVisible: boolean;
   panelLayout: number[] | null;
 
@@ -50,7 +52,7 @@ export interface ClientState {
   /** Highest status-feed revision observed for each project. */
   workItemCursorsByProject: Record<string, number>;
 
-  selectModule: (id: string) => Promise<void>;
+  selectModule: (id: string, options?: { isCurrent?: () => boolean }) => Promise<void>;
   deselectModule: () => void;
   selectTask: (id: string) => void;
   toggleStateConfiguration: (projectId: string, stateId: string) => void;

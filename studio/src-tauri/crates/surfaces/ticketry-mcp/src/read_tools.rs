@@ -6,8 +6,8 @@ use super::{
 };
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
-use ticketry_agent_execution::graph::GraphAccess;
-use ticketry_work_management::commands::CommandError;
+use ticketry_agent_execution::GraphAccess;
+use ticketry_work_management::CommandError;
 
 pub(super) async fn dispatch(
     database: &DatabaseConnection,
@@ -61,8 +61,7 @@ pub(super) async fn dispatch(
             // edges inside it are returned; MCP must not restate it.
             let access = GraphAccess::caller_roots(&task.project_id, [&task.id]);
             Ok(DispatchOutput::direct(
-                match ticketry_agent_execution::graph::dependency_graph(database, &task.id, &access)
-                    .await
+                match ticketry_agent_execution::dependency_graph(database, &task.id, &access).await
                 {
                     Ok(graph) => json!({
                         "root_id": graph.root_id,

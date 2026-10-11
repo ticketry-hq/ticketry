@@ -2,12 +2,13 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { expect, vi } from "vitest";
 
 import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
-import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
+import { ModuleManager, openModuleManager } from "../features/module-manager";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
 import {
   getModulesSnapshot,
 } from "../features/projects";
 import { useStudioStore } from "../features/projects/store";
+import { setStorySprintFilterIntent } from "../features/work-items";
 import * as api from "./legacyApiFixture";
 import { resetStudioApolloClient } from "../shared/apollo/client";
 import type { Module, Project, WorkItem } from "../shared/api/types";
@@ -51,7 +52,7 @@ export function project(manual_module_order: boolean): Project {
 export function ModuleSurfaces() {
   return (
     <>
-      <ModulesPane />
+      <ModuleManager />
       <ModuleTabStrip />
     </>
   );
@@ -59,16 +60,16 @@ export function ModuleSurfaces() {
 
 export function rows(): HTMLElement[] {
   return Array.from(
-    document.querySelectorAll<HTMLElement>("li[data-module-id]"),
+    document.querySelectorAll<HTMLElement>("li[data-module-manager-row]"),
   );
 }
 
-export function sidebarOrder(): string[] {
-  return rows().map((row) => row.dataset.moduleId ?? "");
+export function managerOrder(): string[] {
+  return rows().map((row) => row.dataset.moduleManagerRow ?? "");
 }
 
 export function rowFor(moduleId: string): HTMLElement {
-  return rows().find((row) => row.dataset.moduleId === moduleId)!;
+  return rows().find((row) => row.dataset.moduleManagerRow === moduleId)!;
 }
 
 export function tabs(): HTMLElement[] {
@@ -113,10 +114,10 @@ export async function resetModuleReorderHarness(): Promise<void> {
   listProjects.mockReset();
   reorderWorkItem.mockReset().mockResolvedValue(moved("module-c"));
   useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
+  setStorySprintFilterIntent(PROJECT_ID, { mode: "all" });
   useAgentStatusStore.setState({ runs: {} });
   useClientStore.setState({
     selectedModuleId: null,
-    modulesCursorId: null,
     toasts: [],
   });
 }
@@ -125,8 +126,9 @@ export async function resetModuleReorderHarness(): Promise<void> {
 export async function renderAutomaticProject(): Promise<void> {
   listModules.mockResolvedValue(modules("module-a", "module-b", "module-c"));
   listProjects.mockResolvedValue([project(false)]);
+  openModuleManager();
   render(<ModuleSurfaces />);
   await waitFor(() =>
-    expect(sidebarOrder()).toEqual(["module-a", "module-b", "module-c"]),
+    expect(managerOrder()).toEqual(["module-a", "module-b", "module-c"]),
   );
 }

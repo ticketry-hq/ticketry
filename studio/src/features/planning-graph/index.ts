@@ -17,3 +17,7 @@ export {
 export { usePlanningGraph, type PlanningGraphResult } from "./usePlanningGraph";
 
 export { convergePlanningCollections } from "./convergence";
+
+export { refreshPlanningGraph } from "./refreshPlanningGraph";
+
+export { compareSprintSequence } from "./sprintSequence";

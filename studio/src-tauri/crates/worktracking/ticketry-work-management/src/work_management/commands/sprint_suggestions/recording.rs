@@ -84,10 +84,10 @@ pub(crate) async fn record_in(
     };
     let reviewed = sprint_suggestion::Entity::find()
         .filter(sprint_suggestion::Column::SprintId.eq(&sprint_id))
-        .filter(
-            sprint_suggestion::Column::Status
-                .is_in([sprint_suggestion::ACCEPTED, sprint_suggestion::DISMISSED]),
-        )
+        .filter(sprint_suggestion::Column::Status.is_in([
+            ticketry_entities::SPRINT_SUGGESTION_ACCEPTED,
+            ticketry_entities::SPRINT_SUGGESTION_DISMISSED,
+        ]))
         .order_by_asc(sprint_suggestion::Column::CreatedAt)
         .order_by_asc(sprint_suggestion::Column::Id)
         .all(txn)

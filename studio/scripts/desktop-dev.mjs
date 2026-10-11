@@ -164,7 +164,7 @@ export function parseDesktopDevOptions(args = []) {
     return { mode: productionDataMode, temporarySqlite: false };
   }
   throw new Error(
-    "usage: pnpm --filter @worktracker/studio desktop:dev -- [--production-data | --temp-sqlite]",
+    "usage: bun run --cwd studio desktop:dev [--production-data | --temp-sqlite]",
   );
 }
 
@@ -237,7 +237,7 @@ export function buildTauriDevelopmentConfig(port) {
     productName: "Ticketry Dev",
     identifier: "com.ticketry.desktop.dev",
     build: {
-      beforeDevCommand: `npm run dev -- --host 127.0.0.1 --port ${port} --strictPort`,
+      beforeDevCommand: `bun run dev -- --host 127.0.0.1 --port ${port} --strictPort`,
       devUrl,
     },
     app: {

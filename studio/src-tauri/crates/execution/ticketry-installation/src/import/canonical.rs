@@ -114,8 +114,9 @@ pub(crate) fn digest(rows: &[Vec<Cell>]) -> String {
 }
 
 fn canonical_json(value: &str) -> Result<String, String> {
-    let value = serde_json::from_str::<serde_json::Value>(value)
+    let mut value = serde_json::from_str::<serde_json::Value>(value)
         .map_err(|error| format!("a PostgreSQL JSON value is invalid: {error}"))?;
+    value.sort_all_objects();
     serde_json::to_string(&value).map_err(|error| format!("JSON could not be encoded: {error}"))
 }
 

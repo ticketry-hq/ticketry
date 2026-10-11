@@ -29,14 +29,14 @@ pub use hook_spool::{
 };
 pub use persistence::timestamp::{format as format_timestamp, normalize as normalize_timestamp};
 pub use persistence::{
-    adopt, ensure_adopted, failure_code, open_status_stream, outbox_adopted, owned_run_tables,
-    preflight, publish_readiness, published_readiness_is_complete, readiness_open,
-    readiness_unavailable, record_run_ended, record_sweep_ended, register_status_graphql,
-    reset_reason, run_holding_in, terminating_signal, unavailable_error, AdoptionEvidence,
-    AgentRunHolding, AgentRunRecord, AttemptFailure, AttemptOutcome, AttemptService,
-    AutomationAttemptProjection, AutomationAttemptRecord, ClaimedLaunch, CompactionOutcome,
-    CompactionPolicy, CompactionSchedule, CompatibilityService, DeliveryMode, DjangoGeneration,
-    EffectService, EndOfLifeOrigin, LaunchDispatchService, LaunchEffectRecord, LaunchExecutor,
+    adopt, ensure_adopted, open_status_stream, outbox_adopted, owned_run_tables, preflight,
+    publish_readiness, published_readiness_is_complete, readiness_open, readiness_unavailable,
+    record_run_ended, record_sweep_ended, register_status_graphql, run_holding_in,
+    terminating_signal, unavailable_error, AdoptionEvidence, AgentRunHolding, AgentRunRecord,
+    AttemptFailure, AttemptOutcome, AttemptService, AutomationAttemptProjection,
+    AutomationAttemptRecord, ClaimedLaunch, CompactionOutcome, CompactionPolicy,
+    CompactionSchedule, CompatibilityService, DeliveryMode, DjangoGeneration, EffectService,
+    EndOfLifeOrigin, LaunchDispatchService, LaunchEffectRecord, LaunchExecutor,
     LaunchExecutorFailure, LaunchIntent, LaunchOutcome, LaunchPreparationParticipant,
     LaunchReconciliationService, LaunchRuntimeEvidence, LaunchRuntimeProbe,
     LaunchSettlementParticipant, LifecycleAcceptance, LifecycleFact, LifecycleService,
@@ -52,4 +52,10 @@ pub use persistence::{
     MAX_LEASE_SECONDS, MAX_RECONCILIATION_BATCH, MAX_REPLAY_BYTES, MAX_REPLAY_EVENTS,
     READINESS_FILE, RETAINED_EVENTS, RETENTION_DAYS, RUNTIME_CONFLICT_CODE,
     RUN_OWNED_AUTHORED_TABLES, SUPPORTED_PAYLOAD_VERSION, VERSION,
+};
+
+pub use persistence::{
+    STATUS_CURSOR_AHEAD_OF_SERVER, STATUS_CURSOR_COMPACTED, STATUS_EVENT_VERSION_INCOMPATIBLE,
+    STATUS_EVENT_VERSION_UNSUPPORTED, STATUS_REPLAY_BOUNDED, STATUS_STREAM_BAD_REQUEST,
+    STATUS_STREAM_UNAVAILABLE,
 };

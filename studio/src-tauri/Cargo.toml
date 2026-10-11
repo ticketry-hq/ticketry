@@ -9,7 +9,9 @@ edition = "2021"
 
 [lib]
 name = "muxed_studio_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# Desktop-only: the staticlib and cdylib outputs exist for Tauri mobile
+# targets, which this app does not ship, and linking them cost 5-8s per build.
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "=2.6.3", features = [] }
@@ -63,11 +65,16 @@ http.workspace = true
 log = "=0.4.33"
 reqwest.workspace = true
 sea-orm.workspace = true
+sea-orm-migration.workspace = true
 seaography.workspace = true
 seaolim.workspace = true
 sha2.workspace = true
+schemars = "=1.2.1"
 syn = { version = "=2.0.119", features = ["full", "visit"] }
+quote = "=1.0.47"
+proc-macro2 = "=1.0.107"
 tauri-graphql.workspace = true
+tauri-macros = "=2.6.3"
 tempfile.workspace = true
 ticketry-agent-execution.workspace = true
 ticketry-codex-app-server.workspace = true
@@ -156,9 +163,11 @@ uuid = { version = "1.24", features = ["v4", "v5"] }
 # and the desktop crash reports actually read.
 [profile.dev]
 debug = "line-tables-only"
-# Crate granularity is what makes a rebuild small now, so the incremental
-# cache buys little and costs tens of gigabytes of `target/`.
-incremental = false
+# The workspace crates form one deep dependency chain, so an edit recompiles
+# every crate above it, one at a time. The incremental cache makes those
+# recompiles 3-4x faster (a work-management edit fell from 69s to 12-20s) for
+# about 2 GB of `target/` per build configuration. CI sets CARGO_INCREMENTAL=0.
+incremental = true
 
 [profile.dev.package."*"]
 debug = false

@@ -39,7 +39,7 @@ test("the printed checklist states the action and observable result for each che
     assert.ok(checklist.includes(check.expect));
   }
   assert.match(checklist, /Launchkey Mini MK3/);
-  assert.match(checklist, /npm run desktop:dev/);
+  assert.match(checklist, /bun run desktop:dev/);
 });
 
 test("the interactive check refuses to certify hardware on a non-macOS host", async () => {

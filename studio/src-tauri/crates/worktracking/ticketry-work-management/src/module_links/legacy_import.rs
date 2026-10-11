@@ -34,7 +34,9 @@ use super::receipt::{
     ImportReceipt, ImportedLink, LinkStatus, ReceiptSource, SkipReason, SkippedLink, VERSION,
 };
 use super::store::{find, module_exists};
-use super::{entities::module_link, schema, ModuleLinkError};
+use ticketry_entities::module_link;
+
+use super::{schema, ModuleLinkError};
 
 /// What one import run did.
 #[derive(Clone, Debug, Eq, PartialEq)]

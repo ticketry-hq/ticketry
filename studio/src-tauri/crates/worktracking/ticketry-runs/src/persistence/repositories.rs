@@ -353,6 +353,7 @@ fn agent_run(row: agent_run_entity::Model) -> Option<AgentRunRecord> {
         launch_state: row.launch_state,
         launch_model: row.launch_model,
         attention_reason: row.attention_reason,
+        stage_skill_availability: row.stage_skill_availability,
     })
 }
 

@@ -1,5 +1,6 @@
 mod bridge;
 mod cli;
+mod mcp_authority;
 mod protocol;
 mod spool;
 mod transport;

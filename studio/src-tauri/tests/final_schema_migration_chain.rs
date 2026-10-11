@@ -3,10 +3,14 @@ use tauri_graphql::TransportApiImpl;
 use ticketry_graphql_schema::{adopt_worktracker_and_install, InstallationOwnership};
 use ticketry_installation::install_final_schema_migrations;
 use ticketry_settings as provider_catalog_migrations;
+use ticketry_work_management::open_for_commands;
 use ticketry_work_management::{
-    launch_binding_entry_skill_migration, launch_binding_stage_skills_migration,
-    module_presentation_migration, open_for_commands, project_onboarding_migration,
-    workflow_color_migration, workspace_tab_order_migration,
+    install_launch_binding_entry_skill_schema, install_launch_binding_stage_skills_schema,
+    install_module_presentation_schema, install_project_onboarding_schema,
+    install_workflow_color_schema, install_workspace_tab_order_schema,
+    LAUNCH_BINDING_ENTRY_SKILL_MIGRATION_LEDGER_TABLE, MODULE_PRESENTATION_MIGRATION_LEDGER_TABLE,
+    PROJECT_ONBOARDING_MIGRATION_LEDGER_TABLE, WORKFLOW_COLOR_MIGRATION_LEDGER_TABLE,
+    WORKSPACE_TAB_ORDER_MIGRATION_LEDGER_TABLE,
 };
 
 #[path = "final_schema_migration_chain/support.rs"]
@@ -35,7 +39,7 @@ async fn full_0044_through_0054_chain_is_lossless_and_reopens() {
 #[tokio::test]
 async fn stage_skills_backfill_the_trimmed_legacy_entry_skill() {
     let (_directory, database) = fixture().await;
-    launch_binding_entry_skill_migration::install(&database)
+    install_launch_binding_entry_skill_schema(&database)
         .await
         .expect("install the legacy entry-skill column");
     database
@@ -45,7 +49,7 @@ async fn stage_skills_backfill_the_trimmed_legacy_entry_skill() {
         .await
         .expect("pad the legacy entry skill");
 
-    launch_binding_stage_skills_migration::install(&database)
+    install_launch_binding_stage_skills_schema(&database)
         .await
         .expect("install stage skills");
 
@@ -79,7 +83,7 @@ async fn stage_skills_backfill_the_trimmed_legacy_entry_skill() {
 async fn null_and_blank_entry_skills_backfill_empty_without_copying_required_skills() {
     for legacy in ["NULL", "'   '"] {
         let (_directory, database) = fixture().await;
-        launch_binding_entry_skill_migration::install(&database)
+        install_launch_binding_entry_skill_schema(&database)
             .await
             .expect("install the legacy entry-skill column");
         database
@@ -90,7 +94,7 @@ async fn null_and_blank_entry_skills_backfill_empty_without_copying_required_ski
             .await
             .expect("set the legacy selection");
 
-        launch_binding_stage_skills_migration::install(&database)
+        install_launch_binding_stage_skills_schema(&database)
             .await
             .expect("install stage skills");
         let row = database
@@ -146,14 +150,14 @@ async fn repeating_stage_skills_migration_preserves_explicit_clearing() {
 #[tokio::test]
 async fn editing_an_upgraded_selection_survives_restart_without_legacy_rebackfill() {
     let (directory, database) = fixture().await;
-    launch_binding_entry_skill_migration::install(&database)
+    install_launch_binding_entry_skill_schema(&database)
         .await
         .expect("install the legacy scalar");
     database
         .execute_unprepared("UPDATE worktracker_launchbinding SET entry_skill = 'to-spec'")
         .await
         .expect("seed the legacy selection");
-    launch_binding_stage_skills_migration::install(&database)
+    install_launch_binding_stage_skills_schema(&database)
         .await
         .expect("upgrade to the list contract");
     database
@@ -191,9 +195,7 @@ async fn partial_prior_completion_resumes_without_replaying_completed_steps() {
     provider_catalog_migrations::install_codex_5_6(&database)
         .await
         .unwrap();
-    project_onboarding_migration::install(&database)
-        .await
-        .unwrap();
+    install_project_onboarding_schema(&database).await.unwrap();
     install_final_schema_migrations(&database)
         .await
         .expect("resume the remaining chain");
@@ -300,7 +302,7 @@ async fn fresh_production_entry_reaches_the_final_leaf() {
         .expect("repeat the production chain");
     assert_eq!(
         ticketry_installation::ORDERED_MIGRATION_IDS.last(),
-        Some(&"0063_sprints")
+        Some(&"0065_sprint_rank")
     );
     for table in [
         "worktracker_sprint",
@@ -337,11 +339,11 @@ async fn fresh_production_entry_reaches_the_final_leaf() {
 async fn run_step(database: &DatabaseConnection, step: usize) -> sea_orm::DbErr {
     let result = match step {
         0 => provider_catalog_migrations::install_codex_5_6(database).await,
-        1 => project_onboarding_migration::install(database).await,
-        2 => launch_binding_entry_skill_migration::install(database).await,
-        3 => workflow_color_migration::install(database).await,
-        4 => workspace_tab_order_migration::install(database).await,
-        5 => module_presentation_migration::install(database).await,
+        1 => install_project_onboarding_schema(database).await,
+        2 => install_launch_binding_entry_skill_schema(database).await,
+        3 => install_workflow_color_schema(database).await,
+        4 => install_workspace_tab_order_schema(database).await,
+        5 => install_module_presentation_schema(database).await,
         6 => provider_catalog_migrations::install_codex_spark(database).await,
         _ => unreachable!(),
     };
@@ -355,27 +357,21 @@ async fn complete_before(database: &DatabaseConnection, stop: usize) {
             .unwrap();
     }
     if stop > 1 {
-        project_onboarding_migration::install(database)
-            .await
-            .unwrap();
+        install_project_onboarding_schema(database).await.unwrap();
     }
     if stop > 2 {
-        launch_binding_entry_skill_migration::install(database)
+        install_launch_binding_entry_skill_schema(database)
             .await
             .unwrap();
     }
     if stop > 3 {
-        workflow_color_migration::install(database).await.unwrap();
+        install_workflow_color_schema(database).await.unwrap();
     }
     if stop > 4 {
-        workspace_tab_order_migration::install(database)
-            .await
-            .unwrap();
+        install_workspace_tab_order_schema(database).await.unwrap();
     }
     if stop > 5 {
-        module_presentation_migration::install(database)
-            .await
-            .unwrap();
+        install_module_presentation_schema(database).await.unwrap();
     }
 }
 
@@ -390,27 +386,27 @@ async fn every_step_rolls_back_an_injected_failure_and_then_resumes() {
         (
             "CREATE TRIGGER fail_step BEFORE UPDATE ON worktracker_project BEGIN SELECT RAISE(ABORT,'0045'); END",
             "DROP TRIGGER fail_step",
-            project_onboarding_migration::LEDGER_TABLE,
+            PROJECT_ONBOARDING_MIGRATION_LEDGER_TABLE,
         ),
         (
             "CREATE VIEW ticketry_launch_binding_entry_skill_migration AS SELECT 1",
             "DROP VIEW ticketry_launch_binding_entry_skill_migration",
-            launch_binding_entry_skill_migration::LEDGER_TABLE,
+            LAUNCH_BINDING_ENTRY_SKILL_MIGRATION_LEDGER_TABLE,
         ),
         (
             "CREATE VIEW ticketry_workflow_color_migration AS SELECT 1",
             "DROP VIEW ticketry_workflow_color_migration",
-            workflow_color_migration::LEDGER_TABLE,
+            WORKFLOW_COLOR_MIGRATION_LEDGER_TABLE,
         ),
         (
             "CREATE VIEW ticketry_workspace_tab_order_migration AS SELECT 1",
             "DROP VIEW ticketry_workspace_tab_order_migration",
-            workspace_tab_order_migration::LEDGER_TABLE,
+            WORKSPACE_TAB_ORDER_MIGRATION_LEDGER_TABLE,
         ),
         (
             "CREATE VIEW worktracker_modulepresentation AS SELECT 1",
             "DROP VIEW worktracker_modulepresentation",
-            module_presentation_migration::LEDGER_TABLE,
+            MODULE_PRESENTATION_MIGRATION_LEDGER_TABLE,
         ),
         (
             "CREATE TRIGGER fail_step BEFORE INSERT ON worktracker_agentmodel WHEN NEW.name='gpt-5.3-codex-spark' BEGIN SELECT RAISE(ABORT,'0051'); END",
@@ -452,8 +448,8 @@ async fn sprint_schema_keeps_existing_issues_in_backlog_and_enforces_planning_in
         database
             .execute_unprepared(&format!(
                 "INSERT INTO worktracker_sprint
-            (id, project_id, name, status, created_at, updated_at)
-            VALUES ('{id}', '{}', 'Sprint', '{status}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            (id, project_id, name, status, rank, created_at, updated_at)
+            VALUES ('{id}', '{}', 'Sprint', '{status}', '{id}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 "00000000000000000000000000001001"
             ))
             .await

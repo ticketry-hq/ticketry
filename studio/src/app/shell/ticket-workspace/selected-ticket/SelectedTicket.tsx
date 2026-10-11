@@ -1,8 +1,8 @@
+import { useRef } from "react";
 import { TEMP_TASK_ID } from "../../../../features/agents/types";
 import {
   scratchBucketId,
   useInstantRunTicketTitle,
-  useTerminalStore,
 } from "../../../../features/agents/terminal";
 import { PaneShell } from "../../PaneShell";
 import { useStudioStore } from "../../../../features/projects";
@@ -18,14 +18,25 @@ import {
 import { StateConfigurationPanel } from "../../../../features/workflows";
 import { ConversationConfigurationPanel } from "../../../../features/settings";
 import { recordSelectionProfilePoint } from "../../../../shared/utilities/selectionProfile";
-import { selectedRunSession } from "../../../../features/agents/actions/agentRunActions";
 
 /** Adapts Studio selection state to the selected-ticket workspace. */
 export function SelectedTicket({ active = true }: { active?: boolean }) {
   recordSelectionProfilePoint("selected-ticket-render");
-  const selectedTaskId = useClientStore((s) => s.selectedTaskId);
+  const currentTaskId = useClientStore((s) => s.selectedTaskId);
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
-  const selectedModuleId = useClientStore((s) => s.selectedModuleId);
+  const currentModuleId = useClientStore((s) => s.selectedModuleId);
+  // Only retain presentation identities, never record or application-state
+  // copies. Module restoration can briefly have no selected Story; that
+  // empty authoritative selection must not tear down dormant native viewers.
+  const dormantContext = useRef<{ projectId: string; moduleId: string; taskId: string | null } | null>(null);
+  if (selectedProjectId && currentModuleId && (currentTaskId || !dormantContext.current)) {
+    dormantContext.current = { projectId: selectedProjectId, moduleId: currentModuleId, taskId: currentTaskId };
+  } else if (dormantContext.current?.projectId !== selectedProjectId) {
+    dormantContext.current = null;
+  }
+  const dormant = !currentTaskId ? dormantContext.current : null;
+  const selectedModuleId = dormant?.moduleId ?? currentModuleId;
+  const selectedTaskId = currentTaskId ?? dormant?.taskId ?? null;
   const workspaceSelection = useClientStore((s) => s.workspaceSelection);
   const conversationRunId = useSelectedInstantRunId();
   // The New conversation row is an action, not a workspace: keep its scratch
@@ -57,13 +68,6 @@ export function SelectedTicket({ active = true }: { active?: boolean }) {
           moduleId: selectedModuleId,
         }
       : null;
-  const closeConversationConfiguration = () => {
-    dismissConversationConfiguration();
-    requestAnimationFrame(() => {
-      const session = selectedRunSession();
-      if (session) useTerminalStore.getState().focusSession(session.sessionId);
-    });
-  };
   const configuredState =
     workspaceSelection.kind === "state-configuration" &&
     workspaceSelection.projectId === selectedProjectId
@@ -77,13 +81,13 @@ export function SelectedTicket({ active = true }: { active?: boolean }) {
       titleCasing="preserve"
     >
       <div className="relative h-full min-h-0">
-        <div className="h-full" hidden={newConversationRowSelected}>
+        <div className="h-full" hidden={newConversationRowSelected || !currentTaskId}>
           <SelectedTicketContent
             bucket={bucket}
             projectId={selectedProjectId}
             moduleId={selectedModuleId}
             owner="studio"
-            workspaceActive={active}
+            workspaceActive={active && !!currentTaskId && !newConversationRowSelected && workspaceSelection.kind === "task"}
             details={<SelectedTicketDetails />}
             launchContext={launchContext}
             conversationRunId={conversationRunId}
@@ -99,7 +103,7 @@ export function SelectedTicket({ active = true }: { active?: boolean }) {
           workspaceSelection.projectId === selectedProjectId &&
           workspaceSelection.moduleId === selectedModuleId ? (
           <ConversationConfigurationPanel
-            onClose={closeConversationConfiguration}
+            onClose={dismissConversationConfiguration}
           />
         ) : null}
       </div>

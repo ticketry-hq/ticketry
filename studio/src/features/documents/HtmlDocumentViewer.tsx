@@ -6,15 +6,17 @@ import type { DesignDoc } from "./types";
 export function HtmlDocumentViewer({
   doc,
   focusSignal,
+  canFocus,
 }: {
   doc: DesignDoc;
   focusSignal: number;
+  canFocus?: (target?: HTMLElement | null) => boolean;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    if (focusSignal > 0) frameRef.current?.focus();
-  }, [focusSignal]);
+    if (focusSignal > 0 && (canFocus?.(frameRef.current) ?? true)) frameRef.current?.focus();
+  }, [focusSignal, canFocus]);
 
   return (
     <iframe

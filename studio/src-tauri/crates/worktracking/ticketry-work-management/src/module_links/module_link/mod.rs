@@ -25,7 +25,7 @@ mod views;
 
 use seaography::Builder;
 
-use super::entities::module_link;
+use ticketry_entities::module_link;
 
 /// Register generated reads and the two restricted Module Link writes.
 pub fn register(mut builder: Builder) -> Builder {

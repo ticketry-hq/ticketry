@@ -227,6 +227,7 @@ export async function configureCodexDefault(
     .map((provider) => provider.slug);
   const saved = (await graphql(request, UpdateProviderCatalogDocument, {
     activatedProviders,
+    codexProfiles: catalog.codex_profiles,
     defaultProvider: "codex",
     defaultModel: CODEX_TEST_MODEL,
     defaultReasoning: CODEX_TEST_REASONING,

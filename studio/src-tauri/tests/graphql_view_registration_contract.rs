@@ -215,7 +215,7 @@ fn audited_source_roots() -> Vec<PathBuf> {
     slices.sort();
     assert_eq!(
         slices.len(),
-        21,
+        22,
         "GraphQL audit must scan all workspace crates"
     );
     roots.extend(slices);

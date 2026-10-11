@@ -163,7 +163,7 @@ describe("module boundaries", () => {
       "app/StudioApp.tsx": ["./shell/StudioShell"],
       "app/shell/StudioShell.tsx": ["./StudioLayout"],
       "app/shell/StudioLayout.tsx": [
-        "./sidebar/StudioSidebar",
+        "../../features/module-manager/ModuleManager",
         "./ticket-workspace/TicketWorkspace",
       ],
       "app/shell/ticket-workspace/TicketWorkspace.tsx": [

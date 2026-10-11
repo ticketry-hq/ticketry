@@ -18,6 +18,7 @@ const VARIANT_NAMES = {
 
 const conversations = Array.from({ length: 12 }, (_, index) => ({
   __typename: "InstantRunTicket" as const,
+  user_title: null,
   agent_run_id: `conversation-${index + 1}`,
   title: `Prototype chat ${String(index + 1).padStart(2, "0")}`,
   started_at: `2026-09-01T${String(index).padStart(2, "0")}:00:00Z`,

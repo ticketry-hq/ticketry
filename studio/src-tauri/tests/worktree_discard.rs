@@ -305,7 +305,7 @@ impl Fixture {
 
 /// Point one module at one local repository, through the one write seam.
 async fn link_module(database: &DatabaseConnection, module_id: &str, repository: &Path) {
-    ticketry_work_management::schema::install(database)
+    ticketry_work_management::install_module_links_schema(database)
         .await
         .expect("install the Module Link schema");
     ticketry_work_management::ModuleLinkStore::new(database.clone())

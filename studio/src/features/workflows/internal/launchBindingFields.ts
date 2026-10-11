@@ -5,6 +5,7 @@ import type { ScopedWorkflowLaunchBinding } from "../../../shared/api/types";
 export interface LaunchBindingFields {
   prompt: string;
   stageSkills: string[];
+  requiredSkills: string[];
   agent: string;
   profile: string;
   model: string;
@@ -18,6 +19,7 @@ export function storedLaunchBindingFields(
   return {
     prompt: binding?.prompt ?? "",
     stageSkills: binding?.stage_skills ?? [],
+    requiredSkills: binding?.required_skills ?? [],
     agent: binding?.agent ?? "",
     profile: binding?.profile ?? "",
     model: binding?.model ?? "",

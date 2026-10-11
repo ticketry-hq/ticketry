@@ -1,3 +1,4 @@
+import { resolveRoadmapAvailability } from "./scripts/roadmap-build-policy.mjs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { devProxy } from "./vite.proxy";
@@ -5,6 +6,7 @@ import { webFrontendLogPlugin } from "./scripts/web-frontend-log-plugin.mjs";
 
 // Studio dev server (:5174) and its single default-entry production build.
 export default defineConfig({
+  define: { __TICKETRY_ROADMAP_ENABLED__: JSON.stringify(resolveRoadmapAvailability(process.env)) },
   plugins: [react(), webFrontendLogPlugin()],
   resolve: {
     // CodeMirror packages are deduped so the dark theme Studio passes into

@@ -19,7 +19,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, RunsServices) {
             lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT, scope TEXT NOT NULL,
             launch_state TEXT, launch_model TEXT, initial_prompt TEXT,
             launch_reasoning TEXT, launch_unattended BOOL NOT NULL DEFAULT 0,
-            attention_reason TEXT
+            attention_reason TEXT, conversation_title TEXT, stage_skill_availability TEXT
         );
         CREATE TABLE agent_terminal_sessions (
             agent_run_id TEXT PRIMARY KEY, tmux_session_name TEXT NOT NULL,

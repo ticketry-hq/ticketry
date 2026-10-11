@@ -59,7 +59,9 @@ export const grantsEveryLease: WorkTrackerGraphQlExecute = async (
 ) =>
   (LEASE_OPERATIONS.has(documentOperationName(document))
     ? { viewer_lease: grantedLease(variables) }
-    : {}) as never;
+    : documentOperationName(document) === "AgentRunStageSkillAvailability"
+      ? { agent_runs: { __typename: "AgentRunsConnection", nodes: [] } }
+      : {}) as never;
 
 export interface TerminalSessionReadFixture {
   readTaskTerminalSessions(taskId: string): Promise<PersistedTerminalSession[]>;
@@ -98,6 +100,7 @@ export interface WorkItemEndedRunFixture {
   readonly exit_code?: number | null;
   readonly launch_state?: string | null;
   readonly launch_model?: string | null;
+  readonly stage_skill_availability?: string | null;
   readonly provider_session_id?: string | null;
   /** `undefined` when no durable terminal session record survives. */
   readonly terminated_at?: string | null;
@@ -115,6 +118,7 @@ function endedRunRow(run: WorkItemEndedRunFixture, defaultScope: string) {
     exit_code: run.exit_code ?? 0,
     launch_state: run.launch_state ?? null,
     launch_model: run.launch_model ?? null,
+    stage_skill_availability: run.stage_skill_availability ?? null,
     provider_session_id: run.provider_session_id ?? null,
     terminal_session: {
       __typename: "AgentTerminalSessionsConnection",
@@ -291,10 +295,24 @@ export function installDesktopGraphQlRuntime(
   ) => void,
 ): RecordedGraphQlOperation[] {
   const recorded: RecordedGraphQlOperation[] = [];
+  const fixtureExecute: WorkTrackerGraphQlExecute = async (document, variables) => {
+    const operation = documentOperationName(document);
+    // These terminal fixtures have no sprint catalog. Return complete generated
+    // connections at the transport boundary so Stories resolves semantic Active.
+    if (operation === "StoryActiveSprint" || operation === "StorySelectedSprint") {
+      return { sprints: { __typename: "WorktrackerSprintConnection", nodes: [] } } as never;
+    }
+    if (operation === "ProjectStorySprintModules") {
+      return { modules: { __typename: "WorktrackerIssueConnection", nodes: [],
+        pageInfo: { __typename: "PageInfo", hasNextPage: false },
+        paginationInfo: { __typename: "PaginationInfo", total: 0 } } } as never;
+    }
+    return execute(document, variables);
+  };
   const route: StudioRuntime["readWorkTracker"] = (routes) =>
     routes.graphQl(((document, variables) => {
       recorded.push({ operationName: documentOperationName(document), variables });
-      return execute(document, variables);
+      return fixtureExecute(document, variables);
     }) as WorkTrackerGraphQlExecute);
   const graphQlTransport: StudioRuntime["graphQlTransport"] = () => ({
     graphql_execute: async (requestJson) => {
@@ -303,7 +321,7 @@ export function installDesktopGraphQlRuntime(
         variables: unknown;
       };
       recorded.push(request);
-      const data = await execute(
+      const data = await fixtureExecute(
         { operationName: request.operationName } as never,
         request.variables as never,
       );

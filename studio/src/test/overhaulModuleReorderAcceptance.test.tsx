@@ -37,6 +37,7 @@ vi.mock("../features/projects/modulePresentationTransport", async () => {
   return { ...actual, reorderModulePresentation: api.reorderWorkItem };
 });
 
+import { useModuleManagerStore } from "../features/module-manager";
 import { loadModules, loadProjects } from "../features/projects";
 import type { WorkItem } from "../shared/api/types";
 import { useClientStore } from "../state/clientStore";
@@ -54,14 +55,14 @@ import {
   resetModuleReorderHarness,
   rowFor,
   rows,
-  sidebarOrder,
+  managerOrder,
   tabStripOrder,
 } from "./moduleReorderHarness";
 
-describe("module sidebar reorder acceptance", () => {
+describe("module manager reorder acceptance", () => {
   beforeEach(resetModuleReorderHarness);
 
-  it("[overhaul-42] freezes the visible module order on the first sidebar drag", async () => {
+  it("[overhaul-42] freezes the visible module order on the first manager drag", async () => {
     await renderAutomaticProject();
     const settle = deferred<WorkItem>();
     reorderWorkItem.mockReturnValue(settle.promise);
@@ -79,7 +80,7 @@ describe("module sidebar reorder acceptance", () => {
 
     // The move appears at once on both reorder-visible surfaces, before the
     // server has answered.
-    expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]);
+    expect(managerOrder()).toEqual(["module-c", "module-a", "module-b"]);
     expect(tabStripOrder()).toEqual(["C", "A", "B"]);
     settle.resolve(moved("module-c"));
   });
@@ -107,7 +108,7 @@ describe("module sidebar reorder acceptance", () => {
     // A manual project keeps the server's persisted order after the refresh.
     await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]),
+      expect(managerOrder()).toEqual(["module-c", "module-a", "module-b"]),
     );
     expect(tabStripOrder()).toEqual(["C", "A", "B"]);
     expect(rows().every((row) => row.getAttribute("draggable") === "true")).toBe(true);
@@ -126,7 +127,7 @@ describe("module sidebar reorder acceptance", () => {
 
     dragModule("module-c", "module-a", "near");
     await waitFor(() => expect(reorderWorkItem).toHaveBeenCalled());
-    expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]);
+    expect(managerOrder()).toEqual(["module-c", "module-a", "module-b"]);
 
     settle.resolve(moved("module-c"));
 
@@ -135,7 +136,7 @@ describe("module sidebar reorder acceptance", () => {
     await waitFor(() =>
       expect(rows().every((row) => row.getAttribute("draggable") === "true")).toBe(true),
     );
-    expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]);
+    expect(managerOrder()).toEqual(["module-c", "module-a", "module-b"]);
     expect(tabStripOrder()).toEqual(["C", "A", "B"]);
 
     // Once reads recover, the server's creation-order automatic mode wins.
@@ -144,7 +145,7 @@ describe("module sidebar reorder acceptance", () => {
     await loadModules(PROJECT_ID);
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["module-a", "module-b", "module-c"]),
+      expect(managerOrder()).toEqual(["module-a", "module-b", "module-c"]),
     );
   });
 
@@ -173,7 +174,7 @@ describe("module sidebar reorder acceptance", () => {
     await staleLoad;
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]),
+      expect(managerOrder()).toEqual(["module-c", "module-a", "module-b"]),
     );
     expect(tabStripOrder()).toEqual(["C", "A", "B"]);
   });
@@ -186,7 +187,7 @@ describe("module sidebar reorder acceptance", () => {
 
     // The optimistic order is shown first, then withdrawn with an explanation.
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["module-a", "module-b", "module-c"]),
+      expect(managerOrder()).toEqual(["module-a", "module-b", "module-c"]),
     );
     expect(tabStripOrder()).toEqual(["A", "B", "C"]);
     expect(
@@ -206,7 +207,7 @@ describe("module sidebar reorder acceptance", () => {
     dragModule("module-c", "module-a", "near");
 
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]),
+      expect(managerOrder()).toEqual(["module-c", "module-a", "module-b"]),
     );
     expect(tabStripOrder()).toEqual(["C", "A", "B"]);
   });
@@ -240,7 +241,7 @@ describe("module sidebar reorder acceptance", () => {
       initial_order_ids: ["module-b", "module-c", "module-a"],
     });
     await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["module-b", "module-a", "module-c"]),
+      expect(managerOrder()).toEqual(["module-b", "module-a", "module-c"]),
     );
     expect(tabStripOrder()).toEqual(["B", "A", "C"]);
     expect(
@@ -255,27 +256,27 @@ describe("module sidebar reorder acceptance", () => {
 
     // Cancelled: the pointer left the row before release.
     const { target } = dragModule("module-c", "module-a", "near", { drop: false });
-    expect(screen.getByTestId("module-drop-seam")).toHaveAttribute(
+    expect(screen.getByTestId("module-manager-drop-seam")).toHaveAttribute(
       "data-drop-intent",
       "near",
     );
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByTestId("module-drop-seam")).toBeNull();
+    expect(screen.queryByTestId("module-manager-drop-seam")).toBeNull();
 
     // No-op: dropped back onto the edge it already occupies.
     dragModule("module-b", "module-a", "far");
     dragModule("module-a", "module-a", "far");
 
     expect(reorderWorkItem).not.toHaveBeenCalled();
-    expect(sidebarOrder()).toEqual(["module-a", "module-b", "module-c"]);
+    expect(managerOrder()).toEqual(["module-a", "module-b", "module-c"]);
 
     // A drop must not select the module it landed on, but an ordinary click must.
     dragModule("module-c", "module-a", "near");
-    fireEvent.click(target);
-    expect(useClientStore.getState().modulesCursorId).toBeNull();
+    fireEvent.click(target.querySelector("[data-module-manager-inspect]")!);
+    expect(useModuleManagerStore.getState().selectedModuleId).toBeNull();
 
     await waitFor(() => expect(reorderWorkItem).toHaveBeenCalledTimes(1));
-    fireEvent.click(rowFor("module-b"));
-    expect(useClientStore.getState().modulesCursorId).toBe("module-b");
+    fireEvent.click(rowFor("module-b").querySelector("[data-module-manager-inspect]")!);
+    expect(useModuleManagerStore.getState().selectedModuleId).toBe("module-b");
   });
 });

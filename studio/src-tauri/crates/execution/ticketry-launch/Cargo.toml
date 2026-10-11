@@ -22,5 +22,6 @@ ticketry-workspace-runtime.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+toml_edit.workspace = true
 tempfile.workspace = true
 tokio.workspace = true

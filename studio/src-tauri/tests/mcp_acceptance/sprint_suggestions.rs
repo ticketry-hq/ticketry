@@ -35,7 +35,8 @@ async fn assert_suggestion_only(client: &mut SocketClient) {
     }
     assert!(!tools
         .iter()
-        .any(|tool| tool["name"] == "update_task" || tool["name"] == "create_task"));
+        .any(|tool| ["update_task", "create_task", "list_sprints"]
+            .contains(&tool["name"].as_str().unwrap())));
     for (id, name, arguments) in [
         (
             31,
@@ -47,6 +48,7 @@ async fn assert_suggestion_only(client: &mut SocketClient) {
             "create_task",
             json!({"project_id": super::PROJECT, "name": "Unapproved story", "issue_type": "Story"}),
         ),
+        (33, "list_sprints", json!({"project_id": super::PROJECT})),
     ] {
         let rejected = client.structured(id, name, arguments).await;
         assert_eq!(rejected["error"], "tool_not_allowed", "{rejected}");
@@ -70,11 +72,11 @@ async fn sprint_tools_enforce_project_open_sprint_and_current_run_without_assign
             ('90000000000000000000000000000000', 'Foreign', 'FOREIGN', '', 0, 0,
              CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
         INSERT INTO worktracker_sprint
-            (id, project_id, name, status, suggestion_run_id, created_at, updated_at) VALUES
+            (id, project_id, name, status, suggestion_run_id, rank, created_at, updated_at) VALUES
             ('80000000000000000000000000000001', '10000000000000000000000000000000',
-             'Planning', 'planned', 'run-valid', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+             'Planning', 'planned', 'run-valid', 'a0', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
             ('80000000000000000000000000000003', '90000000000000000000000000000000',
-             'Foreign sprint', 'planned', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+             'Foreign sprint', 'planned', NULL, 'a0', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
         INSERT INTO worktracker_sprint_goal (id, sprint_id, position, text, created_at, updated_at) VALUES
             ('80000000000000000000000000000002', '80000000000000000000000000000001', 1,
              'Ship planning', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -87,9 +89,7 @@ async fn sprint_tools_enforce_project_open_sprint_and_current_run_without_assign
     let schema = ticketry_graphql_schema::foundation_schema(
         database.clone(),
         Some(database.clone()),
-        Some(ticketry_work_management::commands::CommandDatabase(
-            database.clone(),
-        )),
+        Some(ticketry_work_management::CommandDatabase(database.clone())),
         None,
         None,
         None,
@@ -132,7 +132,8 @@ async fn sprint_tools_enforce_project_open_sprint_and_current_run_without_assign
         .any(|tool| tool["name"] == "suggest_sprint_story"));
     assert!(!tools
         .iter()
-        .any(|tool| tool["name"] == "update_task" || tool["name"] == "create_task"));
+        .any(|tool| ["update_task", "create_task", "list_sprints"]
+            .contains(&tool["name"].as_str().unwrap())));
     assert!(!tools
         .iter()
         .any(|tool| tool["name"].as_str().unwrap().contains("assign")));
@@ -220,7 +221,7 @@ async fn sprint_tools_enforce_project_open_sprint_and_current_run_without_assign
     let before_binding = next
         .request(json!({"jsonrpc":"2.0", "id":19, "method":"tools/list"}))
         .await;
-    for name in ["create_task", "update_task"] {
+    for name in ["create_task", "update_task", "list_sprints"] {
         assert!(
             before_binding["result"]["tools"]
                 .as_array()

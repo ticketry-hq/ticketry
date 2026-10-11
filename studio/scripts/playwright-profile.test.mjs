@@ -6,15 +6,18 @@ import { fileURLToPath } from "node:url";
 
 test("Playwright shares one isolated socket profile and removes it on runner exit", () => {
   const result = spawnSync(process.execPath, ["-e", `
-    const ts = require('typescript');
+    const workspaceRequire = require('node:module').createRequire(
+      require('node:path').resolve('studio/package.json'),
+    );
+    const ts = workspaceRequire('typescript');
     const fs = require('node:fs');
     const assert = require('node:assert/strict');
     function load(file) {
-      const output = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+      const output = ts.transpileModule(fs.readFileSync(file, 'utf8').replaceAll('import.meta.dirname', JSON.stringify(require('node:path').dirname(require('node:path').resolve(file)))), {
         compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
       }).outputText;
       const module = { exports: {} };
-      new Function('require', 'module', 'exports', output)(require, module, module.exports);
+      new Function('require', 'module', 'exports', output)(workspaceRequire, module, module.exports);
       return module.exports.default;
     }
     delete process.env.TICKETRY_E2E_DATA_DIR;

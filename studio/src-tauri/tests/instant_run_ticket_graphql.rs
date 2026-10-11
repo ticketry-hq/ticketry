@@ -25,7 +25,7 @@ async fn database() -> DatabaseConnection {
                ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,\n\
                lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,\n\
                scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT, initial_prompt TEXT,\n\
-               launch_reasoning TEXT, launch_unattended BOOL NOT NULL DEFAULT 0, attention_reason TEXT\n\
+               launch_reasoning TEXT, launch_unattended BOOL NOT NULL DEFAULT 0, attention_reason TEXT, conversation_title TEXT, stage_skill_availability TEXT\n\
              );\n\
              CREATE TABLE terminal_launch_material (\n\
                effect_id TEXT PRIMARY KEY, agent_run_id TEXT NOT NULL UNIQUE, schema_version INTEGER NOT NULL,\n\
@@ -228,6 +228,30 @@ async fn accepted_codex_thread_name_is_returned_for_eligible_agent_run() {
         serde_json::json!({"title": "Rename the selected conversation"})
     );
     assert_eq!(*calls.lock().unwrap(), ["thread-active"]);
+}
+
+#[tokio::test]
+async fn persisted_user_title_prevents_provider_title_reads() {
+    let database = database().await;
+    database
+        .execute_unprepared(
+            "UPDATE agent_runs SET conversation_title='My chosen name' WHERE id='run-active'",
+        )
+        .await
+        .unwrap();
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let (endpoint, _) = title_schema_with_database(
+        database,
+        ScriptedTitleReader {
+            title: Some("Provider generated title".to_owned()),
+            calls: calls.clone(),
+        },
+    )
+    .await;
+    let response = execute_title(&endpoint, "run-active").await;
+    assert_eq!(response["errors"], serde_json::Value::Null);
+    assert_eq!(response["data"]["title"], serde_json::Value::Null);
+    assert!(calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

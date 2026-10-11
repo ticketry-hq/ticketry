@@ -1,6 +1,6 @@
 //! Graph Run model views backed by the serialized execution service.
 
-pub mod action_compatibility;
+mod action_compatibility;
 mod operation_registry;
 mod views;
 

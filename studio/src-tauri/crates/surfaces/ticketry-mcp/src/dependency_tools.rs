@@ -1,7 +1,9 @@
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
 
-use ticketry_work_management::commands::{blockers, hierarchy, CommandError};
+use ticketry_work_management::{
+    change_blockers, reparent_work_item, BlockerChange, CommandError, ReparentWorkItem,
+};
 
 use super::{dispatch::DispatchOutput, projection, scope, workflow_tools::string, RunPrincipal};
 
@@ -38,9 +40,9 @@ async fn set_blockers(
                 .id,
         );
     }
-    match blockers::change(
+    match change_blockers(
         database,
-        blockers::BlockerChange::Replace {
+        BlockerChange::Replace {
             task_id: task.id.clone(),
             blocked_by_ids: ids,
         },
@@ -73,9 +75,9 @@ async fn add_blocker(
     };
     let task = scope::task(database, principal, task_key).await?;
     let blocker = scope::task(database, principal, blocker_key).await?;
-    match blockers::change(
+    match change_blockers(
         database,
-        blockers::BlockerChange::Add {
+        BlockerChange::Add {
             task_id: task.id.clone(),
             blocker_id: blocker.id,
         },
@@ -132,9 +134,9 @@ async fn reparent_tasks(
             skipped.push(json!({"task_id": raw_id, "reason": "self_parent"}));
             continue;
         }
-        match hierarchy::reparent(
+        match reparent_work_item(
             database,
-            hierarchy::ReparentWorkItem {
+            ReparentWorkItem {
                 id: task.id.clone(),
                 parent_id: Some(parent_id.clone()),
                 before_id: None,

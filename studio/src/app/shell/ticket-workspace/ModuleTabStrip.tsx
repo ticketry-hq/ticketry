@@ -5,22 +5,21 @@ import {
   ModulePicker,
   useModuleJumpBadges,
   useModulePresentations,
-  useSetModuleTabHidden,
-  visibleModules,
+  useCloseModuleTab,
+  useEffectiveModuleTabs,
+  getEffectiveModuleTabsSnapshot,
 } from "../../../features/module-tabs";
 import {
   useModuleReorderDrag,
   useModulesQuery,
   useStudioStore,
 } from "../../../features/projects";
-import { getModuleFolder } from "../../../features/module-links";
 import { useClientStore } from "../../../state/clientStore";
 import { ModuleTab } from "./ModuleTab";
 import { useWorkspaceTabNavigation } from "./useWorkspaceTabNavigation";
 import { WorkspaceTabs } from "./WorkspaceTabs";
-import { leavePlanWorkspace, usePlanWorkspace } from "../../../features/sprints";
+import { leavePlanWorkspace, selectPlanWorkspaceActive, usePlanWorkspace } from "../../../features/sprints";
 import { leaveChangesWorkspace, useChangesWorkspace } from "../../../features/agents/worktrees";
-import { ModulesPaneToggle } from "./ModulesPaneToggle";
 
 export function ModuleTabStrip() {
   const tabNavigation = useWorkspaceTabNavigation();
@@ -28,15 +27,16 @@ export function ModuleTabStrip() {
   const modulesQuery = useModulesQuery(selectedProjectId);
   const modules = modulesQuery.data ?? [];
   const presentations = useModulePresentations(selectedProjectId);
-  const shownModules = visibleModules(modules, presentations);
-  const planActive = usePlanWorkspace((state) => state.active);
+  const projection = useEffectiveModuleTabs(selectedProjectId, modules, presentations);
+  const canReorder = !projection.restricted && !projection.loading;
+  const shownModules = projection.modules;
+  const planActive = usePlanWorkspace(selectPlanWorkspaceActive);
   const planModuleId = usePlanWorkspace((state) => state.origin?.selectedModuleId ?? null);
   const changesActive = useChangesWorkspace((state) => state.active);
   const surfaceActive = planActive || changesActive;
   const selectedModuleId = useClientStore((state) => state.selectedModuleId);
   const selectModule = useClientStore((state) => state.selectModule);
-  const deselectModule = useClientStore((state) => state.deselectModule);
-  const setTabHidden = useSetModuleTabHidden();
+  const handleHide = useCloseModuleTab();
   const loading = modulesQuery.isPending;
   const pushModal = useModalStore((state) => state.pushModal);
   const modalOpen = useModalStore((state) => state.modalStack.length > 0);
@@ -54,40 +54,16 @@ export function ModuleTabStrip() {
   const handleSelect = useCallback(
     (moduleId: string) => {
       if (dragDrop.consumePostDropClick()) return;
-      if (usePlanWorkspace.getState().active) leavePlanWorkspace();
+      if (selectPlanWorkspaceActive(usePlanWorkspace.getState())) leavePlanWorkspace();
       if (useChangesWorkspace.getState().active) leaveChangesWorkspace();
-      void selectModule(moduleId);
+      const current = getEffectiveModuleTabsSnapshot(selectedProjectId);
+      if (current.restricted && current.complete) {
+        void selectModule(moduleId, { isCurrent: () =>
+          useStudioStore.getState().selectedProjectId === selectedProjectId
+          && getEffectiveModuleTabsSnapshot(selectedProjectId).generation === current.generation });
+      } else void selectModule(moduleId);
     },
-    [dragDrop, selectModule],
-  );
-
-  const handleHide = useCallback(
-    (moduleId: string) => {
-      if (moduleId === selectedModuleId) {
-        const hiddenIndex = modules.findIndex((module) => module.id === moduleId);
-        const shownIds = new Set(shownModules.map((module) => module.id));
-        const fallback =
-          modules.slice(hiddenIndex + 1).find((module) =>
-            shownIds.has(module.id) && getModuleFolder(module.id)
-          )
-          ?? [...modules.slice(0, hiddenIndex)]
-            .reverse()
-            .find((module) =>
-              shownIds.has(module.id) && getModuleFolder(module.id)
-            );
-        if (fallback) void selectModule(fallback.id);
-        else deselectModule();
-      }
-      void setTabHidden(moduleId, true);
-    },
-    [
-      deselectModule,
-      modules,
-      selectModule,
-      selectedModuleId,
-      setTabHidden,
-      shownModules,
-    ],
+    [dragDrop, selectModule, selectedProjectId],
   );
 
   const moduleOrderKey = JSON.stringify(
@@ -107,7 +83,6 @@ export function ModuleTabStrip() {
       aria-label="Project modules"
       className="flex h-7 min-w-0 shrink-0 border-b border-pane-border bg-pane-title"
     >
-      <ModulesPaneToggle />
       <div
         aria-label="Scrollable project module tabs"
         className="flex min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -126,13 +101,13 @@ export function ModuleTabStrip() {
                   key={module.id}
                   module={module}
                   isSelected={module.id === selectedModuleId && !surfaceActive}
-                  dropIntent={dragDrop.dropIntentFor(module.id)}
+                  dropIntent={canReorder ? dragDrop.dropIntentFor(module.id) : null}
                   onSelect={handleSelect}
                   onHide={handleHide}
                   jumpBadge={moduleJumpBadges.get(index + 1)}
                   registerRef={registerRef}
-                  dragSourceProps={dragDrop.dragSourcePropsFor(module.id)}
-                  dropTargetProps={dragDrop.dropTargetPropsFor(module.id)}
+                  dragSourceProps={canReorder ? dragDrop.dragSourcePropsFor(module.id) : undefined}
+                  dropTargetProps={canReorder ? dragDrop.dropTargetPropsFor(module.id) : undefined}
                 />
               ))
             : null}

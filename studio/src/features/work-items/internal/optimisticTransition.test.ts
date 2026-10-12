@@ -1,7 +1,7 @@
 import { InMemoryCache } from "@apollo/client";
 import { describe, expect, it } from "vitest";
 
-import type { State } from "../../../shared/api/types";
+import type { State } from "../../workflows";
 import {
   GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
   WorkTrackerModuleOpenDocument,
@@ -46,6 +46,9 @@ function issue(
 function destinationState(): State & { id: string } {
   return {
     id: "ready",
+    project: "project-1",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
     name: "Ready",
     group: "unstarted",
     color: "#999999",

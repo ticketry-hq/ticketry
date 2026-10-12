@@ -13,11 +13,11 @@ export function StoryHandoffGuidance({ storyId }: { storyId: string }) {
         Capturing this Story saved your work; it did not start an agent. Open
         Details to describe the desired result and what would count as finished.
       </p>
-      {story?.project_id && story.state ? (
+      {story?.project_id && story.state_id ? (
         <StoryLaunchGuidance
           projectId={story.project_id}
-          issueTypeId={story.issue_type}
-          stateId={story.state}
+          issueTypeId={story.issue_type_id}
+          stateId={story.state_id}
         />
       ) : (
         <p role="status">Checking this Story&apos;s launch configuration…</p>

@@ -61,8 +61,8 @@ vi.mock("../features/work-items/mutationTransport", async () => {
   >("../features/work-items/mutationTransport");
   return {
     ...actual,
-    createWorkItem: (projectId: string, body: { name?: string; issue_type_id?: string }) =>
-      api.createModule(projectId, body.name, body.issue_type_id),
+    createWorkItem: (input: Parameters<typeof actual.createWorkItem>[0]) =>
+      api.createModule(input.projectId, input.name, input.issueTypeId),
   };
 });
 
@@ -97,7 +97,7 @@ import {
   getModuleLinks,
   seedModuleLinks,
 } from "../features/module-links";
-import type { Module, Project } from "../shared/api/types";
+import type { Module, Project } from "../features/projects";
 import { useClientStore } from "../state/clientStore";
 
 const PROJECT_ID = "project-1";
@@ -105,6 +105,8 @@ const NEW_MODULE_ID = "module-new";
 
 function module(id: string, name: string, sequence_id: number): Module {
   return {
+    rank: "",
+    project: null,
     id,
     name,
     sequence_id,
@@ -112,21 +114,22 @@ function module(id: string, name: string, sequence_id: number): Module {
     key: id.toUpperCase(),
     is_archived: false,
     issue_type: "module",
-  } as unknown as Module;
+  };
 }
 
 /** The two modules the project already had, in the server's answer order. */
 const EXISTING = [module("module-a", "Alpha", 1), module("module-b", "Bravo", 2)];
 const CREATED = module(NEW_MODULE_ID, "Newest", 3);
 
-function project(manual_module_order: boolean): Project {
+function project(manual_module_order: boolean): Project & { readonly manual_module_order: boolean } {
   return {
+    created_at: "2026-01-01T00:00:00Z",
     id: PROJECT_ID,
     name: "Project",
     slug: "PRJ",
     description: "",
     manual_module_order,
-  } as Project;
+  };
 }
 
 /**

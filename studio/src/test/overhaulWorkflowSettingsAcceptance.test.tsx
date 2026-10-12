@@ -25,11 +25,17 @@ vi.mock("../features/workflows/queries/readTransport", async () => ({
 }));
 
 const states = [
-  { id: "todo", name: "Todo", group: "unstarted", color: null, sort_order: 0 },
-  { id: "build", name: "Build", group: "started", color: null, sort_order: 1 },
-  { id: "review", name: "Review", group: "started", color: null, sort_order: 2 },
-  { id: "done", name: "Done", group: "completed", color: null, sort_order: 3 },
-];
+  { id: "todo", name: "Todo", group: "unstarted", color: "", sort_order: 0 },
+  { id: "build", name: "Build", group: "started", color: "", sort_order: 1 },
+  { id: "review", name: "Review", group: "started", color: "", sort_order: 2 },
+  { id: "done", name: "Done", group: "completed", color: "", sort_order: 3 },
+].map((state) => ({
+  ...state,
+  project: "project-1",
+  is_protected: false,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+}));
 
 const workflow = {
   issue_type_id: "story",
@@ -106,7 +112,8 @@ describe("workflow settings acceptance", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     workflowReads.readWorkflowSettings.mockReset().mockResolvedValue(workflow);
-    const base = projectOpenFixture({ id: "project-1", name: "Project", slug: "PROJECT", description: "" }, []).data;
+    const base = projectOpenFixture({
+    created_at: "2026-01-01T00:00:00Z", id: "project-1", name: "Project", slug: "PROJECT", description: "" }, []).data;
     studioApolloClient().writeQuery({
       query: WorkTrackerProjectOpenDocument,
       variables: { projectId: "project-1" },
@@ -132,13 +139,13 @@ describe("workflow settings acceptance", () => {
     });
     setStatesSorted("project-1", states);
     setWorkflowIssueTypes("project-1", [
-      { id: "story", name: "Story", level: "task", color: null, sort_order: 0, start_state: "todo", workflow_revision: 4 },
+      { id: "story", project: "project-1", name: "Story", level: "task", color: "", sort_order: 0, start_state: "todo", workflow_revision: 4 },
     ]);
     setWorkflowStateCounts("project-1", { review: 2 });
     useWorkflowEditorStore.setState({
       projectId: "project-1",
       issueTypes: [
-        { id: "story", name: "Story", level: "task", color: null, sort_order: 0, start_state: "todo", workflow_revision: 4 },
+        { id: "story", project: "project-1", name: "Story", level: "task", color: "", sort_order: 0, start_state: "todo", workflow_revision: 4 },
       ],
       states,
       stateWorkItemCounts: { review: 2 },
@@ -182,7 +189,7 @@ describe("workflow settings acceptance", () => {
     useWorkflowEditorStore.setState(useWorkflowEditorStore.getInitialState(), true);
     setStatesSorted("project-1", states);
     setWorkflowIssueTypes("project-1", [
-      { id: "story", name: "Story", level: "task", color: null, sort_order: 0, start_state: "todo", workflow_revision: 4 },
+      { id: "story", project: "project-1", name: "Story", level: "task", color: "", sort_order: 0, start_state: "todo", workflow_revision: 4 },
     ]);
 
     const loading = useWorkflowEditorStore.getState().load("project-1");
@@ -213,7 +220,7 @@ describe("workflow settings acceptance", () => {
     act(() => {
       useWorkflowEditorStore.setState({
         issueTypes: [
-          { id: "story", name: "Story", level: "task", color: null, sort_order: 0, start_state: "todo", workflow_revision: 4 },
+          { id: "story", project: "project-1", name: "Story", level: "task", color: "", sort_order: 0, start_state: "todo", workflow_revision: 4 },
         ],
         loading: false,
       });

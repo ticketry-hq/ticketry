@@ -48,19 +48,22 @@ import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import { useModuleJumpBadges } from "../features/module-tabs";
 import { useStudioStore } from "../features/projects/store";
 import { notifyNativeTerminalKeyboardEngaged } from "../runtime/nativeTerminalKeyboard";
-import type { Module, Project } from "../shared/api/types";
+import type { Module, Project } from "../features/projects";
 import { resetStudioApolloClient } from "../shared/apollo/client";
 import { useClientStore } from "../state/clientStore";
 import { projectOpenFixture } from "./projectOpenFixture";
 
 const PROJECT_ID = "project-1";
 const PROJECT: Project = {
+  created_at: "2026-01-01T00:00:00Z",
   id: PROJECT_ID,
   name: "Project",
   slug: "PRJ",
   description: "",
 };
 const MODULES = Array.from({ length: 13 }, (_, index): Module => ({
+    rank: "",
+    project: null,
   id: `module-${index + 1}`,
   name: `Module ${index + 1}`,
   project_id: PROJECT_ID,

@@ -1,10 +1,7 @@
 import type { ApolloCache } from "@apollo/client";
 
-import type { WorkItemCreate } from "../../../shared/api/types";
-import {
-  compactWorktrackerId,
-  publicWorktrackerId,
-} from "../../../shared/api/generatedWorktracker";
+import type { WorkItemCreateVariables } from "../types";
+import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
 import { WorkTrackerProjectOpenDocument } from "../../projects";
 import {
   WorkTrackerModuleOpenDocument,
@@ -28,7 +25,7 @@ function sameId(left: string | null | undefined, right: string): boolean {
 export function optimisticCreatedIssue(
   cache: ApolloCache,
   membership: CreationMembership,
-  body: WorkItemCreate,
+  body: WorkItemCreateVariables,
 ): GeneratedWorkTrackerWorkItemFieldsFragment {
   const project = cache.readQuery({
     query: WorkTrackerProjectOpenDocument,
@@ -37,9 +34,9 @@ export function optimisticCreatedIssue(
     returnPartialData: true,
   });
   const issueType = project?.issue_types?.nodes.find((candidate) =>
-    body.issue_type_id && sameId(candidate.id, body.issue_type_id)
+    body.issueTypeId && sameId(candidate.id, body.issueTypeId)
   );
-  const destinationId = body.state_id
+  const destinationId = body.stateId
     ?? issueType?.start_state
     ?? project?.states?.nodes.find((state) => state.group === "backlog")?.id
     ?? null;
@@ -59,26 +56,26 @@ export function optimisticCreatedIssue(
     __typename: "WorktrackerIssue",
     id: `optimistic:${sequence}`,
     name: body.name ?? "",
-    project_id: publicWorktrackerId(membership.projectId),
+    project_id: compactWorktrackerId(membership.projectId),
     sequence_id: -sequence,
-    state_id: destinationId ? publicWorktrackerId(destinationId) : null,
+    state_id: destinationId ? compactWorktrackerId(destinationId) : null,
     state_revision: 1,
     description: body.description ?? "",
     workspace_tab_order: [],
-    parent_id: body.parent_id
-      ? publicWorktrackerId(body.parent_id)
-      : publicWorktrackerId(membership.moduleId),
-    module_id: publicWorktrackerId(membership.moduleId),
+    parent_id: body.parentId
+      ? compactWorktrackerId(body.parentId)
+      : compactWorktrackerId(membership.moduleId),
+    module_id: compactWorktrackerId(membership.moduleId),
     sprint_id: null,
     is_archived: false,
     created_at: now,
     updated_at: now,
     rank: arrivalRank(module?.work_items?.nodes ?? [], destinationId),
-    issue_type_id: publicWorktrackerId(body.issue_type_id ?? ""),
+    issue_type_id: compactWorktrackerId(body.issueTypeId ?? ""),
     project: null,
     state_record: state ? {
       __typename: "WorktrackerState",
-      id: publicWorktrackerId(state.id),
+      id: compactWorktrackerId(state.id),
       name: state.name,
       group: state.group,
       color: state.color,
@@ -87,7 +84,7 @@ export function optimisticCreatedIssue(
     } : null,
     issue_type_record: issueType ? {
       __typename: "WorktrackerIssuetype",
-      id: publicWorktrackerId(issueType.id),
+      id: compactWorktrackerId(issueType.id),
       name: issueType.name,
       level: issueType.level,
       color: issueType.color,

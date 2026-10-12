@@ -1,6 +1,8 @@
+import type { WorkItem } from "./workItemView";
 import { type ReactNode, useMemo, useState } from "react";
 import { formatWorkItemDisplayIdentifier } from "./displayIdentifier";
-import type { Module, WorkItem } from "../../shared/api/types";
+import type { Module } from "../projects";
+
 import { PopoverOption } from "../../shared/ui/Popover";
 import PopoverSearch from "../../shared/ui/PopoverSearch";
 import PopoverContent from "../../shared/ui/PopoverContent";

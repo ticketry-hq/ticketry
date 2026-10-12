@@ -1,24 +1,15 @@
-import type {
-  IssueType,
-  ScopedWorkflowSettings,
-  State,
-  StateImpact,
-  WorkItem,
-} from "../../../shared/api/types";
+import type { IssueType, ScopedWorkflowSettings, State, StateImpact } from "../types";
+import type { WorkItem } from "../../work-items";
 import type { FetchPolicy } from "@apollo/client";
-import {
-  compactWorktrackerId,
-  publicWorktrackerId,
-} from "../../../shared/api/generatedWorktracker";
+import type { IssueTypeMetadata } from "../types";
+import { publicResult, serverVariables } from "../../../shared/api/worktrackerConversion";
 import { studioApolloClient } from "../../../shared/apollo/client";
+import { WorkTrackerProjectIssueTypeMetadataDocument } from "./issueTypeMetadata";
+import { selectIssueTypeLevel } from "../selectors/issueTypeLevel";
 import {
   getStatesSnapshot,
   setStates as setApolloStates,
 } from "../../../features/projects";
-import {
-  WorkTrackerProjectIssueTypeMetadataDocument,
-  type WorkTrackerProjectIssueTypeMetadataQuery,
-} from "./issueTypeMetadata";
 import { loadProviderCapabilities } from "../providerQueries";
 import {
   getProviderCapabilitiesSnapshot,
@@ -59,24 +50,17 @@ export {
 } from "./workflowSnapshots";
 export { setIssueTypeMetadata as setWorkflowIssueTypes } from "./issueTypeMetadata";
 
-export function getWorkflowIssueTypesSnapshot(projectId: string): IssueType[] {
+export function getWorkflowIssueTypesSnapshot(projectId: string): IssueTypeMetadata[] {
   const projectRows = getWorkflowCatalogSnapshot(projectId)?.issueTypes;
-  const auxiliaryRows = studioApolloClient()
-    .readQuery<WorkTrackerProjectIssueTypeMetadataQuery>({
+  if (projectRows) return projectRows.map(selectIssueTypeLevel);
+  const auxiliary = studioApolloClient().readQuery({
     query: WorkTrackerProjectIssueTypeMetadataDocument,
-    variables: { projectId: compactWorktrackerId(projectId) },
+    variables: serverVariables(WorkTrackerProjectIssueTypeMetadataDocument, { projectId }),
     optimistic: true,
-  })?.issue_types.nodes;
-  return (projectRows ?? auxiliaryRows)?.map((row) => ({
-    id: publicWorktrackerId(row.id),
-    project: publicWorktrackerId(row.project),
-    name: row.name,
-    level: row.level as IssueType["level"],
-    color: row.color,
-    sort_order: row.sort_order,
-    start_state: row.start_state ? publicWorktrackerId(row.start_state) : null,
-    workflow_revision: row.workflow_revision,
-  })) ?? EMPTY_ISSUE_TYPES;
+  });
+  if (auxiliary) return publicResult(WorkTrackerProjectIssueTypeMetadataDocument, auxiliary)
+    .issue_types.nodes.map(selectIssueTypeLevel);
+  return EMPTY_ISSUE_TYPES;
 }
 
 export function setWorkflowStates(projectId: string, states: State[]): void {

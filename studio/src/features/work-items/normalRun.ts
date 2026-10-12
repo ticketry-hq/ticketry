@@ -1,8 +1,9 @@
+import type { WorkItem } from "./workItemView";
 import { TEMP_TASK_ID } from "../agents/types";
 import { launchDefaultAgent } from "../agents/terminal";
 import { clearWorktreeTrustDeferral } from "../agents/worktrees/worktreeTrustDeferrals";
 import { executeTaskSubtree } from "../execution";
-import type { WorkItem } from "../../shared/api/types";
+
 import { useClientStore } from "../../state/clientStore";
 
 export type NormalRunResult =

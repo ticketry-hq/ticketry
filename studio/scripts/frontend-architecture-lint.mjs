@@ -2,6 +2,7 @@ import fs from "node:fs";
 import ts from "typescript";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { hasExistingWorktrackerHelperImport } from "./worktracker-helper-imports.mjs";
 
 const studioRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceRoot = path.join(studioRoot, "src");
@@ -79,6 +80,44 @@ function importedSpecifiers(source) {
   return specifiers;
 }
 
+const worktrackerHelpers = new Set([
+  "publicWorktrackerId", "compactWorktrackerId", "publicWorktrackerTimestamp",
+]);
+
+function importedWorktrackerHelpers(file, source) {
+  const helpers = new Set();
+  const syntax = ts.createSourceFile("source.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  function visit(node) {
+    if (ts.isImportSpecifier(node) || ts.isExportSpecifier(node)) {
+      const name = (node.propertyName ?? node.name).text;
+      if (worktrackerHelpers.has(name)) helpers.add(name);
+    }
+    let wildcardModule;
+    if (ts.isImportDeclaration(node) && node.importClause?.namedBindings
+        && ts.isNamespaceImport(node.importClause.namedBindings)) {
+      wildcardModule = node.moduleSpecifier;
+    } else if (ts.isExportDeclaration(node)
+        && (!node.exportClause || ts.isNamespaceExport(node.exportClause))) {
+      wildcardModule = node.moduleSpecifier;
+    } else if (ts.isCallExpression(node)
+        && (node.expression.kind === ts.SyntaxKind.ImportKeyword
+          || (ts.isIdentifier(node.expression) && node.expression.text === "require"))) {
+      wildcardModule = node.arguments[0];
+    } else if (ts.isExternalModuleReference(node)) {
+      wildcardModule = node.expression;
+    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      wildcardModule = node.argument.literal;
+    }
+    if (wildcardModule && ts.isStringLiteral(wildcardModule)
+        && targetPath(file, wildcardModule.text)?.replace(/\.(?:ts|tsx|js)$/, "") === "shared/api/generatedWorktracker") {
+      for (const helper of worktrackerHelpers) helpers.add(helper);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(syntax);
+  return helpers;
+}
+
 function targetPath(importer, specifier) {
   if (specifier.startsWith("@/")) {
     return path.posix.normalize(specifier.slice(2));
@@ -91,6 +130,13 @@ export function architectureViolations(entries) {
   const violations = [];
   for (const { file, source } of entries) {
     const normalizedFile = file.split(path.sep).join("/");
+    if (/^(?:app|features)\//.test(normalizedFile)) {
+      for (const helper of importedWorktrackerHelpers(normalizedFile, source)) {
+        if (!hasExistingWorktrackerHelperImport(normalizedFile, helper)) {
+          violations.push(`${normalizedFile}: ${helper} must be accessed through the WorkTracker document conversion seam`);
+        }
+      }
+    }
     if (
       normalizedFile.startsWith("app/shell/ticket-workspace/selected-ticket/documents/")
       && normalizedFile !== "app/shell/ticket-workspace/selected-ticket/documents/WorkspaceDocument.tsx"
@@ -102,7 +148,9 @@ export function architectureViolations(entries) {
       if (!target) continue;
       if (
         normalizedFile.startsWith("state/")
-        && target.replace(/\.(?:ts|tsx)$/, "") === "shared/api/types"
+        && (target.replace(/\.(?:ts|tsx)$/, "") === "shared/api/types"
+          || /(?:^|\/)generated\//.test(target)
+          || /^features\/(?:projects|work-items|workflows)(?:\/|$)/.test(target.replace(/\.(?:ts|tsx)$/, "")))
       ) {
         violations.push(`${normalizedFile}: client state may not import server record types`);
       }

@@ -19,10 +19,10 @@ import {
 import { dialog, toast, useClientStore } from "../../../../../state/clientStore";
 import { useStudioStore } from "../../../../../features/projects";
 import { useModulesQuery, useProjectsQuery } from "../../../../../features/projects";
-import type { Module, Project } from "../../../../../shared/api/types";
+import type { Module, Project } from "../../../../../features/projects";
 import { apiErrorMessage, isNoOpTransition } from "../../../../../shared/api/errors";
 import { deleteWorkItem } from "../../../../../features/work-items";
-import { WorkItemNotFoundError } from "../../../../../shared/api/workItemBatcher";
+import { WorkItemNotFoundError } from "../../../../../features/work-items";
 import { useCachedStates } from "../../../../../features/projects";
 import { useIssueTypesQuery } from "../../../../../features/settings";
 import { usePersistedSubtreeRun } from "../../../../../features/execution";
@@ -104,13 +104,13 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
   const projectWorkflows = useProjectWorkflowSettings(task?.project_id ?? null);
   const permittedStateIds = useMemo(() => {
     const ids = new Set<string>();
-    if (!task?.state) return ids;
-    const workflow = projectWorkflows[task.issue_type];
+    if (!task?.state_id) return ids;
+    const workflow = projectWorkflows[task.issue_type_id];
     for (const transition of workflow?.transitions ?? []) {
-      if (transition.from_state_id === task.state) ids.add(transition.to_state_id);
+      if (transition.from_state_id === task.state_id) ids.add(transition.to_state_id);
     }
     return ids;
-  }, [projectWorkflows, task?.issue_type, task?.state]);
+  }, [projectWorkflows, task?.issue_type_id, task?.state_id]);
   const subtreeDescendantIds = useMemo(() => {
     const ids: string[] = [];
     const seen = new Set([issueId]);
@@ -246,7 +246,7 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
       danger: true,
     });
     if (!ok) return;
-    await deleteWorkItem(task.id, { moduleId: epic?.id ?? selectedModuleId ?? undefined });
+    await deleteWorkItem({ id: task.id }, { moduleId: epic?.id ?? selectedModuleId ?? undefined });
   };
 
   return (
@@ -261,7 +261,7 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
             <WorkflowStatePicker
               task={task}
               states={states}
-              workflow={projectWorkflows[task.issue_type]}
+              workflow={projectWorkflows[task.issue_type_id]}
               permittedStateIds={permittedStateIds}
               saving={Boolean(saving.state_id)}
               onStateChange={(state) =>
@@ -310,7 +310,7 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
             />
             <IssueTypePicker
               projectId={task.project_id}
-              value={task.issue_type}
+              value={task.issue_type_id}
               saving={Boolean(saving.issue_type_id)}
               onChange={(issueType) =>
                 changeType.mutate(
@@ -319,7 +319,7 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
                 )
               }
             />
-            {issueTypes.find((type) => type.id === task.issue_type)?.name === "Story" && (
+            {issueTypes.find((type) => type.id === task.issue_type_id)?.name === "Story" && (
               <StoryWorkflowGuideAction onOpen={() => openStoryWorkflowGuide(task.id)} />
             )}
           </>
@@ -422,8 +422,8 @@ function IssueDetailContent({ issueId, detailsVisible }: { issueId: string; deta
               createChild.mutate(
                 {
                   name,
-                  parent_id: task.id,
-                  issue_type_id: issueTypeId,
+                  parentId: task.id,
+                  issueTypeId: issueTypeId,
                 },
                 { onError: reportMutationError },
               )

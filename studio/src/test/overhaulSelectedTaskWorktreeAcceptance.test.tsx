@@ -68,7 +68,7 @@ describe("overhaul acceptance — selected-task Details worktree", () => {
       }),
       workItem({
         id: "implement-state-catalog",
-        state: { id: "implement", name: "Implement", group: "started", color: null },
+        state_id: { id: "implement", name: "Implement", group: "started", color: null },
       }),
     ]);
 

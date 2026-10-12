@@ -12,7 +12,7 @@ import {
   type RecordedGraphQlOperation,
 } from "./desktopGraphQlRuntime";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
-import type { WorkItem } from "../shared/api/types";
+import type { WorkItem } from "../features/work-items";
 
 const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -34,7 +34,17 @@ function task(id = "task-1"): WorkItem {
     name: "Task",
     project_id: "project-1",
     sequence_id: 1,
-    state: "state-1",
+    state_id: "state-1",
+    state_revision: 1,
+    workspace_tab_order: [],
+    module_id: "module-1",
+    sprint_id: null,
+    project: { id: "project-1", slug: "TEST" },
+    state_record: null,
+    issue_type_record: null,
+    children: { nodes: [] },
+    blocked_by_edges: { nodes: [] },
+    blocks_edges: { nodes: [] },
     description: "",
     parent_id: "module-1",
     sub_issues_count: 0,
@@ -44,7 +54,7 @@ function task(id = "task-1"): WorkItem {
     created_at: "2026-09-16T00:00:00Z",
     updated_at: "2026-09-16T00:00:00Z",
     rank: "a",
-    issue_type: "story",
+    issue_type_id: "story",
     blocked_by_ids: [],
     blocks_ids: [],
   };

@@ -1,8 +1,6 @@
 // Shared visual metadata for workflow-state groups. Colors come from the
 // shared lifecycle/accent tokens in tailwind.config.
 
-import type { State } from "../api/types";
-
 // The five workflow groups in their frozen left-to-right board order.
 export const STATE_GROUP_ORDER = [
   "backlog",
@@ -45,12 +43,14 @@ const GROUP_COLOR: Record<string, string> = {
   cancelled: "#f7768e",
 };
 
-export function stateColor(state: State | null | undefined): string {
+/** Color presentation needs only the caller's color and lifecycle group. */
+export function stateColor(state: { color?: string | null; group: string } | null | undefined): string {
   if (!state) return GROUP_COLOR.backlog;
   return state.color || GROUP_COLOR[state.group] || GROUP_COLOR.backlog;
 }
 
-export function stateLabel(state: State | null | undefined): string {
+/** Label presentation does not own or reconstruct a workflow state. */
+export function stateLabel(state: { name: string } | null | undefined): string {
   return state?.name ?? "No state";
 }
 
@@ -59,7 +59,7 @@ export function stateLabel(state: State | null | undefined): string {
 // chips and blocker pickers.
 export const RESOLVED_GROUPS = new Set(["completed", "cancelled"]);
 
-export function isResolved(state: State | null | undefined): boolean {
+export function isResolved(state: { group: string } | null | undefined): boolean {
   return RESOLVED_GROUPS.has(state?.group ?? "");
 }
 

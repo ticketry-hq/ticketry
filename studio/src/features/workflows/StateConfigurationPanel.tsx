@@ -1,9 +1,6 @@
+import type { IssueTypeMetadata } from "./types";
 import { useEffect, useMemo, useState } from "react";
-import type {
-  IssueType,
-  ScopedWorkflowSettings,
-  State,
-} from "../../shared/api/types";
+import type { ScopedWorkflowSettings, State } from "./types";
 import {
   SETTINGS_CHECKBOX_CLASS,
   SettingsStatusLine,
@@ -202,7 +199,7 @@ function StateLaunchBindingEditor({
   binding: ReturnType<typeof useWorkflowEditorStore.getState>["workflows"][string]["launch_bindings"][number] | undefined;
   controlErrors: Record<string, string>;
   error?: string;
-  issueType: IssueType;
+  issueType: IssueTypeMetadata;
   onSelectType: (typeId: string) => void;
   providerCapabilities: ReturnType<typeof useWorkflowEditorStore.getState>["providerCapabilities"];
   save: Parameters<typeof LaunchConfigurationForm>[0]["save"];
@@ -213,7 +210,7 @@ function StateLaunchBindingEditor({
   setTransitionHandoff: ReturnType<typeof useWorkflowEditorStore.getState>["setTransitionHandoff"];
   state: State;
   states: State[];
-  types: IssueType[];
+  types: IssueTypeMetadata[];
   workflow: ScopedWorkflowSettings;
 }) {
   return (
@@ -292,7 +289,7 @@ function StateEntryAutomation({
   action: string | null;
   binding: ReturnType<typeof useWorkflowEditorStore.getState>["workflows"][string]["launch_bindings"][number] | undefined;
   controlErrors: Record<string, string>;
-  issueType: IssueType;
+  issueType: IssueTypeMetadata;
   providerCapabilities: ReturnType<typeof useWorkflowEditorStore.getState>["providerCapabilities"];
   setAutoStart: ReturnType<typeof useWorkflowEditorStore.getState>["setAutoStart"];
   setSubtreeRun: ReturnType<typeof useWorkflowEditorStore.getState>["setSubtreeRun"];
@@ -367,7 +364,7 @@ function StateTransitions({
 }: {
   action: string | null;
   controlErrors: Record<string, string>;
-  issueType: IssueType;
+  issueType: IssueTypeMetadata;
   setTransitionPermission: ReturnType<typeof useWorkflowEditorStore.getState>["setTransitionPermission"];
   setTransitionHandoff: ReturnType<typeof useWorkflowEditorStore.getState>["setTransitionHandoff"];
   state: State;

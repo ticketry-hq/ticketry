@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 
-import type { ScopedWorkflowImpact, State } from "../../shared/api/types";
+import type { ScopedWorkflowImpact, State } from "./types";
 import { settingsButtonClass } from "../../shared/ui/SettingsPrimitives";
 
 export interface PendingWorkflowChange {

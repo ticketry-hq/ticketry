@@ -1,8 +1,4 @@
-import type {
-  ScopedWorkflowImpact,
-  ScopedWorkflowImpactOperation,
-  ScopedWorkflowSettings,
-} from "../../../shared/api/types";
+import type { ScopedWorkflowImpact, ScopedWorkflowImpactOperation, ScopedWorkflowSettings } from "../types";
 
 function reachableStateIds(
   startStateId: string | null,

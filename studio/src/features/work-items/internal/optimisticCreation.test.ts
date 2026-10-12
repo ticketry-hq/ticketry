@@ -125,6 +125,27 @@ function writeModuleItems(
 }
 
 describe("optimistic work-item creation", () => {
+  it("emits compact server identities while preserving the optimistic identity", () => {
+    const id = "01234567-89ab-cdef-0123-456789abcdef";
+    const compact = "0123456789abcdef0123456789abcdef";
+    const created = optimisticCreatedIssue(new InMemoryCache(), {
+      projectId: id,
+      moduleId: id,
+    }, {
+      name: "Pending item",
+      issueTypeId: id,
+      stateId: id,
+      parentId: id,
+    });
+
+    expect(created.id).toMatch(/^optimistic:/);
+    expect(created.project_id).toBe(compact);
+    expect(created.module_id).toBe(compact);
+    expect(created.issue_type_id).toBe(compact);
+    expect(created.state_id).toBe(compact);
+    expect(created.parent_id).toBe(compact);
+  });
+
   it("uses the cached issue-type start state and inserts before its first active item", () => {
     const cache = new InMemoryCache();
     writeProjectCatalog(cache);
@@ -136,7 +157,7 @@ describe("optimistic work-item creation", () => {
 
     const created = optimisticCreatedIssue(cache, membership, {
       name: "New story",
-      issue_type_id: "story-type",
+      issueTypeId: "story-type",
     });
 
     expect(created.state_id).toBe("start-state");
@@ -150,8 +171,8 @@ describe("optimistic work-item creation", () => {
 
     const created = optimisticCreatedIssue(cache, membership, {
       name: "New backlog item",
-      issue_type_id: "story-type",
-      state_id: "backlog-state",
+      issueTypeId: "story-type",
+      stateId: "backlog-state",
     });
 
     expect(created.state_id).toBe("backlog-state");
@@ -165,7 +186,7 @@ describe("optimistic work-item creation", () => {
 
     const created = optimisticCreatedIssue(cache, membership, {
       name: "New task",
-      issue_type_id: "unconfigured-type",
+      issueTypeId: "unconfigured-type",
     });
 
     expect(created.state_id).toBe("backlog-state");

@@ -452,6 +452,9 @@ named gate before the full Studio suite, typecheck, and build.
 | 463 | Leaving the card for Plan during a run observes completion; a failed result refresh can be retried and a moduleless suggestion reviewed and dismissed. |
 | 464 | Removing a selected epic moves its stories and waiting suggestions to the selectable No epic group with matching counts. |
 | 465 | A new sprint starts with the last visited sprint's selected epics and active epic; an untouched sprint starts empty. |
+| 466 | Plan creates and focuses an epic from its tab menu and restores each sprint's planning visit. |
+| 467 | Compact server issue-type UUIDs resolve the selected Details type, Story workflow guide and Run now, and queued Review findings. |
+| 468 | A newly created workflow state reaches the open catalog after an unrelated state rename during canonical hydration, preserving the rename and canonical protected fields. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. A case whose

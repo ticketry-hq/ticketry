@@ -1,5 +1,6 @@
 import { getStatesSnapshot, stateById } from "../../../../../features/projects";
-import type { ScopedWorkflowSettings, State, WorkItem } from "../../../../../shared/api/types";
+import type { ScopedWorkflowSettings, State } from "../../../../../features/workflows";
+import type { WorkItem } from "../../../../../features/work-items";
 import { compareStateOrder, stateColor, stateLabel } from "../../../../../shared/utilities/display";
 import Popover, { PopoverOption } from "../../../../../shared/ui/Popover";
 import PopoverContent from "../../../../../shared/ui/PopoverContent";
@@ -50,7 +51,7 @@ export function WorkflowStatePicker({
   saving,
   onStateChange,
 }: WorkflowStatePickerProps) {
-  const selected = stateById([...states], task.state);
+  const selected = stateById([...states], task.state_id);
   const track = workflowTrack(states, workflow);
   const trackIds = new Set(track.map((state) => state.id));
   const offTrack = states
@@ -84,7 +85,7 @@ export function WorkflowStatePicker({
             <div className="px-3 py-2 text-sm text-text-muted">No permitted transitions</div>
           )}
           {track.map((state) => {
-            if (state.id === task.state) {
+            if (state.id === task.state_id) {
               return (
                 <div
                   key={state.id}

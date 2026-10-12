@@ -1,12 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { LaunchConfigurationForm } from "../features/workflows/LaunchConfigurationForm";
-import type {
-  IssueType,
-  ProviderCapabilities,
-  ScopedWorkflowLaunchBinding,
-  State,
-} from "../shared/api/types";
+import type { ProviderCapabilities } from "../features/settings";
+import type { IssueType, ScopedWorkflowLaunchBinding, State } from "../features/workflows";
 
 const capabilities: ProviderCapabilities[] = [
   {

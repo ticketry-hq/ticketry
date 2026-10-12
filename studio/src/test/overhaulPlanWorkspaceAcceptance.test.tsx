@@ -47,7 +47,9 @@ function PlanControls() {
 }
 function cachePlanningGraph(moduleId: string | null = "module-2") {
   const data = {
-    project: { __typename: "WorktrackerProjectConnection", nodes: [{ __typename: "WorktrackerProject", id: "project-1", name: "Planner", slug: "PLAN" }] },
+    project: { __typename: "WorktrackerProjectConnection", nodes: [{
+    created_at: "2026-01-01T00:00:00Z",
+    description: "", __typename: "WorktrackerProject", id: "project-1", name: "Planner", slug: "PLAN" }] },
     states: { __typename: "WorktrackerStateConnection", nodes: [] }, issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [] },
     sprints: { __typename: "WorktrackerSprintConnection", nodes: [
       { __typename: "WorktrackerSprint", id: "completed", name: "Completed", status: "completed", createdAt: "2026-01-01" },
@@ -76,7 +78,9 @@ describe("overhaul acceptance, Plan workspace", () => {
       { __typename: "WorktrackerIssue", id: "module-2", name: "Module 2", sequenceId: 2, presentation: { __typename: "WorktrackerModulepresentationConnection", nodes: [] } },
     ];
     const graph = {
-      project: { __typename: "WorktrackerProjectConnection", nodes: [{ __typename: "WorktrackerProject", id: "project-1", name: "Planner", slug: "PLAN" }] },
+      project: { __typename: "WorktrackerProjectConnection", nodes: [{
+    created_at: "2026-01-01T00:00:00Z",
+    description: "", __typename: "WorktrackerProject", id: "project-1", name: "Planner", slug: "PLAN" }] },
       states: { __typename: "WorktrackerStateConnection", nodes: [] },
       issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [{ __typename: "WorktrackerIssuetype", id: "epic", name: "Epic", level: "module" }] },
       sprints: { __typename: "WorktrackerSprintConnection", nodes: [
@@ -106,7 +110,7 @@ describe("overhaul acceptance, Plan workspace", () => {
         })) } } as TResult;
         case "CreateWorkTrackerWorkItem": {
           writes.push(variables);
-          http.workItems([workItem({ id: "created-epic", name: "Delivery", parent_id: null, issue_type: "epic" })]);
+          http.workItems([workItem({ id: "created-epic", name: "Delivery", parent_id: null, issue_type_id: "epic" })]);
           graph.modules.nodes = [...graph.modules.nodes, { __typename: "WorktrackerIssue", id: "created-epic", name: "Delivery", sequenceId: 3, presentation: { __typename: "WorktrackerModulepresentationConnection", nodes: [] } }];
           const result = await http.executeGraphQl(WorkTrackerWorkItemDocument, { id: "created-epic" });
           return { create_work_item: result.work_item.nodes[0] } as TResult;

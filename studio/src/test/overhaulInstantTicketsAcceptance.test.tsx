@@ -470,6 +470,7 @@ describe("overhaul acceptance — Conversations", () => {
   it("[overhaul-406] exits Conversation configuration through workspace navigation", async () => {
     const terminalExecutor = terminalSessionReadExecutor(emptyTerminalReads);
     const otherProject = projectOpenFixture({
+      created_at: "2026-01-01T00:00:00Z",
       id: "project-2",
       name: "Other project",
       slug: "OTHER",
@@ -517,7 +518,10 @@ describe("overhaul acceptance — Conversations", () => {
       id: "state-1",
       name: "Ideas",
       group: "backlog",
-      color: null,
+      color: "",
+      project: "project-1",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
       sort_order: 0,
       is_protected: false,
     }]);

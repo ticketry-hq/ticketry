@@ -1,4 +1,5 @@
-import type { WorkItem } from "../../../shared/api/types";
+import type { WorkItem } from "../workItemView";
+
 
 export type DependencyEdgeField = "blocked_by_ids" | "blocks_ids";
 

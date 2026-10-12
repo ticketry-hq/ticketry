@@ -18,6 +18,7 @@ interface PersistedModelSettings {
   database_path: string;
   global_default: {
     provider: string;
+    profile: string | null;
     model: string | null;
     reasoning: string | null;
   } | null;
@@ -34,9 +35,12 @@ function readPersistedModelSettings(expected: {
   model: string;
   reasoning: string;
 }): PersistedModelSettings {
+  const dataDirectory = process.env.TICKETRY_E2E_DATA_DIR;
+  expect(dataDirectory, "this Playwright run owns an isolated data directory").toBeTruthy();
   const stdout = execFileSync(process.execPath, [
     verificationScript,
-    "--temp-profile",
+    "--data-dir",
+    dataDirectory!,
     "--expect-provider",
     expected.provider,
     "--expect-model",
@@ -75,7 +79,7 @@ test("persists a Models settings change into the state database", async ({
   // three controls have to be set in that order.
   await dialog.getByRole("combobox", { name: "Agent/provider" })
     .selectOption(CHANGED_PROVIDER);
-  await dialog.getByRole("combobox", { name: "Model" }).fill(CHANGED_MODEL);
+  await dialog.getByRole("combobox", { name: "Model" }).selectOption(CHANGED_MODEL);
   await dialog.getByRole("combobox", { name: "Reasoning" })
     .selectOption(CHANGED_REASONING);
   await dialog.getByRole("button", { name: "Save changes" }).click();
@@ -89,6 +93,7 @@ test("persists a Models settings change into the state database", async ({
   expect(persisted.mismatches).toEqual([]);
   expect(persisted.global_default).toEqual({
     provider: CHANGED_PROVIDER,
+    profile: null,
     model: CHANGED_MODEL,
     reasoning: CHANGED_REASONING,
   });

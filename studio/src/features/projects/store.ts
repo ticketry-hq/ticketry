@@ -12,13 +12,8 @@ import {
   updateProjectRecord,
 } from "./queries";
 import { createWorkItem } from "../work-items";
-import type {
-  Module,
-  Project,
-  ProjectCreate,
-  ProjectPatch,
-  View,
-} from "../../shared/api/types";
+import type { Project, ProjectCreate, ProjectPatch, ProjectCreateResult } from "./types";
+import type { NavigationView as View } from "../../shared/navigation/view";
 import { loadIssueTypes } from "../settings";
 import { getModuleFolder } from "../module-links";
 import { readRecentModule } from "../../state/persistence";
@@ -74,15 +69,15 @@ interface StudioState {
   reloadModules: () => Promise<void>;
   // Create a module in the selected project, reload the list, and return the
   // created module so the caller can auto-select it (#919 Slice A).
-  createModule: (name: string) => Promise<Module | null>;
-  createModuleForProjectWithError: (projectId: string, name: string) => Promise<Module>;
+  createModule: (name: string) => Promise<Awaited<ReturnType<typeof createWorkItem>> | null>;
+  createModuleForProjectWithError: (projectId: string, name: string) => Promise<Awaited<ReturnType<typeof createWorkItem>>>;
 
   // Project CRUD (#665). create appends + returns the new project (the caller
   // navigates into it); update replaces the row; delete removes it and reports
   // where to redirect when the deleted project was the open one.
-  createProject: (body: ProjectCreate) => Promise<Project | null>;
-  createProjectWithError: (body: ProjectCreate) => Promise<Project>;
-  updateProject: (id: string, patch: ProjectPatch) => Promise<Project | null>;
+  createProject: (body: ProjectCreate) => Promise<ProjectCreateResult | null>;
+  createProjectWithError: (body: ProjectCreate) => Promise<ProjectCreateResult>;
+  updateProject: (variables: ProjectPatch) => Promise<Project | null>;
   deleteProject: (id: string) => Promise<DeleteProjectResult>;
 }
 
@@ -161,10 +156,11 @@ export const useStudioStore = createApolloStore<StudioState>("studio", (set, get
       (issueType) => issueType.level === "module" && issueType.name === "Module",
     );
     if (!moduleType) throw new Error("The Module issue type is unavailable.");
-    const created = await createWorkItem(projectId, {
+    const created = await createWorkItem({
+      projectId,
       name,
-      issue_type_id: moduleType.id,
-      parent_id: null,
+      issueTypeId: moduleType.id,
+      parentId: null,
     });
     // Reload so every surface adopts the server's canonical presentation order.
     await loadModules(projectId).catch(() => {});
@@ -188,9 +184,9 @@ export const useStudioStore = createApolloStore<StudioState>("studio", (set, get
     return createProjectRecord(body);
   },
 
-  async updateProject(id, patch) {
+  async updateProject(variables) {
     try {
-      return await updateProjectRecord(id, patch);
+      return await updateProjectRecord(variables);
     } catch (e) {
       toast.error(errMessage(e));
       return null;

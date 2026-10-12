@@ -22,7 +22,7 @@ import {
   useTerminalPanelStore,
 } from "../features/terminal-panel";
 import { compactWorktrackerId } from "../shared/api/generatedWorktracker";
-import type { Module, Project } from "../shared/api/types";
+import type { Module, Project } from "../features/projects";
 import { studioApolloClient } from "../shared/apollo/client";
 import { useClientStore } from "../state/clientStore";
 import { projectOpenFixture } from "./projectOpenFixture";
@@ -107,12 +107,15 @@ describe("terminal panel — native chord", () => {
 
   it("switches visible module positions from an engaged native terminal", async () => {
     const project: Project = {
+      created_at: "2026-01-01T00:00:00Z",
       id: "project-1",
       name: "Project",
       slug: "PRJ",
       description: "",
     };
     const modules = ["One", "Hidden", "Three"].map((name, index): Module => ({
+    rank: "",
+    project: null,
       id: `module-${index + 1}`,
       name,
       project_id: project.id,

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { WorkTrackerProjectOpenDocument } from "../projects";
 import { useWorkItem } from "../work-items";
 import { useClientStore } from "../../state/clientStore";
-import { compactWorktrackerId, publicWorktrackerId } from "../../shared/api/generatedWorktracker";
+import { serverVariables } from "../../shared/api/worktrackerConversion";
 import { studioApolloClient } from "../../shared/apollo/client";
 import { useProviderCatalogQuery } from "./providerQueries";
 import { normalizedCatalog } from "./queries/projectCatalog";
@@ -26,11 +26,14 @@ export function StoryWorkflowGuideDialog({
   const { data: story } = useWorkItem(storyId);
   const seenStory = useRef(false);
   const projectId = story?.project_id ?? null;
+  const projectVariables = projectId
+    ? serverVariables(WorkTrackerProjectOpenDocument, { projectId })
+    : undefined;
   const projectQuery = useQuery(
     WorkTrackerProjectOpenDocument,
-    projectId ? {
+    projectVariables ? {
       client: studioApolloClient(),
-      variables: { projectId: compactWorktrackerId(projectId) },
+      variables: projectVariables,
       fetchPolicy: "cache-and-network",
       nextFetchPolicy: "cache-first",
     } : skipToken,
@@ -46,25 +49,25 @@ export function StoryWorkflowGuideDialog({
   }, [onDismiss, story]);
 
   const projectData = projectQuery.data?.project.nodes.some(
-    (project) => publicWorktrackerId(project.id) === projectId,
+    (project) => project.id === projectId || project.id === projectVariables?.projectId,
   ) ? projectQuery.data : undefined;
   const catalog = useMemo(
     () => projectData ? normalizedCatalog(projectData) : null,
     [projectData],
   );
   const issueType = catalog?.issueTypes.find(
-    (candidate) => publicWorktrackerId(candidate.id) === story?.issue_type,
+    (candidate) => candidate.id === story?.issue_type_id,
   );
   useEffect(() => {
     if (issueType && issueType.name !== "Story") onDismiss();
   }, [issueType, onDismiss]);
   const workflow = useMemo(() => {
     if (!catalog || !story || !issueType) return null;
-    return workflowSettingsFromCatalog(catalog, story.issue_type);
+    return workflowSettingsFromCatalog(catalog, story.issue_type_id);
   }, [catalog, issueType, story]);
   const provider = providerQuery.data;
   const currentBinding = workflow?.launch_bindings.find(
-    (binding) => binding.state_id === story?.state,
+    (binding) => binding.state_id === story?.state_id,
   );
   const loadingWorkflow = !projectQuery.error && !workflow && (projectQuery.loading || !story);
   const missingWorkflow = !projectQuery.error && !workflow && !loadingWorkflow;
@@ -129,7 +132,7 @@ export function StoryWorkflowGuideDialog({
           <StoryWorkflowGuideStages
             workflow={workflow}
             states={catalog.states}
-            currentStateId={story.state}
+            currentStateId={story.state_id}
           />
         ) : null}
       </section>

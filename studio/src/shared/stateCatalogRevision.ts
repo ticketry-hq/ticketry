@@ -1,14 +1,18 @@
+import type { WorktrackerState } from "../graphql-foundation/generated/schemaTypes";
+
 const revisions = new Map<string, number>();
 const authoritativeStates = new Map<string, Map<string, CatalogState>>();
 
-interface CatalogState {
-  id: string | null;
-  name: string;
-  group: string;
-  color: string | null;
-  sort_order?: number;
-  is_protected?: boolean;
-}
+/**
+ * Partial reconciliation view of a generated state: legacy drafts may have no
+ * identity/color, while event snapshots may omit protection and ordering.
+ */
+type CatalogState = Pick<WorktrackerState, "name" | "group"> & {
+  id: WorktrackerState["id"] | null;
+  color: WorktrackerState["color"] | null;
+  sort_order?: WorktrackerState["sortOrder"];
+  is_protected?: WorktrackerState["isProtected"];
+};
 
 export function stateCatalogRevision(projectId: string): number {
   return revisions.get(projectId) ?? 0;

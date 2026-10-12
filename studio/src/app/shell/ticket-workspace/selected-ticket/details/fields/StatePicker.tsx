@@ -4,7 +4,7 @@ import {
   useCachedStates,
 } from "../../../../../../features/projects";
 import { compareStateOrder, stateColor, stateLabel } from "../../../../../../shared/utilities/display";
-import type { State } from "../../../../../../shared/api/types";
+import type { State } from "../../../../../../features/workflows";
 import Popover, { PopoverOption } from "../../../../../../shared/ui/Popover";
 import PickerTrigger from "./PickerTrigger";
 

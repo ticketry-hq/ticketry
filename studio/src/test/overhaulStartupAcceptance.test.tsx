@@ -57,6 +57,7 @@ const readModuleTree = workItemReadTransport.readModuleTreeRecords as ReturnType
 >;
 
 const INSTALLATION_PROJECT = {
+  created_at: "2026-01-01T00:00:00Z",
   id: "project-1",
   name: "Coding",
   slug: "CDN",

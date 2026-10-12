@@ -1,4 +1,4 @@
-import type { WorkItem } from "./types";
+import type { WorkItem } from "./workItemView";
 
 export const WORK_ITEM_BATCH_WINDOW_MS = 10;
 export const WORK_ITEM_BATCH_MAX_IDS = 100;

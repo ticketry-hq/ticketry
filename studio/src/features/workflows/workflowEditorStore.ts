@@ -1,16 +1,9 @@
+import type { IssueTypeMetadata } from "./types";
 import { createApolloStore } from "../../shared/apollo/localState";
 import { ApiError } from "../../shared/api/errors";
-import type {
-  IssueType,
-  LaunchBindingInput,
-  ProviderCapabilities,
-  ScopedWorkflowImpact,
-  ScopedWorkflowImpactOperation,
-  ScopedWorkflowSettings,
-  State,
-  StatePatch,
-  WorkItem,
-} from "../../shared/api/types";
+import type { ProviderCapabilities } from "../settings";
+import type { LaunchBindingInput, ScopedWorkflowImpact, ScopedWorkflowImpactOperation, ScopedWorkflowSettings, State, StatePatch } from "./types";
+import type { WorkItem } from "../work-items";
 import * as api from "./mutationTransport";
 import { loadProviderCapabilities } from "./providerQueries";
 import {
@@ -54,7 +47,7 @@ type ScopedOperation = (
 
 interface WorkflowEditorState {
   projectId: string | null;
-  issueTypes: IssueType[];
+  issueTypes: IssueTypeMetadata[];
   states: State[];
   stateWorkItemCounts: Record<string, number>;
   providerCapabilities: ProviderCapabilities[];
@@ -139,7 +132,7 @@ interface WorkflowEditorState {
 }
 
 let loadGeneration = 0;
-const EMPTY_ISSUE_TYPES: IssueType[] = [];
+const EMPTY_ISSUE_TYPES: IssueTypeMetadata[] = [];
 const EMPTY_STATES: State[] = [];
 const EMPTY_COUNTS: Record<string, number> = {};
 const EMPTY_WORKFLOWS: Record<string, ScopedWorkflowSettings> = {};
@@ -149,11 +142,7 @@ const bySortOrder = <T extends { sort_order?: number }>(rows: T[]): T[] =>
 
 const countWorkItemsByState = (items: WorkItem[]): Record<string, number> =>
   items.reduce<Record<string, number>>((counts, item) => {
-    // Canonical work-item rows carry relation UUIDs. Older hydrated callers
-    // may still supply the full State object, so accept both while the Studio
-    // view model remains richer than the generated wire model.
-    const state = (item as unknown as { state: string | State | null }).state;
-    const stateId = typeof state === "string" ? state : state?.id;
+    const stateId = item.state_id;
     if (stateId) counts[stateId] = (counts[stateId] ?? 0) + 1;
     return counts;
   }, {});
@@ -647,7 +636,7 @@ function routeAndAttachWorkflowServerState(
 ): void {
   const projectId = state.projectId;
   if (projectId) {
-    const issueTypes = changedOwnValue<IssueType[]>(state, previousState, "issueTypes");
+    const issueTypes = changedOwnValue<IssueTypeMetadata[]>(state, previousState, "issueTypes");
     if (issueTypes !== undefined) setWorkflowIssueTypes(projectId, issueTypes);
     const states = changedOwnValue<State[]>(state, previousState, "states");
     if (states !== undefined) setWorkflowStates(projectId, states);

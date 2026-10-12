@@ -59,10 +59,13 @@ export {
   WorkTrackerProjectsDocument,
 } from "./generated/projects.documents";
 export type {
+  GeneratedWorkTrackerIssueTypeFieldsFragment,
+  GeneratedWorkTrackerStateFieldsFragment,
   WorkTrackerProjectOpenQuery,
   WorkTrackerProjectsQuery,
   WorkTrackerProjectsQueryVariables as WorkTrackerProjectsVariables,
   WorkTrackerOnboardingQuery,
   WorkTrackerOnboardingQueryVariables as WorkTrackerOnboardingVariables,
 } from "./generated/projects.documents";
-export type { OnboardingProject } from "../../shared/api/types";
+export type { Project, Module, OnboardingProject, ProjectCreate, ProjectPatch, ProjectCreateResult } from "./types";
+export type { ModulePresentation } from "./modulePresentationTypes";

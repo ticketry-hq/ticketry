@@ -38,7 +38,7 @@ vi.mock("../features/projects/modulePresentationTransport", async () => {
 });
 
 import { loadModules, loadProjects } from "../features/projects";
-import type { WorkItem } from "../shared/api/types";
+import type { WorkItem } from "../features/work-items";
 import { useClientStore } from "../state/clientStore";
 import { dragModule } from "./moduleDragGestures";
 import {

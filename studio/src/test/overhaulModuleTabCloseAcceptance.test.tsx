@@ -2,9 +2,11 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ModuleTab } from "../app/shell/ticket-workspace/ModuleTab";
-import type { Module } from "../shared/api/types";
+import type { Module } from "../features/projects";
 
 const MODULE: Module = {
+    rank: "",
+    project: null,
   id: "module-1",
   name: "Ticketry",
   project_id: "project-1",

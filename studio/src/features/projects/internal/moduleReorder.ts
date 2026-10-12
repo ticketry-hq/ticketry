@@ -1,4 +1,4 @@
-import type { Module } from "../../../shared/api/types";
+import type { Module } from "../types";
 
 /**
  * Turn a resolved Module drop into the write the server expects (#360).

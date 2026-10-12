@@ -12,12 +12,8 @@ import {
 import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../../shared/apollo/client";
 
-type CachedProject = {
-  id: string;
-  slug: string;
-  name: string;
-  onboarding_required: boolean;
-};
+/** Apollo onboarding rows keep the generated selection in server identity form. */
+type CachedProject = OnboardingProject;
 
 function onboardingQueryData(nodes: CachedProject[]) {
   return {

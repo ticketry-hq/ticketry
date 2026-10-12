@@ -1,5 +1,5 @@
 import { FindingLocationLabel } from "../../../../../features/work-items";
-import { type WorkItem } from "../../../../../shared/api/types";
+import type { WorkItem } from "../../../../../features/work-items";
 import { stateColor, stateLabel } from "../../../../../shared/utilities/display";
 import { useClientStore } from "../../../../../state/clientStore";
 import { useCachedStates, stateById } from "../../../../../features/projects";
@@ -49,7 +49,7 @@ export default function FindingsPanel({ children, projectId, onCancel }: Finding
       </div>
       <div className="overflow-hidden border border-pane-border" data-testid="findings-list">
         {items.map((f) => {
-          const state = stateById(states, f.state);
+          const state = stateById(states, f.state_id);
           const identifier = formatWorkItemDisplayIdentifier(f.sequence_id);
           return (
             <div

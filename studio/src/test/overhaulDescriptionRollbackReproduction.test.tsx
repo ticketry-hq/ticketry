@@ -223,7 +223,7 @@ describe("CODING-1524 reproduction — description rollback under live fact traf
   it("[evidence B] a stale module-open read landing after a save leaves the saved description in place", async () => {
     const { wire, details } = await dirtyEditorThenStaleModuleRead();
 
-    await waitFor(() => expect(wire.journal).toHaveLength(6));
+    await waitFor(() => expect(wire.journal).toHaveLength(8));
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(within(details).getByLabelText("Story description")).toHaveValue(SAVED);
     expect(wire.journal).toEqual([
@@ -231,6 +231,10 @@ describe("CODING-1524 reproduction — description rollback under live fact traf
       'request  WorkTrackerModuleOpen {"moduleId":"module-1"}',
       'request  UpdateWorkTrackerWorkItemDetails {"id":"story-a","description":"Saved description"}',
       'response UpdateWorkTrackerWorkItemDetails story-a.description="Saved description"',
+      // Planning membership convergence evicts the project module collection;
+      // its mounted project-open watcher reloads while the stale reads are held.
+      'request  WorkTrackerProjectOpen {"projectId":"project-1"}',
+      'response WorkTrackerProjectOpen',
       'response WorkTrackerWorkItem',
       'response WorkTrackerModuleOpen story-a.description="Original description"',
     ]);

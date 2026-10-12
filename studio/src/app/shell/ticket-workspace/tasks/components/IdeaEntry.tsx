@@ -67,8 +67,8 @@ export function IdeaEntry() {
       if (!storyType) throw new Error("The Story issue type is unavailable.");
       const created = await createStory.mutateAsync({
         name,
-        parent_id: moduleId,
-        issue_type_id: storyType.id,
+        parentId: moduleId,
+        issueTypeId: storyType.id,
       });
       if (
         submissionRef.current !== submission ||
@@ -78,8 +78,8 @@ export function IdeaEntry() {
       }
 
       const ui = useClientStore.getState();
-      if (created.state && ui.collapsedStateIds.has(created.state)) {
-        ui.toggleStateCollapsed(created.state);
+      if (created.state_id && ui.collapsedStateIds.has(created.state_id)) {
+        ui.toggleStateCollapsed(created.state_id);
       }
       useOnboardingTourStore.getState().storyCreated(created.id);
       setDraft("");

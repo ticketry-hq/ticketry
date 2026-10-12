@@ -23,6 +23,7 @@ function ModuleTicketNames({ moduleId }: { moduleId: string }) {
 }
 
 const project = {
+  created_at: "2026-01-01T00:00:00Z",
   id: "project-1",
   name: "Runtime Project",
   slug: "runtime-project",

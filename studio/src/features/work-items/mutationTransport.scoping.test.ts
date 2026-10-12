@@ -43,8 +43,7 @@ describe("work-item module convergence", () => {
     const query = vi.spyOn(client, "query").mockResolvedValue({ data: {} } as never);
 
     await createWorkItem(
-      "project-1",
-      { name: "Item", issue_type_id: "type-1" },
+      { projectId: "project-1", name: "Item", issueTypeId: "type-1" },
       { moduleId: "module-a" },
     );
 
@@ -63,7 +62,7 @@ describe("work-item module convergence", () => {
     } as never);
     const query = vi.spyOn(client, "query").mockResolvedValue({ data: {} } as never);
 
-    await reparentWorkItem("item-1", "module-b", {
+    await reparentWorkItem({ id: "item-1", parentId: "module-b" }, {
       moduleIds: ["module-a", "module-a"],
     });
 

@@ -1,4 +1,5 @@
-import type { ModuleTree, State as TaskState } from "../../../shared/api/types";
+import type { ModuleTree } from "../types";
+import type { State as TaskState } from "../../workflows";
 import { fuzzyMatches } from "./fuzzyMatch";
 
 export type TaskId = string;
@@ -11,6 +12,7 @@ const STATE_GROUP_ORDER: Record<string, number> = {
   cancelled: 4,
 };
 
+/** Tree input accepts partial/unsaved rows: display key and rank may be absent, sequence unknown. */
 export interface TreeWorkItem {
   id: TaskId;
   name: string;
@@ -18,7 +20,7 @@ export interface TreeWorkItem {
   sequence_id: number | null;
   rank?: string;
   parent_id: string | null;
-  state: string | null;
+  state_id: string | null;
 }
 
 export interface OrderedTaskSection {
@@ -70,7 +72,7 @@ export function orderedTaskSections(
 ): OrderedTaskSection[] {
   const groups: Record<string, TaskId[]> = {};
   for (const id of rootIds) {
-    const stateId = itemsById[id]?.state;
+    const stateId = itemsById[id]?.state_id;
     if (stateId) (groups[stateId] ??= []).push(id);
   }
   const orderedStates = [...states].sort((a, b) => {
@@ -239,7 +241,7 @@ export function taskRevealPath(
     current = parent;
     parent = parentById.get(current);
   }
-  const stateId = itemsById[current]?.state ?? null;
+  const stateId = itemsById[current]?.state_id ?? null;
   return {
     ancestorIds,
     stateId,

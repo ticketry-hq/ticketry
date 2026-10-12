@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { LaunchBindingInput } from "../../../shared/api/types";
+import type { LaunchBindingInput } from "../types";
 
 type SaveLaunchBinding = (binding: LaunchBindingInput) => Promise<unknown>;
 

@@ -68,6 +68,10 @@ const SANCTIONED_MUTATIONS = [
   "module_checkout_commit_push",
   "module_checkout_push",
   "module_checkout_pull_request_create",
+  // Sprint suggestion execution uses authored, identity-scoped model CRUD:
+  // create binds project/sprint/request identity; update only requests cancellation.
+  "agent_execution_create",
+  "agent_execution_update",
   // Execution, terminals, and agent runs.
   "run_now",
   "graph_run_create",

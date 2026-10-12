@@ -1,4 +1,6 @@
-import type { IssueType, Module, Project, State, WorkItem } from "../shared/api/types";
+import type { Module, Project } from "../features/projects";
+import type { IssueType, State } from "../features/workflows";
+import type { WorkItem } from "../features/work-items";
 import type { ProjectOpenResult } from "../features/projects/queries/readTransport";
 import { WorkTrackerModuleOpenDocument } from "../features/work-items/generated/workItems.documents";
 import {
@@ -85,7 +87,7 @@ export function seedModuleOpenFixture(moduleId: string, items: FixtureWorkItem[]
           name: item.name,
           project_id: compactWorktrackerId(item.project_id),
           sequence_id: item.sequence_id,
-          state_id: item.state ? compactWorktrackerId(item.state) : null,
+          state_id: item.state_id ? compactWorktrackerId(item.state_id) : null,
           state_revision: 1,
           description: item.description,
           workspace_tab_order: [],
@@ -96,16 +98,16 @@ export function seedModuleOpenFixture(moduleId: string, items: FixtureWorkItem[]
           created_at: item.created_at,
           updated_at: item.updated_at,
           rank: item.rank,
-          issue_type_id: compactWorktrackerId(item.issue_type),
+          issue_type_id: compactWorktrackerId(item.issue_type_id),
           project: {
             __typename: "WorktrackerProject",
             id: item.project_id,
             slug: item.key.split("-")[0] ?? "PROJECT",
           },
-          state_record: item.state ? {
+          state_record: item.state_id ? {
             __typename: "WorktrackerState",
-            id: item.state,
-            name: item.__state?.name ?? item.state,
+            id: item.state_id,
+            name: item.__state?.name ?? item.state_id,
             group: item.__state?.group ?? "backlog",
             color: item.__state?.color ?? "",
             sort_order: item.__state?.sort_order ?? 0,
@@ -113,8 +115,8 @@ export function seedModuleOpenFixture(moduleId: string, items: FixtureWorkItem[]
           } : null,
           issue_type_record: {
             __typename: "WorktrackerIssuetype",
-            id: item.issue_type,
-            name: item.__issueType?.name ?? item.issue_type,
+            id: item.issue_type_id,
+            name: item.__issueType?.name ?? item.issue_type_id,
             level: item.__issueType?.level ?? "task",
             color: item.__issueType?.color ?? "",
             sort_order: item.__issueType?.sort_order ?? 0,

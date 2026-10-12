@@ -3,7 +3,7 @@ import {
   getProjectsSnapshot,
   loadProjects,
 } from "../../projects";
-import type { Project } from "../../../shared/api/types";
+import type { Project, ProjectCreateResult } from "../../projects";
 
 export const DEFAULT_PROJECT_KEY = "CDN";
 export const LEGACY_PROJECT_KEY = "CODING";
@@ -17,7 +17,7 @@ function findDefaultProject(projects: Project[]): Project | null {
 }
 
 /** Resolve the installation's default project, creating canonical Coding last. */
-export async function resolveDefaultProject(): Promise<Project> {
+export async function resolveDefaultProject(): Promise<Project | ProjectCreateResult> {
   const existing = findDefaultProject(getProjectsSnapshot());
   if (existing) return existing;
 

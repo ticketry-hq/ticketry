@@ -1,9 +1,5 @@
-import type {
-  ConfigurableProvider,
-  LaunchBinding,
-  LaunchBindingInput,
-  ProviderCapabilities,
-} from "../../shared/api/types";
+import type { ConfigurableProvider, ProviderCapabilities } from "../settings";
+import type { LaunchBinding, LaunchBindingInput, ScopedWorkflowLaunchBinding } from "./types";
 
 // The `agy` adapter stays in code but is deliberately not configurable in
 // Settings (ADR-0015); only the three built-in providers are.
@@ -38,8 +34,8 @@ export function launchBindingsByStateId(
 ): Map<string, LaunchBinding> {
   return new Map(
     bindings
-      .filter((binding) => binding.issue_type_id === issueTypeId)
-      .map((binding) => [binding.state_id, binding] as const),
+      .filter((binding) => binding.issue_type === issueTypeId)
+      .map((binding) => [binding.state, binding] as const),
   );
 }
 
@@ -99,8 +95,9 @@ export function validateLaunchBindingOptions(
   return null;
 }
 
+/** Launch eligibility uses editor choices whose model/provider identities are resolved. */
 export function canAutoLaunchTo(
-  binding: LaunchBinding | undefined,
+  binding: ScopedWorkflowLaunchBinding | undefined,
   capabilities: ProviderCapabilities[],
 ): boolean {
   if (!binding) return false;

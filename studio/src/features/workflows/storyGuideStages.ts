@@ -1,4 +1,4 @@
-import type { ScopedWorkflowSettings, State } from "../../shared/api/types";
+import type { ScopedWorkflowSettings, State } from "./types";
 
 const commonMeanings: Record<string, string> = {
   ideas: "captures a desired change",

@@ -6,45 +6,25 @@ import type { PlanningGraphQuery } from "./generated/planningGraph.documents";
 
 export type SprintStatus = "planned" | "active" | "completed";
 
-export interface PlanningState {
-  id: string;
-  name: string;
-  group: string;
-  color: string;
-}
+/** Generated planner state selection; no handwritten server field contract. */
+export type PlanningState = Pick<PlanningGraphQuery["states"]["nodes"][number], "id" | "name" | "group" | "color">;
 
-export interface PlanningSprint {
-  id: string;
-  name: string;
-  status: SprintStatus;
-  createdAt: string;
-}
+/** Planner view narrows persisted status to the supported sprint lifecycle. */
+export type PlanningSprint = Pick<PlanningGraphQuery["sprints"]["nodes"][number], "id" | "name" | "createdAt"> & { status: SprintStatus };
 
-export interface PlanningModule {
-  id: string;
-  key: string;
-  name: string;
-}
+/** Planner module view adds a display key derived from project slug and sequence. */
+export type PlanningModule = Pick<PlanningGraphQuery["modules"]["nodes"][number], "id" | "name"> & { key: string };
 
-export interface PlanningWorkItem {
-  id: string;
-  /** Display identifier, `SLUG-N`. */
-  key: string;
-  name: string;
-  rank: string;
-  parentId: string | null;
-  moduleId: string | null;
-  stateId: string | null;
-  sprintId: string | null;
-  updatedAt: string;
-  typeName: string | null;
-}
+/** Planner card view retains selected fields and adds display key and related type name. */
+export type PlanningWorkItem = Pick<PlanningGraphQuery["workItems"]["nodes"][number],
+  "id" | "name" | "rank" | "parentId" | "moduleId" | "stateId" | "sprintId" | "updatedAt"
+> & { key: string; typeName: string | null };
 
 /** The one issue type a Plan control creates, or why there isn't one. */
 export type CreationType = { id: string } | { error: string };
 
 export interface PlanningGraph {
-  project: { id: string; name: string; slug: string } | null;
+  project: PlanningGraphQuery["project"]["nodes"][number] | null;
   states: PlanningState[];
   /** The project's one Story issue type, used when creating stories. */
   storyType: CreationType;

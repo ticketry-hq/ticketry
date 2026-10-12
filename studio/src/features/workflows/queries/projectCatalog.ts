@@ -1,21 +1,17 @@
 import type { FetchPolicy } from "@apollo/client";
-import type { IssueType } from "../../../shared/api/types";
-import {
-  compactWorktrackerId,
-  publicWorktrackerId,
-  publicWorktrackerTimestamp,
-  stringList,
-} from "../../../shared/api/generatedWorktracker";
+import type { LaunchBinding, State } from "../types";
+import { selectIssueTypeLevel } from "../selectors/issueTypeLevel";
+import { publicResult, serverVariables } from "../../../shared/api/worktrackerConversion";
 import type { WorkTrackerProjectOpenQuery } from "../../projects";
-import { readProjectOpen, WorkTrackerProjectOpenDocument } from "../../projects";
+import { WorkTrackerProjectOpenDocument } from "../../projects";
 import { studioApolloClient } from "../../../shared/apollo/client";
 
 type IssueTypeRow = WorkTrackerProjectOpenQuery["issue_types"]["nodes"][number];
 
 export interface WorkflowCatalog {
-  states: ReturnType<typeof normalizeStates>;
+  states: State[];
   issueTypes: IssueTypeRow[];
-  launchBindings: ReturnType<typeof normalizeLaunchBindings>;
+  launchBindings: LaunchBinding[];
   providers: WorkTrackerProjectOpenQuery["provider_catalog"]["providers"];
   configurableProviders: WorkTrackerProjectOpenQuery["provider_catalog"]["configurable_providers"];
   agentModels: WorkTrackerProjectOpenQuery["provider_catalog"]["agent_models"];
@@ -23,27 +19,10 @@ export interface WorkflowCatalog {
   globalDefault: WorkTrackerProjectOpenQuery["provider_catalog"]["global_default"];
 }
 
-export function issueType(row: IssueTypeRow): IssueType {
-  return {
-    id: publicWorktrackerId(row.id),
-    project: publicWorktrackerId(row.project),
-    name: row.name,
-    level: row.level as IssueType["level"],
-    color: row.color,
-    sort_order: row.sort_order,
-    start_state: row.start_state ? publicWorktrackerId(row.start_state) : null,
-    workflow_revision: row.workflow_revision,
-  };
-}
+export const issueType = selectIssueTypeLevel;
 
 function normalizeStates(catalog: WorkTrackerProjectOpenQuery) {
-  return catalog.states.nodes.map((state) => ({
-    ...state,
-    id: publicWorktrackerId(state.id),
-    project: publicWorktrackerId(state.project),
-    created_at: publicWorktrackerTimestamp(state.created_at),
-    updated_at: publicWorktrackerTimestamp(state.updated_at),
-  })).sort((left, right) =>
+  return catalog.states.nodes.slice().sort((left, right) =>
     left.sort_order - right.sort_order
     || left.created_at.localeCompare(right.created_at)
   );
@@ -59,19 +38,7 @@ function normalizeIssueTypes(catalog: WorkTrackerProjectOpenQuery) {
 function normalizeLaunchBindings(catalog: WorkTrackerProjectOpenQuery) {
   return catalog.issue_types.nodes.flatMap((type) =>
     type.launch_bindings.nodes.map((binding) => ({
-      id: binding.id,
-      issue_type: publicWorktrackerId(binding.issue_type),
-      state: publicWorktrackerId(binding.state),
-      prompt: binding.prompt,
-      required_skills: stringList(binding.required_skills),
-      stage_skills: stringList(binding.stage_skills),
-      profile: binding.profile ?? null,
-      model: binding.model ? publicWorktrackerId(binding.model) : null,
-      reasoning: binding.reasoning ? publicWorktrackerId(binding.reasoning) : null,
-      auto_start: binding.auto_start,
-      subtree_run_enabled: binding.subtree_run_enabled,
-      created_at: publicWorktrackerTimestamp(binding.created_at),
-      updated_at: publicWorktrackerTimestamp(binding.updated_at),
+      ...binding,
       issue_type_order: type.sort_order,
       state_order: binding.state_record?.sort_order ?? Number.MAX_SAFE_INTEGER,
     })),
@@ -85,15 +52,16 @@ function normalizeLaunchBindings(catalog: WorkTrackerProjectOpenQuery) {
 export function normalizedCatalog(
   catalog: WorkTrackerProjectOpenQuery,
 ): WorkflowCatalog {
+  const converted = publicResult(WorkTrackerProjectOpenDocument, catalog);
   return {
-    states: normalizeStates(catalog),
-    issueTypes: normalizeIssueTypes(catalog),
-    launchBindings: normalizeLaunchBindings(catalog),
-    providers: catalog.provider_catalog.providers,
-    configurableProviders: catalog.provider_catalog.configurable_providers,
-    agentModels: catalog.provider_catalog.agent_models,
-    reasoningLevels: catalog.provider_catalog.reasoning_levels,
-    globalDefault: catalog.provider_catalog.global_default,
+    states: normalizeStates(converted),
+    issueTypes: normalizeIssueTypes(converted),
+    launchBindings: normalizeLaunchBindings(converted),
+    providers: converted.provider_catalog.providers,
+    configurableProviders: converted.provider_catalog.configurable_providers,
+    agentModels: converted.provider_catalog.agent_models,
+    reasoningLevels: converted.provider_catalog.reasoning_levels,
+    globalDefault: converted.provider_catalog.global_default,
   };
 }
 
@@ -101,7 +69,14 @@ export async function readWorkflowCatalog(
   projectId: string,
   fetchPolicy: FetchPolicy = "cache-first",
 ): Promise<WorkflowCatalog> {
-  return normalizedCatalog((await readProjectOpen(projectId, fetchPolicy)).data);
+  const { data } = await studioApolloClient().query({
+    query: WorkTrackerProjectOpenDocument,
+    variables: serverVariables(WorkTrackerProjectOpenDocument, { projectId }),
+    fetchPolicy,
+    ...(fetchPolicy === "network-only" || fetchPolicy === "no-cache"
+      ? { context: { queryDeduplication: false } } : {}),
+  });
+  return normalizedCatalog(data!);
 }
 
 export function getWorkflowCatalogSnapshot(
@@ -109,7 +84,7 @@ export function getWorkflowCatalogSnapshot(
 ): WorkflowCatalog | undefined {
   const data = studioApolloClient().readQuery({
     query: WorkTrackerProjectOpenDocument,
-    variables: { projectId: compactWorktrackerId(projectId) },
+    variables: serverVariables(WorkTrackerProjectOpenDocument, { projectId }),
     optimistic: true,
   });
   return data?.states && data.issue_types && data.provider_catalog

@@ -1,10 +1,10 @@
 import { skipToken, useQuery } from "@apollo/client/react";
 import { useMemo } from "react";
-import type { State } from "../../shared/api/types";
+import type { State } from "../workflows";
 import {
   compactWorktrackerId,
-  publicWorktrackerId,
 } from "../../shared/api/generatedWorktracker";
+import { publicResult, serverVariables } from "../../shared/api/worktrackerConversion";
 import { studioApolloClient } from "../../shared/apollo/client";
 import { readProjectOpen } from "./queries/readTransport";
 import { WorkTrackerProjectStatesDocument } from "./generated/projects.documents";
@@ -21,16 +21,7 @@ const cacheId = (value: string): string =>
     : value;
 
 const bySortOrder = (rows: State[]): State[] =>
-  [...rows].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-
-const stateFromRow = (row: GeneratedWorkTrackerStateFieldsFragment): State => ({
-  id: publicWorktrackerId(row.id),
-  name: row.name,
-  group: row.group,
-  color: row.color,
-  sort_order: row.sort_order,
-  is_protected: row.is_protected,
-});
+  [...rows].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
 
 const rowsFromStates = (projectId: string, states: State[]) => states.map(
   (state, index) => ({
@@ -42,20 +33,20 @@ const rowsFromStates = (projectId: string, states: State[]) => states.map(
     color: state.color ?? "",
     sort_order: state.sort_order ?? index,
     is_protected: state.is_protected ?? false,
-    created_at: new Date(index).toISOString(),
-    updated_at: new Date(index).toISOString(),
+    created_at: state.created_at,
+    updated_at: state.updated_at,
   }),
 );
 
 function statesFromData(data: { states: { nodes: GeneratedWorkTrackerStateFieldsFragment[] } }): State[] {
-  return bySortOrder(data.states.nodes.map(stateFromRow));
+  return bySortOrder(publicResult(WorkTrackerProjectStatesDocument, data).states.nodes);
 }
 
 export function getStatesSnapshot(projectId: string | null): State[] {
   if (!projectId) return [];
   const data = studioApolloClient().readQuery({
     query: WorkTrackerProjectStatesDocument,
-    variables: { projectId: compactWorktrackerId(projectId) },
+    variables: serverVariables(WorkTrackerProjectStatesDocument, { projectId }),
     optimistic: true,
   });
   return data ? statesFromData(data) : [];
@@ -83,7 +74,7 @@ export function useCachedStates(projectId: string | null): State[] {
     WorkTrackerProjectStatesDocument,
     projectId
       ? {
-          variables: { projectId: compactWorktrackerId(projectId) },
+          variables: serverVariables(WorkTrackerProjectStatesDocument, { projectId }),
           client: studioApolloClient(),
           fetchPolicy: "cache-only",
         }
@@ -98,7 +89,7 @@ export function useCachedStates(projectId: string | null): State[] {
 export function setStates(projectId: string, states: State[]): void {
   studioApolloClient().writeQuery({
     query: WorkTrackerProjectStatesDocument,
-    variables: { projectId: compactWorktrackerId(projectId) },
+    variables: serverVariables(WorkTrackerProjectStatesDocument, { projectId }),
     data: {
       states: {
         __typename: "WorktrackerStateConnection",

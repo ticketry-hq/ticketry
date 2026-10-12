@@ -70,3 +70,30 @@ export { deriveWorkflowImpact, workflowMemberStateIds } from "./selectors";
 export type { WorkflowEditorResources } from "./queries";
 export { useWorkflowEditorStore } from "./workflowEditorStore";
 export { setIssueTypeMetadata } from "./queries/issueTypeMetadata";
+
+export type {
+  LaunchBinding,
+  LaunchBindingInput,
+  StateImpact,
+  IssueLevel,
+  IssueType,
+  State,
+  IssueTypeCreate,
+  IssueTypePatch,
+  StateCreate,
+  StatePatch,
+  WorkflowEdge,
+  WorkflowGraph,
+  ScopedWorkflowTransition,
+  ScopedWorkflowLaunchBinding,
+  WorkflowStandingWarning,
+  ScopedWorkflowSettings,
+  ScopedWorkflowImpactOperation,
+  ScopedWorkflowImpact,
+  IssueTypeWorkflow,
+  WorkflowDiagnostic,
+  IssueTypeMetadata,
+  WorkflowTransition,
+} from "./types";
+
+export { readWorkflowCatalog } from "./queries/projectCatalog";

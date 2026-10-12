@@ -31,7 +31,7 @@ export function useEpicEntry({ projectId, epicType, onCreated }: EpicEntryProps)
     if ("error" in epicType) { setState({ kind: "editing", error: epicType.error }); return; }
     pending.current = true; setState({ kind: "creating" });
     try {
-      const epic = await createWorkItem(projectId, { name: name.trim(), issue_type_id: epicType.id, parent_id: null });
+      const epic = await createWorkItem({ projectId, name: name.trim(), issueTypeId: epicType.id, parentId: null });
       await refresh(epic.id);
     } catch (cause) {
       setState({ kind: "editing", error: cause instanceof Error ? cause.message : "Could not create epic." });

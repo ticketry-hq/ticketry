@@ -23,13 +23,15 @@ import {
 import { seedModuleLinks } from "../features/module-links";
 import { useStudioStore } from "../features/projects/store";
 import { createBrowserRuntime, initializeStudioRuntime } from "../runtime";
-import type { Module, ModulePresentation, Project } from "../shared/api/types";
+import type { Module, Project } from "../features/projects";
+import type { ModulePresentation } from "../features/projects";
 import { resetStudioApolloClient } from "../shared/apollo/client";
 import { useClientStore } from "../state/clientStore";
 import { projectOpenFixture } from "./projectOpenFixture";
 
 const PROJECT_ID = "project-1";
 const PROJECT: Project = {
+  created_at: "2026-01-01T00:00:00Z",
   id: PROJECT_ID,
   name: "Project",
   slug: "PRJ",
@@ -43,6 +45,8 @@ function module(
   isArchived = false,
 ): Module {
   return {
+    rank: "",
+    project: null,
     id,
     name,
     project_id: PROJECT_ID,

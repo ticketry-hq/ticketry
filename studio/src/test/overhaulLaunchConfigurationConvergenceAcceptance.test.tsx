@@ -75,7 +75,7 @@ it("[overhaul-246] [overhaul-262] [overhaul-263] keeps launch policy canonical t
   const cache = studioApolloClient().cache;
   const created = optimisticCreatedIssue(cache, {
     projectId: PROJECT_ID, moduleId: "module-probe",
-  }, { name: "Implementation child", issue_type_id: typeId });
+  }, { name: "Implementation child", issueTypeId: typeId });
   cache.recordOptimisticTransaction((optimistic) => optimistic.writeFragment({
     fragment: GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
     fragmentName: "GeneratedWorkTrackerWorkItemFields",

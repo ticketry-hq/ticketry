@@ -5,7 +5,10 @@ import {
 import { useStudioStore } from "../../features/projects";
 import { getModuleTreeSnapshot, getWorkItemSnapshot } from "../../features/work-items";
 import { getStatesSnapshot } from "../../features/projects";
-import type { Module, ModuleTree, Project, State, WorkItem } from "../../shared/api/types";
+import type { Module, Project } from "../../features/projects";
+import type { ModuleTree } from "../../features/work-items";
+import type { State } from "../../features/workflows";
+import type { WorkItem } from "../../features/work-items";
 import { useClientStore } from "../../state/clientStore";
 import type {
   Row,

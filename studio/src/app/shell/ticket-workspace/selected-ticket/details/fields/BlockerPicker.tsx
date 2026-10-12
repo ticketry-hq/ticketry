@@ -1,6 +1,6 @@
 import { reachable } from "../../../../../../features/work-items";
 import { stateById, useCachedStates } from "../../../../../../features/projects";
-import type { WorkItem } from "../../../../../../shared/api/types";
+import type { WorkItem } from "../../../../../../features/work-items";
 import { stateColor } from "../../../../../../shared/utilities/display";
 import Popover from "../../../../../../shared/ui/Popover";
 import { GhostChipAdd } from "./QuietChipControls";
@@ -49,7 +49,7 @@ export default function BlockerPicker({ issueId, projectId, items, currentIds, o
           taskLeading={(c) => (
             <span
               className="h-2 w-2 flex-none"
-              style={{ backgroundColor: stateColor(stateById(states, c.state)) }}
+              style={{ backgroundColor: stateColor(stateById(states, c.state_id)) }}
             />
           )}
         />

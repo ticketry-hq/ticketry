@@ -10,7 +10,8 @@ const createdSprint: PlanningGraphQuery["sprints"]["nodes"][number] = {
   id: "created-sprint", name: "Release", status: "planned", createdAt: "2026-10-03",
 };
 const emptyGraph: PlanningGraphQuery = {
-  project: { nodes: [{ id: "project-1", name: "Planner", slug: "PLAN" }] },
+  project: { nodes: [{
+    id: "project-1", name: "Planner", slug: "PLAN" }] },
   states: { nodes: [] },
   issueTypes: { nodes: [] },
   sprints: { nodes: [] },

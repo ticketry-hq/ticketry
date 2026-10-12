@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { studioApolloClient } from "../../shared/apollo/client";
 import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
+import { serverVariables } from "../../shared/api/worktrackerConversion";
 import { PlanWorkItemDocument } from "./generated/workItems.documents";
 import { claimPlanWrite, releasePlanWrite } from "./planWriteGuard";
 
@@ -16,7 +17,7 @@ export function usePlanWorkItem() {
       }, optimisticId);
       try {
         const result = await client.mutate({ mutation: PlanWorkItemDocument,
-          variables: { id: compactWorktrackerId(id), sprintId: sprintId ? compactWorktrackerId(sprintId) : null } });
+          variables: serverVariables(PlanWorkItemDocument, { id, sprintId }) });
         return Boolean(result.data?.update_work_item);
       } finally {
         client.cache.removeOptimistic(optimisticId);

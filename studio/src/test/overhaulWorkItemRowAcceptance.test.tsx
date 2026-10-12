@@ -33,7 +33,7 @@ describe("overhaul acceptance — work-item rows", () => {
       id: "unresolved-1",
       name: "Unresolved work item",
       key: "MEML-UNRESOLVED",
-      state: active,
+      state_id: active,
     });
     Reflect.deleteProperty(unresolvedWorkItem, "sequence_id");
     http.workItems([
@@ -42,7 +42,7 @@ describe("overhaul acceptance — work-item rows", () => {
         name: "A deliberately long Story title that must yield space to its key",
         key: "MEML-CANONICAL-STORY",
         sequence_id: 33,
-        state: active,
+        state_id: active,
         sub_issues_count: 1,
       }),
       workItem({
@@ -51,8 +51,8 @@ describe("overhaul acceptance — work-item rows", () => {
         key: "MEML-CANONICAL-IMPLEMENTATION",
         sequence_id: 34,
         parent_id: "story-1",
-        issue_type: implementation,
-        state: active,
+        issue_type_id: implementation,
+        state_id: active,
       }),
       unresolvedWorkItem,
     ]);

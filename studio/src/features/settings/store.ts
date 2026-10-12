@@ -1,5 +1,6 @@
 import { createApolloStore } from "../../shared/apollo/localState";
 import * as api from "../workflows";
+import { issueType, readWorkflowCatalog } from "../workflows/queries/projectCatalog";
 import { ApiError } from "../../shared/api/errors";
 import { toast } from "../../state/clientStore";
 import {
@@ -15,17 +16,9 @@ import {
   loadSettings as loadSettingsData,
   refreshSubtreeRunCapabilities as refreshCapabilitiesData,
   setIssueTypes,
-  setIssueTypesSorted,
   synchronizeSubtreeRunCapabilities as synchronizeCapabilities,
 } from "./queries";
-import type {
-  IssueType,
-  IssueTypeCreate,
-  IssueTypePatch,
-  State,
-  StateCreate,
-  StatePatch,
-} from "../../shared/api/types";
+import type { IssueType, IssueTypeCreate, IssueTypePatch, State, StateCreate, StatePatch } from "../workflows";
 
 function errMessage(e: unknown): string {
   if (e instanceof ApiError) return `${e.status}: ${e.message}`;
@@ -102,13 +95,18 @@ export const useSettingsStore = createApolloStore<SettingsState>("settings", (se
   async createType(body) {
     const projectId = get().projectId;
     if (!projectId) return null;
+    let committed = false;
     try {
-      const created = await api.createIssueType(projectId, body);
-      setIssueTypesSorted(projectId, [...getIssueTypesSnapshot(projectId), created]);
-      return created;
+      const row = await api.createIssueType(projectId, body);
+      committed = true;
+      const catalog = await readWorkflowCatalog(projectId, "network-only");
+      const created = catalog.issueTypes.find((type) => type.id === row.id);
+      if (!created) throw new Error("The created issue type was absent from the refreshed catalog.");
+      return issueType(created);
     } catch (e) {
-      toast.error(errMessage(e));
-      set({ error: errMessage(e) });
+      const message = committed ? `Issue type created, but the catalog could not be refreshed: ${errMessage(e)}` : errMessage(e);
+      toast.error(message);
+      set({ error: message });
       return null;
     }
   },
@@ -119,19 +117,22 @@ export const useSettingsStore = createApolloStore<SettingsState>("settings", (se
     const snapshot = getIssueTypesSnapshot(projectId);
     setIssueTypes(
       projectId,
-      snapshot.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+      snapshot.map((t) => (t.id === id ? {
+        ...t, name: patch.name ?? t.name, color: patch.color ?? t.color,
+        sort_order: patch.sortOrder ?? t.sort_order,
+      } : t)),
     );
     set({ error: null });
+    let committed = false;
     try {
-      const updated = await api.updateIssueType(id, patch);
-      setIssueTypesSorted(
-        projectId,
-        getIssueTypesSnapshot(projectId).map((t) => (t.id === id ? updated : t)),
-      );
+      await api.updateIssueType(id, patch);
+      committed = true;
+      await readWorkflowCatalog(projectId, "network-only");
     } catch (e) {
-      setIssueTypes(projectId, snapshot);
-      set({ error: errMessage(e) });
-      toast.error(errMessage(e));
+      if (!committed) setIssueTypes(projectId, snapshot);
+      const message = committed ? `Issue type updated, but the catalog could not be refreshed: ${errMessage(e)}` : errMessage(e);
+      set({ error: message });
+      toast.error(message);
     }
   },
 
@@ -163,12 +164,16 @@ export const useSettingsStore = createApolloStore<SettingsState>("settings", (se
       [...snapshot].sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)),
     );
     set({ error: null });
+    let committed = false;
     try {
-      setIssueTypesSorted(projectId, await api.reorderIssueTypes(projectId, orderedIds));
+      await api.reorderIssueTypes(projectId, orderedIds);
+      committed = true;
+      await readWorkflowCatalog(projectId, "network-only");
     } catch (e) {
-      setIssueTypes(projectId, snapshot);
-      set({ error: errMessage(e) });
-      toast.error(errMessage(e));
+      if (!committed) setIssueTypes(projectId, snapshot);
+      const message = committed ? `Issue types reordered, but the catalog could not be refreshed: ${errMessage(e)}` : errMessage(e);
+      set({ error: message });
+      toast.error(message);
     }
   },
 
@@ -194,7 +199,10 @@ export const useSettingsStore = createApolloStore<SettingsState>("settings", (se
     const snapshot = getStatesSnapshot(projectId);
     setStates(
       projectId,
-      snapshot.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+      snapshot.map((s) => (s.id === id ? {
+        ...s, name: patch.name ?? s.name, color: patch.color ?? s.color,
+        group: patch.group ?? s.group, sort_order: patch.sortOrder ?? s.sort_order,
+      } : s)),
     );
     set({ error: null });
     try {

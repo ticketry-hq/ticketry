@@ -1,4 +1,5 @@
-import type { IssueType, ScopedWorkflowSettings, State } from "../../shared/api/types";
+import type { IssueTypeMetadata } from "./types";
+import type { ScopedWorkflowSettings, State } from "./types";
 import {
   SETTINGS_CHECKBOX_CLASS,
   SETTINGS_EYEBROW_CLASS,
@@ -25,7 +26,7 @@ export function TransitionDisclosure({
   controlErrors: Record<string, string>;
   edge: ScopedWorkflowSettings["transitions"][number];
   expanded: boolean;
-  issueType: IssueType;
+  issueType: IssueTypeMetadata;
   onToggle: () => void;
   removeTransition: ReturnType<typeof useWorkflowEditorStore.getState>["removeTransition"];
   setTransitionPermission: ReturnType<

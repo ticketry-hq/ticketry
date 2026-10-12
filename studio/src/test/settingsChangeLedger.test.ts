@@ -3,11 +3,15 @@ import {
   createSettingsChangeLedger,
   observeConfirmedSettings,
 } from "../features/settings/changeLedger";
-import type { State } from "../shared/api/types";
+import type { State } from "../features/workflows";
 
 const states: State[] = [
   {
     id: "todo",
+    project: "project-1",
+    is_protected: false,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
     name: "Todo",
     group: "unstarted",
     color: "#64748b",

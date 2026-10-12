@@ -135,7 +135,11 @@ beforeEach(() => {
       group: "backlog",
       color: "#111111",
       sort_order: 0,
-    } as never,
+      project: PROJECT,
+      is_protected: false,
+      created_at: "2026-08-16T09:00:00Z",
+      updated_at: "2026-08-16T09:00:00Z",
+    },
   ]);
 });
 

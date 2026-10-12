@@ -32,7 +32,9 @@ describe("Plan sprint header", () => {
     const decisions: unknown[] = [];
     const moduleless = { ...suggestion, issue: { ...suggestion.issue, moduleId: null } };
     const graph = {
-      project: { __typename: "WorktrackerProjectConnection", nodes: [{ __typename: "WorktrackerProject", id: "project-1", name: "Planner", slug: "PLAN" }] },
+      project: { __typename: "WorktrackerProjectConnection", nodes: [{
+    created_at: "2026-01-01T00:00:00Z",
+    description: "", __typename: "WorktrackerProject", id: "project-1", name: "Planner", slug: "PLAN" }] },
       states: { __typename: "WorktrackerStateConnection", nodes: [{ __typename: "WorktrackerState", id: "idea", name: "Implement", group: "backlog", color: "", sortOrder: 0 }] },
       issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [{ __typename: "WorktrackerIssuetype", id: "story-type", name: "Story", level: "task" }, { __typename: "WorktrackerIssuetype", id: "epic-type", name: "Epic", level: "module" }] },
       modules: { __typename: "WorktrackerIssueConnection", nodes: [{ __typename: "WorktrackerIssue", id: "module-1", name: "Alpha", sequenceId: 2, presentation: { __typename: "WorktrackerModulePresentationConnection", nodes: [] } }] },
@@ -107,7 +109,9 @@ describe("Plan sprint header", () => {
     let release = () => {};
     const pendingSuggestions = new Promise<void>((resolve) => { release = resolve; });
     const graph = {
-      project: { __typename: "WorktrackerProjectConnection", nodes: [{ __typename: "WorktrackerProject", id: "project-1", name: "Planner", slug: "PLAN" }] },
+      project: { __typename: "WorktrackerProjectConnection", nodes: [{
+    created_at: "2026-01-01T00:00:00Z",
+    description: "", __typename: "WorktrackerProject", id: "project-1", name: "Planner", slug: "PLAN" }] },
       states: { __typename: "WorktrackerStateConnection", nodes: [] },
       issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [{ __typename: "WorktrackerIssuetype", id: "epic-type", name: "Epic", level: "module" }] },
       modules: { __typename: "WorktrackerIssueConnection", nodes: ["Alpha", "Beta"].map((name, index) => ({ __typename: "WorktrackerIssue", id: `epic-${index}`, name, sequenceId: index + 1, presentation: { __typename: "WorktrackerModulePresentationConnection", nodes: [] } })) },
@@ -163,7 +167,9 @@ describe("Plan sprint header", () => {
     http.tree("epic-0", { rootIds: [], children: {}, order: [] });
     http.tree("epic-1", { rootIds: [], children: {}, order: [] });
     const graph = {
-      project: { __typename: "WorktrackerProjectConnection", nodes: [{ __typename: "WorktrackerProject", id: "project-1", name: "Planner", slug: "PLAN" }] },
+      project: { __typename: "WorktrackerProjectConnection", nodes: [{
+    created_at: "2026-01-01T00:00:00Z",
+    description: "", __typename: "WorktrackerProject", id: "project-1", name: "Planner", slug: "PLAN" }] },
       states: { __typename: "WorktrackerStateConnection", nodes: [{ __typename: "WorktrackerState", id: "idea", name: "Idea", group: "backlog", color: "#888", sortOrder: 0 }, { __typename: "WorktrackerState", id: "implement", name: "Implement", group: "started", color: "#888", sortOrder: 1 }] },
       issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [{ __typename: "WorktrackerIssuetype", id: "story", name: "Story", level: "task" }, { __typename: "WorktrackerIssuetype", id: "epic", name: "Epic", level: "module" }] },
       modules: { __typename: "WorktrackerIssueConnection", nodes: ["Module 1", "Module 2"].map((name, index) => ({ __typename: "WorktrackerIssue", id: `epic-${index}`, name, sequenceId: index + 1, presentation: { __typename: "WorktrackerModulePresentationConnection", nodes: [] } })) },

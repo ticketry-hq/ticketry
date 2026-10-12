@@ -1,5 +1,6 @@
-import { compactWorktrackerId, publicWorktrackerId } from "../../shared/api/generatedWorktracker";
-import type { ModulePresentation } from "../../shared/api/types";
+import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
+import { publicResult, serverVariables } from "../../shared/api/worktrackerConversion";
+import type { ModulePresentation } from "./modulePresentationTypes";
 import { studioApolloClient } from "../../shared/apollo/client";
 import {
   ReorderWorkTrackerModulePresentationDocument,
@@ -17,18 +18,16 @@ export async function reorderModulePresentation(
 ): Promise<ModulePresentation> {
   const { data } = await studioApolloClient().mutate({
     mutation: ReorderWorkTrackerModulePresentationDocument,
-    variables: {
-      moduleId: compactWorktrackerId(moduleId),
-      beforeId: neighbors.before_id ? compactWorktrackerId(neighbors.before_id) : null,
-      afterId: neighbors.after_id ? compactWorktrackerId(neighbors.after_id) : null,
-      initialOrderIds: neighbors.initial_order_ids?.map(compactWorktrackerId),
-    },
+    variables: serverVariables(ReorderWorkTrackerModulePresentationDocument, {
+      moduleId,
+      beforeId: neighbors.before_id,
+      afterId: neighbors.after_id,
+      initialOrderIds: neighbors.initial_order_ids
+        ? [...neighbors.initial_order_ids] : neighbors.initial_order_ids,
+    }),
   });
   if (!data) throw new Error("Module reorder returned no data.");
-  return {
-    ...data.reorder_module_presentation,
-    module_id: publicWorktrackerId(data.reorder_module_presentation.module_id),
-  };
+  return publicResult(ReorderWorkTrackerModulePresentationDocument, data).reorder_module_presentation;
 }
 
 export async function setModuleTabHidden(
@@ -37,8 +36,13 @@ export async function setModuleTabHidden(
   tabHidden: boolean,
 ): Promise<ModulePresentation> {
   const client = studioApolloClient();
-  const variables = { projectId: compactWorktrackerId(projectId) };
-  const compactModuleId = compactWorktrackerId(moduleId);
+  const variables = serverVariables(WorkTrackerProjectOpenDocument, { projectId });
+  const mutationVariables = serverVariables(UpdateWorkTrackerModulePresentationDocument, {
+    moduleId, tabHidden,
+  });
+  const compactModuleId = mutationVariables.moduleId;
+  // Apollo optimistic/cache rows stay in server form; normalize legacy cache
+  // identities only when matching a row, never feature results or wire inputs.
   const current = client.readQuery({
     query: WorkTrackerProjectOpenDocument,
     variables,
@@ -50,7 +54,7 @@ export async function setModuleTabHidden(
   )?.rank ?? "";
   const { data } = await client.mutate({
     mutation: UpdateWorkTrackerModulePresentationDocument,
-    variables: { moduleId: compactModuleId, tabHidden },
+    variables: mutationVariables,
     optimisticResponse: {
       update_module_presentation: {
         __typename: "WorktrackerModulepresentation",
@@ -96,8 +100,5 @@ export async function setModuleTabHidden(
     },
   });
   if (!data) throw new Error("Module visibility update returned no data.");
-  return {
-    ...data.update_module_presentation,
-    module_id: publicWorktrackerId(data.update_module_presentation.module_id),
-  };
+  return publicResult(UpdateWorkTrackerModulePresentationDocument, data).update_module_presentation;
 }

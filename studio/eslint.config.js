@@ -14,16 +14,17 @@ export default [
       "no-restricted-imports": [
         "error",
         {
-          paths: [
-            {
-              name: "../shared/api/types",
-              message: "The client store may not hold record types. See LLD 2.",
-            },
-            {
-              name: "@/shared/api/types",
-              message: "The client store may not hold record types. See LLD 2.",
-            },
-          ],
+          // The AST architecture gate also resolves normalized relative paths,
+          // re-exports and dynamic imports; this gives editor feedback on imports.
+          patterns: [{
+            group: [
+              "**/generated/**",
+              "**/features/projects", "**/features/projects/**",
+              "**/features/work-items", "**/features/work-items/**",
+              "**/features/workflows", "**/features/workflows/**",
+            ],
+            message: "Client state may not import generated contracts or feature record views.",
+          }],
         },
       ],
     },

@@ -45,8 +45,8 @@ function storyFixture(scenario?: WorkflowScenario) {
     workItem({
       id: "story-1",
       name: "Search saved notes",
-      state: { id: "ideas", name: "Ideas", group: "backlog", color: null },
-      issue_type: {
+      state_id: { id: "ideas", name: "Ideas", group: "backlog", color: null },
+      issue_type_id: {
         id: "story", name: "Story", level: "task", color: null,
         sort_order: 1, start_state: scenario?.start ?? "ideas",
         workflow_revision: scenario?.revision ?? 1,
@@ -58,7 +58,7 @@ function storyFixture(scenario?: WorkflowScenario) {
       key: "MEML-2",
       sequence_id: 2,
       rank: "b",
-      state: { id: "review", name: "Review", group: "started", color: null },
+      state_id: { id: "review", name: "Review", group: "started", color: null },
     }),
   ]);
   if (scenario) {
@@ -66,14 +66,14 @@ function storyFixture(scenario?: WorkflowScenario) {
       id: `catalog-${stage.id}`,
       name: `Catalog ${stage.name}`,
       sequence_id: index + 100,
-      state: {
+      state_id: {
         id: stage.id,
         name: stage.name,
         group: stage.group ?? "started",
         color: null,
         sort_order: index,
       },
-      issue_type: "catalog-only",
+      issue_type_id: "catalog-only",
     })));
   }
   let current = scenario;
@@ -199,6 +199,10 @@ function storyFixture(scenario?: WorkflowScenario) {
   };
 }
 
+// The first dialog opening loads its production chunk; allow cold transforms
+// under the full-suite worker load without changing the asserted behavior.
+const guideOpenWait = { timeout: 5_000 };
+
 async function openGuide() {
   const details = await screen.findByRole("region", { name: "Details" });
   const trigger = await within(details).findByRole("button", {
@@ -206,7 +210,7 @@ async function openGuide() {
   });
   trigger.focus();
   fireEvent.click(trigger);
-  return { trigger, dialog: await screen.findByRole("dialog", { name: "Story workflow guide" }) };
+  return { trigger, dialog: await screen.findByRole("dialog", { name: "Story workflow guide" }, guideOpenWait) };
 }
 
 describe("overhaul acceptance — Story workflow guide", () => {
@@ -223,7 +227,7 @@ describe("overhaul acceptance — Story workflow guide", () => {
     expect(trigger).toHaveTextContent("Story workflow guide");
     trigger.focus();
     fireEvent.click(trigger);
-    const dialog = await screen.findByRole("dialog", { name: "Story workflow guide" });
+    const dialog = await screen.findByRole("dialog", { name: "Story workflow guide" }, guideOpenWait);
     expect(dialog).toBeVisible();
     expect(screen.getAllByText("Search saved notes").length).toBeGreaterThan(0);
     fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
@@ -303,7 +307,7 @@ describe("overhaul acceptance — Story workflow guide", () => {
       edges: [["ideas", "review"]],
       bindings: [],
     });
-    http.revise("story-1", { state: "parked" });
+    http.revise("story-1", { state_id: "parked" });
     mount();
     const { dialog } = await openGuide();
 
@@ -472,7 +476,7 @@ describe("overhaul acceptance — Story workflow guide", () => {
     });
     await waitFor(() => expect(dialog).toHaveTextContent("Settings > Model configuration"));
 
-    http.revise("story-1", { state: "review" });
+    http.revise("story-1", { state_id: "review" });
     act(() => http.notifications.workItemChanged("story-1", 100));
     const reviewHeading = await within(dialog).findByRole("heading", { name: "Review" });
     await waitFor(() => expect(reviewHeading.closest("li")).toHaveTextContent("Current state"));
@@ -547,7 +551,7 @@ describe("overhaul acceptance — Story workflow guide", () => {
       studioApolloClient().cache.gc();
       fireEvent.click(trigger);
     });
-    const dialog = await screen.findByRole("dialog", { name: "Story workflow guide" });
+    const dialog = await screen.findByRole("dialog", { name: "Story workflow guide" }, guideOpenWait);
 
     expect(await within(dialog).findByRole("status")).toHaveTextContent("Loading workflow");
     expect(dialog).toHaveTextContent("describe the desired result");

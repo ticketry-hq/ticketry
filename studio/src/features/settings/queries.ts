@@ -1,6 +1,8 @@
 import { setIssueTypeMetadata as setIssueTypes } from "../workflows";
 import { skipToken, useQuery } from "@apollo/client/react";
-import type { IssueType, SubtreeRunCapabilityMap } from "../../shared/api/types";
+import type { SubtreeRunCapabilityMap } from "./providerTypes";
+import type { IssueType } from "../workflows";
+import { publicResult } from "../../shared/api/worktrackerConversion";
 import {
   compactWorktrackerId,
   publicWorktrackerId,
@@ -167,7 +169,10 @@ export function useIssueTypesQuery(projectId: string | null) {
   return {
     ...query,
     data: query.data
-      ? bySortOrder(query.data.issue_types.nodes.map(issueType))
+      ? bySortOrder(
+          publicResult(WorkTrackerProjectIssueTypesDocument, query.data)
+            .issue_types.nodes.map(issueType),
+        )
       : undefined,
   };
 }

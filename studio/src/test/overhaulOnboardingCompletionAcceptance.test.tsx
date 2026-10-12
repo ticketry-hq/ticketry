@@ -27,6 +27,7 @@ import { documentOperationName } from "../graphql-foundation/typedDocument";
 import { useClientStore } from "../state/clientStore";
 
 const PROJECT_ID = "345113f3-2578-4285-aed7-b86eb7c4fd78";
+const SERVER_PROJECT_ID = "345113f325784285aed7b86eb7c4fd78";
 const MODULE_ID = "12d17fb4-643c-4bf5-a16a-f4e974e175f8";
 const STORY_ID = "7692cc90-fffc-4291-a7ad-946ddb8a07d7";
 const MODULE_TYPE_ID = "20b3aa0b-9de6-4419-a260-a0a0a82fa4a7";
@@ -669,7 +670,7 @@ describe("completed onboarding workspace acceptance", () => {
     const finish = await screen.findByRole("button", { name: "Finish tour" });
     fireEvent.click(finish);
     await waitFor(() => expect(boundary.onboardingRequired).toBe(false));
-    expect(boundary.acknowledgementProjectIds).toEqual([PROJECT_ID]);
+    expect(boundary.acknowledgementProjectIds).toEqual([SERVER_PROJECT_ID]);
     expect(screen.queryByTestId("onboarding-welcome")).not.toBeInTheDocument();
     await expectSelectedOnboardingStory();
     expectCreatedContentOnce(boundary);
@@ -880,7 +881,10 @@ describe("completed onboarding workspace acceptance", () => {
         expect(screen.queryByRole("button", { name: "Finish tour" }))
           .not.toBeInTheDocument();
       });
-      expect(boundary.acknowledgementProjectIds).toEqual([PROJECT_ID, PROJECT_ID]);
+      expect(boundary.acknowledgementProjectIds).toEqual([
+        SERVER_PROJECT_ID,
+        SERVER_PROJECT_ID,
+      ]);
       expect(boundary.onboardingRequired).toBe(false);
       expect(boundary.providerChoice).toBe(choice);
       expect(boundary.operations.filter((operation) =>

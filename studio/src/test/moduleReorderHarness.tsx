@@ -10,7 +10,8 @@ import {
 import { useStudioStore } from "../features/projects/store";
 import * as api from "./legacyApiFixture";
 import { resetStudioApolloClient } from "../shared/apollo/client";
-import type { Module, Project, WorkItem } from "../shared/api/types";
+import type { Module, Project } from "../features/projects";
+import type { WorkItem } from "../features/work-items";
 import { useClientStore } from "../state/clientStore";
 
 /**
@@ -27,6 +28,8 @@ export const PROJECT_ID = "project-1";
 
 export function modules(...ids: string[]): Module[] {
   return ids.map((id, index) => ({
+    rank: "",
+    project: null,
     id,
     name: id.replace("module-", "").toUpperCase(),
     project_id: PROJECT_ID,
@@ -34,17 +37,18 @@ export function modules(...ids: string[]): Module[] {
     sequence_id: ids.length - index,
     is_archived: false,
     issue_type: "module",
-  })) as unknown as Module[];
+  }));
 }
 
-export function project(manual_module_order: boolean): Project {
+export function project(manual_module_order: boolean): Project & { readonly manual_module_order: boolean } {
   return {
+    created_at: "2026-01-01T00:00:00Z",
     id: PROJECT_ID,
     name: "Project",
     slug: "PRJ",
     description: "",
     manual_module_order,
-  } as Project;
+  };
 }
 
 /** Both reorder-visible surfaces at once: they read one cached order. */

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { ApiError, apiErrorMessage } from "../../shared/api/errors";
-import type { State, StateImpact } from "../../shared/api/types";
+import type { State, StateImpact } from "./types";
 import { STATE_GROUP_ORDER } from "../../shared/utilities/display";
 import {
   SETTINGS_FIELD_CLASS,

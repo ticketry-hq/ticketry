@@ -1,11 +1,13 @@
+import type { WorkItem } from "../workItemView";
 import { skipToken, useFragment, useQuery } from "@apollo/client/react";
 import { useMemo } from "react";
-import type { ModuleTree, WorkItem } from "../../../shared/api/types";
-import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
+import type { ModuleTree } from "../types";
+import { publicResult, serverVariables } from "../../../shared/api/worktrackerConversion";
 import { studioApolloClient } from "../../../shared/apollo/client";
 import {
   GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
   WorkTrackerModuleOpenDocument,
+  WorkTrackerWorkItemDocument,
 } from "../generated/workItems.documents";
 import type { GeneratedWorkTrackerWorkItemFieldsFragment } from "../generated/workItems.documents";
 import {
@@ -14,7 +16,7 @@ import {
   readProjectWorkItems,
   readWorkItem,
 } from "./readTransport";
-import { orderedWorkItems, workItemFromIssue } from "../issueAdapter";
+import { orderedWorkItems, workItemView } from "../workItemView";
 import { recordSelectionProfilePoint } from "../../../shared/utilities/selectionProfile";
 
 import { moduleLoadPoint } from "../../../shared/utilities/moduleLoadProbe";
@@ -27,7 +29,7 @@ export const EMPTY_MODULE_TREE: ModuleTree = {
 
 const issueReference = (id: string) => ({
   __typename: "WorktrackerIssue" as const,
-  id: compactWorktrackerId(id),
+  id: serverVariables(WorkTrackerWorkItemDocument, { id }).id,
 });
 
 function moduleTreeFromResult(
@@ -44,11 +46,11 @@ export function getModuleTreeSnapshot(
   if (!moduleId) return EMPTY_MODULE_TREE;
   const result = studioApolloClient().readQuery({
     query: WorkTrackerModuleOpenDocument,
-    variables: { moduleId: compactWorktrackerId(moduleId) },
+    variables: serverVariables(WorkTrackerModuleOpenDocument, { moduleId }),
     optimistic: true,
   });
   return result
-    ? moduleTreeFromResult(moduleId, result.work_items.nodes)
+    ? moduleTreeFromResult(moduleId, publicResult(WorkTrackerModuleOpenDocument, result).work_items.nodes)
     : EMPTY_MODULE_TREE;
 }
 
@@ -82,7 +84,7 @@ export function useModuleOpen(moduleId: string | null): {
       return { tree: EMPTY_MODULE_TREE, items: [] };
     }
     const started = performance.now();
-    const items = orderedWorkItems(query.data.work_items.nodes).filter((item) => !item.is_archived);
+    const items = orderedWorkItems(publicResult(WorkTrackerModuleOpenDocument, query.data).work_items.nodes).filter((item) => !item.is_archived);
     recordSelectionProfilePoint("module-open-materialize");
     const tree = moduleTreeFromWorkItems(moduleId, items);
     moduleLoadPoint(moduleId)("tree-materialized", { task_count: items.length, materialize_ms: performance.now() - started });
@@ -96,7 +98,7 @@ function useModuleQuery(moduleId: string | null, fetchPolicy: "cache-and-network
     WorkTrackerModuleOpenDocument,
     moduleId
       ? {
-          variables: { moduleId: compactWorktrackerId(moduleId) },
+          variables: serverVariables(WorkTrackerModuleOpenDocument, { moduleId }),
           client: studioApolloClient(),
           fetchPolicy,
           nextFetchPolicy: fetchPolicy === "cache-only" ? "cache-only" : "cache-first",
@@ -109,7 +111,7 @@ function useModuleQuery(moduleId: string | null, fetchPolicy: "cache-and-network
 export function useModuleItems(moduleId: string | null) {
   const { data } = useModuleQuery(moduleId, "cache-only");
   return useMemo(() => data
-    ? orderedWorkItems(data.work_items.nodes).filter((item) => !item.is_archived)
+    ? orderedWorkItems(publicResult(WorkTrackerModuleOpenDocument, data).work_items.nodes).filter((item) => !item.is_archived)
     : [], [data]);
 }
 
@@ -121,7 +123,8 @@ export function useWorkItem(id: string | null) {
     from: id ? issueReference(id) : null,
   });
   const data = id && fragment.data && "id" in fragment.data
-    ? workItemFromIssue(fragment.data as GeneratedWorkTrackerWorkItemFieldsFragment)
+    ? workItemView(publicResult(GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
+      fragment.data as GeneratedWorkTrackerWorkItemFieldsFragment))
     : undefined;
   return {
     data,
@@ -138,7 +141,7 @@ export function getWorkItemSnapshot(id: string | null): WorkItem | undefined {
     from: issueReference(id),
     optimistic: true,
   });
-  return row ? workItemFromIssue(row) : undefined;
+  return row ? workItemView(publicResult(GeneratedWorkTrackerWorkItemFieldsFragmentDoc, row)) : undefined;
 }
 
 export { readProjectWorkItems, readWorkItem };

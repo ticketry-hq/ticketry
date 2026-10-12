@@ -1,4 +1,5 @@
-import type { IssueType, State, WorkItem } from "../../../../../../shared/api/types";
+import type { IssueType, State } from "../../../../../../features/workflows";
+import type { WorkItem } from "../../../../../../features/work-items";
 import { isResolved } from "../../../../../../shared/utilities/display";
 
 // CODIN-907: the Story-detail review-findings panel. A "finding" is a direct
@@ -9,7 +10,7 @@ import { isResolved } from "../../../../../../shared/utilities/display";
 
 /** Findings are the Story's direct Implementation children (CODIN-905). */
 export function isFinding(item: WorkItem, implementationTypeId: string | null): boolean {
-  return item.issue_type === implementationTypeId;
+  return item.issue_type_id === implementationTypeId;
 }
 
 /** Queued = Implementation AND still at the Implementation start stage. */
@@ -18,7 +19,7 @@ export function isQueuedFinding(
   implementationTypeId: string | null,
   implementStateId: string | null,
 ): boolean {
-  return isFinding(item, implementationTypeId) && item.state === implementStateId;
+  return isFinding(item, implementationTypeId) && item.state_id === implementStateId;
 }
 
 /** The panel is Review-scoped on a Story; hidden for every other type/state. */
@@ -29,7 +30,7 @@ export function hasFindingsPanel(
 ): boolean {
   const reviewStateId = states.find((state) => state.name === "Review")?.id ?? null;
   const storyTypeId = issueTypes.find((type) => type.name === "Story")?.id ?? null;
-  return item.issue_type === storyTypeId && item.state === reviewStateId;
+  return item.issue_type_id === storyTypeId && item.state_id === reviewStateId;
 }
 
 /** The Story's Implementation children, in the order the API returned them. */
@@ -50,7 +51,7 @@ export function queuedFindingCount(
 
 /** A cancellable finding is one not already resolved (Done / Cancelled). */
 export function isCancellable(item: WorkItem, states: readonly State[]): boolean {
-  return !isResolved(states.find((state) => state.id === item.state));
+  return !isResolved(states.find((state) => state.id === item.state_id));
 }
 
 export { parseFindingLocation, formatFindingLocation, type FindingLocation } from "../../../../../../features/work-items";

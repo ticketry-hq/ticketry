@@ -73,13 +73,16 @@ describe("overhaul acceptance - agent run actions", () => {
 
   it("[overhaul-254] dispatches focus through workspace and terminal focus authorities", async () => {
     seedModuleOpenFixture("module-1", [
-      workItem({ id: "parent", name: "Parent", state: "ideas", sub_issues_count: 1 }),
-      workItem({ id: "middle", name: "Middle", state: "ideas", parent_id: "parent", sub_issues_count: 1 }),
-      workItem({ id: "task-1", name: "Pad target", state: "working", parent_id: "middle" }),
+      workItem({ id: "parent", name: "Parent", state_id: "ideas", sub_issues_count: 1 }),
+      workItem({ id: "middle", name: "Middle", state_id: "ideas", parent_id: "parent", sub_issues_count: 1 }),
+      workItem({ id: "task-1", name: "Pad target", state_id: "working", parent_id: "middle" }),
     ]);
     setStatesSorted("project-1", [{
       id: "ideas", name: "Ideas", group: "backlog", color: "", sort_order: 0,
       is_protected: false,
+      project: "project-1",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
     }]);
     useClientStore.setState({
       expandedIdsByModule: {}, collapsedStateIds: new Set(["ideas"]),

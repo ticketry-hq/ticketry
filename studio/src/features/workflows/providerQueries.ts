@@ -3,7 +3,7 @@ import type {
   ConfigurableProvider,
   ProviderCapabilities,
   ProviderCatalog,
-} from "../../shared/api/types";
+} from "../settings";
 import { studioApolloClient } from "../../shared/apollo/client";
 import {
   LoadProviderCatalogDocument,

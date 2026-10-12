@@ -10,14 +10,16 @@ import type { DesignDoc } from "../features/agents/types";
 import { useStudioStore } from "../features/projects/store";
 import { loadModules } from "../features/projects/queries";
 import { loadModuleTree } from "../features/work-items/queries";
-import type {
-  Attachment,
-  IssueType,
-  ModuleTree,
-  ScopedWorkflowTransition,
-  State,
-  WorkItem,
-} from "../shared/api/types";
+import type { Attachment } from "../features/work-items";
+import type { ModuleTree } from "../features/work-items";
+import type { IssueType, ScopedWorkflowTransition, State } from "../features/workflows";
+import {
+  normalizeIssueTypeFixture,
+  normalizeStateFixture,
+  type IssueTypeFixtureInput,
+  type StateFixtureInput,
+} from "./workflowFixtureDrafts";
+import type { WorkItem } from "../features/work-items";
 import { StudioApolloProvider } from "../shared/apollo/StudioApolloProvider";
 import { useClientStore } from "../state/clientStore";
 import { rankBetween } from "../features/work-items/utilities/rank";
@@ -321,8 +323,16 @@ class BoundaryFixture implements StudioFixture {
       id: "implementation",
       name: "Implementation",
       level: "task",
-      color: null,
+      color: "",
       sort_order: 2,
+    project: "project-1",
+    start_state: "state-1",
+    workflow_revision: 0,
+    is_pathfind: false,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    transitions: { nodes: [] },
+    launch_bindings: { nodes: [] },
     };
     this.issueTypes.set(seeded.id, seeded);
     return seeded;
@@ -446,8 +456,8 @@ class BoundaryFixture implements StudioFixture {
         id: compactWorktrackerId(item.id),
         state_revision: this.revisions.get(item.id) ?? 1,
         workspace_tab_order: [],
-        state_id: item.state,
-        issue_type_id: item.issue_type,
+        state_id: item.state_id,
+        issue_type_id: item.issue_type_id,
         module_id: moduleId,
         sprint_id: this.sprintAssignments.get(item.id) ?? null,
         project: {
@@ -455,18 +465,18 @@ class BoundaryFixture implements StudioFixture {
           id: this.projectId(),
           slug: item.key.split("-")[0] ?? "PROJECT",
         },
-        state_record: item.state ? {
+        state_record: item.state_id ? {
           __typename: "WorktrackerState",
-          ...this.states.get(item.state),
-          id: item.state,
-          sort_order: this.states.get(item.state)?.sort_order ?? 0,
-          is_protected: this.states.get(item.state)?.is_protected ?? false,
+          ...this.states.get(item.state_id),
+          id: item.state_id,
+          sort_order: this.states.get(item.state_id)?.sort_order ?? 0,
+          is_protected: this.states.get(item.state_id)?.is_protected ?? false,
         } : null,
         issue_type_record: {
           __typename: "WorktrackerIssuetype",
-          ...this.issueTypes.get(item.issue_type),
-          id: item.issue_type,
-          sort_order: this.issueTypes.get(item.issue_type)?.sort_order ?? 0,
+          ...this.issueTypes.get(item.issue_type_id),
+          id: item.issue_type_id,
+          sort_order: this.issueTypes.get(item.issue_type_id)?.sort_order ?? 0,
         },
         children: { __typename: "WorktrackerIssueConnection", nodes: [...this.items.values()].filter((child) => child.parent_id === item.id).map((child) => ({ __typename: "WorktrackerIssue", id: child.id, is_archived: child.is_archived })) },
         blocked_by_edges: {
@@ -519,11 +529,11 @@ class BoundaryFixture implements StudioFixture {
         },
       }));
       const bindings = [...this.items.values()].flatMap((item, index) =>
-        item.issue_type === type.id && item.state ? [{
+        item.issue_type_id === type.id && item.state_id ? [{
           __typename: "WorktrackerLaunchbinding",
           id: index + 1,
           issue_type: type.id,
-          state: item.state,
+          state: item.state_id,
           prompt: null,
           required_skills: [],
           stage_skills: [],
@@ -533,7 +543,7 @@ class BoundaryFixture implements StudioFixture {
           subtree_run_enabled: this.subtreeRunEnabled,
           created_at: createdAt,
           updated_at: createdAt,
-          state_record: { __typename: "WorktrackerState", id: item.state, sort_order: this.states.get(item.state)?.sort_order ?? 0 },
+          state_record: { __typename: "WorktrackerState", id: item.state_id, sort_order: this.states.get(item.state_id)?.sort_order ?? 0 },
         }] : [],
       );
       return {
@@ -674,8 +684,8 @@ class BoundaryFixture implements StudioFixture {
       const updated: WorkItem = {
         ...current,
         ...body,
-        state: (body.state_id as string | undefined) ?? current.state,
-        issue_type: (body.issue_type_id as string | undefined) ?? current.issue_type,
+        state_id: (body.state_id as string | undefined) ?? current.state_id,
+        issue_type_id: (body.issue_type_id as string | undefined) ?? current.issue_type_id,
         parent_id: body.parent_id === undefined ? current.parent_id : body.parent_id as string | null,
         blocked_by_ids: (body.blocked_by_ids as string[] | undefined) ?? current.blocked_by_ids,
         rank: body.state_id === undefined ? current.rank : this.transitionRanks.get(id) ?? current.rank,
@@ -704,7 +714,7 @@ class BoundaryFixture implements StudioFixture {
             !item.is_archived &&
             item.project_id === current.project_id &&
             item.parent_id === current.parent_id &&
-            item.state === current.state
+            item.state_id === current.state_id
           )
           .sort((left, right) =>
             left.rank.localeCompare(right.rank) ||
@@ -752,8 +762,8 @@ class BoundaryFixture implements StudioFixture {
         if (committed && committedState && committedType) {
           this.items.set(id, {
             ...committed,
-            state: committedState.id,
-            issue_type: committedType.id,
+            state_id: committedState.id,
+            issue_type_id: committedType.id,
           });
         }
         return {
@@ -788,8 +798,8 @@ class BoundaryFixture implements StudioFixture {
       const implementation = this.implementationType();
       this.items.set(current.id, {
         ...current,
-        state: implement.id,
-        issue_type: implementation.id,
+        state_id: implement.id,
+        issue_type_id: implementation.id,
       });
       return {
         run_now: {
@@ -943,12 +953,12 @@ class BoundaryFixture implements StudioFixture {
     ) {
       const bindings = new Map<string, unknown>();
       for (const item of this.items.values()) {
-        if (!item.issue_type || !item.state) continue;
-        const key = `${item.issue_type}:${item.state}`;
+        if (!item.issue_type_id || !item.state_id) continue;
+        const key = `${item.issue_type_id}:${item.state_id}`;
         bindings.set(key, {
           id: bindings.size + 1,
-          issue_type: item.issue_type,
-          state: item.state,
+          issue_type: item.issue_type_id,
+          state: item.state_id,
           subtree_run_enabled: this.subtreeRunEnabled,
           workflow_revision: 1,
           created_at: "2026-08-08T10:00:00Z",
@@ -1005,13 +1015,13 @@ class BoundaryFixture implements StudioFixture {
       };
       const current = this.items.get(id);
       if (!current) return json({ detail: "Not found" }, 404);
-      const state = body.state_id ?? current.state;
-      const issueType = body.issue_type_id ?? current.issue_type;
+      const state = body.state_id ?? current.state_id;
+      const issueType = body.issue_type_id ?? current.issue_type_id;
       const updated = {
         ...current,
         ...body,
-        state,
-        issue_type: issueType,
+        state_id: state,
+        issue_type_id: issueType,
         rank: body.state_id === undefined
           ? current.rank
           : this.transitionRanks.get(id) ?? current.rank,
@@ -1073,9 +1083,9 @@ type FixtureWorkItem = WorkItem & {
   __issueType?: IssueType;
 };
 
-type WorkItemOverrides = Partial<Omit<WorkItem, "state" | "issue_type">> & {
-  state?: string | null | State;
-  issue_type?: string | IssueType;
+type WorkItemOverrides = Partial<Omit<WorkItem, "state_id" | "issue_type_id">> & {
+  state_id?: string | null | StateFixtureInput;
+  issue_type_id?: string | IssueTypeFixtureInput;
 };
 
 export function workItem(overrides: WorkItemOverrides = {}): FixtureWorkItem {
@@ -1083,25 +1093,54 @@ export function workItem(overrides: WorkItemOverrides = {}): FixtureWorkItem {
     id: "state-1",
     name: "Ideas",
     group: "backlog",
-    color: null,
+    color: "",
+    sort_order: 0,
+    is_protected: false,
+    project: "project-1",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
   };
   const defaultIssueType: IssueType = {
     id: "story",
     name: "Story",
     level: "task",
-    color: null,
+    color: "",
     sort_order: 1,
+    project: "project-1",
+    start_state: "state-1",
+    workflow_revision: 0,
+    is_pathfind: false,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    transitions: { nodes: [] },
+    launch_bindings: { nodes: [] },
   };
-  const state = overrides.state === undefined ? defaultState : overrides.state;
-  const issueType = overrides.issue_type === undefined
+  const stateInput = overrides.state_id === undefined ? defaultState : overrides.state_id;
+  const state = typeof stateInput === "object" && stateInput !== null
+    ? normalizeStateFixture(stateInput, defaultState)
+    : stateInput;
+  const issueTypeInput = overrides.issue_type_id === undefined
     ? defaultIssueType
-    : overrides.issue_type;
+    : overrides.issue_type_id;
+  const issueType = typeof issueTypeInput === "object"
+    ? normalizeIssueTypeFixture(issueTypeInput, defaultIssueType)
+    : issueTypeInput;
   return {
     id: "story-1",
     name: "Story",
     project_id: "project-1",
     sequence_id: 1,
-    state: typeof state === "string" || state === null ? state : state.id,
+    state_revision: 1,
+    workspace_tab_order: [],
+    module_id: "module-1",
+    sprint_id: null,
+    project: { id: "project-1", slug: "MEML" },
+    state_record: null,
+    issue_type_record: null,
+    children: { nodes: [] },
+    blocked_by_edges: { nodes: [] },
+    blocks_edges: { nodes: [] },
+    state_id: typeof state === "string" || state === null ? state : state.id,
     description: "",
     parent_id: "module-1",
     sub_issues_count: 0,
@@ -1111,11 +1150,11 @@ export function workItem(overrides: WorkItemOverrides = {}): FixtureWorkItem {
     created_at: "2026-08-06T12:00:00Z",
     updated_at: "2026-08-06T12:00:00Z",
     rank: "a",
-    issue_type: typeof issueType === "string" ? issueType : issueType.id,
+    issue_type_id: typeof issueType === "string" ? issueType : issueType.id,
     blocked_by_ids: [],
     blocks_ids: [],
     ...Object.fromEntries(
-      Object.entries(overrides).filter(([key]) => key !== "state" && key !== "issue_type"),
+      Object.entries(overrides).filter(([key]) => key !== "state_id" && key !== "issue_type_id"),
     ),
     __state: typeof state === "object" && state !== null ? state : undefined,
     __issueType: typeof issueType === "object" ? issueType : undefined,

@@ -4,7 +4,7 @@ import type {
   DropIntent,
   DropTargetProps,
 } from "../../../../shared/dragDrop/useAxisDragAndDrop";
-import type { Module } from "../../../../shared/api/types";
+import type { Module } from "../../../../features/projects";
 
 interface ModuleRowProps {
   module: Module;

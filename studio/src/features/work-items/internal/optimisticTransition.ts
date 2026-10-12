@@ -1,9 +1,8 @@
 import type { ApolloCache } from "@apollo/client";
 
-import type { State } from "../../../shared/api/types";
+import type { State } from "../../workflows";
 import {
   compactWorktrackerId,
-  publicWorktrackerId,
 } from "../../../shared/api/generatedWorktracker";
 import {
   WorkTrackerModuleOpenDocument,
@@ -31,10 +30,10 @@ export function optimisticTransitionedIssue(
 
   return {
     ...current,
-    state_id: publicWorktrackerId(state.id),
+    state_id: compactWorktrackerId(state.id),
     rank: arrivalRank(candidates, state.id),
     state_record: {
-      id: publicWorktrackerId(state.id),
+      id: compactWorktrackerId(state.id),
       name: state.name,
       group: state.group,
       color: state.color ?? "",

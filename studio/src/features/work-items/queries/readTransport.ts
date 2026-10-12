@@ -1,8 +1,6 @@
-import type { ModuleTree, WorkItem } from "../../../shared/api/types";
-import {
-  compactWorktrackerId,
-  publicWorktrackerId,
-} from "../../../shared/api/generatedWorktracker";
+import type { WorkItem } from "../workItemView";
+import type { ModuleTree } from "../types";
+import { publicResult, serverVariables } from "../../../shared/api/worktrackerConversion";
 import { studioApolloClient } from "../../../shared/apollo/client";
 import {
   WorkTrackerModuleOpenDocument,
@@ -10,7 +8,7 @@ import {
   WorkTrackerWorkItemDocument,
   WorkTrackerWorkItemsDocument,
 } from "../generated/workItems.documents";
-import { orderedWorkItems, workItemFromIssue } from "../issueAdapter";
+import { orderedWorkItems, workItemView } from "../workItemView";
 
 export async function readWorkItem(id: string): Promise<WorkItem> {
   const key = /^(.*)-(\d+)$/.exec(id);
@@ -25,13 +23,16 @@ export async function readWorkItem(id: string): Promise<WorkItem> {
       })
     : studioApolloClient().query({
         query: WorkTrackerWorkItemDocument,
-        variables: { id: compactWorktrackerId(id) },
+        variables: serverVariables(WorkTrackerWorkItemDocument, { id }),
         fetchPolicy: "network-only" as const,
       });
   const { data } = await request;
-  const item = data!.work_item.nodes[0];
+  const converted = key
+    ? publicResult(WorkTrackerWorkItemByKeyDocument, data!)
+    : publicResult(WorkTrackerWorkItemDocument, data!);
+  const item = converted.work_item.nodes[0];
   if (!item) throw new Error(`Work item ${id} was not found.`);
-  return workItemFromIssue(item);
+  return workItemView(item);
 }
 
 export async function readModuleTreeRecords(
@@ -40,10 +41,10 @@ export async function readModuleTreeRecords(
 ): Promise<ModuleTree & { workItems: WorkItem[] }> {
   const { data } = await studioApolloClient().query({
     query: WorkTrackerModuleOpenDocument,
-    variables: { moduleId: compactWorktrackerId(moduleId) },
+    variables: serverVariables(WorkTrackerModuleOpenDocument, { moduleId }),
     fetchPolicy: "network-only",
   });
-  const workItems = orderedWorkItems(data!.work_items.nodes);
+  const workItems = orderedWorkItems(publicResult(WorkTrackerModuleOpenDocument, data!).work_items.nodes);
   return {
     ...moduleTreeFromWorkItems(moduleId, workItems),
     workItems,
@@ -53,17 +54,17 @@ export async function readModuleTreeRecords(
 export async function readProjectWorkItems(projectId: string): Promise<WorkItem[]> {
   const { data } = await studioApolloClient().query({
     query: WorkTrackerWorkItemsDocument,
-    variables: { projectId: compactWorktrackerId(projectId) },
+    variables: serverVariables(WorkTrackerWorkItemsDocument, { projectId }),
     fetchPolicy: "network-only",
   });
-  return orderedWorkItems(data!.work_items.nodes);
+  return orderedWorkItems(publicResult(WorkTrackerWorkItemsDocument, data!).work_items.nodes);
 }
 
 export function moduleTreeFromWorkItems(
   moduleId: string,
   tasks: readonly WorkItem[],
 ): ModuleTree {
-  const publicModuleId = publicWorktrackerId(moduleId);
+  const serverModuleId = serverVariables(WorkTrackerModuleOpenDocument, { moduleId }).moduleId;
   const rootIds: string[] = [];
   const children: Record<string, string[]> = {};
   const order: string[] = [];
@@ -72,7 +73,9 @@ export function moduleTreeFromWorkItems(
     children[task.id] = [];
   }
   for (const task of tasks) {
-    if (task.parent_id === publicModuleId) rootIds.push(task.id);
+    if (task.parent_id && serverVariables(WorkTrackerModuleOpenDocument, {
+      moduleId: task.parent_id,
+    }).moduleId === serverModuleId) rootIds.push(task.id);
     else if (task.parent_id && children[task.parent_id]) {
       children[task.parent_id].push(task.id);
     }

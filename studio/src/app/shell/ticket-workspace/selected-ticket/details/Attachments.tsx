@@ -1,4 +1,4 @@
-import { type Attachment } from "../../../../../shared/api/types";
+import { type Attachment } from "../../../../../features/work-items";
 import { formatBytes } from "../../../../../shared/utilities/display";
 import { IconPaperclip } from "../../../../../shared/ui/icons";
 

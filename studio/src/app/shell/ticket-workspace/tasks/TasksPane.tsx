@@ -184,22 +184,22 @@ function TasksPaneContent() {
         ? null
         : itemsById[resolved.targetId];
       const destinationState = states.find(
-        (state) => state.id === (headerStateId ?? target?.state),
+        (state) => state.id === (headerStateId ?? target?.state_id),
       );
       if (!destinationState?.id) {
         recordStoryMove("drop-rejected", {
           storyId: payload.taskId,
           reason: "destination-state-not-found",
-          sourceStateId: source.state,
+          sourceStateId: source.state_id,
           targetId: resolved.targetId,
           headerStateId,
-          targetStateId: target?.state ?? null,
+          targetStateId: target?.state_id ?? null,
         }, "warn");
         return;
       }
 
       const sectionBlocks = visibleBlocks.filter((block) =>
-        itemsById[block.rootId]?.state === destinationState.id,
+        itemsById[block.rootId]?.state_id === destinationState.id,
       );
       // Collapsed headers have no visible blocks. Rebuild their root-only
       // section from the ranked task list so a head drop still uses the real
@@ -219,7 +219,7 @@ function TasksPaneContent() {
         recordStoryMove("drop-rejected", {
           storyId: payload.taskId,
           reason: "reorder-neighbors-not-resolved",
-          sourceStateId: source.state,
+          sourceStateId: source.state_id,
           destinationStateId: destinationState.id,
           targetId: resolved.targetId,
           intent: resolved.intent,
@@ -229,15 +229,15 @@ function TasksPaneContent() {
       }
       recordStoryMove("drop-resolved", {
         storyId: payload.taskId,
-        sourceStateId: source.state,
+        sourceStateId: source.state_id,
         destinationStateId: destinationState.id,
         targetId: resolved.targetId,
         intent: resolved.intent,
         beforeId: neighbors.beforeId,
         afterId: neighbors.afterId,
-        requiresTransition: source.state !== destinationState.id,
+        requiresTransition: source.state_id !== destinationState.id,
       });
-      if (source.state === destinationState.id) {
+      if (source.state_id === destinationState.id) {
         reorder.mutate({
           id: payload.taskId,
           beforeId: neighbors.beforeId,

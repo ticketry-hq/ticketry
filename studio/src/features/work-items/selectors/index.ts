@@ -1,4 +1,6 @@
-import type { Module, State, WorkItem } from "../../../shared/api/types";
+import type { WorkItem } from "../workItemView";
+import type { Module } from "../../projects";
+import type { State } from "../../workflows";
 import { RESOLVED_GROUPS } from "../../../shared/utilities/display";
 
 export {
@@ -72,7 +74,7 @@ export function resolveBlockerChips(
   return ids.map((id) => {
     const item = itemById.get(id);
     if (item) {
-      const state = states.find((candidate) => candidate.id === item.state) ?? null;
+      const state = states.find((candidate) => candidate.id === item.state_id) ?? null;
       return {
         id,
         key: item.key,

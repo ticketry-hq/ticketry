@@ -1,5 +1,6 @@
+import type { WorkItem } from "./workItemView";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { WorkItem } from "../../shared/api/types";
+
 import { resetStudioApolloClient } from "../../shared/apollo/client";
 import { TEMP_TASK_ID } from "../agents/types";
 import { launchDefaultAgent } from "../agents/terminal";

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { type WorkItem } from "../../../../../shared/api/types";
+import type { WorkItem } from "../../../../../features/work-items";
 import { stateColor } from "../../../../../shared/utilities/display";
 import { useIssueTypesQuery } from "../../../../../features/settings";
 import { formatWorkItemDisplayIdentifier } from "../../../../../features/work-items";
@@ -49,7 +49,7 @@ export default function ChildIssues({
             >
               <span
                 className="h-2 w-2 flex-none"
-                style={{ backgroundColor: stateColor(stateById(states, c.state)) }}
+                style={{ backgroundColor: stateColor(stateById(states, c.state_id)) }}
               />
               <span className="w-20 flex-none font-mono text-xs text-text-muted">
                 {formatWorkItemDisplayIdentifier(c.sequence_id)}

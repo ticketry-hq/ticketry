@@ -33,14 +33,16 @@ function planner() {
   const graphReads: string[] = [];
   const canonicalReads: string[] = [];
   function add(id: string, name: string, sprintId = "active-sprint", done = false) {
-    http.workItems([workItem({ id, name, state: done
+    http.workItems([workItem({ id, name, state_id: done
       ? { id: "done", name: "Done", group: "completed", color: "#00ff00" }
       : { id: "state-1", name: "Implement", group: "started", color: "#0000ff" } })]);
     memberships.set(id, sprintId);
   }
   function graph(projectId: string) {
     const response = {
-      project: { __typename: "WorktrackerProjectConnection", nodes: [{ __typename: "WorktrackerProject", id: projectId, name: "Planner", slug: "PLAN" }] },
+      project: { __typename: "WorktrackerProjectConnection", nodes: [{
+    created_at: "2026-01-01T00:00:00Z",
+    description: "", __typename: "WorktrackerProject", id: projectId, name: "Planner", slug: "PLAN" }] },
       states: { __typename: "WorktrackerStateConnection", nodes: [
         { __typename: "WorktrackerState", id: "state-1", name: "Implement", group: "started", color: "#0000ff", sortOrder: 0 },
         { __typename: "WorktrackerState", id: "done", name: "Done", group: "completed", color: "#00ff00", sortOrder: 1 },
@@ -54,9 +56,9 @@ function planner() {
       workItems: { __typename: "WorktrackerIssueConnection", nodes: [...http.items.values()].filter((item) => !item.is_archived && item.project_id === projectId)
         .map((item) => ({ __typename: "WorktrackerIssue", id: item.id, name: item.name,
           sequenceId: item.sequence_id, rank: item.rank, parentId: item.parent_id ?? null,
-          moduleId: "module-1", stateId: item.state ?? null, stateRevision: 1,
+          moduleId: "module-1", stateId: item.state_id ?? null, stateRevision: 1,
           sprintId: memberships.get(item.id) ?? null, updatedAt: item.updated_at,
-          issueType: { __typename: "WorktrackerIssuetype", id: item.issue_type, name: "Story" } })) },
+          issueType: { __typename: "WorktrackerIssuetype", id: item.issue_type_id, name: "Story" } })) },
     };
     return response satisfies PlanningGraphQuery;
   }

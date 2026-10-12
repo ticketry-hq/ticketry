@@ -2,7 +2,7 @@ import {
   issueTypeById,
   useIssueTypesQuery,
 } from "../../../../../../features/settings";
-import type { IssueType } from "../../../../../../shared/api/types";
+import type { IssueType } from "../../../../../../features/workflows";
 import { IssueTypeLabel } from "../../../../../../shared/ui/IssueTypeLabel";
 import Popover, { PopoverOption } from "../../../../../../shared/ui/Popover";
 import PopoverContent from "../../../../../../shared/ui/PopoverContent";

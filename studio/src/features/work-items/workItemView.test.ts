@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { orderedWorkItems } from "./issueAdapter";
+import { orderedWorkItems } from "./workItemView";
 import type { GeneratedWorkTrackerWorkItemFieldsFragment } from "./generated/workItems.documents";
 
 // Exactly what the Rust `fractional_rank::rebalance(5)` allocates. Every case

@@ -1,4 +1,4 @@
-import type { WorkItem } from "../../../../../shared/api/types";
+import type { WorkItem } from "../../../../../features/work-items";
 import type { ActiveSubtreeRun } from "../../../../../features/execution";
 import { SubtreeRunButton } from "./internal/SubtreeRunButton";
 import { useSubtreeRunEligibility, useSubtreeRunLaunch } from "./internal/subtreeRun";

@@ -8,7 +8,7 @@ import { getModuleFolder, getModuleLinks, seedModuleLinks } from "../features/mo
 import * as moduleLinkTransport from "../features/module-links/moduleLinkTransport";
 import { createBrowserRuntime } from "../runtime/browserRuntime";
 import type { DirectoryTrustResult, StudioRuntime } from "../runtime";
-import type { ConfigurableProvider } from "../shared/api/types";
+import type { ConfigurableProvider } from "../features/settings";
 import * as providerQueries from "../features/workflows/providerQueries";
 import { useClientStore } from "../state/clientStore";
 

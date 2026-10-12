@@ -44,13 +44,13 @@ describe("overhaul acceptance — transition landing", () => {
         name: "Previous first",
         key: "MEML-2",
         rank: "M",
-        state: implement,
+        state_id: implement,
       }),
       workItem({
         id: sourceId,
         name: "Move first",
         rank: "Z",
-        state: grill,
+        state_id: grill,
       }),
     ]);
     http.workflowTransitions("story", [{
@@ -138,8 +138,8 @@ describe("overhaul acceptance — transition landing", () => {
       order: ["picker-move", "drag-move", "ideas-top", "ideas-bottom"],
     });
     http.workItems([
-      workItem({ id: "picker-move", name: "Picker move", state: grill, rank: "X" }),
-      workItem({ id: "drag-move", name: "Drag move", key: "MEML-2", state: grill, rank: "W" }),
+      workItem({ id: "picker-move", name: "Picker move", state_id: grill, rank: "X" }),
+      workItem({ id: "drag-move", name: "Drag move", key: "MEML-2", state_id: grill, rank: "W" }),
       workItem({ id: "ideas-top", name: "Ideas top", key: "MEML-3", rank: "M" }),
       workItem({ id: "ideas-bottom", name: "Ideas bottom", key: "MEML-4", rank: "Z" }),
     ]);

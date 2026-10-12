@@ -1,11 +1,7 @@
+import type { IssueTypeMetadata } from "./types";
 import { useMemo } from "react";
-import type {
-  IssueType,
-  LaunchBindingInput,
-  ProviderCapabilities,
-  ScopedWorkflowLaunchBinding,
-  State,
-} from "../../shared/api/types";
+import type { ProviderCapabilities } from "../settings";
+import type { LaunchBindingInput, ScopedWorkflowLaunchBinding, State } from "./types";
 import {
   LaunchDefaultPicker,
   type LaunchDefaultPickerValue,
@@ -23,7 +19,7 @@ import {
 interface LaunchConfigurationFormProps {
   binding?: ScopedWorkflowLaunchBinding;
   error?: string;
-  issueType: IssueType;
+  issueType: IssueTypeMetadata;
   providerCapabilities: ProviderCapabilities[];
   promptRows?: number;
   save: (binding: LaunchBindingInput) => Promise<unknown>;

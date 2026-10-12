@@ -38,7 +38,8 @@ describe("WorkTracker write runtime acceptance", () => {
         expect(query).not.toContain("create_issue_type(project_id:");
       }
       const field = ({
-        CreateWorkTrackerProject: ["create_project", { id: "project-1", name: "Project", slug: "PRJ", description: "" }],
+        CreateWorkTrackerProject: ["create_project", {
+    created_at: "2026-01-01T00:00:00Z", id: "project-1", name: "Project", slug: "PRJ", description: "" }],
         CreateWorkTrackerWorkItem: ["create_work_item", issue], UpdateWorkTrackerWorkItemDetails: ["update_work_item", issue],
         TransitionWorkTrackerWorkItem: ["update_work_item", issue], ReparentWorkTrackerWorkItem: ["update_work_item", issue],
         SetWorkTrackerBlockers: ["update_work_item", issue], ReorderWorkTrackerWorkItem: ["reorder_work_item", issue],
@@ -56,13 +57,13 @@ describe("WorkTracker write runtime acceptance", () => {
     }));
 
     await createProject({ name: "Project", slug: "PRJ", description: "" });
-    await createWorkItem("project-1", { name: "Item", issue_type_id: "type-1" });
-    await updateWorkItem("item-1", { name: "Renamed" });
-    await transitionWorkItem("item-1", "state-1");
-    await reparentWorkItem("item-1", null);
-    await setWorkItemBlockers("item-1", []);
-    await reorderWorkItem("item-1", { before_id: null, after_id: null });
-    await deleteWorkItem("item-1");
+    await createWorkItem({ projectId: "project-1", name: "Item", issueTypeId: "type-1" });
+    await updateWorkItem({ id: "item-1", name: "Renamed" });
+    await transitionWorkItem({ id: "item-1", targetStateId: "state-1" });
+    await reparentWorkItem({ id: "item-1", parentId: null });
+    await setWorkItemBlockers({ id: "item-1", blockedByIds: [] });
+    await reorderWorkItem({ id: "item-1", beforeId: null, afterId: null });
+    await deleteWorkItem({ id: "item-1" });
     await createState("project-1", { name: "Todo", group: "unstarted" });
     await updateState("state-1", { name: "Ready" });
     await reorderStates("project-1", ["state-1"]);

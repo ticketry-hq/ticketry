@@ -53,8 +53,12 @@ const TODO = {
   id: "todo",
   name: "Todo",
   group: "backlog",
-  color: null,
+  color: "",
   sort_order: 0,
+  is_protected: false,
+  project: "project-1",
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
 };
 
 const PARENT_ROW: WorkItemRow = {
@@ -262,7 +266,7 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
     const parent = workItem({
       id: "story-1",
       name: "Parent",
-      state: TODO.id,
+      state_id: TODO.id,
       rank: "Z",
       sub_issues_count: 1,
     });
@@ -270,7 +274,7 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
       id: "child-1",
       name: "Child",
       key: "MEML-2",
-      state: TODO.id,
+      state_id: TODO.id,
       parent_id: "story-1",
       rank: "A",
     });

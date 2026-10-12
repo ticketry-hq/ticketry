@@ -1,4 +1,5 @@
-import type { IssueType, ScopedWorkflowLaunchBinding, State } from "../../shared/api/types";
+import type { IssueTypeMetadata } from "./types";
+import type { ScopedWorkflowLaunchBinding, State } from "./types";
 import {
   SETTINGS_CHECKBOX_CLASS,
   SETTINGS_EYEBROW_CLASS,
@@ -25,7 +26,7 @@ export function StateLaunchConfiguration({
   action: string | null;
   binding?: ScopedWorkflowLaunchBinding;
   controlErrors: Record<string, string>;
-  issueType: IssueType;
+  issueType: IssueTypeMetadata;
   providerCapabilities: EditorState["providerCapabilities"];
   setAutoStart: EditorState["setAutoStart"];
   setSubtreeRun: EditorState["setSubtreeRun"];

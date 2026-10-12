@@ -40,6 +40,7 @@ vi.mock("../features/projects", async (importOriginal) => ({
 vi.mock("../features/studio/lib/defaultProject", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../features/studio/lib/defaultProject")>()),
   resolveDefaultProject: vi.fn(async () => ({
+    created_at: "2026-01-01T00:00:00Z",
     id: "installation-project",
     name: "Coding",
     slug: "CDN",

@@ -61,6 +61,7 @@ describe("onboarding acceptance", () => {
     }));
     useOnboardingTourStore.getState().reset();
     resolveDefaultProject.mockReset().mockResolvedValue({
+      created_at: "2026-01-01T00:00:00Z",
       id: "installation-project",
       name: "Coding",
       slug: "CDN",

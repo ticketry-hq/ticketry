@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import type { Module, ModulePresentation } from "../../shared/api/types";
+import type { Module } from "../projects";
+import type { ModulePresentation } from "../projects";
 import { visibleModules } from "./modulePresentation";
 
-const MODULES = [
-  { id: "module-a", name: "Alpha", is_archived: false },
-  { id: "module-b", name: "Bravo", is_archived: true },
-  { id: "module-c", name: "Charlie", is_archived: false },
-  { id: "module-d", name: "Delta", is_archived: false },
-] as Module[];
+const MODULES: Module[] = [
+  { id: "module-a", name: "Alpha", is_archived: false, project_id: "project", sequence_id: 1, key: "PRJ-1", issue_type: "type", rank: "", project: null },
+  { id: "module-b", name: "Bravo", is_archived: true, project_id: "project", sequence_id: 2, key: "PRJ-2", issue_type: "type", rank: "", project: null },
+  { id: "module-c", name: "Charlie", is_archived: false, project_id: "project", sequence_id: 1, key: "PRJ-1", issue_type: "type", rank: "", project: null },
+  { id: "module-d", name: "Delta", is_archived: false, project_id: "project", sequence_id: 1, key: "PRJ-1", issue_type: "type", rank: "", project: null },
+];
 
 describe("visibleModules", () => {
   it("keeps canonical order while hidden and archived modules consume no positions", () => {

@@ -17,7 +17,7 @@ import {
   watchNewTaskRunTab,
   type NewTaskRunTabWatch,
 } from "../../../../../features/work-items";
-import type { WorkItem } from "../../../../../shared/api/types";
+import type { WorkItem } from "../../../../../features/work-items";
 import { IconPlay } from "../../../../../shared/ui/icons";
 import { KeyBadge } from "../../../../../shared/ui/KeyChordHint";
 import { useGlobalShortcutLabel } from "../../../../navigation/useGlobalShortcutLabel";
@@ -42,8 +42,8 @@ export function NormalRunAction({
   const eligible =
     task.id !== TEMP_TASK_ID &&
     moduleId !== null &&
-    task.state !== null &&
-    launchBindingStates?.[task.issue_type]?.includes(task.state) === true;
+    task.state_id !== null &&
+    launchBindingStates?.[task.issue_type_id]?.includes(task.state_id) === true;
 
   if (!eligible) return null;
 

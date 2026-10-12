@@ -1,9 +1,6 @@
 import type { FetchPolicy } from "@apollo/client";
-import type { Module, OnboardingProject, Project } from "../../../shared/api/types";
-import {
-  compactWorktrackerId,
-  publicWorktrackerId,
-} from "../../../shared/api/generatedWorktracker";
+import type { Module, OnboardingProject, Project } from "../types";
+import { publicResult, serverVariables } from "../../../shared/api/worktrackerConversion";
 import { studioApolloClient } from "../../../shared/apollo/client";
 import {
   WorkTrackerOnboardingDocument,
@@ -26,49 +23,34 @@ export interface ProjectOpenReadOptions {
   readonly queryDeduplication?: boolean;
 }
 
-export function projectFromRow(
-  row: WorkTrackerProjectsQuery["projects"]["nodes"][number],
-): Project {
-  const { created_at: _createdAt, ...project } = row;
-  return {
-    ...project,
-    id: publicWorktrackerId(project.id),
-  };
-}
-
 export function projectsFromResult(result: WorkTrackerProjectsQuery): Project[] {
-  return result.projects.nodes
+  return publicResult(WorkTrackerProjectsDocument, result).projects.nodes
     .slice()
     .sort((left, right) =>
       left.created_at.localeCompare(right.created_at)
       || left.id.localeCompare(right.id)
-    )
-    .map(projectFromRow);
+    );
 }
 
 export function modulesFromProjectOpen(
   result: WorkTrackerProjectOpenQuery,
 ): Module[] {
-  const modules = result.modules.nodes
+  const converted = publicResult(WorkTrackerProjectOpenDocument, result);
+  const modules = converted.modules.nodes
     .filter((module) => !module.is_archived)
     .map((module): Module => ({
-      id: publicWorktrackerId(module.id),
-      name: module.name,
-      project_id: publicWorktrackerId(module.project_id),
-      sequence_id: module.sequence_id,
+      ...module,
       key: `${module.project?.slug ?? ""}-${module.sequence_id}`,
-      is_archived: module.is_archived,
-      issue_type: publicWorktrackerId(module.issue_type),
     }));
   const moduleIds = new Set(modules.map(({ id }) => id));
   const ranks = new Map(
-    result.module_presentations.nodes
+    converted.module_presentations.nodes
       .filter((presentation) =>
         presentation.rank !== ""
-        && moduleIds.has(publicWorktrackerId(presentation.module_id))
+        && moduleIds.has(presentation.module_id)
       )
       .map((presentation) => [
-        publicWorktrackerId(presentation.module_id),
+        presentation.module_id,
         presentation.rank,
       ]),
   );
@@ -102,17 +84,17 @@ export async function readProjectOpen(
 ): Promise<ProjectOpenResult> {
   const { data } = await studioApolloClient().query({
     query: WorkTrackerProjectOpenDocument,
-    variables: { projectId: compactWorktrackerId(projectId) },
+    variables: serverVariables(WorkTrackerProjectOpenDocument, { projectId }),
     fetchPolicy,
     context: options.queryDeduplication === false
       ? { queryDeduplication: false }
       : undefined,
   });
-  const row = data!.project.nodes[0];
+  const row = publicResult(WorkTrackerProjectOpenDocument, data!).project.nodes[0];
   if (!row) throw new Error(`Project ${projectId} was not found.`);
   return {
     data: data!,
-    project: projectFromRow(row),
+    project: row,
     modules: modulesFromProjectOpen(data!),
   };
 }
@@ -129,8 +111,5 @@ export async function readOnboardingProjects(): Promise<OnboardingProject[]> {
     query: WorkTrackerOnboardingDocument,
     fetchPolicy: "network-only",
   });
-  return data!.projects.nodes.map((project) => ({
-    ...project,
-    id: publicWorktrackerId(project.id),
-  }));
+  return publicResult(WorkTrackerOnboardingDocument, data!).projects.nodes;
 }

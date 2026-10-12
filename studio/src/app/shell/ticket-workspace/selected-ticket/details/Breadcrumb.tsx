@@ -1,4 +1,5 @@
-import { type Project, type Module, type WorkItem } from "../../../../../shared/api/types";
+import { type Project, type Module } from "../../../../../features/projects";
+import type { WorkItem } from "../../../../../features/work-items";
 import { formatWorkItemDisplayIdentifier } from "../../../../../features/work-items";
 import ParentPicker from "./fields/ParentPicker";
 

@@ -1,11 +1,6 @@
-import type {
-  IssueType,
-  ScopedWorkflowSettings,
-  State,
-  SubtreeRunCapabilityMap,
-} from "../../../shared/api/types";
+import type { SubtreeRunCapabilityMap } from "../../settings";
+import type { IssueType, ScopedWorkflowSettings, State } from "../types";
 import type { FetchPolicy } from "@apollo/client";
-import { publicWorktrackerId } from "../../../shared/api/generatedWorktracker";
 import { assembleScopedWorkflowSettings } from "./scopedWorkflowSettings";
 import { issueType, readWorkflowCatalog, type WorkflowCatalog } from "./projectCatalog";
 
@@ -46,14 +41,14 @@ export function workflowSettingsFromCatalog(
   issueTypeId: string,
 ): ScopedWorkflowSettings {
   const selectedType = catalog.issueTypes.find(
-    (candidate) => publicWorktrackerId(candidate.id) === issueTypeId,
+    (candidate) => candidate.id === issueTypeId,
   );
   if (!selectedType) throw new Error("Work-item type not found.");
   const transitions = selectedType.transitions.nodes.map((transition) => ({
     id: transition.id,
-    issue_type: publicWorktrackerId(transition.issue_type),
-    from_state: publicWorktrackerId(transition.from_state),
-    to_state: publicWorktrackerId(transition.to_state),
+    issue_type: transition.issue_type,
+    from_state: transition.from_state,
+    to_state: transition.to_state,
     agent_allowed: transition.agent_allowed,
     handoff: transition.handoff,
     from_order: transition.fromState?.sort_order ?? Number.MAX_SAFE_INTEGER,

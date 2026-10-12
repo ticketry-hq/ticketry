@@ -78,16 +78,16 @@ describe("overhaul acceptance — Run Now", () => {
       ],
     });
     http.workItems([
-      workItem({ id: "click-idea", name: "Click idea", state: ideas }),
-      workItem({ id: "key-idea", name: "Keyboard idea", state: ideas }),
-      workItem({ id: "refusal-idea", name: "Refusal idea", state: ideas }),
-      workItem({ id: "refresh-idea", name: "Refresh idea", state: ideas }),
-      workItem({ id: "ticketed-story", name: "Ticketed story", state: tickets }),
+      workItem({ id: "click-idea", name: "Click idea", state_id: ideas }),
+      workItem({ id: "key-idea", name: "Keyboard idea", state_id: ideas }),
+      workItem({ id: "refusal-idea", name: "Refusal idea", state_id: ideas }),
+      workItem({ id: "refresh-idea", name: "Refresh idea", state_id: ideas }),
+      workItem({ id: "ticketed-story", name: "Ticketed story", state_id: tickets }),
       workItem({
         id: "implementation-idea",
         name: "Implementation idea",
-        state: ideas,
-        issue_type: {
+        state_id: ideas,
+        issue_type_id: {
           id: "implementation",
           name: "Implementation",
           level: "task",
@@ -95,7 +95,7 @@ describe("overhaul acceptance — Run Now", () => {
           sort_order: 2,
         },
       }),
-      workItem({ id: "state-catalog", name: "State catalog", state: implement }),
+      workItem({ id: "state-catalog", name: "State catalog", state_id: implement }),
     ]);
     useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
     mountStudio({
@@ -269,31 +269,31 @@ describe("overhaul acceptance — Run Now", () => {
       ],
     });
     http.workItems([
-      workItem({ id: "active-parent", name: "Active parent", state: ideas }),
+      workItem({ id: "active-parent", name: "Active parent", state_id: ideas }),
       workItem({
         id: "active-child",
         name: "Active child",
-        state: ideas,
+        state_id: ideas,
         parent_id: "active-parent",
       }),
-      workItem({ id: "completed-parent", name: "Completed parent", state: ideas }),
+      workItem({ id: "completed-parent", name: "Completed parent", state_id: ideas }),
       workItem({
         id: "completed-child",
         name: "Completed child",
-        state: done,
+        state_id: done,
         parent_id: "completed-parent",
       }),
-      workItem({ id: "archived-parent", name: "Archived parent", state: ideas }),
+      workItem({ id: "archived-parent", name: "Archived parent", state_id: ideas }),
       workItem({
         id: "archived-child",
         name: "Archived child",
-        state: ideas,
+        state_id: ideas,
         parent_id: "archived-parent",
         is_archived: true,
       }),
-      workItem({ id: "childless-story", name: "Childless story", state: ideas }),
-      workItem({ id: "stale-story", name: "Stale story", state: ideas }),
-      workItem({ id: "state-catalog", name: "State catalog", state: implement }),
+      workItem({ id: "childless-story", name: "Childless story", state_id: ideas }),
+      workItem({ id: "stale-story", name: "Stale story", state_id: ideas }),
+      workItem({ id: "state-catalog", name: "State catalog", state_id: implement }),
     ]);
     useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
     mountStudio({
@@ -360,15 +360,15 @@ describe("overhaul acceptance — Run Now", () => {
       order: rootIds,
     });
     http.workItems([
-      workItem({ id: "click-story", name: "Click story", key: "MEML-11", sequence_id: 11, state: ideas }),
-      workItem({ id: "key-story", name: "Keyboard story", key: "MEML-12", sequence_id: 12, state: ideas }),
-      workItem({ id: "late-story", name: "Late story", key: "MEML-13", sequence_id: 13, state: ideas }),
-      workItem({ id: "unconfigured-story", name: "Unconfigured story", state: ideas }),
+      workItem({ id: "click-story", name: "Click story", key: "MEML-11", sequence_id: 11, state_id: ideas }),
+      workItem({ id: "key-story", name: "Keyboard story", key: "MEML-12", sequence_id: 12, state_id: ideas }),
+      workItem({ id: "late-story", name: "Late story", key: "MEML-13", sequence_id: 13, state_id: ideas }),
+      workItem({ id: "unconfigured-story", name: "Unconfigured story", state_id: ideas }),
       workItem({
         id: "implementation-catalog",
         name: "Implementation catalog",
-        state: implement,
-        issue_type: implementation,
+        state_id: implement,
+        issue_type_id: implementation,
       }),
     ]);
     useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
@@ -397,8 +397,8 @@ describe("overhaul acceptance — Run Now", () => {
         id,
         name,
         key: `MEML-${sequenceId}`,
-        issue_type: "implementation",
-        state: "implement",
+        issue_type_id: "implementation",
+        state_id: "implement",
       });
       // The Stories list regroups the same row under Implement without a reload.
       const row = within(stories).getByRole("treeitem", { name: new RegExp(name) });

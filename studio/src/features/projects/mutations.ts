@@ -1,6 +1,7 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { apiErrorMessage } from "../../shared/api/errors";
-import { compactWorktrackerId, publicWorktrackerId } from "../../shared/api/generatedWorktracker";
+import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
+import { serverVariables } from "../../shared/api/worktrackerConversion";
 import { studioApolloClient } from "../../shared/apollo/client";
 import { toast } from "../../state/clientStore";
 import { reorderModulePresentation } from "./modulePresentationTransport";
@@ -29,7 +30,9 @@ function subscribePending(listener: () => void): () => void {
 
 function optimisticModuleOrder(projectId: string, order: readonly string[], layerId: string): void {
   const client = studioApolloClient();
-  const variables = { projectId: compactWorktrackerId(projectId) };
+  const variables = serverVariables(WorkTrackerProjectOpenDocument, { projectId });
+  // Apollo optimistic rows retain server IDs; these cache-only conversions do
+  // not convert feature results or transport operation variables.
   client.cache.batch({
     optimistic: layerId,
     update(cache) {
@@ -114,8 +117,8 @@ async function persistModuleReorder(
         });
         const retryPlan = planModuleReorder(
           authoritative,
-          publicWorktrackerId(moduleId),
-          publicWorktrackerId(targetId),
+          moduleId,
+          targetId,
           intent,
         );
         if (!retryPlan) return;
@@ -160,8 +163,8 @@ export function useReorderModule(projectId: string | null): ModuleReorderControl
       if (projectId === null || pendingCount > 0) return;
       const plan = planModuleReorder(
         getModulesSnapshot(projectId),
-        publicWorktrackerId(moduleId),
-        publicWorktrackerId(targetId),
+        moduleId,
+        targetId,
         intent,
       );
       if (plan) {

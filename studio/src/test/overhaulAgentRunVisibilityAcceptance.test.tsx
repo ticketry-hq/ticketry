@@ -79,12 +79,12 @@ describe("overhaul acceptance - acknowledged Agent Run visibility", () => {
       workItem({
         id: TASK,
         name: "Launch exactly one visible run",
-        state: { id: "ideas", name: "Ideas", group: "backlog", color: null },
+        state_id: { id: "ideas", name: "Ideas", group: "backlog", color: null },
       }),
       workItem({
         id: "state-catalog",
         name: "Implement state",
-        state: {
+        state_id: {
           id: "implement",
           name: "Implement",
           group: "started",

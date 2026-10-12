@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { ScopedWorkflowSettings, State } from "../../shared/api/types";
+import type { ScopedWorkflowSettings, State } from "./types";
 import { storyGuideStages, type StoryGuideStage } from "./storyGuideStages";
 
 function StageEntry({ stage }: { stage: StoryGuideStage }) {

@@ -1,22 +1,10 @@
-import type { IssueType, ScopedWorkflowSettings, State } from "../../../shared/api/types";
-import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
-
-interface CatalogProvider { id: string; slug: string; activated?: boolean }
-interface CatalogModel { id: string; provider: string; name: string }
-interface CatalogReasoning { id: string; name: string }
-interface Transition { from_state: string; to_state: string; agent_allowed?: boolean; handoff?: boolean }
-interface Binding {
-  issue_type: string;
-  state: string;
-  prompt?: string;
-  required_skills?: unknown;
-  stage_skills?: unknown;
-  profile?: string | null;
-  model?: string | null;
-  reasoning?: string | null;
-  auto_start?: boolean;
-  subtree_run_enabled?: boolean;
-}
+import type { IssueType, ScopedWorkflowSettings, State, LaunchBinding, WorkflowTransition } from "../types";
+import type { WorkTrackerProjectOpenQuery } from "../../projects";
+type CatalogProvider = WorkTrackerProjectOpenQuery["provider_catalog"]["providers"][number];
+type CatalogModel = WorkTrackerProjectOpenQuery["provider_catalog"]["agent_models"][number];
+type CatalogReasoning = WorkTrackerProjectOpenQuery["provider_catalog"]["reasoning_levels"][number];
+type Transition = Pick<WorkflowTransition, "from_state" | "to_state" | "agent_allowed" | "handoff">;
+type Binding = LaunchBinding;
 
 function reachable(start: string | null, transitions: ScopedWorkflowSettings["transitions"]): Set<string> {
   if (!start) return new Set();
@@ -45,19 +33,9 @@ export function assembleScopedWorkflowSettings(
   reasoningLevels: CatalogReasoning[],
   hasGlobalDefault: boolean,
 ): ScopedWorkflowSettings {
-  // Catalog rows arrive with the server's compact UUIDs while binding rows are
-  // normalized to the hyphenated public form. Key both sides compactly so a
-  // stored model/reasoning id still resolves to its catalog row; keying on the
-  // raw strings silently dropped every saved model and reasoning selection.
-  const providerById = new Map(
-    providers.map((provider) => [compactWorktrackerId(provider.id), provider]),
-  );
-  const modelById = new Map(
-    models.map((model) => [compactWorktrackerId(model.id), model]),
-  );
-  const reasoningById = new Map(
-    reasoningLevels.map((level) => [compactWorktrackerId(level.id), level]),
-  );
+  const providerById = new Map(providers.map((provider) => [provider.id, provider]));
+  const modelById = new Map(models.map((model) => [model.id, model]));
+  const reasoningById = new Map(reasoningLevels.map((level) => [level.id, level]));
   const scopedTransitions = transitions.map((transition) => ({
     from_state_id: transition.from_state,
     to_state_id: transition.to_state,
@@ -66,10 +44,10 @@ export function assembleScopedWorkflowSettings(
   }));
   const scopedBindings = bindings.filter((binding) => binding.issue_type === issueType.id).map((binding) => {
     const model = binding.model
-      ? modelById.get(compactWorktrackerId(binding.model))
+      ? modelById.get(binding.model)
       : undefined;
     const provider = binding.profile ? providers.find((item) => item.slug === "codex") : model
-      ? providerById.get(compactWorktrackerId(model.provider))
+      ? providerById.get(model.provider)
         ?? providers.find((item) => item.slug === model.provider)
       : undefined;
     return {
@@ -85,7 +63,7 @@ export function assembleScopedWorkflowSettings(
       profile: binding.profile ?? null,
       model: model?.name ?? null,
       reasoning: binding.reasoning
-        ? reasoningById.get(compactWorktrackerId(binding.reasoning))?.name ?? null
+        ? reasoningById.get(binding.reasoning)?.name ?? null
         : null,
       auto_start: binding.auto_start ?? false,
       subtree_run_enabled: binding.subtree_run_enabled ?? false,

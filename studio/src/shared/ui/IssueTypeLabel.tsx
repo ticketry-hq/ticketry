@@ -1,7 +1,6 @@
-import type { IssueType } from "../api/types";
-
 interface IssueTypeLabelProps {
-  issueType: Pick<IssueType, "level" | "name">;
+  /** Presentation inputs only; the caller owns its issue-type row. */
+  issueType: { level: string; name: string };
 }
 
 export function IssueTypeLabel({ issueType }: IssueTypeLabelProps) {

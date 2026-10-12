@@ -12,7 +12,7 @@ import {
   useSubtreeRunCapabilitiesQuery,
 } from "../../../../../../features/settings";
 import { readWorkItem } from "../../../../../../features/work-items";
-import type { WorkItem } from "../../../../../../shared/api/types";
+import type { WorkItem } from "../../../../../../features/work-items";
 import { stateById, useCachedStates } from "../../../../../../features/projects";
 
 /**
@@ -24,13 +24,13 @@ export function useSubtreeRunEligibility(item: WorkItem, moduleId: string | null
   // One row per work item mounts this; the query dedups so they share a single
   // request rather than each firing its own.
   const { data: capabilityMap } = useSubtreeRunCapabilitiesQuery(item.project_id);
-  const enabledStates = capabilityMap?.[item.issue_type];
+  const enabledStates = capabilityMap?.[item.issue_type_id];
   return (
     item.id !== TEMP_TASK_ID &&
     moduleId !== null &&
     item.sub_issues_count > 0 &&
-    item.state !== null &&
-    enabledStates?.includes(item.state) === true
+    item.state_id !== null &&
+    enabledStates?.includes(item.state_id) === true
   );
 }
 
@@ -106,7 +106,7 @@ export function useSubtreeRunLaunch({
           // rejection or suppress its feedback.
           readWorkItem(item.id).catch(() => item),
         ]);
-        const stateId = freshItem.state ?? item.state;
+        const stateId = freshItem.state_id ?? item.state_id;
         const stateName = stateById(states, stateId)?.name;
         toast.error(
           stateName

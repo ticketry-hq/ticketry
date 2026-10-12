@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { studioApolloClient } from "../../../../shared/apollo/client";
 import { compactWorktrackerId } from "../../../../shared/api/generatedWorktracker";
+import type { State } from "../../../workflows";
 import { getStatesSnapshot, seedStates } from "../../../../features/projects";
 import { useAgentStatusStore } from "../testStore";
 import { readAgentStatusHolding } from "../apolloHolding";
@@ -20,10 +21,20 @@ import {
 import { WorktreeStatusDocument } from "../../worktrees/generated/worktreeStatus.documents";
 import { CurrentWorktreesDocument } from "../../worktrees/generated/currentWorktrees.documents";
 import { WorkTrackerProjectOpenDocument } from "../../../projects/generated/projects.documents";
+import { PlanningGraphDocument } from "../../../planning-graph";
+import { WorkTrackerModuleOpenDocument } from "../../../work-items";
+import { projectOpenFixture } from "../../../../test/projectOpenFixture";
 import { recordLocalWorkItemConvergence } from "../../../work-items/workItemConvergence";
 
 const PROJECT = "11111111-1111-1111-1111-111111111111";
 const OTHER_PROJECT = "22222222-2222-2222-2222-222222222222";
+
+const catalogFields = {
+  project: PROJECT,
+  is_protected: false,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-02T00:00:00Z",
+} satisfies Pick<State, "project" | "is_protected" | "created_at" | "updated_at">;
 
 interface Subscription {
   readonly id: string;
@@ -376,7 +387,10 @@ describe("WorkItem convergence", () => {
       variables: { projectId: compactWorktrackerId(PROJECT) },
       context: { queryDeduplication: false },
     }));
-    expect(refreshTaskCollection).not.toHaveBeenCalled();
+    expect(refreshTaskCollection).toHaveBeenCalledTimes(1);
+    expect(refreshTaskCollection).toHaveBeenCalledWith(expect.objectContaining({
+      include: [PlanningGraphDocument],
+    }));
   });
 
   it("batches the canonical entity and refreshes the collection only on membership changes", async () => {
@@ -418,7 +432,10 @@ describe("WorkItem convergence", () => {
     expect(refresh.mock.calls.map(([options]) => options?.variables)).toEqual([
       { id: "item-2" },
     ]);
-    expect(refreshCollection).toHaveBeenCalledTimes(1);
+    expect(refreshCollection.mock.calls.map(([options]) => options.include)).toEqual([
+      [PlanningGraphDocument],
+      [WorkTrackerModuleOpenDocument],
+    ]);
   });
 
   it("refreshes only the module named by a membership fact", async () => {
@@ -443,10 +460,13 @@ describe("WorkItem convergence", () => {
       { id: "item-1" },
       { moduleId: "module-1" },
     ]);
-    expect(broadRefresh).not.toHaveBeenCalled();
+    expect(broadRefresh).toHaveBeenCalledTimes(1);
+    expect(broadRefresh).toHaveBeenCalledWith(expect.objectContaining({
+      include: [PlanningGraphDocument],
+    }));
   });
 
-  it("does not repeat a refresh for the exact server version a mutation adopted", async () => {
+  it("does not repeat canonical adoption but refreshes planning membership for a locally adopted version", async () => {
     const transport = harness();
     const client = studioApolloClient();
     const refresh = vi.spyOn(client, "query").mockResolvedValue({} as never);
@@ -467,7 +487,10 @@ describe("WorkItem convergence", () => {
     await vi.advanceTimersByTimeAsync(60);
 
     expect(refresh).not.toHaveBeenCalled();
-    expect(broadRefresh).not.toHaveBeenCalled();
+    expect(broadRefresh).toHaveBeenCalledTimes(1);
+    expect(broadRefresh).toHaveBeenCalledWith(expect.objectContaining({
+      include: [PlanningGraphDocument],
+    }));
 
     transport.send(
       event(12, "work_item.changed", {
@@ -521,7 +544,10 @@ describe("WorkItem convergence", () => {
     expect(evict).toHaveBeenCalledWith({
       id: client.cache.identify({ __typename: "WorktrackerIssue", id: "item-9" }),
     });
-    expect(refreshCollection).toHaveBeenCalledTimes(1);
+    expect(refreshCollection.mock.calls.map(([options]) => options.include)).toEqual([
+      [PlanningGraphDocument],
+      [WorkTrackerModuleOpenDocument],
+    ]);
   });
 });
 
@@ -535,7 +561,8 @@ describe("workflow convergence", () => {
         group: "backlog",
         color: "#111111",
         sort_order: 0,
-      } as never,
+        ...catalogFields,
+      },
     ]);
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
@@ -555,21 +582,119 @@ describe("workflow convergence", () => {
 
     expect(getStatesSnapshot(PROJECT)).toEqual([
       {
+        __typename: "WorktrackerState",
         id: "state-1",
         name: "Ready",
         group: "unstarted",
         color: "#222222",
         sort_order: 3,
-        is_protected: false,
+        ...catalogFields,
       },
     ]);
+  });
+
+  it("reads a canonical catalog row when a fact introduces an unknown state", async () => {
+    const transport = harness();
+    seedStates(PROJECT, []);
+    statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
+    await vi.advanceTimersByTimeAsync(0);
+    const canonical = {
+      id: "state-new", name: "Ready", group: "unstarted", color: "#222222",
+      sort_order: 3, ...catalogFields, is_protected: true,
+    };
+    const fixture = projectOpenFixture({ id: PROJECT, name: "Project", slug: "P", description: "", created_at: "2026-01-01T00:00:00Z" }, []);
+    const query = vi.spyOn(studioApolloClient(), "query").mockResolvedValue({
+      data: { ...fixture.data, states: { nodes: [canonical] } },
+    });
+
+    transport.send(event(11, "workflow_state.changed", {
+      stateId: "state-new",
+      state: { id: "state-new", name: "Ready", group: "unstarted", color: "#222222", sort_order: 3 },
+    }));
+    expect(getStatesSnapshot(PROJECT)).toEqual([]);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(query).toHaveBeenCalledWith(expect.objectContaining({
+      query: WorkTrackerProjectOpenDocument,
+      fetchPolicy: "no-cache",
+    }));
+    expect(getStatesSnapshot(PROJECT)).toEqual([{ __typename: "WorktrackerState", ...canonical }]);
+  });
+
+  it("hydrates an unknown state after an unrelated existing-state rename", async () => {
+    const transport = harness();
+    const existing = {
+      id: "state-existing", name: "Backlog", group: "backlog", color: "#111111",
+      sort_order: 0, ...catalogFields,
+    };
+    const introduced = {
+      id: "state-new", name: "Ready", group: "unstarted", color: "#222222",
+      sort_order: 3, ...catalogFields, is_protected: true,
+    };
+    seedStates(PROJECT, [existing]);
+    statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
+    await vi.advanceTimersByTimeAsync(0);
+    const fixture = projectOpenFixture({ id: PROJECT, name: "Project", slug: "P", description: "", created_at: "2026-01-01T00:00:00Z" }, []);
+    const response = { data: { ...fixture.data, states: { nodes: [existing, introduced] } } };
+    const renamed = { ...existing, name: "Renamed backlog" };
+    let resolveRead!: (result: typeof response) => void;
+    vi.spyOn(studioApolloClient(), "query")
+      .mockReturnValueOnce(new Promise((resolve) => { resolveRead = resolve; }))
+      .mockResolvedValue({ data: { ...fixture.data, states: { nodes: [renamed, introduced] } } });
+
+    transport.send(event(11, "workflow_state.changed", {
+      stateId: introduced.id,
+      state: { id: introduced.id, name: introduced.name, group: introduced.group, color: introduced.color, sort_order: introduced.sort_order },
+    }));
+    transport.send(event(12, "workflow_state.changed", {
+      stateId: existing.id,
+      state: { id: existing.id, name: renamed.name, group: existing.group, color: existing.color, sort_order: existing.sort_order },
+    }));
+    resolveRead(response);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(getStatesSnapshot(PROJECT)).toEqual([
+      { __typename: "WorktrackerState", ...renamed },
+      { __typename: "WorktrackerState", ...introduced },
+    ]);
+  });
+
+  it("discards an unknown-state catalog response after a newer deletion", async () => {
+    const transport = harness();
+    seedStates(PROJECT, []);
+    statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
+    await vi.advanceTimersByTimeAsync(0);
+    const canonical = {
+      id: "state-new", name: "Ready", group: "unstarted", color: "#222222",
+      sort_order: 3, ...catalogFields, is_protected: true,
+    };
+    const fixture = projectOpenFixture({ id: PROJECT, name: "Project", slug: "P", description: "", created_at: "2026-01-01T00:00:00Z" }, []);
+    const response = { data: { ...fixture.data, states: { nodes: [canonical] } } };
+    let resolveRead!: (result: typeof response) => void;
+    let resolveFreshRead!: (result: typeof response) => void;
+    vi.spyOn(studioApolloClient(), "query")
+      .mockReturnValueOnce(new Promise((resolve) => { resolveRead = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveFreshRead = resolve; }));
+
+    transport.send(event(11, "workflow_state.changed", {
+      stateId: "state-new",
+      state: { id: "state-new", name: "Ready", group: "unstarted", color: "#222222", sort_order: 3 },
+    }));
+    transport.send(event(12, "workflow_state.deleted", { stateId: "state-new" }));
+    resolveRead(response);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(getStatesSnapshot(PROJECT)).toEqual([]);
+    resolveFreshRead({ data: { ...fixture.data, states: { nodes: [] } } });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getStatesSnapshot(PROJECT)).toEqual([]);
   });
 
   it("removes a deleted state from the one cached catalog", async () => {
     const transport = harness();
     seedStates(PROJECT, [
-      { id: "state-1", name: "Backlog", group: "backlog", color: "#111111", sort_order: 0 } as never,
-      { id: "state-2", name: "Done", group: "completed", color: "#222222", sort_order: 1 } as never,
+      { id: "state-1", name: "Backlog", group: "backlog", color: "#111111", sort_order: 0, ...catalogFields },
+      { id: "state-2", name: "Done", group: "completed", color: "#222222", sort_order: 1, ...catalogFields },
     ]);
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);
@@ -679,7 +804,7 @@ describe("connection lifecycle", () => {
   it("buffers newer facts through a reset and applies only those above the baseline", async () => {
     const transport = harness();
     seedStates(PROJECT, [
-      { id: "state-1", name: "Backlog", group: "backlog", color: "#000000", sort_order: 0 } as never,
+      { id: "state-1", name: "Backlog", group: "backlog", color: "#000000", sort_order: 0, ...catalogFields },
     ]);
     statusStreamFeed.start(PROJECT, { createProxy: transport.createProxy });
     await vi.advanceTimersByTimeAsync(0);

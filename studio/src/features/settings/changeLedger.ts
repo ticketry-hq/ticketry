@@ -1,11 +1,5 @@
-import type {
-  IssueType,
-  ProviderCatalog,
-  ScopedWorkflowLaunchBinding,
-  ScopedWorkflowSettings,
-  ScopedWorkflowTransition,
-  State,
-} from "../../shared/api/types";
+import type { ProviderCatalog } from "./providerTypes";
+import type { IssueType, ScopedWorkflowLaunchBinding, ScopedWorkflowSettings, ScopedWorkflowTransition, State } from "../workflows";
 
 export type SettingsLedgerTone = "pending" | "applied";
 

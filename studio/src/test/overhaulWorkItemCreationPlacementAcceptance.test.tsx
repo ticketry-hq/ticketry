@@ -39,8 +39,8 @@ describe("work-item creation placement acceptance", () => {
       id: existingId,
       name: "Existing first Story",
       rank: "M",
-      state: readyState,
-      issue_type: storyType,
+      state_id: readyState,
+      issue_type_id: storyType,
     });
     const created = workItem({
       id: createdId,
@@ -48,8 +48,8 @@ describe("work-item creation placement acceptance", () => {
       key: "MEML-2",
       sequence_id: 2,
       rank: "A",
-      state: readyState,
-      issue_type: storyType,
+      state_id: readyState,
+      issue_type_id: storyType,
     });
     http.tree("module-1", {
       rootIds: [existingId],

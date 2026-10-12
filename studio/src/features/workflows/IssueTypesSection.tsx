@@ -1,11 +1,6 @@
+import type { IssueTypeMetadata } from "./types";
 import { useEffect, useMemo, useState } from "react";
-import type {
-  IssueType,
-  ScopedWorkflowImpact,
-  ScopedWorkflowImpactOperation,
-  ScopedWorkflowSettings,
-  State,
-} from "../../shared/api/types";
+import type { ScopedWorkflowImpact, ScopedWorkflowImpactOperation, ScopedWorkflowSettings, State } from "./types";
 import { useWorkflowEditorStore } from "./workflowEditorStore";
 import { workflowMemberStateIds } from "./workflowMembership";
 import { StateLaunchConfiguration } from "./StateLaunchConfiguration";
@@ -241,7 +236,7 @@ interface WorkflowSourceGroupProps {
   controlErrors: Record<string, string>;
   expandedLaunch: boolean;
   expandedTransition: string | null;
-  issueType: IssueType;
+  issueType: IssueTypeMetadata;
   onToggleLaunch: () => void;
   onToggleTransition: (key: string) => void;
   providerCapabilities: ReturnType<typeof useWorkflowEditorStore.getState>["providerCapabilities"];
@@ -386,7 +381,7 @@ interface AddDestinationProps {
   action: string | null;
   addTransition: WorkflowSourceGroupProps["addTransition"];
   controlErrors: Record<string, string>;
-  issueType: IssueType;
+  issueType: IssueTypeMetadata;
   outgoing: ScopedWorkflowSettings["transitions"];
   source: State;
   states: State[];

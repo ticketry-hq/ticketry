@@ -1,14 +1,11 @@
+import type { WorkItem } from "./workItemView";
 import { skipToken, useQuery } from "@apollo/client/react";
 import { useSyncExternalStore } from "react";
 import { launchFailureMessage } from "../agents/terminal";
 import { toast, useClientStore } from "../../state/clientStore";
-import type {
-  IssueType,
-  ScopedWorkflowSettings,
-  State,
-  WorkItem,
-} from "../../shared/api/types";
+import type { IssueType, ScopedWorkflowSettings, State } from "../workflows";
 import { compactWorktrackerId, publicWorktrackerId } from "../../shared/api/generatedWorktracker";
+import { publicResult, serverVariables } from "../../shared/api/worktrackerConversion";
 import { studioApolloClient } from "../../shared/apollo/client";
 import { getStatesSnapshot } from "../../features/projects";
 import { getIssueTypesSnapshot } from "../settings";
@@ -22,7 +19,7 @@ import {
 } from "./taskRunTabActivation";
 import { WorkTrackerProjectOpenDocument } from "../projects";
 import { WorkTrackerModuleOpenDocument } from "./generated/workItems.documents";
-import { workItemFromIssue } from "./issueAdapter";
+import { workItemView } from "./workItemView";
 import { getWorkItemSnapshot } from "./queries";
 
 type WorkflowTransitions = ScopedWorkflowSettings["transitions"];
@@ -62,7 +59,7 @@ export function useRunNowTransitions(
     WorkTrackerProjectOpenDocument,
     enabled && issueTypeId
       ? {
-          variables: { projectId: compactWorktrackerId(projectId) },
+          variables: serverVariables(WorkTrackerProjectOpenDocument, { projectId }),
           client: studioApolloClient(),
           fetchPolicy: "cache-first",
         }
@@ -96,13 +93,13 @@ export function isRunNowEligible(
   issueTypes: readonly IssueType[],
   transitions: WorkflowTransitions | undefined,
 ): boolean {
-  const issueType = issueTypes.find((candidate) => candidate.id === item.issue_type);
+  const issueType = issueTypes.find((candidate) => candidate.id === item.issue_type_id);
   const ideas = namedState(states, "Ideas");
   const implement = namedState(states, "Implement");
   return (
     issueType?.name === "Story" &&
     !item.has_children &&
-    item.state === ideas?.id &&
+    item.state_id === ideas?.id &&
     transitions?.some(
       (transition) =>
         transition.from_state_id === ideas.id &&
@@ -193,7 +190,7 @@ export function startRunNow(item: WorkItem, moduleId: string | null): boolean {
     returnPartialData: true,
   });
   const type = projectOpen?.issue_types?.nodes.find(
-    (candidate) => publicWorktrackerId(candidate.id) === item.issue_type,
+    (candidate) => publicWorktrackerId(candidate.id) === item.issue_type_id,
   );
   const transitions = type?.transitions.nodes.map((transition) => ({
     from_state_id: publicWorktrackerId(transition.from_state),
@@ -243,16 +240,17 @@ export function startRunNowForSelectedItem(): boolean {
   const opened = ui.selectedModuleId
     ? studioApolloClient().readQuery({
         query: WorkTrackerModuleOpenDocument,
-        variables: { moduleId: compactWorktrackerId(ui.selectedModuleId) },
+        variables: serverVariables(WorkTrackerModuleOpenDocument, { moduleId: ui.selectedModuleId }),
         optimistic: true,
         returnPartialData: true,
       })
     : undefined;
-  const row = opened?.work_items?.nodes.find(
-    (candidate) => publicWorktrackerId(candidate.id) === ui.selectedTaskId,
+  const converted = opened ? publicResult(WorkTrackerModuleOpenDocument, opened) : undefined;
+  const row = converted?.work_items?.nodes.find(
+    (candidate) => candidate.id === ui.selectedTaskId,
   );
   const item = row
-    ? workItemFromIssue(row)
+    ? workItemView(row)
     : getWorkItemSnapshot(ui.selectedTaskId);
   return item ? startRunNow(item, ui.selectedModuleId) : false;
 }

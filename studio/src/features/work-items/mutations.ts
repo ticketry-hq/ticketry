@@ -1,13 +1,19 @@
+import type { WorkItem } from "./workItemView";
 import { useCallback, useState } from "react";
-import type { IssueType, State, WorkItem, WorkItemCreate } from "../../shared/api/types";
-import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
+import type { WorkItemCreateVariables } from "./types";
+import type { IssueType, State } from "../workflows";
 import { studioApolloClient } from "../../shared/apollo/client";
-import {
-  GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
-  WorkTrackerModuleOpenDocument,
+import type {
+  GeneratedWorkTrackerWorkItemFieldsFragment,
+  UpdateWorkTrackerWorkItemDetailsMutationVariables,
+  ReparentWorkTrackerWorkItemMutationVariables,
+  SetWorkTrackerBlockersMutationVariables,
+  ReorderWorkTrackerWorkItemMutationVariables,
+  TransitionWorkTrackerWorkItemMutationVariables,
 } from "./generated/workItems.documents";
-import type { GeneratedWorkTrackerWorkItemFieldsFragment } from "./generated/workItems.documents";
 import { rankBetween } from "./utilities/rank";
+import { cachedIssue, cachedModuleIssue } from "./internal/mutationCache";
+import { optimisticIssueType, optimisticParent, optimisticBlockers } from "./internal/optimisticUpdates";
 import {
   createWorkItem,
   reparentWorkItem,
@@ -38,20 +44,6 @@ type OptimisticIssue<TVariables> = (
   current: GeneratedWorkTrackerWorkItemFieldsFragment,
   variables: TVariables,
 ) => GeneratedWorkTrackerWorkItemFieldsFragment;
-
-function cachedIssue(id: string): GeneratedWorkTrackerWorkItemFieldsFragment | undefined {
-  const client = studioApolloClient();
-  const cacheId = client.cache.identify({
-    __typename: "WorktrackerIssue",
-    id: compactWorktrackerId(id),
-  });
-  if (!cacheId) return undefined;
-  return client.readFragment({
-    id: cacheId,
-    fragment: GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
-    optimistic: true,
-  }) ?? undefined;
-}
 
 function useApolloWorkItemMutation<TVariables>(
   execute: (
@@ -113,55 +105,45 @@ function useApolloWorkItemMutation<TVariables>(
   };
 }
 
-export interface RenameWorkItemArgs { id: string; name: string }
+export type RenameWorkItemArgs = Pick<UpdateWorkTrackerWorkItemDetailsMutationVariables, "id"> & Required<Pick<UpdateWorkTrackerWorkItemDetailsMutationVariables, "name">>;
 
 export function useRenameWorkItem() {
   return useApolloWorkItemMutation(
     ({ id, name }: RenameWorkItemArgs, optimistic) =>
-      updateWorkItem(id, { name }, { optimistic }),
+      updateWorkItem({ id, name }, { optimistic }),
     ({ id }: RenameWorkItemArgs) => id,
-    (current, { name }) => ({ ...current, name }),
+    (current, { name }) => ({ ...current, name: name ?? "" }),
   );
 }
 
-export interface EditWorkItemDescriptionArgs { id: string; description: string | null }
+export type EditWorkItemDescriptionArgs = Pick<UpdateWorkTrackerWorkItemDetailsMutationVariables, "id"> & Required<Pick<UpdateWorkTrackerWorkItemDetailsMutationVariables, "description">>;
 
 export function useEditWorkItemDescription() {
   return useApolloWorkItemMutation(
     ({ id, description }: EditWorkItemDescriptionArgs, optimistic) =>
-      updateWorkItem(id, { description }, { optimistic }),
+      updateWorkItem({ id, description }, { optimistic }),
     ({ id }: EditWorkItemDescriptionArgs) => id,
     (current, { description }) => ({ ...current, description: description ?? "" }),
   );
 }
 
-export interface ChangeWorkItemTypeArgs { id: string; issueType: IssueType }
+export type ChangeWorkItemTypeArgs = Pick<UpdateWorkTrackerWorkItemDetailsMutationVariables, "id"> & { issueType: IssueType };
 
 export function useChangeWorkItemType() {
   return useApolloWorkItemMutation(
     ({ id, issueType }: ChangeWorkItemTypeArgs, optimistic) =>
-      updateWorkItem(id, { issue_type_id: issueType.id }, { optimistic }),
+      updateWorkItem({ id, issueTypeId: issueType.id }, { optimistic }),
     ({ id }: ChangeWorkItemTypeArgs) => id,
-    (current, { issueType }) => ({
-      ...current,
-      issue_type_id: compactWorktrackerId(issueType.id),
-      issue_type_record: {
-        id: compactWorktrackerId(issueType.id),
-        name: issueType.name,
-        level: issueType.level,
-        color: issueType.color ?? "",
-        sort_order: issueType.sort_order,
-      },
-    }),
+    (current, { issueType }) => optimisticIssueType(current, issueType),
   );
 }
 
-export interface SetWorkItemStateArgs { id: string; state: State & { id: string } }
+export type SetWorkItemStateArgs = Pick<TransitionWorkTrackerWorkItemMutationVariables, "id"> & { state: State & { id: string } };
 
 export function useSetWorkItemState() {
   return useApolloWorkItemMutation(
     ({ id, state }: SetWorkItemStateArgs, optimistic) =>
-      transitionWorkItem(id, state.id, {
+      transitionWorkItem({ id, targetStateId: state.id }, {
         optimistic,
         moduleId: optimistic?.module_id ?? undefined,
       }),
@@ -174,16 +156,12 @@ export function useSetWorkItemState() {
   );
 }
 
-export interface SetWorkItemParentArgs {
-  id: string;
-  parentId: string | null;
-  moduleId?: string;
-}
+export type SetWorkItemParentArgs = Pick<ReparentWorkTrackerWorkItemMutationVariables, "id"> & Required<Pick<ReparentWorkTrackerWorkItemMutationVariables, "parentId">> & { moduleId?: string };
 
 export function useSetWorkItemParent(memberships: readonly ModuleMembership[]) {
   return useApolloWorkItemMutation(
     ({ id, parentId, moduleId }: SetWorkItemParentArgs, optimistic) =>
-      reparentWorkItem(id, parentId, {
+      reparentWorkItem({ id, parentId }, {
         optimistic,
         moduleIds: [
           ...memberships.map((membership) => membership.moduleId),
@@ -191,45 +169,28 @@ export function useSetWorkItemParent(memberships: readonly ModuleMembership[]) {
         ],
       }),
     ({ id }: SetWorkItemParentArgs) => id,
-    (current, { parentId }) => ({
-      ...current,
-      parent_id: parentId ? compactWorktrackerId(parentId) : null,
-    }),
+    (current, { parentId }) => optimisticParent(current, parentId),
   );
 }
 
-export interface SetWorkItemBlockersArgs { id: string; blockedByIds: string[] }
-
-let optimisticBlockerEdgeSequence = 0;
+export type SetWorkItemBlockersArgs = SetWorkTrackerBlockersMutationVariables;
 
 export function useSetWorkItemBlockers() {
   return useApolloWorkItemMutation(
     ({ id, blockedByIds }: SetWorkItemBlockersArgs, optimistic) =>
-      setWorkItemBlockers(id, blockedByIds, {
+      setWorkItemBlockers({ id, blockedByIds }, {
         optimistic,
         moduleId: optimistic?.module_id ?? undefined,
       }),
     ({ id }: SetWorkItemBlockersArgs) => id,
-    (current, { blockedByIds }) => ({
-      ...current,
-      blocked_by_edges: {
-        nodes: blockedByIds.map((id) => ({
-          id: -(++optimisticBlockerEdgeSequence),
-          to_issue_id: compactWorktrackerId(id),
-        })),
-      },
-    }),
+    (current, { blockedByIds }) => optimisticBlockers(current, blockedByIds),
   );
 }
 
-export interface ReorderWorkItemArgs {
-  id: string;
-  beforeId: string | null;
-  afterId: string | null;
-}
+export type ReorderWorkItemArgs = Pick<ReorderWorkTrackerWorkItemMutationVariables, "id"> & Required<Pick<ReorderWorkTrackerWorkItemMutationVariables, "beforeId" | "afterId">>;
 
-function cachedRank(id: string | null): string | null {
-  if (id === null) return null;
+function cachedRank(id: string | null | undefined): string | null {
+  if (id == null) return null;
   const rank = cachedIssue(id)?.rank;
   if (rank === undefined) {
     throw new Error(`Cannot optimistically reorder without rank for ${id}`);
@@ -237,26 +198,11 @@ function cachedRank(id: string | null): string | null {
   return rank;
 }
 
-function cachedModuleIssue(
-  membership: ModuleMembership,
-  id: string,
-): GeneratedWorkTrackerWorkItemFieldsFragment | undefined {
-  return studioApolloClient().readQuery({
-    query: WorkTrackerModuleOpenDocument,
-    variables: { moduleId: compactWorktrackerId(membership.moduleId) },
-    optimistic: true,
-    returnPartialData: true,
-  })?.work_items?.nodes.find(
-    (candidate) => candidate.id === compactWorktrackerId(id) || candidate.id === id,
-  );
-}
-
 export function useReorderWorkItem(membership: ModuleMembership) {
   return useApolloWorkItemMutation(
     ({ id, beforeId, afterId }: ReorderWorkItemArgs, optimistic) =>
       reorderWorkItem(
-        id,
-        { before_id: beforeId, after_id: afterId },
+        { id, beforeId, afterId },
         { optimistic, moduleId: membership.moduleId },
       ),
     ({ id }: ReorderWorkItemArgs) => id,
@@ -291,9 +237,8 @@ export function useReorderWorkItem(membership: ModuleMembership) {
 
 export function useCreateWorkItem(membership: ModuleMembership) {
   return useApolloWorkItemMutation(
-    (body: WorkItemCreate) => createWorkItem(
-      membership.projectId,
-      body,
+    (body: WorkItemCreateVariables) => createWorkItem(
+      { ...body, projectId: membership.projectId },
       {
         optimistic: optimisticCreatedIssue(studioApolloClient().cache, membership, body),
         moduleId: membership.moduleId,

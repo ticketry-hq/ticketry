@@ -1,4 +1,4 @@
-import type { ProviderCapabilities } from "../../shared/api/types";
+import type { ProviderCapabilities } from "../settings";
 import { SETTINGS_FIELD_CLASS } from "../../shared/ui/SettingsPrimitives";
 
 export interface LaunchDefaultPickerValue {

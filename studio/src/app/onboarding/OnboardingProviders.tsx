@@ -3,7 +3,7 @@ import { apiErrorMessage } from "../../shared/api/errors";
 import type {
   ConfigurableProvider,
   ProviderCatalog,
-} from "../../shared/api/types";
+} from "../../features/settings";
 import {
   LaunchDefaultPicker,
   type LaunchDefaultPickerValue,

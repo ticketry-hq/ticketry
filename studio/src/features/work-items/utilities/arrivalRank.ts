@@ -1,6 +1,7 @@
 import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
 import { rankBetween } from "./rank";
 
+/** Rank selector input carries only placement/archive facts, not a full WorkItem record. */
 interface ArrivalRankItem {
   readonly state_id: string | null;
   readonly rank: string;

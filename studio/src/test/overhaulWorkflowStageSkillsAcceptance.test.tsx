@@ -1,12 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { LaunchConfigurationForm } from "../features/workflows/LaunchConfigurationForm";
-import type {
-  IssueType,
-  LaunchBindingInput,
-  ScopedWorkflowLaunchBinding,
-  State,
-} from "../shared/api/types";
+import type { IssueType, LaunchBindingInput, ScopedWorkflowLaunchBinding, State } from "../features/workflows";
 
 const issueType = { id: "story", name: "Story" } as IssueType;
 const state = { id: "spec", name: "Spec" } as State;

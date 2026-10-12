@@ -9,7 +9,9 @@ import { useStudioStore } from "../features/projects";
 import { useClientStore } from "../state/clientStore";
 
 const graph = {
-  project: { __typename: "WorktrackerProjectConnection", nodes: [{ __typename: "WorktrackerProject", id: "project-1", name: "Planning", slug: "PLAN" }] },
+  project: { __typename: "WorktrackerProjectConnection", nodes: [{
+    created_at: "2026-01-01T00:00:00Z",
+    description: "", __typename: "WorktrackerProject", id: "project-1", name: "Planning", slug: "PLAN" }] },
   states: { __typename: "WorktrackerStateConnection", nodes: [] },
   issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [] },
   modules: { __typename: "WorktrackerIssueConnection", nodes: [{ __typename: "WorktrackerIssue", id: "module-1", name: "Module", sequenceId: 1,

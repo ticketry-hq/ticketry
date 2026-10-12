@@ -7,6 +7,7 @@
  * `null` — it is skipped rather than guessed at, and the caller leaves its
  * holding untouched.
  */
+import type { State } from "../../../workflows";
 import type {
   AutomationAttemptPayload,
   RunHoldingPayload,
@@ -75,13 +76,8 @@ export interface WorkflowStateFact {
   readonly state: WorkflowStateRow | null;
 }
 
-export interface WorkflowStateRow {
-  readonly id: string;
-  readonly name: string;
-  readonly group: string;
-  readonly color: string;
-  readonly sort_order: number;
-}
+/** Durable-event reconciliation view selects only the generated state fields the event carries. */
+export type WorkflowStateRow = Readonly<Pick<State, "id" | "name" | "group" | "color" | "sort_order">>;
 
 export interface AutomationAttemptFact {
   readonly family: "automation_attempt";

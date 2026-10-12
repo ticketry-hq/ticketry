@@ -1,6 +1,6 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { State } from "../shared/api/types";
+import type { State } from "../features/workflows";
 import { fixture, mountStudio, workItem } from "./seam";
 
 describe("overhaul acceptance — workflow-state colors", () => {
@@ -13,6 +13,10 @@ describe("overhaul acceptance — workflow-state colors", () => {
         group: "backlog",
         color: "#60646C",
         sort_order: 0,
+        project: "project-1",
+        is_protected: false,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
         sequenceId: 1,
       },
       {
@@ -21,6 +25,10 @@ describe("overhaul acceptance — workflow-state colors", () => {
         group: "backlog",
         color: "#FA4D56",
         sort_order: 1,
+        project: "project-1",
+        is_protected: false,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
         sequenceId: 2,
       },
       {
@@ -29,6 +37,10 @@ describe("overhaul acceptance — workflow-state colors", () => {
         group: "started",
         color: "#08BDBA",
         sort_order: 5,
+        project: "project-1",
+        is_protected: false,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
         sequenceId: 3,
       },
       {
@@ -37,6 +49,10 @@ describe("overhaul acceptance — workflow-state colors", () => {
         group: "unstarted",
         color: "#C0FFEE",
         sort_order: 6,
+        project: "project-1",
+        is_protected: false,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
         sequenceId: 4,
       },
     ];
@@ -54,7 +70,7 @@ describe("overhaul acceptance — workflow-state colors", () => {
           name: `${state.name} work`,
           key: `MEML-${state.sequenceId}`,
           sequence_id: state.sequenceId,
-          state,
+          state_id: state,
         }),
       ),
     );

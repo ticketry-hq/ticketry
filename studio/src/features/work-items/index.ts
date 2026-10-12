@@ -1,3 +1,5 @@
+export type { ModuleTree, WorkItemFilters, WorkItemCreateVariables } from "./types";
+export type { WorkItem, WorkItemDerived, WorkItemRow as GeneratedWorkItemRow } from "./workItemView";
 // Retained work-item state and workspace interfaces. The retired backlog view
 // and its composition are intentionally absent from this public surface.
 export {
@@ -114,3 +116,6 @@ export { watchNewTaskRunTab, type NewTaskRunTabWatch } from "./taskRunTabActivat
 export { consumeLocalWorkItemConvergence } from "./workItemConvergence";
 export { usePlanWorkItem } from "./planMutation";
 export { usePlanWritePending } from "./planWriteGuard";
+
+export { WorkItemNotFoundError } from "./workItemBatcher";
+export type { Attachment } from "./attachmentView";

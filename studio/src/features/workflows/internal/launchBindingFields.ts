@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { ScopedWorkflowLaunchBinding } from "../../../shared/api/types";
+import type { ScopedWorkflowLaunchBinding } from "../types";
 
-/** The editable fields of one state's launch configuration. */
+/** Unsaved form draft uses empty strings for unset provider choices and excludes server-owned identities. */
 export interface LaunchBindingFields {
   prompt: string;
   stageSkills: string[];

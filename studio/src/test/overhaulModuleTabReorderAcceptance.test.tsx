@@ -38,7 +38,7 @@ vi.mock("../features/projects/modulePresentationTransport", async () => {
 });
 
 import { useAgentStatusStore } from "../features/agents/status/testStore";
-import type { WorkItem } from "../shared/api/types";
+import type { WorkItem } from "../features/work-items";
 import { useClientStore } from "../state/clientStore";
 import {
   dataTransfer,

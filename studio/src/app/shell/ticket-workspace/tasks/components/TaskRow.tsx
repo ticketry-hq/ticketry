@@ -89,7 +89,7 @@ function WorkItemPlanningRow({
       expandable={row.expandable}
       expanded={row.expanded}
       identifier={formatWorkItemDisplayIdentifier(task.sequence_id)}
-      stateColor={stateById(states, task.state)?.color ?? null}
+      stateColor={stateById(states, task.state_id)?.color ?? null}
       name={task.name}
       isSelected={isSelected}
       onClick={onClick}

@@ -1,13 +1,13 @@
 import { skipToken, useQuery } from "@apollo/client/react";
 import { useEffect, useState } from "react";
-import type { Module, Project, ProjectCreate, ProjectPatch } from "../../../shared/api/types";
+import type { Module, Project, ProjectCreate, ProjectPatch, ProjectCreateResult } from "../types";
 import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
+import { serverVariables } from "../../../shared/api/worktrackerConversion";
 import { studioApolloClient } from "../../../shared/apollo/client";
 import {
   WorkTrackerProjectOpenDocument,
   WorkTrackerProjectsDocument,
 } from "../generated/projects.documents";
-import type { WorkTrackerProjectsQuery } from "../generated/projects.documents";
 import {
   createProject as writeProject,
   deleteProject as removeProject,
@@ -33,7 +33,7 @@ export function getModulesSnapshot(projectId: string | null): Module[] {
   if (!projectId) return [];
   const data = studioApolloClient().readQuery({
     query: WorkTrackerProjectOpenDocument,
-    variables: { projectId: compactWorktrackerId(projectId) },
+    variables: serverVariables(WorkTrackerProjectOpenDocument, { projectId }),
     optimistic: true,
   });
   return data ? modulesFromProjectOpen(data) : [];
@@ -52,7 +52,7 @@ export async function loadModules(
   const opened = await readProjectOpen(projectId, "network-only", options);
   studioApolloClient().writeQuery({
     query: WorkTrackerProjectOpenDocument,
-    variables: { projectId: compactWorktrackerId(projectId) },
+    variables: serverVariables(WorkTrackerProjectOpenDocument, { projectId }),
     data: opened.data,
   });
   const ordered = opened.modules;
@@ -73,7 +73,7 @@ export function useCachedModules(projectId: string | null): Module[] {
     WorkTrackerProjectOpenDocument,
     projectId
       ? {
-          variables: { projectId: compactWorktrackerId(projectId) },
+          variables: serverVariables(WorkTrackerProjectOpenDocument, { projectId }),
           client: studioApolloClient(),
           fetchPolicy: "cache-only",
         }
@@ -100,7 +100,7 @@ export function useModulesQuery(projectId: string | null) {
     WorkTrackerProjectOpenDocument,
     projectId
       ? {
-          variables: { projectId: compactWorktrackerId(projectId) },
+          variables: serverVariables(WorkTrackerProjectOpenDocument, { projectId }),
           client: studioApolloClient(),
           fetchPolicy: "cache-only",
         }
@@ -142,24 +142,25 @@ export function useModulesQuery(projectId: string | null) {
   };
 }
 
-export async function createProjectRecord(body: ProjectCreate): Promise<Project> {
+export async function createProjectRecord(body: ProjectCreate): Promise<ProjectCreateResult> {
   const created = await writeProject(body);
-  const projects = getProjectsSnapshot();
-  seedProjects(projects.some((project) => project.id === created.id)
-    ? projects
-    : [...projects, created]);
+  // A refresh failure must not turn a committed creation into a failed write.
+  await loadProjects().catch(() => {});
   return created;
 }
 
-export async function updateProjectRecord(
-  id: string,
-  patch: ProjectPatch,
-): Promise<Project> {
-  const updated = await writeProjectUpdate(id, patch);
-  seedProjects(getProjectsSnapshot().map((project) =>
-    project.id === id ? updated : project
-  ));
-  return updated;
+export async function updateProjectRecord(variables: ProjectPatch): Promise<Project> {
+  const updated = await writeProjectUpdate(variables);
+  const projects = getProjectsSnapshot();
+  const current = projects.find(({ id }) => id === updated.id);
+  if (current) {
+    const project = { ...current, ...updated };
+    seedProjects(projects.map((row) => row.id === project.id ? project : row));
+    return project;
+  }
+  const project = (await loadProjects()).find(({ id }) => id === updated.id);
+  if (!project) throw new Error(`Project ${updated.id} was not found after update.`);
+  return project;
 }
 
 export async function deleteProjectRecord(id: string): Promise<void> {
@@ -175,26 +176,25 @@ export async function deleteProjectRecord(id: string): Promise<void> {
 }
 
 export function seedProjects(projects: Project[]): void {
-  studioApolloClient().writeQuery({
-    query: WorkTrackerProjectsDocument,
-    data: {
-      projects: {
-        __typename: "WorktrackerProjectConnection",
-        nodes: projects.map((project, index) => ({
-          __typename: "WorktrackerProject",
-          id: compactWorktrackerId(project.id),
-          name: project.name,
-          slug: project.slug,
-          description: project.description,
-          created_at: new Date(index).toISOString(),
-        })),
-      },
-    } as unknown as WorkTrackerProjectsQuery,
-  });
+  const data = {
+    projects: {
+      __typename: "WorktrackerProjectConnection",
+      nodes: projects.map((project) => ({
+        ...project,
+        __typename: "WorktrackerProject",
+        id: compactWorktrackerId(project.id),
+        name: project.name,
+        slug: project.slug,
+        description: project.description,
+        created_at: project.created_at,
+      })),
+    },
+  };
+  studioApolloClient().writeQuery({ query: WorkTrackerProjectsDocument, data });
 }
 
 export function seedModules(projectId: string, modules: Module[]): void {
-  const variables = { projectId: compactWorktrackerId(projectId) };
+  const variables = serverVariables(WorkTrackerProjectOpenDocument, { projectId });
   const current = studioApolloClient().readQuery({
     query: WorkTrackerProjectOpenDocument,
     variables,
@@ -207,7 +207,8 @@ export function seedModules(projectId: string, modules: Module[]): void {
       ...current,
       modules: {
         ...current.modules,
-        nodes: modules.map((module, index) => ({
+        nodes: modules.map(({ key, ...module }, index) => ({
+          ...current.modules.nodes.find(({ id }) => id === compactWorktrackerId(module.id)),
           __typename: "WorktrackerIssue" as const,
           id: compactWorktrackerId(module.id),
           name: module.name,
@@ -219,7 +220,7 @@ export function seedModules(projectId: string, modules: Module[]): void {
           project: {
             __typename: "WorktrackerProject" as const,
             id: compactWorktrackerId(projectId),
-            slug: current.project.nodes[0]?.slug ?? module.key.split("-")[0] ?? "",
+            slug: current.project.nodes[0]?.slug ?? key.split("-")[0] ?? "",
           },
         })),
       },

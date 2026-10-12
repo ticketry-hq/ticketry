@@ -1,5 +1,6 @@
+import type { WorkItem } from "../workItemView";
 import { useLayoutEffect, useMemo } from "react";
-import type { WorkItem } from "../../../shared/api/types";
+
 import { useClientStore } from "../../../state/clientStore";
 import { useStudioStore } from "../../projects";
 import {

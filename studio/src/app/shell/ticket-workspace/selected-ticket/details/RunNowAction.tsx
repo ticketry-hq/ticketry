@@ -1,4 +1,5 @@
-import type { IssueType, State, WorkItem } from "../../../../../shared/api/types";
+import type { IssueType, State } from "../../../../../features/workflows";
+import type { WorkItem } from "../../../../../features/work-items";
 import {
   isRunNowEligible,
   startRunNow,
@@ -19,11 +20,11 @@ export function RunNowAction({
   states: readonly State[];
   issueTypes: readonly IssueType[];
 }) {
-  const issueType = issueTypes.find((candidate) => candidate.id === item.issue_type);
-  const currentState = states.find((candidate) => candidate.id === item.state);
+  const issueType = issueTypes.find((candidate) => candidate.id === item.issue_type_id);
+  const currentState = states.find((candidate) => candidate.id === item.state_id);
   const transitions = useRunNowTransitions(
     item.project_id,
-    item.issue_type,
+    item.issue_type_id,
     issueType?.name === "Story" && currentState?.name === "Ideas",
   );
   const pending = useRunNowPending(item.id);

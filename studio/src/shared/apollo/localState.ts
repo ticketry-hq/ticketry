@@ -52,7 +52,7 @@ export function createApolloStore<T>(
   },
 ): ApolloStore<T> {
   const listeners = new Set<StateListener<T>>();
-  const derived = new WeakMap<object, T>();
+  let derived = new WeakMap<object, T>();
   const derive = (state: T): T => {
     if (!adapters) return state;
     const key = state as object;
@@ -104,6 +104,9 @@ export function createApolloStore<T>(
     if (Object.is(nextState, previousState)) return;
     adapters?.prepare(nextState, previousState);
     write(nextState);
+    // A write routed only to server rows can leave this row unchanged, so the
+    // cached wrapper would hide the new server state from subscribers.
+    if (adapters) derived = new WeakMap();
     // Adapted stores expose derived fields on read wrappers. Legacy subscribers
     // still receive the mutable written value before Apollo copies it.
     for (const listener of listeners) listener(adapters ? getState() : nextState, previousState);

@@ -29,7 +29,8 @@ import { useAgentStatusStore } from "../features/agents/status/testStore";
 import { useStudioStore } from "../features/projects/store";
 import { useModalStore } from "../app/modal/modalStore";
 import { createBrowserRuntime, initializeStudioRuntime } from "../runtime";
-import type { Module, ModulePresentation, Project } from "../shared/api/types";
+import type { Module, Project } from "../features/projects";
+import type { ModulePresentation } from "../features/projects";
 import {
   resetStudioApolloClient,
   studioApolloClient,
@@ -40,12 +41,15 @@ import { projectOpenFixture } from "./projectOpenFixture";
 
 const PROJECT_ID = "project-1";
 const PROJECT: Project = {
+  created_at: "2026-01-01T00:00:00Z",
   id: PROJECT_ID,
   name: "Project",
   slug: "PRJ",
   description: "",
 };
 const MODULES: Module[] = ["Alpha", "Bravo", "Charlie"].map((name, index) => ({
+    rank: "",
+    project: null,
   id: "module-" + name[0]!.toLowerCase(),
   name,
   project_id: PROJECT_ID,

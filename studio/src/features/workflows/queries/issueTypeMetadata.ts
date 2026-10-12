@@ -1,9 +1,12 @@
 import { gql } from "@apollo/client";
-import type { IssueType } from "../../../shared/api/types";
+import type { IssueTypeMetadata } from "../types";
+import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
+import type { WorkTrackerProjectOpenQuery } from "../../projects";
+import { serverVariables } from "../../../shared/api/worktrackerConversion";
 import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../../../shared/apollo/client";
 
-export const WorkTrackerProjectIssueTypeMetadataDocument = gql`
+export const WorkTrackerProjectIssueTypeMetadataDocument: TypedDocumentNode<WorkTrackerProjectIssueTypeMetadataQuery, { projectId: string }> = gql`
   query WorkTrackerProjectIssueTypeMetadata($projectId: String!) {
     issue_types: worktrackerIssuetype(
       filters: { projectId: { eq: $projectId } }
@@ -25,21 +28,13 @@ export const WorkTrackerProjectIssueTypeMetadataDocument = gql`
 
 export interface WorkTrackerProjectIssueTypeMetadataQuery {
   issue_types: {
-    nodes: Array<{
-      id: string;
-      project: string;
-      name: string;
-      level: string;
-      color: string;
-      sort_order: number;
-      start_state: string | null;
-      workflow_revision: number;
-    }>;
+    nodes: Array<Pick<WorkTrackerProjectOpenQuery["issue_types"]["nodes"][number],
+      "id" | "project" | "name" | "level" | "color" | "sort_order" | "start_state" | "workflow_revision">>;
   };
 }
 
 /** Metadata edits must not copy optimistic relationships or invent empty ones. */
-export function setIssueTypeMetadata(projectId: string, issueTypes: IssueType[]): void {
+export function setIssueTypeMetadata(projectId: string, issueTypes: IssueTypeMetadata[]): void {
   const data = {
     issue_types: {
       __typename: "WorktrackerIssuetypeConnection",
@@ -58,7 +53,7 @@ export function setIssueTypeMetadata(projectId: string, issueTypes: IssueType[])
   };
   studioApolloClient().writeQuery({
     query: WorkTrackerProjectIssueTypeMetadataDocument,
-    variables: { projectId: compactWorktrackerId(projectId) },
+    variables: serverVariables(WorkTrackerProjectIssueTypeMetadataDocument, { projectId }),
     data,
   });
 }

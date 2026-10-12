@@ -128,7 +128,10 @@ setStatesSorted("project-1", [{
   id: "state-1",
   name: "Ideas",
   group: "backlog",
-  color: null,
+  color: "",
+  project: "project-1",
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
   sort_order: 0,
   is_protected: false,
 }]);

@@ -53,8 +53,8 @@ vi.mock("../features/work-items/mutationTransport", async () => {
   >("../features/work-items/mutationTransport");
   return {
     ...actual,
-    createWorkItem: (projectId: string, body: { name?: string; issue_type_id?: string }) =>
-      api.createModule(projectId, body.name, body.issue_type_id),
+    createWorkItem: (input: Parameters<typeof actual.createWorkItem>[0]) =>
+      api.createModule(input.projectId, input.name, input.issueTypeId),
   };
 });
 
@@ -244,6 +244,7 @@ describe("onboarding and module-folder acceptance", () => {
     api.createProject
       .mockRejectedValueOnce(new Error("temporary failure"))
       .mockResolvedValueOnce({
+        created_at: "2026-01-01T00:00:00Z",
         id: "project-1",
         name: "Coding",
         slug: "CDN",

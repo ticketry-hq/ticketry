@@ -16,7 +16,9 @@ import { fixture, mountStudio } from "./seam";
 
 function cacheEmptyPlan() {
   const data = {
-    project: { __typename: "WorktrackerProjectConnection", nodes: [{ __typename: "WorktrackerProject", id: "project-1", name: "Planner", slug: "PLAN" }] },
+    project: { __typename: "WorktrackerProjectConnection", nodes: [{
+    created_at: "2026-01-01T00:00:00Z",
+    description: "", __typename: "WorktrackerProject", id: "project-1", name: "Planner", slug: "PLAN" }] },
     states: { __typename: "WorktrackerStateConnection", nodes: [] }, issueTypes: { __typename: "WorktrackerIssuetypeConnection", nodes: [] }, modules: { __typename: "WorktrackerIssueConnection", nodes: [] },
     workItems: { __typename: "WorktrackerIssueConnection", nodes: [] }, sprints: { __typename: "WorktrackerSprintConnection", nodes: [] },
   };

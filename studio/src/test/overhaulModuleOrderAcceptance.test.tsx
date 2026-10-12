@@ -34,7 +34,8 @@ vi.mock("../features/projects/queries/readTransport", async () => {
         ) ?? false;
         project = cachedProject
           ? { ...cachedProject, id: projectId, manual_module_order: manualModuleOrder }
-          : { id: projectId, name: "Project", slug: "PRJ", description: "", manual_module_order: false };
+          : {
+    created_at: "2026-01-01T00:00:00Z", id: projectId, name: "Project", slug: "PRJ", description: "", manual_module_order: false };
       }
       if (!project) throw new Error(`Project ${projectId} was not found.`);
       return projectOpenFixture(project, modules);
@@ -55,7 +56,7 @@ import {
 import { useStudioStore } from "../features/projects/store";
 import * as api from "./legacyApiFixture";
 import { resetStudioApolloClient } from "../shared/apollo/client";
-import type { Module, Project } from "../shared/api/types";
+import type { Module, Project } from "../features/projects";
 import { useClientStore } from "../state/clientStore";
 
 const listModules = api.listModules as ReturnType<typeof vi.fn>;
@@ -70,20 +71,23 @@ const SERVER_ORDER: Module[] = [
   { id: "module-c", name: "Charlie", sequence_id: 3 },
 ].map((module) => ({
   ...module,
+  rank: "",
+  project: null,
   project_id: PROJECT_ID,
   key: module.id.toUpperCase(),
   is_archived: false,
   issue_type: "module",
-})) as unknown as Module[];
+}));
 
-function project(manual_module_order: boolean): Project {
+function project(manual_module_order: boolean): Project & { readonly manual_module_order: boolean } {
   return {
+    created_at: "2026-01-01T00:00:00Z",
     id: PROJECT_ID,
     name: "Project",
     slug: "PRJ",
     description: "",
     manual_module_order,
-  } as Project;
+  };
 }
 
 /**

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { WorkItem } from "./types";
+import type { WorkItem } from "./workItemView";
 import {
   createWorkItemBatcher,
   WorkItemNotFoundError,

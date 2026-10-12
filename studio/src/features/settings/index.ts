@@ -26,3 +26,4 @@ export {
   UpdateProviderCatalogDocument,
 } from "./generated/providerCatalog.documents";
 export type { LoadProviderCatalogQuery } from "./generated/providerCatalog.documents";
+export type { ProviderCapabilities, ProviderCatalog, ConfigurableProvider, GlobalLaunchDefault, SubtreeRunCapabilityMap } from "./providerTypes";

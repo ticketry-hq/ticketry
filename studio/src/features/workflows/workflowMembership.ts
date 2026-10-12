@@ -1,4 +1,4 @@
-import type { ScopedWorkflowSettings } from "../../shared/api/types";
+import type { ScopedWorkflowSettings } from "./types";
 
 /**
  * The workflow editor treats the start state and every state reachable through

@@ -6,10 +6,7 @@ import { readWorkflowSettings } from "../features/workflows/queries/readTranspor
 import { initializeStudioRuntime } from "../runtime";
 import { createBrowserRuntime } from "../runtime/browserRuntime";
 import { createDesktopRuntime } from "../runtime/desktopRuntime";
-import type {
-  LaunchBindingInput,
-  ScopedWorkflowLaunchBinding,
-} from "../shared/api/types";
+import type { LaunchBindingInput, ScopedWorkflowLaunchBinding } from "../features/workflows";
 
 vi.mock("../features/workflows/providerQueries", async (importOriginal) => ({
   ...await importOriginal<typeof import("../features/workflows/providerQueries")>(),

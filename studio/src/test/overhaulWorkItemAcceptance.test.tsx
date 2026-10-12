@@ -57,8 +57,12 @@ describe("overhaul acceptance — Stories and details", () => {
           id: "state-1",
           name: "Intake",
           group: "backlog",
-          color: null,
+          color: "",
           sort_order: 0,
+          is_protected: false,
+          project: "project-1",
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
         },
       ]);
     });
@@ -165,8 +169,8 @@ describe("overhaul acceptance — Stories and details", () => {
         id: "story-2",
         name: "New parent",
         key: "MEML-2",
-        issue_type: implementation,
-        state: review,
+        issue_type_id: implementation,
+        state_id: review,
         rank: "Z",
         sub_issues_count: 1,
       }),
@@ -211,8 +215,8 @@ describe("overhaul acceptance — Stories and details", () => {
         id: "story-1",
         name: "After",
         description: "Fresh copy",
-        issue_type: implementation,
-        state: review,
+        issue_type_id: implementation,
+        state_id: review,
         parent_id: "module-1",
         rank: "A",
       }),
@@ -220,8 +224,8 @@ describe("overhaul acceptance — Stories and details", () => {
         id: "story-2",
         name: "New parent",
         key: "MEML-2",
-        issue_type: implementation,
-        state: review,
+        issue_type_id: implementation,
+        state_id: review,
         rank: "Z",
         sub_issues_count: 0,
       }),
@@ -265,7 +269,7 @@ describe("overhaul acceptance — Stories and details", () => {
       order: ["story-1", "ideas-seed"],
     });
     http.workItems([
-      workItem({ id: "story-1", name: "Moving story", state: grill, rank: "Z" }),
+      workItem({ id: "story-1", name: "Moving story", state_id: grill, rank: "Z" }),
       workItem({
         id: "ideas-seed",
         name: "Already an idea",
@@ -327,7 +331,7 @@ describe("overhaul acceptance — Stories and details", () => {
         id: "implement-seed",
         name: "Already implementing",
         key: "MEML-2",
-        state: implement,
+        state_id: implement,
       }),
     ]);
     const patched = http.expectPatch("story-1", {
@@ -380,13 +384,13 @@ describe("overhaul acceptance — Stories and details", () => {
         id: "implement-seed",
         name: "Already implementing",
         key: "MEML-2",
-        state: implement,
+        state_id: implement,
       }),
       workItem({
         id: "done-seed",
         name: "Already done",
         key: "MEML-3",
-        state: done,
+        state_id: done,
       }),
     ]);
     mountStudio({ http });
@@ -452,7 +456,7 @@ describe("overhaul acceptance — Stories and details", () => {
         id: sourceId,
         name: "Move to Implement",
         rank: "Z",
-        state: {
+        state_id: {
           id: ideasId,
           name: "Ideas",
           group: "backlog",
@@ -465,7 +469,7 @@ describe("overhaul acceptance — Stories and details", () => {
         name: "Already implementing",
         key: "MEML-2",
         rank: "M",
-        state: {
+        state_id: {
           id: implementId,
           name: "Implement",
           group: "started",

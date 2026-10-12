@@ -9,7 +9,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import type { Module, ModulePresentation } from "../../shared/api/types";
+import type { Module } from "../projects";
+import type { ModulePresentation } from "../projects";
 import { hiddenModuleIds } from "./modulePresentation";
 import { useRestoreAndSelectModule } from "./useRestoreAndSelectModule";
 

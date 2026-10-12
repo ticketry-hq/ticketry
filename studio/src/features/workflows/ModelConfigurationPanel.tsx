@@ -26,7 +26,7 @@ import type {
   ConfigurableProvider,
   ProviderCapabilities,
   ProviderCatalog,
-} from "../../shared/api/types";
+} from "../settings";
 import {
   SETTINGS_CHECKBOX_CLASS,
   SETTINGS_FIELD_CLASS,

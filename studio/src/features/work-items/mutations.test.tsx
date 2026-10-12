@@ -90,10 +90,11 @@ describe("human workflow transition", () => {
     const mutationResponse = deferred<string>();
     const refetchResponse = deferred<string>();
     const requests: string[] = [];
+    const compactStateId = "123456781234123412341234567890ab";
     const moving = issue("moving", "doing", "kV");
     const authoritative = {
       ...moving,
-      state_id: "ready",
+      state_id: compactStateId,
       rank: "FV",
     };
     installTransport(async (request) => {
@@ -104,7 +105,7 @@ describe("human workflow transition", () => {
     });
     seedModule([
       moving,
-      issue("destination-first", "ready", "V"),
+      issue("destination-first", compactStateId, "V"),
     ]);
     const hook = renderHook(() => useSetWorkItemState());
 
@@ -113,19 +114,22 @@ describe("human workflow transition", () => {
       transition = hook.result.current.mutateAsync({
         id: moving.id,
         state: {
-          id: "ready",
+          id: "12345678-1234-1234-1234-1234567890ab",
           name: "Ready",
           group: "unstarted",
           color: "#999999",
           sort_order: 1,
           is_protected: false,
+          project: "project-1",
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
         },
       });
     });
 
     await waitFor(() => expect(requests).toHaveLength(1));
     expect(cachedIssue(moving.id)).toMatchObject({
-      state_id: "ready",
+      state_id: compactStateId,
       rank: "FV",
     });
 
@@ -140,7 +144,7 @@ describe("human workflow transition", () => {
           __typename: "WorktrackerIssueConnection",
           nodes: [
             authoritative,
-            issue("destination-first", "ready", "V"),
+            issue("destination-first", compactStateId, "V"),
           ],
         },
       },

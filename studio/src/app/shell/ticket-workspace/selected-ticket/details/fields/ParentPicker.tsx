@@ -1,6 +1,7 @@
 import { useModulesQuery, useStudioStore } from "../../../../../../features/projects";
 import { formatWorkItemDisplayIdentifier } from "../../../../../../features/work-items";
-import type { Module, WorkItem } from "../../../../../../shared/api/types";
+import type { Module } from "../../../../../../features/projects";
+import type { WorkItem } from "../../../../../../features/work-items";
 import { IconCornerDownRight } from "../../../../../../shared/ui/icons";
 import Popover from "../../../../../../shared/ui/Popover";
 import PickerTrigger from "./PickerTrigger";

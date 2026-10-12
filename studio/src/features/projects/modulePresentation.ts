@@ -1,27 +1,11 @@
 import { skipToken, useQuery } from "@apollo/client/react";
 
-import {
-  compactWorktrackerId,
-  publicWorktrackerId,
-} from "../../shared/api/generatedWorktracker";
-import type { Module, ModulePresentation } from "../../shared/api/types";
+import { publicResult, serverVariables } from "../../shared/api/worktrackerConversion";
+import type { ModulePresentation } from "./modulePresentationTypes";
+import type { Module } from "./types";
 import { studioApolloClient } from "../../shared/apollo/client";
 import { WorkTrackerProjectOpenDocument } from "./generated/projects.documents";
 import { getModulesSnapshot } from "./queries";
-
-function presentationsFromRows(
-  rows: ReadonlyArray<{
-    readonly module_id: string;
-    readonly rank: string;
-    readonly tab_hidden: boolean;
-  }>,
-): ModulePresentation[] {
-  return rows.map((presentation) => ({
-    module_id: publicWorktrackerId(presentation.module_id),
-    rank: presentation.rank,
-    tab_hidden: presentation.tab_hidden,
-  }));
-}
 
 export function useModulePresentations(
   projectId: string | null,
@@ -32,12 +16,12 @@ export function useModulePresentations(
       ? {
           client: studioApolloClient(),
           fetchPolicy: "cache-only",
-          variables: { projectId: compactWorktrackerId(projectId) },
+          variables: serverVariables(WorkTrackerProjectOpenDocument, { projectId }),
         }
       : skipToken,
   );
   return query.data
-    ? presentationsFromRows(query.data.module_presentations.nodes)
+    ? publicResult(WorkTrackerProjectOpenDocument, query.data).module_presentations.nodes
     : undefined;
 }
 
@@ -47,11 +31,11 @@ export function getModulePresentationsSnapshot(
   if (!projectId) return [];
   const data = studioApolloClient().readQuery({
     query: WorkTrackerProjectOpenDocument,
-    variables: { projectId: compactWorktrackerId(projectId) },
+    variables: serverVariables(WorkTrackerProjectOpenDocument, { projectId }),
     optimistic: true,
   });
   return data
-    ? presentationsFromRows(data.module_presentations.nodes)
+    ? publicResult(WorkTrackerProjectOpenDocument, data).module_presentations.nodes
     : [];
 }
 

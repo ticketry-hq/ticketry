@@ -1,4 +1,4 @@
-import type { WorkItem } from "../../../../../shared/api/types";
+import type { WorkItem } from "../../../../../features/work-items";
 import type { BlockerChip } from "../../../../../features/work-items";
 import BlockerChipView from "./BlockerChipView";
 import Field from "./Field";

@@ -264,6 +264,7 @@ async fn append_description_serializes_read_modify_write() {
                     id,
                     new_content: content.to_owned(),
                 },
+                None,
             )
             .await
         })

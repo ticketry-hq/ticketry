@@ -1,3 +1,4 @@
+use crate::work_management::database::begin_write;
 use std::collections::{HashMap, HashSet};
 
 use super::default_project_catalog;
@@ -9,8 +10,7 @@ use super::CommandError;
 use rand::seq::SliceRandom;
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection,
-    DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter, Set, TransactionTrait,
-    TryIntoModel,
+    DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter, Set, TryIntoModel,
 };
 use ticketry_entities::{issue, issue_type, project, state};
 
@@ -85,7 +85,7 @@ pub async fn create_project(
         )));
     }
 
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let id = new_database_uuid();
     let now = super::timestamp::now();
     project::ActiveModel {
@@ -172,7 +172,7 @@ pub async fn create_state(
     input: CreateState,
     facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let active = prepare_state_create(&transaction, input, facts).await?;
     let id = active.id.as_ref().to_owned();
     active.insert(&transaction).await?;
@@ -276,7 +276,7 @@ pub async fn update_issue_type(
     database: &DatabaseConnection,
     input: UpdateIssueType,
 ) -> Result<String, CommandError> {
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let active = prepare_issue_type_update(&transaction, input).await?;
     let id = active.id.as_ref().to_owned();
     active.update(&transaction).await?;
@@ -344,7 +344,7 @@ pub async fn delete_issue_type(
     reassign_to: Option<&str>,
 ) -> Result<(), CommandError> {
     let id = database_uuid(issue_type_id, "issue_type_id")?;
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let row = issue_type::Entity::find_by_id(&id)
         .one(&transaction)
         .await?
@@ -387,7 +387,7 @@ pub async fn update_state(
     input: UpdateState,
     facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let active = prepare_state_update(&transaction, input, facts).await?;
     let id = active.id.as_ref().to_owned();
     active.update(&transaction).await?;
@@ -459,7 +459,7 @@ pub async fn reorder_issue_types(
     project_id: &str,
     ordered_ids: Vec<String>,
 ) -> Result<(), CommandError> {
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     for (_, active) in prepare_issue_type_reorder(&transaction, project_id, ordered_ids).await? {
         active.update(&transaction).await?;
     }
@@ -534,7 +534,7 @@ pub async fn reorder_states(
     ordered_ids: Vec<String>,
     facts: Option<&WorkFactRecorder>,
 ) -> Result<(), CommandError> {
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     for (_, active) in prepare_state_reorder(&transaction, project_id, ordered_ids, facts).await? {
         active.update(&transaction).await?;
     }

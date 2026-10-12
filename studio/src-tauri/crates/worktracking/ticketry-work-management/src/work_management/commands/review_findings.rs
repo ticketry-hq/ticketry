@@ -1,6 +1,7 @@
+use crate::work_management::database::begin_write;
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    QueryOrder, Set, TransactionTrait,
+    QueryOrder, Set,
 };
 
 use super::identifiers::database_uuid;
@@ -51,7 +52,7 @@ pub async fn create_review_finding(
         });
     }
 
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let reservation = project::Entity::update_many()
         .col_expr(
             project::Column::StateRevision,

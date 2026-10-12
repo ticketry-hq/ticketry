@@ -12,12 +12,17 @@ import {
 import { loadWebDevDefaults } from "./web-dev-defaults.mjs";
 
 import {
+  buildGraphqlAdapterCommand,
+  buildWebChildEnvironment,
   buildWebDevelopmentEnvironment,
   buildWebFrontendCommand,
   buildWebHookRunnerCommand,
   cleanupTemporaryWebLaunch,
   configuredWebPort,
+  graphqlAdapterCargoArguments,
+  main,
   parseWebDevOptions,
+  planWebLaunch,
   selectWebPort,
   waitUntilGraphqlReady,
   withWebFileLogging,
@@ -359,4 +364,106 @@ test("web defaults reject the retired MCP TCP override", () => {
   } finally {
     rmSync(directory, { recursive: true });
   }
+});
+
+const adapterRunArguments = (features) => [
+  "run", "--locked", "--manifest-path", "studio/src-tauri/Cargo.toml",
+  "-p", "ticketry-dev-tools", ...features, "--bin", "ticketry_graphql_adapter",
+];
+
+test("web defaults may choose the edition", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ticketry-web-edition-default-"));
+  const configPath = path.join(directory, "web-defaults.json");
+  try {
+    writeFileSync(configPath, JSON.stringify({ environment: { TICKETRY_EDITION: "core" } }));
+    assert.equal(
+      loadWebDevDefaults({ configPath, environment: {} }).environment.TICKETRY_EDITION,
+      "core",
+    );
+    assert.equal(
+      loadWebDevDefaults({ configPath, environment: { TICKETRY_EDITION: "pocock" } })
+        .environment.TICKETRY_EDITION,
+      "pocock",
+    );
+  } finally {
+    rmSync(directory, { recursive: true });
+  }
+});
+
+test("bun run web launches Pocock by default without the core Cargo feature", () => {
+  const plan = planWebLaunch({ environment: { PRESERVED: "yes" } });
+  assert.equal(plan.editionBuild.edition, "pocock");
+  assert.equal(plan.editionBuild.description, "Edition: pocock (default)");
+  assert.deepEqual(plan.adapterCommand, ["cargo", ...adapterRunArguments([])]);
+  assert.equal(plan.adapterCommand.some((argument) => argument.includes("edition-core")), false);
+  assert.deepEqual(plan.environment, { PRESERVED: "yes", TICKETRY_EDITION: "pocock" });
+});
+
+test("bun run web builds the core adapter and frontend from one resolved edition", () => {
+  const plan = planWebLaunch({ environment: { TICKETRY_EDITION: "core" } });
+  assert.equal(plan.editionBuild.description, "Edition: core (explicit)");
+  assert.deepEqual(
+    plan.adapterCommand,
+    ["cargo", ...adapterRunArguments(["--features", "edition-core"])],
+  );
+  assert.equal(plan.environment.TICKETRY_EDITION, "core");
+
+  const launch = buildWebDevelopmentEnvironment({
+    cwd: "/repository",
+    environment: plan.environment,
+    resolveProductData: () => installedDataDirectory,
+  });
+  const child = buildWebChildEnvironment({
+    launch,
+    adapterPort: 8790,
+    hookRunner: "/hook",
+    logToFile: false,
+    logPath: "/log",
+  });
+  assert.equal(child.TICKETRY_EDITION, "core");
+  assert.equal(child.TICKETRY_GRAPHQL_ADAPTER_PORT, "8790");
+  assert.equal(child.TICKETRY_GRAPHQL_ADAPTER_HOOK_RUNNER, "/hook");
+  assert.equal(child.MUXED_VITE_GRAPHQL_ORIGIN, "http://127.0.0.1:8790");
+});
+
+test("a reused GraphQL adapter starts no adapter command", () => {
+  const plan = planWebLaunch({
+    environment: { TICKETRY_EDITION: "core" },
+    reuseGraphqlAdapter: true,
+  });
+  assert.equal(plan.adapterCommand, null);
+  assert.equal(plan.environment.TICKETRY_EDITION, "core");
+});
+
+test("a prebuilt adapter binary still runs as-is and the default arguments stay Pocock", () => {
+  assert.deepEqual(
+    buildGraphqlAdapterCommand({ TICKETRY_GRAPHQL_ADAPTER_BINARY: "/bin/adapter", TICKETRY_EDITION: "core" }),
+    ["/bin/adapter"],
+  );
+  assert.deepEqual(buildGraphqlAdapterCommand({}), ["cargo", ...adapterRunArguments([])]);
+  assert.equal(graphqlAdapterCargoArguments.includes("--features"), false);
+});
+
+test("an invalid edition stops bun run web before any child process starts", async () => {
+  const spawned = [];
+  const launcher = {
+    spawn: (...call) => { spawned.push(call); throw new Error("spawned"); },
+    spawnSync: (...call) => { spawned.push(call); throw new Error("spawned"); },
+  };
+  await assert.rejects(
+    main({
+      argv: [],
+      loadDefaults: () => ({
+        environment: { TICKETRY_EDITION: "Core" },
+        logToFile: false,
+        reuseGraphqlAdapter: false,
+      }),
+      launcher,
+    }),
+    (error) => error.message.includes("TICKETRY_EDITION")
+      && error.message.includes("pocock")
+      && error.message.includes("core"),
+  );
+  assert.deepEqual(spawned, []);
+  assert.throws(() => planWebLaunch({ environment: { TICKETRY_EDITION: "full" } }), /TICKETRY_EDITION/);
 });

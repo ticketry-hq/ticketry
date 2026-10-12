@@ -419,11 +419,40 @@ impl ExecutionHarness {
         .await
     }
 
-    /// Press a campaign the way an MCP caller does. An omitted mode keeps the
-    /// established parallel default.
+    /// Press a campaign the way an MCP caller does. The caller never chooses
+    /// the mode; the edition does: serial in Pocock, parallel where the edition
+    /// grants parallel subtree runs (see [`Self::parallel_subtree_runs`]).
     pub async fn execute(&self, root_id: &str) -> Value {
         self.mcp("execute_dependency_graph", json!({"root_task_id": root_id}))
             .await
+    }
+
+    /// Whether the edition under test runs subtrees in parallel. Where it does,
+    /// an omitted mode arms a parallel campaign; elsewhere (Pocock) it arms a
+    /// serial one and an explicit parallel press is refused (CODING-2865).
+    pub fn parallel_subtree_runs() -> bool {
+        ticketry_edition::has(ticketry_edition::EditionCapability::ParallelSubtreeRuns)
+    }
+
+    /// Press an explicitly parallel campaign the way core Studio does: read the
+    /// root's holding, then create an unarmed campaign or update an armed one.
+    /// Only editions with [`Self::parallel_subtree_runs`] accept it; Pocock
+    /// refuses the press, so parallel scheduling proofs are core-edition proofs.
+    pub async fn press_parallel(&self, root_id: &str) -> Value {
+        let holding = self
+            .graphql(STUDIO_HOLDING, json!({"rootId": root_id}))
+            .await;
+        let armed = holding["data"]["graph_run_holding"]["nodes"]
+            .as_array()
+            .unwrap_or_else(|| panic!("read the campaign holding: {holding}"))
+            .len()
+            == 1;
+        let press = if armed { STUDIO_UPDATE } else { STUDIO_CREATE };
+        self.graphql(
+            press,
+            json!({"rootId": root_id, "executionMode": "parallel"}),
+        )
+        .await
     }
 
     pub async fn graphql(&self, query: &str, variables: Value) -> Value {
@@ -457,6 +486,37 @@ impl ExecutionHarness {
         .expect("open the execution harness database")
     }
 }
+
+/// The holding Studio reads before deciding whether a press is a create or an
+/// update, and the two presses it then sends.
+const STUDIO_HOLDING: &str = r#"
+query Holding($rootId: String!) {
+  graph_run_holding: graphRuns(
+    filters: { rootId: { eq: $rootId } }
+    pagination: { offset: { limit: 1, offset: 0 } }
+  ) {
+    nodes { root_id: rootId execution_mode: executionMode }
+  }
+}
+"#;
+
+const STUDIO_CREATE: &str = r#"
+mutation Create($rootId: String!, $executionMode: String) {
+  graph_run_result: graph_run_create(root_id: $rootId, execution_mode: $executionMode) {
+    graph_run { root_id: rootId execution_mode: executionMode }
+    prepared: prepared_child_ids
+  }
+}
+"#;
+
+const STUDIO_UPDATE: &str = r#"
+mutation Update($rootId: String!, $executionMode: String) {
+  graph_run_result: graph_run_update(root_id: $rootId, execution_mode: $executionMode) {
+    graph_run { root_id: rootId execution_mode: executionMode }
+    prepared: prepared_child_ids
+  }
+}
+"#;
 
 fn provider_directory(data_directory: &Path) -> PathBuf {
     data_directory.join("approved-bin")

@@ -17,6 +17,7 @@ pub(super) struct BodyEvidence {
 pub(super) fn inspect(item: &Item) -> BodyEvidence {
     let mut visitor = BodyExports {
         root: true,
+        gates: Vec::new(),
         evidence: BodyEvidence::default(),
     };
     visitor.visit_item(item);
@@ -25,6 +26,8 @@ pub(super) fn inspect(item: &Item) -> BodyEvidence {
 
 struct BodyExports {
     root: bool,
+    /// cfg evidence of the nested body items enclosing the current item.
+    gates: Vec<String>,
     evidence: BodyEvidence,
 }
 
@@ -74,6 +77,11 @@ impl<'ast> Visit<'ast> for BodyExports {
             if evidence.macro_export {
                 self.evidence.errors.push("unsupported macro_export declaration nested in a body; add explicit root inventory handling and compile evidence".into());
             }
+            // Tauri commands and mobile entry points emit root helpers that
+            // `Loader::expansion_roots` models only for module-level items.
+            if evidence.root_command_macros || evidence.mobile_entry {
+                self.evidence.errors.push("unsupported root-exporting attribute nested in a body; add explicit expansion handling and compile evidence".into());
+            }
             if !evidence.macro_references.is_empty() {
                 self.evidence.attributes.extend(
                     evidence
@@ -95,7 +103,34 @@ impl<'ast> Visit<'ast> for BodyExports {
                         }
                     }
                 }
-                Item::Mod(item) => self.evidence.bindings.push(item.ident.unraw().to_string()),
+                Item::Mod(item) => {
+                    // A file module has no contents for this visitor, and
+                    // the Loader never loads body modules, so its root
+                    // exports (macro_export) would stay unseen.
+                    if item.content.is_none() {
+                        let mut gates = self.gates.clone();
+                        gates.extend(evidence.gates.iter().cloned());
+                        gates.extend(
+                            evidence
+                                .paths
+                                .iter()
+                                .filter(|(_, conditions)| !conditions.is_empty())
+                                .map(|(path, conditions)| {
+                                    format!("{} => path {path}", conditions.join(" && "))
+                                }),
+                        );
+                        self.evidence.errors.push(format!(
+                            "unsupported file module `{}` declared in a body; add explicit body source loading and compile evidence{}",
+                            item.ident.unraw(),
+                            if gates.is_empty() {
+                                String::new()
+                            } else {
+                                format!("; module gating evidence: {}", gates.join(" && "))
+                            }
+                        ));
+                    }
+                    self.evidence.bindings.push(item.ident.unraw().to_string())
+                }
                 Item::ExternCrate(item) => self.evidence.bindings.push(
                     item.rename
                         .as_ref()
@@ -109,6 +144,11 @@ impl<'ast> Visit<'ast> for BodyExports {
                 }
                 _ => {}
             }
+            let depth = self.gates.len();
+            self.gates.extend(evidence.gates);
+            syn::visit::visit_item(self, item);
+            self.gates.truncate(depth);
+            return;
         }
         syn::visit::visit_item(self, item);
     }

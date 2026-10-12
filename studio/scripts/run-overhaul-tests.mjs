@@ -11,7 +11,7 @@ const common = process.argv.slice(2);
 let failed = false;
 for (const args of [
   ["run", ...cases, "src/test/studioRenameBehaviour.test.tsx", ...common],
-  ["run", "--config", "vitest.roadmap-off.config.ts", ...common],
+  ["run", "--config", "vitest.pocock.config.ts", ...common],
 ]) {
   const result = spawnSync(process.execPath, [vitest, ...args], { cwd: studio, stdio: "inherit" });
   if (result.error) console.error(result.error.message);

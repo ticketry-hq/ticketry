@@ -6,15 +6,22 @@ import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { planPlannerAcceptanceBuild } from "./desktop-planner-acceptance-build.mjs";
 import { availablePort, connectToStudio, defaultDesktopBinary, spawnTicketry, stopProcess } from "./desktop-webdriver-session.mjs";
 
 const studioRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = path.resolve(studioRoot, "..");
+let plannerBuild;
+try {
+  // Sprint planning is Core-only: refuse Pocock or an invalid edition before building.
+  plannerBuild = planPlannerAcceptanceBuild(process.env);
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
+console.log(plannerBuild.editionBuild.description);
 if (!process.argv.includes("--skip-build")) {
-  // This case exercises the desktop lifecycle and WKWebView HTTP transport.
-  // The supported xterm fallback keeps the unrelated native terminal library
-  // out of this test build; shipping features are unchanged.
-  const built = spawnSync("cargo", ["build", "--offline", "--manifest-path", "studio/src-tauri/Cargo.toml", "--bin", "ticketry", "--no-default-features", "--features", "desktop-acceptance"], { cwd: repositoryRoot, stdio: "inherit", env: { ...process.env, TAURI_CONFIG: JSON.stringify({ build: { devUrl: null }, bundle: { resources: [] } }) } });
+  const built = spawnSync(plannerBuild.command, plannerBuild.args, { cwd: repositoryRoot, stdio: "inherit", env: plannerBuild.environment });
   assert.equal(built.status, 0, "build the planner desktop acceptance binary");
 }
 

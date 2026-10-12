@@ -3,22 +3,25 @@
 Ticketry persists root-scoped campaigns that launch eligible direct children in parallel or serial order and exposes factual planning reads separately from execution.
 
 Surfaces: browser, desktop
+Editions: pocock, core
 
 ## Sub-features
 
-- `dependency-graph-parallel-run`: Arm or press a selected branch's persisted parallel campaign.
+- `dependency-graph-parallel-run` (core): Arm or press a selected branch's persisted parallel campaign.
 - `dependency-graph-serial-run`: Start the first eligible direct child and wait for its serial frontier to settle.
 - `dependency-graph-active-run`: Restore the campaign's live-run affordance from persisted holding and status data.
 - `dependency-graph-planning-read`: Read the current subtree and dependency edges without launching work.
 - `dependency-graph-agent-execution`: Execute or reset a root campaign through scoped MCP tools.
-- `dependency-graph-planning-projection`: Share project planning records through Apollo rather than a second execution model.
+- `dependency-graph-planning-projection` (core): Share project planning records through Apollo rather than a second execution model.
 
 ## How to get to it
 
 Select a module and a work item with children, then open the **Details** region.
-Click **Run subtree** or **Run subtree serially**. The selected branch registers
-`normal-run-command` (Cmd+Enter) for parallel execution when eligible; serial
-execution has no dedicated default chord. While a campaign descendant is live,
+In core, click **Run subtree** or **Run subtree serially**; the selected branch
+registers `normal-run-command` (Cmd+Enter) for parallel execution when
+eligible, and serial execution has no dedicated default chord. Pocock shows
+only **Run subtree serially**, and Cmd+Enter on an eligible branch starts that
+serial run (CODING-2865). While a campaign descendant is live,
 use **Open subtree run** to focus its run. Ordinary **Run item** starts one
 ticket's agent and is a separate action even on a branch; see
 [Agent launch](agent-launch.md).
@@ -40,7 +43,7 @@ provider for automated execution. Children and blockers must have configured
 workflow states. For automatic advancement, the root must remain armed and the
 execution reconciliation service must be available. MCP calls obey the caller's
 project/root authority. The project planning projection requires a selected
-project; the Plan/Sprints UI is Roadmap-gated separately from subtree execution.
+project; the Plan/Sprints UI is edition-gated (`sprintPlanning`) separately from subtree execution.
 
 ## Expected behavior
 
@@ -51,8 +54,9 @@ project; the Plan/Sprints UI is Roadmap-gated separately from subtree execution.
   `studio/src/app/shell/ticket-workspace/selected-ticket/details/internal/subtreeRun.ts`.
 - The frontend reads `ExecutionGraphRunHolding` with a network-only query, then
   uses `CreateExecutionGraphRun` or `UpdateExecutionGraphRun` and writes the
-  authoritative returned holding into Apollo. Serial sends `serial`; parallel
-  sends a null `executionMode`, which resolves to parallel. A nonempty prepared-child list
+  authoritative returned holding into Apollo. Serial sends `serial`; core's
+  parallel press sends a null `executionMode`. Pocock sends `serial` on every
+  press. A nonempty prepared-child list
   reports **Subtree run started.** or **Serial subtree run started.** An accepted
   press with no launches reports that every remaining work item is finished,
   blocked or already running. Refusal reports the error; a stale capability
@@ -65,8 +69,13 @@ project; the Plan/Sprints UI is Roadmap-gated separately from subtree execution.
   eligible children; serial selects the first and holds its frontier until the
   child is satisfied and both run and terminal are inactive. An ended,
   unsatisfied child requires a deliberate press. Durable claims prevent
-  automatic replay from creating another launch. Source: execution context,
-  graph predicates and the Rust graph-run service tests.
+  automatic replay from creating another launch. Graph Run mutations (press,
+  reset, delete and the reconciler's `advance`) share one process-wide lock,
+  whichever launch service each surface composed (CODING-2916). A press skips
+  a selected child that another launch took after selection, such as an
+  interactive launch; any other mid-press conflict still fails the press.
+  Source: execution context, graph predicates and the Rust graph-run service
+  tests.
 - A deliberate press can revive inactive work after cleanup and refreshes
   policy/mode for future children while preserving existing claims. There is
   no prelaunch confirmation/cancel dialog on these controls. MCP reset clears
@@ -84,6 +93,22 @@ project; the Plan/Sprints UI is Roadmap-gated separately from subtree execution.
   external blockers and liveness. The project `PlanningGraph` query supplies
   epics, Stories, sprints, states and creation types to Plan/Sprints; that query
   neither arms nor advances graph runs.
+- The Graph Run service decides the mode for every surface (GraphQL create
+  and update, MCP execute and reset-and-execute) from the `parallelSubtreeRuns`
+  capability (CODING-2865). An omitted mode means `parallel` in core and
+  `serial` in Pocock. Pocock refuses an explicit `parallel` with the typed
+  error `edition_capability_unavailable` (`GraphRunServiceErrorCode::EditionCapabilityUnavailable`)
+  before it writes a header, claim or run; reset-and-execute refuses before it
+  clears the ledger. A persisted Graph Run keeps its stored mode, so a parallel
+  campaign armed before an install became Pocock still advances in parallel
+  until a press refreshes it. The SDL does not differ between editions. Source:
+  `studio/src-tauri/crates/execution/ticketry-agent-execution/src/graph_run_service/edition_mode.rs`.
+- `execute_dependency_graph` arms a serial campaign in Pocock and describes
+  itself as serial. In core (`ParallelSubtreeRuns`) it keeps the parallel
+  campaign. The agent cannot choose the mode. Source:
+  `studio/src-tauri/crates/surfaces/ticketry-mcp/src/launch_tools.rs`; proof:
+  `cargo test --manifest-path studio/src-tauri/Cargo.toml --test mcp_graph_run_mode`,
+  run once per edition.
 
 ## Verifying it
 
@@ -102,16 +127,35 @@ must also establish authoritative state and settled terminal cleanup.
 | `studio/src/test/overhaulSubtreeRunAcceptance.test.tsx`: guarded Cmd+Enter, shape dispatch, missing binding, `overhaul-21` repeated press, `overhaul-57` serial/shared gate, `overhaul-339` persisted active affordance, `overhaul-340` refusal refresh | `bun run --cwd studio test src/test/overhaulSubtreeRunAcceptance.test.tsx` | Mocked runtime/GraphQL; no external provider or native renderer. |
 | `studio/src/features/execution/mutationTransport.test.ts`: holding read, restricted create/update, omitted mode and authoritative cache write | `bun run --cwd studio test src/features/execution/mutationTransport.test.ts` | Transport contract with fixtures. |
 | `studio/src/features/planning-graph/planningModel.test.ts`: project planning adaptation, Story filtering, backlog/state and identity rules | `bun run --cwd studio test src/features/planning-graph/planningModel.test.ts` | Planning projection only. |
-| `studio/src-tauri/tests/graph_run_service.rs`: policy refresh, reset, races, durable replay, settled retry, serial satisfaction/termination and external blocker advancement | `cargo test --manifest-path studio/src-tauri/Cargo.toml --test graph_run_service` | SQLite/service harness with injected terminal runtime; no paid provider/native rendering. |
+| `studio/src-tauri/tests/graph_run_service.rs`: policy refresh, reset, races (including a slow parallel press against `advance` on a separately composed launch service, and a child taken mid-press), durable replay, settled retry, serial satisfaction/termination and external blocker advancement. Edition split (CODING-2865): Pocock resolves an omitted mode to serial and refuses explicit parallel with a typed error, both through the service and through public GraphQL create/update. A persisted parallel campaign advances in parallel in both editions. The parallel-press proofs are core-only | `cargo test --manifest-path studio/src-tauri/Cargo.toml --test graph_run_service`, and again with `--features edition-core` | SQLite/service harness with injected terminal runtime; no paid provider/native rendering. |
+| `studio/src-tauri/tests/slice6_execution_proof.rs` / `slice6_execution_recovery.rs`: composed-runtime Studio and MCP presses. `a_studio_press_arms_the_editions_campaign` proves the edition's omitted mode and Pocock's typed refusal of a parallel create/update. The parallel-press proofs return early in Pocock | `cargo test --manifest-path studio/src-tauri/Cargo.toml --test slice6_execution_proof --test slice6_execution_recovery`, and again with `--features edition-core` | CI runs these suites a second time in core (`Core-edition Graph Run tests` step). |
 | `studio/src-tauri/crates/execution/ticketry-agent-execution/tests/it/execution_graph_facts.rs`: current graph without campaign, external blockers, liveness/claims and scope failures | `cargo test --manifest-path studio/src-tauri/Cargo.toml -p ticketry-agent-execution --test it execution_graph_facts` | Factual read/service seam only. |
-| `studio/e2e/web-app.spec.ts`: **sends serial and parallel subtree launches through the visible controls** | `bun run --cwd studio test:e2e e2e/web-app.spec.ts --grep 'sends serial and parallel subtree launches'` | Intercepts graph mutations; stale selector/setup described below. |
+| `studio/scripts/desktop-subtree-stub.test.mjs`: subtree stub launch identity (factual prompt, run id, bridge, hook), per-run complete/hold → release/exit-after-move → exit control, per-run records, bounded MCP retry | `bun run --cwd studio test:e2e:desktop:providers` | Fixture construction/contract only, with a stand-in bridge; no Ticketry, campaign or paid provider. |
+| `studio/scripts/desktop-subtree-acceptance.mjs` (CODING-2852): desktop serial campaign in the built edition. It asserts the running edition first; the Pocock `serial` case has three held `Implementation` children, one start at a time in stored sequence, native focus through **Open subtree run**, Review in UI and data, run/tmux end before the next start, restored controls, no parallel **Run subtree**, and duplicate/orphan checks through existing reads | `bun run --cwd studio test:e2e:desktop:subtree` (pure checks: `test:e2e:desktop:subtree:checks`) | Disposable `codex`-compatible stub provider on a private tmux socket; no paid provider or network model call. There is no launch-claim read, so claims are counted through agent runs. |
+| `studio/scripts/desktop-subtree-acceptance/` core fixture and `parallel` case (CODING-2854): with `TICKETRY_EDITION=core` the journey ends onboarding after the first module, builds the minimal workflow (Implement/Review/Done, Story and Implementation, agent-allowed Implement → Review, prompted bindings, **Run subtree** on Story/Implement) through the generated workflow operations over native `graphql_execute`, then runs `serial` and `parallel`. `parallel` presses **Run subtree** with every stub held and requires all three children live at once with distinct runs and private tmux sessions before any release, then Review, ended runs, empty tmux and restored controls | `TICKETRY_EDITION=core bun run --cwd studio test:e2e:desktop:subtree` | Same stub/tmux limits. The workflow planner adopts states and types that already exist by name, so it also runs on a build that still seeds reviewed defaults. |
+| `studio/scripts/desktop-subtree-acceptance/recovery-case.mjs` `recovery` case, both editions (CODING-2855): a held serial campaign survives a SIGKILL while child 1 is live (same agent run and unchanged private tmux inventory, no new start through a settle window, **Open subtree run** back after reload, the re-adopted stub's MCP move succeeds through its bridge after the restart) and an orderly quit after child 2 moved to `Review` but before it exited (the stub exits while Ticketry is down; the next start ends child 2's run and starts child 3 exactly once). The in-flight orphan check runs after each restart and the campaign finishes with the shared final checks | `bun run --cwd studio test:e2e:desktop:subtree` (either edition; pure checks: `studio/scripts/desktop-subtree-acceptance/recovery-checks.test.mjs`) | Same stub/tmux limits. Ticketry keeps exited panes (`remain-on-exit`), so while it is down the exited child leaves a dead-pane session; the case requires that pane dead and the stub/bridge PIDs gone, and the session gone after the restart's reconciliation. |
 
 The numbered subtree cases are part of `studio/docs/overhaul-acceptance.md` and
 `bun run --cwd studio test:overhaul`. The disposable desktop harness
 `studio/scripts/desktop-agent-acceptance.mjs`, invoked with
 `bun run --cwd studio test:e2e:desktop`, covers a single Run item and restart
-journey, not a dependency campaign. No current provider-backed end-to-end
-campaign/restart or graph-specific native desktop journey was identified.
+journey, not a dependency campaign. The separate
+`bun run --cwd studio test:e2e:desktop:subtree` journey covers a native serial
+campaign and crash/quit recovery of a campaign in both editions, and a native
+parallel campaign in core. The case list is fixed per edition:
+
+| Edition | Desktop subtree cases | Command |
+| --- | --- | --- |
+| Pocock (default) | `serial`, `recovery` | `bun run --cwd studio test:e2e:desktop:subtree` |
+| core | `serial`, `parallel`, `recovery` | `TICKETRY_EDITION=core bun run --cwd studio test:e2e:desktop:subtree` |
+
+CI (`.github/workflows/ci.yml`, job `desktop-subtree`) gates every push to
+`main` and every same-repository pull request on both legs, in parallel with
+the `desktop` job and with `fail-fast: false`. A failing leg uploads
+`studio/test-results/` (screenshots, DOM, Rust logs, tmux inventory, pane
+output and the `subtree-stub/` records) as `desktop-subtree-diagnostics-<edition>`.
+`studio/scripts/desktop-subtree-acceptance/ci-gate.test.mjs` in `test:e2e:desktop:subtree:checks` keeps that job's matrix
+equal to the journey's editions. The browser feature suite is not run in CI.
 This map was verified against source/tests, without a live walkthrough.
 
 ## End-to-end suite
@@ -133,8 +177,10 @@ refused with `execution_reconciliation_unavailable` because the adapter starts
 the MCP runtime without a terminal-launch service. The refusal case checks
 both presses leave the authoritative campaign unchanged. Graph
 mutation requests are observed, never replaced with successful responses.
-The copied serial/parallel case retains its exact title and serial success
-assertion; the current serial control's accessible name is Run subtree serially.
+`@case-graph-serial-parallel` is the only browser home for the visible
+**Run subtree serially** and **Run subtree** controls. It runs in both
+editions; `TICKETRY_EDITION=core bun run --cwd studio test:e2e:feature dependency-graph-runs`
+runs it against core.
 The feature runner owns disposable profiles, fixture process and private tmux
 cleanup. Provider completion waits for the runtime's 15-second lifecycle sweep
 through authoritative historical session state and process absence.
@@ -152,13 +198,20 @@ through authoritative historical session state and process absence.
 
 ## Gotchas
 
+- `dependency-graph-parallel-run` and `dependency-graph-planning-projection` are
+  `(core)` sub-features (`parallelSubtreeRuns`, and the Plan-only consumers of
+  `PlanningGraph`). The projection cases carry `@edition-core`. The parallel
+  **Run subtree** control is not yet edition-gated in the frontend, so the
+  parallel row still cites shared, untagged cases that also cover serial,
+  active-run and planning-read rows. `@case-graph-serial-parallel` cannot carry
+  `@edition-core` while shared rows cite it (drift-check rule 10). When the
+  control is gated, split it and `@case-graph-empty-disabled`,
+  `@case-graph-empty-recovery` and `@case-graph-frontier-blockers`, which also
+  locate **Run subtree**, so Pocock keeps its serial, active-run and
+  planning-read coverage and the parallel presses move to `@edition-core` cases.
 - **Subtree** is the read scope, not recursive launch permission. The factual
   read omits external blocker edges; their absence does not prove a child can
   launch. Work-item workflow state and run/terminal liveness remain separate.
-- The legacy browser case still asks for **Run serially**, while the new feature suite and production expose
-  **Run subtree serially**; shared `studio/e2e/support.ts` also waits for removed
-  `modules-pane-toggle`. It is existing historical coverage, not a current
-  passing proof. Do not silently repair product or harness code in this map task.
 - Genuine launches require a configured real or disposable provider and runtime
   services. Mocked launch lists prove UI feedback only. Browser/xterm evidence
   cannot prove native libghostty rendering, desktop focus or native retention;

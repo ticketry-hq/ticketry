@@ -13,7 +13,7 @@ use seaolim::{
     RestrictedModelSetMutation, RestrictedMutationField, ViewSerializers,
 };
 
-use crate::work_management::{commands::catalog, graphql};
+use crate::work_management::{commands::catalog, graphql, write_reservation::ReservedWrite};
 use ticketry_entities::issue_type;
 
 use serializer::IssueTypeReorderSerializer;
@@ -57,7 +57,7 @@ pub(super) fn register(builder: &mut Builder) {
                 "ordered_ids",
                 TypeRef::named_nn_list_nn(TypeRef::STRING),
             )),
-        ReorderIssueTypes,
+        ReservedWrite(ReorderIssueTypes),
         ViewSerializers::default()
             .serializer::<issue_type::ActiveModel, _>(IssueTypeReorderSerializer),
     );

@@ -1,7 +1,7 @@
 import type { Module, ModulePresentation } from "../../shared/api/types";
 import { studioApolloClient } from "../../shared/apollo/client";
 import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
-import { ROADMAP_ENABLED } from "../../shared/config/roadmapAvailability";
+import { editionHas } from "../../shared/config/edition";
 import { getModulesSnapshot, getProjectSelectionGeneration, useCachedModules, WorkTrackerProjectOpenDocument } from "../projects";
 import { getStorySprintReadsSnapshot, useActiveStorySprint, useSelectedStorySprint } from "../sprints";
 import { getProjectStorySprintIndexSnapshot, getStorySprintFilterIntent, getStorySprintFilterGeneration,
@@ -21,7 +21,7 @@ function normalTabs(projectId: string | null, modules: readonly Module[],
 export function getEffectiveModuleTabsSnapshot(projectId: string | null): EffectiveModuleTabs {
   const modulesComplete = !!projectId && !!studioApolloClient().readQuery({ query: WorkTrackerProjectOpenDocument,
     variables: { projectId: compactWorktrackerId(projectId) }, optimistic: true });
-  if (!ROADMAP_ENABLED) return normalTabs(projectId, getModulesSnapshot(projectId),
+  if (!editionHas("sprintPlanning")) return normalTabs(projectId, getModulesSnapshot(projectId),
     getModulePresentationsSnapshot(projectId), modulesComplete);
   const intent = getStorySprintFilterIntent(projectId);
   const reads = getStorySprintReadsSnapshot(projectId, intent.mode === "id" ? intent.sprintId : null);
@@ -37,13 +37,13 @@ export function useEffectiveModuleTabs(projectId: string | null, modules?: reado
   presentations?: readonly ModulePresentation[]): EffectiveModuleTabs {
   const cachedModules = useCachedModules(projectId);
   const cachedPresentations = useModulePresentations(projectId);
-  const sprintProjectId = ROADMAP_ENABLED ? projectId : null;
+  const sprintProjectId = editionHas("sprintPlanning") ? projectId : null;
   const intent = useStorySprintFilterIntent(sprintProjectId);
   const generation = useStorySprintFilterGeneration(sprintProjectId);
   const active = useActiveStorySprint(sprintProjectId, "cache-only");
   const selected = useSelectedStorySprint(sprintProjectId, intent.mode === "id" ? intent.sprintId : null, "cache-only");
   const index = useProjectStorySprintIndex(sprintProjectId, "cache-only");
-  if (!ROADMAP_ENABLED) return normalTabs(projectId, modules ?? cachedModules,
+  if (!editionHas("sprintPlanning")) return normalTabs(projectId, modules ?? cachedModules,
     presentations ?? cachedPresentations, presentations !== undefined || cachedPresentations !== undefined);
   const resolution = resolveStorySprintFilter(intent, active, selected);
   return projectModuleTabs({ projectId, projectGeneration: getProjectSelectionGeneration(), modules: modules ?? cachedModules,

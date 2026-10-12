@@ -4,6 +4,9 @@ use super::fixture::{assert_sprint, create_arguments, task_id, Fixture, ACTIVE, 
 
 #[tokio::test]
 async fn update_task_assigns_current_sprint_as_an_exclusive_patch() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     let mut fixture = Fixture::new(true).await;
     let created = fixture
         .client
@@ -30,6 +33,9 @@ async fn update_task_assigns_current_sprint_as_an_exclusive_patch() {
 
 #[tokio::test]
 async fn update_current_explicit_and_backlog_preserves_revision_on_same_sprint() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     let mut fixture = Fixture::new(true).await;
     let mut arguments = create_arguments("Replan this story");
     arguments["sprint"] = json!(PLANNED);
@@ -103,6 +109,9 @@ async fn update_current_explicit_and_backlog_preserves_revision_on_same_sprint()
 
 #[tokio::test]
 async fn omitted_sprint_keeps_membership_when_name_or_description_changes() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     let mut fixture = Fixture::new(true).await;
     let mut arguments = create_arguments("Keep sprint membership");
     arguments["sprint"] = json!(PLANNED);

@@ -37,7 +37,6 @@ import {
   loadWorkflowSettings,
   loadWorkflowStates,
   setWorkflowIssueTypes,
-  setWorkflowProviderCapabilities,
   setWorkflowStateCounts,
   setWorkflowStates,
 } from "./queries";
@@ -658,14 +657,9 @@ function routeAndAttachWorkflowServerState(
     );
     if (counts !== undefined) setWorkflowStateCounts(projectId, counts);
   }
-  const providerCapabilities = changedOwnValue<ProviderCapabilities[]>(
-    state,
-    previousState,
-    "providerCapabilities",
-  );
-  if (providerCapabilities !== undefined) {
-    setWorkflowProviderCapabilities(providerCapabilities);
-  }
+  // Provider capabilities are a read-only view of the catalog Apollo owns
+  // (CODING-2913). Never route them back: the initial `[]` would otherwise be
+  // written as a synthetic empty catalog that cold Settings then adopts.
 
   attachWorkflowServerState(state);
 }

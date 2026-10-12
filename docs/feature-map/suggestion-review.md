@@ -3,6 +3,7 @@
 Review agent suggestions in Plan, approve sprint membership or create a Story, and recover decisions with Retry and Undo.
 
 Surfaces: browser, desktop
+Editions: core
 
 ## Sub-features
 
@@ -33,12 +34,14 @@ describes how to obtain them. Open their epic tabs, including No epic for
 ungrouped suggestions. The [planner service](../planner-service.md) owns the
 transport and service-lifecycle reference.
 
-Roadmap availability is compiled from `TICKETRY_ROADMAP_ENABLED` into
-`__TICKETRY_ROADMAP_ENABLED__`. In a Roadmap-off build the Plan tab, Sprints
-workspace, goals, suggestion review and discovery controls are absent; direct
-Plan mounts render nothing. Runtime settings or URL parameters cannot enable
-them. Verify this with `bun run --cwd studio test:roadmap-off`, which uses
-`studio/vitest.roadmap-off.config.ts`.
+Sprint planning is a build-time edition capability: `TICKETRY_EDITION`
+(`pocock` default, or `core`) compiles into `__TICKETRY_EDITION__`, and
+`editionHas("sprintPlanning")` is true only in the core edition. In a Pocock
+build the Plan tab, Sprints workspace, goals, suggestion review and discovery
+controls are absent; direct Plan mounts render nothing, and sprint
+status-stream facts are ignored (`studio/src/test/overhaulPocockEditionSurfacesAcceptance.test.tsx`).
+Runtime settings or URL parameters cannot enable them. Verify this with
+`bun run --cwd studio test:pocock`, which uses `studio/vitest.pocock.config.ts`.
 
 ## Expected behavior
 
@@ -46,12 +49,18 @@ them. Verify this with `bun run --cwd studio test:roadmap-off`, which uses
   existing Story; Create story trims a valid proposal title and creates the
   Story with its epic and sprint. Accepting from detail replaces the proposal
   editor/banner with the real Story detail. Dismiss removes the waiting row.
+- `SprintSuggestions` returns a sprint's suggestions in creation order
+  (CODING-2915); before that fix its `id` tie-breaker led.
 - Detail shows the suggestion's reason and goal attribution. Proposal Epic and
   Sprint fields are read-only. Blank or over-512-character trimmed titles
   disable creation; an edit survives closing and reopening the detail during
   the visit. Escape closes without approving or dismissing the suggestion.
 - A rejected decision shows Couldn't accept/dismiss/undo and a per-suggestion
-  Retry. Add all accepts the current epic's waiting suggestions sequentially,
+  Retry. Retry uses the current suggestion identity: if another planner has
+  accepted and Undone a rejected proposal, Retry adds its retained Story without
+  sending the rejected proposal's edited title. Edited titles remain available
+  while the current suggestion is still a proposal.
+  Add all accepts the current epic's waiting suggestions sequentially,
   stopping at a failure. An unrelated graph refetch with complete cached records
   does not stop subsequent steps after the batch has saved and fully refreshed
   an earlier decision; an Undone edited proposal uses its retained Story
@@ -95,9 +104,18 @@ Ordinary command loading and remembered-tab normalization remain guarded by
 `studio/src/test/overhaulPlanMovePolicyAcceptance.test.tsx` (749 and 760). The existing
 `@case-bulk-review` browser journey remains the end-to-end proof.
 
-Supplementary off-state coverage is
-`studio/src/test/overhaulRoadmapOffAcceptance.test.tsx` under
-`bun run --cwd studio test:roadmap-off`. It does not fill browser cells.
+Supplementary mounted regression
+`studio/src/test/overhaulPlanConvertedProposalRetryAcceptance.test.tsx`
+(`[overhaul-832]`) covers a definite rejection, another planner's public
+GraphQL acceptance and Undo, authoritative refresh, and Retry. It verifies the
+retained Story identity and name, sprint membership, and omission of the
+obsolete proposal title patch. The existing rejection regression (763) in
+`studio/src/test/overhaulPlanSuggestionRecoveryAcceptance.test.tsx` verifies
+edited-title retention when the suggestion remains a proposal.
+
+Supplementary Pocock-edition coverage is
+`studio/src/test/overhaulPocockEditionAcceptance.test.tsx` under
+`bun run --cwd studio test:pocock`. It does not fill browser cells.
 
 ## End-to-end suite
 
@@ -124,7 +142,7 @@ Suite: studio/e2e/features/suggestion-review.spec.ts
 - `studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/commands/sprint_suggestions.rs`
 - `studio/src-tauri/crates/execution/ticketry-agent-execution/src/sprint_suggestions/create.rs`
 - `studio/src/app/shell/ticket-workspace/WorkspaceTabs.tsx`
-- `studio/src/shared/config/roadmapAvailability.ts`
+- `studio/src/shared/config/edition.ts`
 - `studio/vite.config.ts`
 
 ## Gotchas

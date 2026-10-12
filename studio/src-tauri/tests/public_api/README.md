@@ -2,7 +2,7 @@
 
 These modules are a test-internal source contract. They add no shipping service,
 crate exports, or product operation. `public_api_boundary_contract` is the mandatory shipping-workspace guard. It
-resolves all 22 Cargo library roots after facade contraction; compatibility module
+resolves all 23 Cargo library roots after facade contraction; compatibility module
 exports and generic legacy exceptions are forbidden.
 
 Run fixtures independently of desktop dependencies:
@@ -90,6 +90,23 @@ retain canonical dependency checks and cannot be replaced by a local import. Nes
 attributes, procedural derives, and local import/item scopes hidden in opaque
 macro arguments fail explicitly. Other body macros need supported expansion
 handling and compilation, even when their surrounding function is already named.
+These body checks cover every declaration kind, not only functions and
+constants: enum discriminants, struct/union/foreign field and alias array
+lengths, and const generic defaults are inspected regardless of visibility or
+cfg, so a nested `macro_export` there fails before approvals are compared.
+Tauri command helpers are modeled only for module-level functions. A Tauri
+command or mobile entry point attribute nested in a body, including one
+controlled by cfg_attr, fails the same way, because its generated
+`__cmd__`/`__tauri_command_name_` root helpers stay reachable behind an
+unchanged root name. `nested_command_fixtures` compiles each form against the
+locked Tauri artifact and proves an external crate imports the leaked helpers.
+Body source is never loaded, so a file module declared in a body (a `#[path]`
+or `cfg_attr` path module in a function, or in an inline module inside one)
+fails explicitly: its `macro_export` items reach the crate root through private
+ancestors. The diagnostic names the module's own and inherited cfg and path
+conditions. Inline body modules stay inspected recursively.
+`body_file_module_fixtures` compiles each form with rustc, proves an external
+`use consumer::leaked_file;` succeeds, and requires audit and regeneration to fail.
 
 The separate shipping compiler probe imports all 16 items across the 40 retained
 entity namespaces, checks Entity/Model/ActiveModel/Column/PrimaryKey and loader

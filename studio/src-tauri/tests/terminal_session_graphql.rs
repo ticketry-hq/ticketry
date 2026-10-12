@@ -33,11 +33,15 @@ async fn schema() -> (GraphQlEndpoint, String) {
          INSERT INTO agent_runs (id, issue_id, agent, status, started_at, scope) VALUES\n\
            ('run-local', 'local-task', 'codex', 'running', '2026-08-19T10:00:00Z', 'task'),\n\
            ('run-runtime-foreign', 'local-task', 'codex', 'running', '2026-08-19T11:00:00Z', 'task'),\n\
-           ('run-project-foreign', 'foreign-task', 'codex', 'running', '2026-08-19T12:00:00Z', 'task');\n\
+           ('run-project-foreign', 'foreign-task', 'codex', 'running', '2026-08-19T12:00:00Z', 'task'),\n\
+           ('run-shell-a', 'local-task', 'shell', 'running', '2026-08-19T10:00:02Z', 'shell'),\n\
+           ('run-shell-b', 'local-task', 'shell', 'running', '2026-08-19T10:00:01Z', 'shell');\n\
          INSERT INTO agent_terminal_sessions VALUES\n\
            ('run-local', 'pt-private', '11111111111111111111111111111111', '22222222222222222222222222222222', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '2026-08-19T10:00:00Z', NULL, 'task', NULL, 0, '{namespace}', NULL, 0, NULL, 'codex'),\n\
            ('run-runtime-foreign', 'pt-private-2', '11111111111111111111111111111111', '22222222222222222222222222222222', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '2026-08-19T11:00:00Z', NULL, 'task', NULL, 0, 'other-runtime', NULL, 0, NULL, 'codex'),\n\
-           ('run-project-foreign', 'pt-private-3', '11111111111111111111111111111111', '22222222222222222222222222222222', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', '2026-08-19T12:00:00Z', NULL, 'task', NULL, 0, '{namespace}', NULL, 0, NULL, 'codex');"
+           ('run-project-foreign', 'pt-private-3', '11111111111111111111111111111111', '22222222222222222222222222222222', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', '2026-08-19T12:00:00Z', NULL, 'task', NULL, 0, '{namespace}', NULL, 0, NULL, 'codex'),\n\
+           ('run-shell-a', 'pt-shell-a', '00000000000000000000000000000000', '22222222222222222222222222222222', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '2026-08-19T10:00:02.000Z', NULL, 'shell', NULL, 0, '{namespace}', NULL, 0, NULL, 'shell'),\n\
+           ('run-shell-b', 'pt-shell-b', '00000000000000000000000000000000', '22222222222222222222222222222222', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '2026-08-19T10:00:01.000Z', NULL, 'shell', NULL, 0, '{namespace}', NULL, 0, NULL, 'shell');"
     );
     database.execute_unprepared(&insert).await.unwrap();
 
@@ -77,6 +81,31 @@ async fn generated_read_scopes_filters_orders_paginates_and_loads_agent_run() {
             "agent_run": { "id": "run-local", "status": "running", "launchState": null, "launchModel": null }
         }])
     );
+}
+
+#[tokio::test]
+async fn authored_module_shell_rediscovery_returns_shells_in_creation_order() {
+    let (endpoint, _) = schema().await;
+    let request = serde_json::json!({
+        "query": include_str!("../../src/features/agents/terminal/operations/terminalSessions.graphql"),
+        "operationName": "ModuleShellSessions",
+        "variables": {
+            "moduleId": "22222222-2222-2222-2222-222222222222",
+            "scratchTaskId": "00000000-0000-0000-0000-000000000000",
+            "limit": 10
+        }
+    });
+    let response: serde_json::Value =
+        serde_json::from_str(&endpoint.execute_json(&request.to_string()).await).unwrap();
+
+    assert_eq!(response["errors"], serde_json::Value::Null);
+    let run_ids: Vec<&str> = response["data"]["terminal_sessions"]["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|session| session["agent_run_id"].as_str().unwrap())
+        .collect();
+    assert_eq!(run_ids, ["run-shell-b", "run-shell-a"]);
 }
 
 #[tokio::test]

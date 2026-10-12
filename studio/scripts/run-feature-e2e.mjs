@@ -12,6 +12,7 @@ import { createPlaywrightProfile, cleanupPlaywrightProfile } from './playwright-
 import { writeFeatureResults } from './feature-e2e/report.mjs';
 import { buildStackBinaries, startStackServer } from './feature-e2e/stackServer.mjs';
 import { coldStartFeatures, createWarmPool, warmLookahead } from './feature-e2e/warmPool.mjs';
+import { resolveEditionBuild } from './edition-build-policy.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 export function buildPlaywrightCommand(invocation) {
@@ -24,7 +25,13 @@ export async function runFeatureE2e(args = process.argv.slice(2)) {
   const registry = deriveFeatureRegistry(map, e2e, root);
   const violations = checkFeatureSuites(map, e2e, root);
   if (args.includes('--list') || args.includes('--check')) return runFeatureCommand(args, { registry, violations });
-  const selection = selectFeatures(registry, args);
+  // One edition per run: the build policy picks it, every server compiles it
+  // and selection drops the features and cases that edition does not have.
+  const editionBuild = resolveEditionBuild(process.env);
+  console.log(editionBuild.description);
+  const selection = selectFeatures(registry, args, { edition: editionBuild.edition });
+  for (const id of selection.skippedByEdition.features) console.log(`Skipped by edition ${editionBuild.edition}: feature ${id}`);
+  for (const id of selection.skippedByEdition.cases) console.log(`Skipped by edition ${editionBuild.edition}: @edition-core case ${id}`);
   const plans = planInvocations(selection);
   const runId = `${new Date().toISOString().replaceAll(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`;
   const runDirectory = join(root, '.ticketry-dev/e2e-results', runId);
@@ -34,7 +41,8 @@ export async function runFeatureE2e(args = process.argv.slice(2)) {
     revision: provenance.revision, dirty: provenance.dirty,
     workingTreePatch: 'working-tree.patch', sourceHashSnapshot: 'source-sha256.json', registrySnapshot: 'registry.json',
     command: ['bun', 'run', '--cwd', 'studio', 'test:e2e:features', ...args],
-    selection: { featureIds: selection.features.map(f => f.id), caseIds: selection.cases.map(c => c.id), complete: selection.complete },
+    edition: { edition: editionBuild.edition, source: editionBuild.source },
+    selection: { featureIds: selection.features.map(f => f.id), caseIds: selection.cases.map(c => c.id), complete: selection.complete, skippedByEdition: selection.skippedByEdition },
     violations, invocations: [], interrupted: false, sourceChanged: false };
   writeFileSync(join(runDirectory, 'registry.json'), JSON.stringify(registry, null, 2) + '\n');
   const save = () => writeFileSync(join(runDirectory, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
@@ -52,7 +60,7 @@ export async function runFeatureE2e(args = process.argv.slice(2)) {
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
   // Build the adapter once; every server then starts its binary instead of
   // running Cargo, so a concurrent edit cannot stall a case mid-run.
-  const binaries = buildStackBinaries();
+  const binaries = buildStackBinaries({ editionBuild });
   const setups = new Map();
   /** Each plan entry owns one artifact directory, profile and port pair. */
   const setupFor = (index) => {
@@ -62,7 +70,7 @@ export async function runFeatureE2e(args = process.argv.slice(2)) {
       mkdirSync(artifactDirectory);
       const frontendPort = await selectFrontendPort();
       const profile = createPlaywrightProfile();
-      const { env, owned } = await invocationEnvironment(profile, artifactDirectory, frontendPort);
+      const { env, owned } = await invocationEnvironment(profile, artifactDirectory, frontendPort, editionBuild.environment);
       env.TICKETRY_E2E_EXTERNAL_SERVER = owned.TICKETRY_E2E_EXTERNAL_SERVER = '1';
       return { artifactDirectory, frontendPort, profile, env, owned };
     })());
@@ -73,7 +81,7 @@ export async function runFeatureE2e(args = process.argv.slice(2)) {
     lookahead: warmLookahead(),
     isCold: (index) => coldStartFeatures.has(plans[index].featureId),
     start: async (index) => startStackServer({
-      owner: `run ${runId} ${plans[index].id}`, setup: await setupFor(index), binaries,
+      owner: `run ${runId} ${plans[index].id}`, setup: await setupFor(index), binaries, environment: editionBuild.environment,
       shouldStop: () => manifest.interrupted,
     }),
   });

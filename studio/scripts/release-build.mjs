@@ -6,7 +6,7 @@ import path from "node:path";
 
 import { inspectReleaseBundle } from "./release-bundle-inspection.mjs";
 import { resolveReleaseCommit } from "./release-provenance.mjs";
-import { resolveRoadmapAvailability } from "./roadmap-build-policy.mjs";
+import { editionFeatureArguments, resolveEditionBuild } from "./edition-build-policy.mjs";
 
 // The update feed manifest keeps its own module; this re-export keeps one
 // release-script entry point for callers.
@@ -246,7 +246,12 @@ export async function releaseTauriBuildEnvironment(
   };
 }
 
-export function tauriBuildArguments(manifest, target, environment = process.env, { allowUnsigned = false } = {}) {
+export function tauriBuildArguments(
+  manifest,
+  target,
+  environment = process.env,
+  { allowUnsigned = false, editionBuild = resolveEditionBuild(environment) } = {},
+) {
   const [, ...tauriArgs] = manifest.artifacts.tauri.command;
   return [
     ...tauriArgs,
@@ -254,6 +259,8 @@ export function tauriBuildArguments(manifest, target, environment = process.env,
     target.rust_target,
     "--config",
     macosTauriSigningConfig(manifest, environment, { allowUnsigned }),
+    // The core edition adds its Cargo feature on top of the default features.
+    ...editionFeatureArguments(editionBuild),
     "--",
     "--bin",
     manifest.artifacts.tauri.binary_name,
@@ -708,12 +715,12 @@ export async function buildRelease(
     environment = process.env, root = studioRoot, log = console.log,
   } = {},
 ) {
+  // Resolve the edition once, before any child process: the frontend and Tauri
+  // builds both receive this value even if the caller's environment changes.
+  const editionBuild = resolveEditionBuild(environment);
   validateMacOSReleaseEnvironment(environment, { allowUnsigned });
-  const roadmapEnabled = resolveRoadmapAvailability(environment, { signedRelease: !allowUnsigned });
-  const buildEnvironment = { ...environment, TICKETRY_ROADMAP_ENABLED: String(roadmapEnabled) };
-  const context = allowUnsigned ? "unsigned release" : "signed release";
-  const source = environment.TICKETRY_ROADMAP_ENABLED === undefined ? `${context} default` : "explicit override";
-  log(`Roadmap compiled availability: ${roadmapEnabled ? "ON" : "OFF"} (${source}).`);
+  const buildEnvironment = editionBuild.environment;
+  log(editionBuild.description);
   const tauriEnvironment = await releaseTauriBuildEnvironment(buildEnvironment, {
     allowUnsigned,
     allowDirty,
@@ -742,7 +749,7 @@ export async function buildRelease(
     const [tauriCommand] = manifest.artifacts.tauri.command;
     await execute(
       tauriCommand,
-      tauriBuildArguments(manifest, target, environment, { allowUnsigned }),
+      tauriBuildArguments(manifest, target, environment, { allowUnsigned, editionBuild }),
       `Tauri build for ${target.id}`,
       { environment: tauriEnvironment },
     );

@@ -9,8 +9,9 @@ import { moduleFolderSaveError, prepareDirectoryTrust, writeModuleLink,
 import { useModuleFolderSelection } from "../agents/terminal/ModuleFolderSelection";
 import { dismissChangesWorkspace } from "../agents/worktrees";
 import { leavePlanWorkspace, selectPlanWorkspaceActive, usePlanWorkspace } from "../sprints";
-import { useOnboardingTourStore } from "../onboarding";
+import { projectHasStoryType, useOnboardingTourStore } from "../onboarding";
 import type { StudioRuntime } from "../../runtime";
+import { editionHas } from "../../shared/config/edition";
 
 const FOLDER_REFUSAL_MESSAGE: Record<ModuleFolderRefusal, string> = {
   module_folder_not_absolute:
@@ -70,7 +71,9 @@ export function useModuleCreation({ runtime, onComplete, isCurrent: callerIsCurr
     setFolderError(null);
     const scopeGeneration = scopeGenerationRef.current;
     const projectGeneration = getProjectSelectionGeneration();
-    const filterScopeCurrent = captureCreationFilterScope(selectedProjectId);
+    // Without sprint planning, hidden sprint intent never scopes creation.
+    const sprintScoped = editionHas("sprintPlanning");
+    const filterScopeCurrent = sprintScoped ? captureCreationFilterScope(selectedProjectId) : () => true;
     const scopeCurrent = () => scopeGenerationRef.current === scopeGeneration
       && useStudioStore.getState().selectedProjectId === selectedProjectId
       && getProjectSelectionGeneration() === projectGeneration
@@ -142,10 +145,13 @@ export function useModuleCreation({ runtime, onComplete, isCurrent: callerIsCurr
           return;
         }
       }
-      clearStorySprintFilter(selectedProjectId);
-      const navigationGeneration = getStorySprintFilterGeneration(selectedProjectId);
-      const navigationCurrent = () => scopeCurrent()
-        && getStorySprintFilterGeneration(selectedProjectId) === navigationGeneration;
+      let navigationCurrent = scopeCurrent;
+      if (sprintScoped) {
+        clearStorySprintFilter(selectedProjectId);
+        const navigationGeneration = getStorySprintFilterGeneration(selectedProjectId);
+        navigationCurrent = () => scopeCurrent()
+          && getStorySprintFilterGeneration(selectedProjectId) === navigationGeneration;
+      }
       // Plan restores its origin when leaving, so exit it before selecting the
       // newly usable module. Setup failures and cancellation keep that origin.
       if (selectPlanWorkspaceActive(usePlanWorkspace.getState())) leavePlanWorkspace();
@@ -159,7 +165,7 @@ export function useModuleCreation({ runtime, onComplete, isCurrent: callerIsCurr
         onboarding.step === "module-create" &&
         onboarding.projectId === selectedProjectId
       ) {
-        onboarding.moduleCreated(resolvedModuleId);
+        onboarding.moduleCreated(resolvedModuleId, projectHasStoryType(selectedProjectId));
       }
       onComplete();
     } catch (cause) {

@@ -1,3 +1,4 @@
+use crate::work_management::write_reservation::ReservedWrite;
 use sea_orm::{
     sea_query::Expr, ColumnTrait, DatabaseTransaction, EntityName, EntityTrait, IdenStatic,
     IntoActiveModel, QueryFilter, QueryOrder, Set,
@@ -151,7 +152,7 @@ pub(crate) fn register_mutations(mut builder: Builder) -> Builder {
         register_restricted_model_mutation::<sprint_goal::Entity, sprint_goal::ActiveModel, _>(
             &mut builder,
             field,
-            hook,
+            ReservedWrite(hook),
             ViewSerializers::default(),
         );
     }

@@ -10,6 +10,7 @@ use crate::desktop::commands;
 use crate::desktop::crash_reports::CrashReportsRuntime;
 use crate::desktop::data_directory::data_directory_ownership_for_startup;
 use crate::desktop::document_protocol;
+use crate::desktop::edition_peripherals;
 #[cfg(debug_assertions)]
 use crate::desktop::environment::development_panic_abort_requested;
 use crate::desktop::environment::{automated_startup_exit_requested, development_log_path};
@@ -37,7 +38,6 @@ macro_rules! native_invoke_handler {
             commands::desktop_validate_module_folder,
             commands::desktop_preflight_report,
             commands::desktop_approve_executable_path,
-            crate::desktop::handy::desktop_toggle_handy_transcription,
             app_updates::desktop_update_check,
             app_updates::install::desktop_update_download_and_install,
             app_updates::install::desktop_update_restart,
@@ -152,10 +152,11 @@ pub fn run(context: tauri::Context, file_logging_requested: bool, app_version: &
         .plugin(startup_plugin(graphql_api.clone()))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(trace_plugin("dialog-plugin-initialized"))
-        .plugin(tauri_plugin_launchkey_adaptor::init())
-        .plugin(trace_plugin("launchkey-plugin-initialized"))
-        .plugin(tauri_plugin_updater::Builder::new().build());
+        .plugin(trace_plugin("dialog-plugin-initialized"));
+    let builder = edition_peripherals::with_launchkey_plugin(builder, |builder| {
+        builder.plugin(trace_plugin("launchkey-plugin-initialized"))
+    })
+    .plugin(tauri_plugin_updater::Builder::new().build());
     #[cfg(feature = "desktop-acceptance")]
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
     let native_handler = native_invoke_handler();
@@ -174,7 +175,7 @@ pub fn run(context: tauri::Context, file_logging_requested: bool, app_version: &
         .manage(ViewerCommandState::new())
         .manage(native_terminal::NativeTerminalState::new())
         .invoke_handler(ticketry_graphql_schema::combine_with_native_handler(
-            native_handler,
+            edition_peripherals::with_voice_transcription_command(native_handler),
             graphql_api,
         ))
         .register_asynchronous_uri_scheme_protocol(
@@ -220,7 +221,9 @@ pub fn run(context: tauri::Context, file_logging_requested: bool, app_version: &
             tauri::RunEvent::Ready => {
                 #[cfg(target_os = "macos")]
                 if !automated_startup_exit_requested() {
-                    crate::desktop::microphone_permission::request();
+                    edition_peripherals::request_microphone_on_ready(
+                        crate::desktop::microphone_permission::request,
+                    );
                 }
                 Some(DesktopLifecycleEvent::StartupReady)
             }

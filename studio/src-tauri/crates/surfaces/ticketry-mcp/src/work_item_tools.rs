@@ -171,6 +171,7 @@ async fn append_description(
             id: task.id,
             new_content: string(arguments, "new_content")?.to_owned(),
         },
+        work_facts(database).await.as_ref(),
     )
     .await?;
     Ok(DispatchOutput::result(Value::Bool(true)))

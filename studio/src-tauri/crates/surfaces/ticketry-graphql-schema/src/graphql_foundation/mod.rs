@@ -171,7 +171,11 @@ async fn initialize_with_worktracker_commands_and_install_inner(
                 format!("could not install the final WorkTracker schema: {error}"),
             )
         })?;
-    if let Some(directory) = readiness_data_directory {
+    // Recovery fails interrupted sprint discovery, so it runs only where the
+    // edition grants sprint planning; elsewhere those rows stay untouched.
+    let recover_sprint_discovery =
+        ticketry_edition::has(ticketry_edition::EditionCapability::SprintPlanning);
+    if let (Some(directory), true) = (readiness_data_directory, recover_sprint_discovery) {
         ticketry_agent_execution::SprintSuggestionExecutor::new(
             worktracker_database.clone(),
             directory.to_owned(),

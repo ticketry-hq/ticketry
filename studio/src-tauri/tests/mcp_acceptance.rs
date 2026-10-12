@@ -38,6 +38,12 @@ const BACKLOG: &str = "40000000-0000-0000-0000-000000000001";
 const REVIEW: &str = "40000000-0000-0000-0000-000000000002";
 const MODULE: &str = "20000000-0000-0000-0000-000000000001";
 
+/// Sprint tools and arguments exist only in editions that grant sprint
+/// planning (CODING-2859); Pocock builds skip the sprint suites.
+fn sprint_planning_edition() -> bool {
+    ticketry_edition::has(ticketry_edition::EditionCapability::SprintPlanning)
+}
+
 fn launch_binding_for<'a>(settings: &'a Value, state_id: &str) -> &'a Value {
     settings["launch_bindings"]
         .as_array()

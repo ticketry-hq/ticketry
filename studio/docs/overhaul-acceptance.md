@@ -837,6 +837,16 @@ named gate before the full Studio suite, typecheck, and build.
 | 829 | A delayed historical run read respects newer stage-skill ownership through aliased run identity while accepting unrelated exit metadata. |
 | 830 | Fresh run reads after a handoff can clear warnings with null or successful checks and can publish a missing-skill warning. |
 | 831 | A pending older run read cannot erase a warning recreated after intervening warning creation and clearing. |
+| 832 | Retry after a rejected proposal and another planner's accept/Undo adds the retained Story without renaming it. |
+| 833 | An engaged Command-arrow arrival on a document lands in navigation mode on the tab body, so the next Command-arrow leaves the editor. |
+| 834 | Background graph repair that removes the final epic preserves an unrelated mounted editor's keyboard focus and continued typing. |
+| 835 | Explicit final Close focuses Add epic even when an unrelated editor previously owned keyboard focus. |
+| 836 | Explicit final Done focuses Add epic even when an unrelated editor previously owned keyboard focus. |
+| 837 | A Story capture membership fact refreshes project modules without remounting the idea field or discarding its next typed draft. |
+| 838 | The keyboard live-terminal cycle leaves an agent terminal that owns typing for the next ticket's live terminal. |
+| 839 | The keyboard live-terminal cycle presents the target ticket's agent terminal even when that ticket last remembered Details. |
+| 840 | Cold Settings reads the real provider catalog rather than a store-initialized empty one, reports a failed read and recovers on reopen without changing the saved default. |
+| 844 | Keeps a hydrated remembered document selected and focused in its retained frame when a retained workspace is covered by configuration and returns. |
 
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a

@@ -83,8 +83,13 @@ async fn a_crash_after_runtime_creation_adopts_the_same_runtime_on_restart() {
 
 #[tokio::test]
 async fn an_armed_parallel_campaign_resumes_released_children_at_startup() {
+    if !ExecutionHarness::parallel_subtree_runs() {
+        return; // Pocock refuses parallel presses; see slice6_execution_proof.
+    }
     let mut harness = ExecutionHarness::start().await;
-    harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT).await;
+    harness
+        .press_parallel(fixture::PARALLEL_CAMPAIGN_ROOT)
+        .await;
     let database = harness.database().await;
     assert_eq!(claimed_children(&database).await, ready_children());
 
@@ -202,17 +207,25 @@ async fn simultaneous_presses_and_events_converge_on_one_claim_per_child() {
         harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT),
     );
 
+    // MCP presses arm the edition's campaign: both ready children in
+    // parallel, or the first alone in serial.
+    let campaign = if ExecutionHarness::parallel_subtree_runs() {
+        ready_children()
+    } else {
+        vec![public_id(fixture::READY_FIRST)]
+    };
     let database = harness.database().await;
     assert_eq!(
         claimed_children(&database).await,
-        ready_children(),
+        campaign,
         "pressed={pressed}; pressed_again={pressed_again}; woken={woken:?}"
     );
     // One claim, one Agent Run, and one verified runtime per child, whichever
     // caller won the race.
-    assert_eq!(count_campaign_runs(&database).await, 2);
-    assert_eq!(harness.live_runtimes().len(), 2);
-    assert_eq!(count(&database, "launched_tasks").await, 2);
+    let children = campaign.len() as i64;
+    assert_eq!(count_campaign_runs(&database).await, children);
+    assert_eq!(harness.live_runtimes().len() as i64, children);
+    assert_eq!(count(&database, "launched_tasks").await, children);
     for observed in [&pressed, &pressed_again] {
         assert!(
             observed["root_id"] == public_id(fixture::PARALLEL_CAMPAIGN_ROOT),
@@ -225,12 +238,17 @@ async fn simultaneous_presses_and_events_converge_on_one_claim_per_child() {
 
 #[tokio::test]
 async fn a_periodic_pass_is_the_backstop_for_a_dropped_wakeup() {
+    if !ExecutionHarness::parallel_subtree_runs() {
+        return; // Pocock refuses parallel presses; see slice6_execution_proof.
+    }
     let mut harness = ExecutionHarness::start_with_options(HarnessOptions {
         pass_interval: std::time::Duration::from_millis(50),
         ..HarnessOptions::default()
     })
     .await;
-    harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT).await;
+    harness
+        .press_parallel(fixture::PARALLEL_CAMPAIGN_ROOT)
+        .await;
     let database = harness.database().await;
 
     // Nothing tells execution that the blocker moved; only the bounded

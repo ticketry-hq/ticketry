@@ -3,6 +3,7 @@
 The packaged hook helper publishes provider events atomically for Ticketry's Runs service to ingest and expose as durable lifecycle status.
 
 Surfaces: browser, desktop, manual
+Editions: pocock, core
 
 ## Sub-features
 
@@ -85,6 +86,7 @@ durable status from a surviving frontend snapshot.
 | `studio/src-tauri/crates/app/ticketry-hook/tests/cli.rs`: `hook_spools_the_raw_payload_and_keeps_failures_silent` | `cargo test --manifest-path studio/src-tauri/Cargo.toml -p ticketry-hook --test cli hook_spools_the_raw_payload_and_keeps_failures_silent` | Real helper subprocess; no Runs ingestion. |
 | `studio/src-tauri/crates/worktracking/ticketry-runs/src/hook_spool/tests.rs`: provider mappings, 1 MiB limit, partial/no-op events, retry across restart, quarantine, symlinks, bounded scans and all drain phases | `cargo test --manifest-path studio/src-tauri/Cargo.toml -p ticketry-runs --lib hook_spool` | Consumer with fake lifecycle sink, plus directory validation tests; no installed provider. |
 | `studio/scripts/desktop-acceptance-provider.test.mjs`: disposable provider/bridge contract | `node --test studio/scripts/desktop-acceptance-provider.test.mjs` | Fixture construction/contract only. |
+| `studio/scripts/desktop-subtree-stub.test.mjs`: subtree stub emits SessionStart, UserPromptSubmit, PostToolUse and Stop through the launch hook command | `node --test studio/scripts/desktop-subtree-stub.test.mjs` | Fixture construction/contract only. |
 | `studio/scripts/desktop-agent-acceptance.mjs` and `studio/scripts/desktop-acceptance-provider.mjs` | `bun run --cwd studio test:e2e:desktop` | Authored macOS WKWebView scenario with packaged helper, actual spool/lifecycle services, child process/private tmux, reload and desktop application restart with disposable Codex-compatible provider; stale setup is described below. |
 
 The [desktop harness](../../studio/e2e-desktop/README.md) requires provider hook

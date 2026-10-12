@@ -33,6 +33,7 @@ pub(crate) mod workflow_color_migration;
 pub(crate) mod workflow_handoff_migration;
 pub(crate) mod workspace_tab_order;
 pub(crate) mod workspace_tab_order_migration;
+pub(crate) mod write_reservation;
 
 pub use database::{
     begin_write, open, open_established, open_for_commands, state_database_path, ReadDatabaseError,

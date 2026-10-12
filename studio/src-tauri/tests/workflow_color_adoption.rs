@@ -1,5 +1,6 @@
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_edition::{has, EditionCapability};
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 use ticketry_installation as provisioning;
 use ticketry_work_management::create_project;
@@ -71,6 +72,9 @@ async fn rows(database: &sea_orm::DatabaseConnection) -> Vec<(String, Option<Str
 
 #[tokio::test]
 async fn adopts_only_exact_former_reviewed_defaults_across_projects_and_reopens_stably() {
+    if !has(EditionCapability::ReviewedWorkflowDefaults) {
+        return; // Core never adopts; see the core counterpart below.
+    }
     let database = mixed_database().await;
 
     install(&database).await.expect("adopt workflow colors");
@@ -239,6 +243,9 @@ async fn generated_colors(api: &TransportApiImpl, project_id: &str) -> Vec<(Stri
 
 #[tokio::test]
 async fn production_startup_adopts_old_colors_before_generated_state_reads() {
+    if !has(EditionCapability::ReviewedWorkflowDefaults) {
+        return; // Core never adopts; see the core counterpart below.
+    }
     let directory = tempfile::tempdir().expect("create upgraded profile");
     provisioning::provision(directory.path())
         .await
@@ -302,6 +309,9 @@ async fn production_startup_adopts_old_colors_before_generated_state_reads() {
 
 #[tokio::test]
 async fn a_failed_color_update_rolls_back_rows_and_the_ledger() {
+    if !has(EditionCapability::ReviewedWorkflowDefaults) {
+        return; // Core issues no color update for the fault to stop.
+    }
     let database = mixed_database().await;
     let before = rows(&database).await;
     database
@@ -331,4 +341,129 @@ async fn a_failed_color_update_rolls_back_rows_and_the_ledger() {
         .try_get::<i64>("", "count")
         .expect("ledger table count");
     assert_eq!(ledger_tables, 0);
+}
+
+/// CODING-2862: core records the color checkpoint without rewriting any
+/// state, so former reviewed colors survive alongside custom ones.
+#[tokio::test]
+async fn core_records_the_color_checkpoint_without_rewriting_any_state() {
+    if has(EditionCapability::ReviewedWorkflowDefaults) {
+        return; // Pocock adopts; see the tests above.
+    }
+    let database = mixed_database().await;
+    let before = rows(&database).await;
+
+    install(&database)
+        .await
+        .expect("record the color checkpoint");
+    install(&database)
+        .await
+        .expect("repeat the color checkpoint");
+
+    assert_eq!(rows(&database).await, before);
+    let ledger = database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            format!("SELECT migration_id, source_commit FROM {LEDGER_TABLE} WHERE singleton = 1"),
+        ))
+        .await
+        .expect("read workflow color ledger")
+        .expect("workflow color ledger row");
+    assert_eq!(
+        ledger
+            .try_get::<String>("", "migration_id")
+            .expect("migration id"),
+        MIGRATION_ID
+    );
+    assert_eq!(
+        ledger
+            .try_get::<String>("", "source_commit")
+            .expect("source commit"),
+        SOURCE_COMMIT
+    );
+}
+
+#[tokio::test]
+async fn core_production_startup_keeps_former_reviewed_colors() {
+    if has(EditionCapability::ReviewedWorkflowDefaults) {
+        return; // Pocock adopts; see the tests above.
+    }
+    let directory = tempfile::tempdir().expect("create upgraded profile");
+    provisioning::provision(directory.path())
+        .await
+        .expect("provision profile schema");
+    let state_path = directory.path().join("state.db");
+    let database = open_for_commands(&state_path)
+        .await
+        .expect("open profile database");
+    install_module_presentation_schema(&database)
+        .await
+        .expect("remove the legacy project ordering flag");
+    install_project_onboarding_schema(&database)
+        .await
+        .expect("move onboarding onto the project");
+    let project_id = create_project(
+        &database,
+        CreateProject {
+            name: "Upgraded".to_owned(),
+            slug: "UPG".to_owned(),
+            description: None,
+        },
+    )
+    .await
+    .expect("create upgraded project");
+    for (sort_order, (name, color)) in [
+        ("Ideas", "#D12771"),
+        ("Grill", "#60646C"),
+        ("Review", "#D6409F"),
+        ("Spec", "#123456"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        database
+            .execute_raw(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "INSERT INTO worktracker_state
+                    (id, project_id, name, \"group\", color, sort_order, is_protected,
+                     created_at, updated_at)
+                 VALUES (?, ?, ?, 'backlog', ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                [
+                    format!("{:032}", sort_order + 1).into(),
+                    project_id.clone().into(),
+                    name.into(),
+                    color.into(),
+                    (sort_order as i32).into(),
+                ],
+            ))
+            .await
+            .expect("seed a pre-upgrade state");
+    }
+    database
+        .execute_unprepared("DROP TABLE ticketry_workflow_color_migration")
+        .await
+        .expect("restore the pre-upgrade migration boundary");
+    database.close().await.expect("close pre-upgrade profile");
+
+    let api = TransportApiImpl::new();
+    let _runtime = initialize_with_worktracker_commands_and_install(
+        &directory.path().join("rust-core.sqlite3"),
+        &state_path,
+        &directory.path().join("media"),
+        &api,
+    )
+    .await
+    .expect("open production GraphQL runtime");
+
+    let mut colors = generated_colors(&api, &project_id).await;
+    colors.sort();
+    assert_eq!(
+        colors,
+        vec![
+            ("Grill".to_owned(), "#60646C".to_owned()),
+            ("Ideas".to_owned(), "#D12771".to_owned()),
+            ("Review".to_owned(), "#D6409F".to_owned()),
+            ("Spec".to_owned(), "#123456".to_owned()),
+        ]
+    );
 }

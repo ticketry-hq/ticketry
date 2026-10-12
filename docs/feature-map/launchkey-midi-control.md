@@ -3,6 +3,7 @@
 Desktop Launchkey Mini MK3 controls project run focus, status pads, external voice toggling and selected-terminal submission through native MIDI.
 
 Surfaces: desktop, manual
+Editions: core
 
 ## Sub-features
 
@@ -14,6 +15,13 @@ Surfaces: desktop, manual
 - launchkey-standalone-restoration: Return the controller to standalone mode and disconnect on normal desktop shutdown.
 
 ## How to get to it
+
+Launchkey MIDI control exists only in the core edition (`TICKETRY_EDITION=core`;
+capability `launchkeyMidi`). A Pocock build compiles the Launchkey code and the
+`tauri-plugin-launchkey-adaptor` dependency, but does not initialize the plugin,
+does not start the controller, and skips the shutdown disconnect: a connected
+Launchkey does nothing, and nothing waits on MIDI at startup or quit
+(CODING-2864).
 
 Connect a Launchkey Mini MK3 to desktop Ticketry and select a project containing
 agent runs. There is no MIDI settings page or enable button: desktop agent-status
@@ -96,6 +104,17 @@ disconnect; forced process death has no equivalent restoration guarantee.
   Run `bun run --cwd studio test -- src/test/overhaulLaunchkeyAcceptance.test.tsx`;
   select a case with `-t overhaul-255`, `-t overhaul-256` or `-t overhaul-257`.
   The numbered suite is also included in `bun run --cwd studio test:overhaul`.
+- Edition composition: `studio/src-tauri/crates/app/ticketry-desktop/src/desktop/edition_peripherals_tests.rs`
+  builds a mock desktop application. Under plain `cargo test` (Pocock), the
+  adaptor plugin is not in the builder and shutdown issues no disconnect; under
+  `--features ticketry-edition/edition-core` (core), both are present. Run
+  `cargo test --manifest-path studio/src-tauri/Cargo.toml -p ticketry-desktop --lib edition_peripherals`
+  with and without `--features ticketry-edition/edition-core`. Frontend startup gating:
+  `studio/src/test/overhaulPocockLaunchkeyVoiceAcceptance.test.tsx` (Pocock,
+  `bun run --cwd studio test:pocock src/test/overhaulPocockLaunchkeyVoiceAcceptance.test.tsx`)
+  checks that startup is never invoked, and `studio/src/test/overhaulCoreLaunchkeyVoiceAcceptance.test.tsx`
+  (`bun run --cwd studio test src/test/overhaulCoreLaunchkeyVoiceAcceptance.test.tsx`)
+  checks that core still starts it.
 - Native wiring is a source contract, not hardware execution:
   `studio/src/test/desktopShellContract.test.ts` checks pinned adaptor registration,
   permissions and standalone-before-disconnect shutdown. Narrow command:
@@ -130,7 +149,8 @@ Suite: excluded (manual): every sub-feature needs a physical Launchkey Mini MK3 
 ## Relevant code
 
 - `studio/src/features/launchkey`: controller, startup, pad projection and their unit fixtures/tests.
-- `studio/src/app/startup/startAgentStatusServices.ts`: desktop startup call after status stream setup.
+- `studio/src/app/startup/startAgentStatusServices.ts`: desktop startup call after status stream setup, gated by `editionHas("launchkeyMidi")`.
+- `studio/src-tauri/crates/app/ticketry-desktop/src/desktop/edition_peripherals.rs`: edition-gated adaptor plugin and shutdown disconnect.
 - `studio/src/app/navigation/actionIds.ts` and `studio/src/app/navigation/keymapRegistry.ts`: action identities and dispatch registration.
 - `studio/src/features/agents/actions/agentRunActions.ts` and `studio/src/features/agents/actions/selectedAgentRun.ts`: run focus and selected-ready-viewer guard.
 - `studio/src/runtime/desktopLaunchkeyMidi.ts`, `studio/src/runtime/desktopRuntime.ts` and `studio/src/runtime/browserRuntime.ts`: native transport, Handy/viewer IPC and inert browser adapter.
@@ -145,6 +165,10 @@ acknowledgement and controller-local Record state do not survive a new controlle
 reconnect reconstructs the pad projection and restores only the controller's
 Record light. A failure that is already historical when reconnecting is not
 newly observed live.
+
+Real hardware stays a manual check in both editions. Pocock's absence is
+proven only by the composition and mounted-shell tests above; no Pocock
+hardware walkthrough was run.
 
 Record's optimistic light does not track Handy's actual recording state, and
 spawn success does not establish transcription or insertion. The hardware doc's

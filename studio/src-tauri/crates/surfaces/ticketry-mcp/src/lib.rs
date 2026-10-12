@@ -23,6 +23,7 @@ mod codex_thread_rename;
 mod connection_handshake;
 mod dependency_tools;
 mod dispatch;
+mod edition_arguments;
 mod launch_tools;
 mod operation_registry;
 mod projection;
@@ -408,5 +409,7 @@ impl Drop for McpRuntime {
     }
 }
 
+#[cfg(test)]
+mod edition_tests;
 #[cfg(test)]
 mod tests;

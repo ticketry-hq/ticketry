@@ -58,6 +58,10 @@ test("epic visits cycle, close and reopen while empty and cancelled creation wri
   await expect(second).toBeFocused();
   await page.getByRole("button", { name: "Close Visits other epic", exact: true }).click();
   await expect(page.getByTestId("plan-backlog").getByText("No epic open. Use + Add epic to plan another one.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add epic", exact: true })).toBeFocused();
+  await selectEpic(page, fixture.secondEpic.name);
+  await page.getByRole("button", { name: /^Done with Visits other epic/ }).click();
+  await expect(page.getByRole("button", { name: "Add epic", exact: true })).toBeFocused();
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await page.locator('[data-testid^="sprint-card-"]').filter({ has: page.getByRole("heading", { name: "Visits release", exact: true }) }).getByRole("button", { name: "Plan", exact: true }).click();
   await expect(page.getByTestId("plan-backlog").getByText("No epic open. Use + Add epic to plan another one.")).toBeVisible();

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { resolve } from "node:path";
+import { resolveEdition } from "../scripts/edition-build-policy.mjs";
 import {
   CODEX_TEST_MODEL,
   CODEX_TEST_REASONING,
@@ -52,11 +53,16 @@ test("uses the provisioned model and completes first-run provider onboarding", a
   await moduleDialog.getByRole("button", { name: "Create module" }).click();
   await expect(moduleDialog).toHaveCount(0);
 
-  const idea = page.getByRole("textbox", { name: "Capture an idea" });
-  await idea.fill("Story created during the onboarding tour");
-  await idea.press("Enter");
-  await expect(page.getByTestId("issue-name"))
-    .toContainText("Story created during the onboarding tour");
+  // Core provisions no Story type, so its tour ends at the module (CODING-2861).
+  if (resolveEdition().edition === "pocock") {
+    const idea = page.getByRole("textbox", { name: "Capture an idea" });
+    await idea.fill("Story created during the onboarding tour");
+    await idea.press("Enter");
+    await expect(page.getByTestId("issue-name"))
+      .toContainText("Story created during the onboarding tour");
+  } else {
+    await expect(page.getByRole("dialog", { name: "Your first module is ready" })).toBeVisible();
+  }
   await page.getByTestId("onboarding-finish").click();
   await expect(page.getByTestId("onboarding-finish")).toHaveCount(0);
 

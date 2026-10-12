@@ -1,5 +1,6 @@
 //! Idempotent deletion of one Module's local folder.
 
+use crate::work_management::write_reservation::ReservedWrite;
 use sea_orm::DatabaseTransaction;
 use seaography::{
     async_graphql::{dynamic::ResolverContext, Result},
@@ -46,7 +47,7 @@ pub(super) fn register(builder: &mut Builder) {
         RestrictedMutationField::new("clear_module_link", OperationType::Delete)
             .argument(string_argument("module_id"))
             .returns_boolean(),
-        ClearModuleLink,
+        ReservedWrite(ClearModuleLink),
         ViewSerializers::default(),
     );
 }

@@ -66,7 +66,7 @@ describe("native libghostty shipping contract", () => {
   it("keeps desktop smoke and packaged acceptance on the shipping feature set", async () => {
     const [smoke, acceptance] = await Promise.all([
       text("../../scripts/desktop-smoke.mjs"),
-      text("../../scripts/desktop-agent-acceptance.mjs"),
+      text("../../scripts/desktop-installation/acceptance-build.mjs"),
     ]);
 
     // No `--features` flag is needed now that native is a default feature, but

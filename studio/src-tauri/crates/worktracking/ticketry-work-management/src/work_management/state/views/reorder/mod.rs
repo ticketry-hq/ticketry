@@ -17,6 +17,7 @@ use super::support::{work_facts, WakeWorkFacts};
 use crate::work_management::{
     commands::catalog,
     graphql::{command_error, require_command_database},
+    write_reservation::ReservedWrite,
 };
 use ticketry_entities::state;
 
@@ -63,7 +64,7 @@ pub(super) fn register(builder: &mut Builder) {
                 TypeRef::named_nn_list_nn(TypeRef::STRING),
             ))
             .hook_owns_authorization(),
-        ReorderStates,
+        ReservedWrite(ReorderStates),
         ViewSerializers::default(),
     );
 }

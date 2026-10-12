@@ -18,7 +18,9 @@ use seaolim::{
 
 use ticketry_entities::sprint;
 
-use crate::work_management::{commands::sprint_create, graphql::command_error};
+use crate::work_management::{
+    commands::sprint_create, graphql::command_error, write_reservation::ReservedWrite,
+};
 use serializer::SprintCreateSerializer;
 
 struct CreateSprint {
@@ -79,7 +81,7 @@ pub(super) fn register(builder: &mut Builder) {
             &context.entity_create_one_mutation.data_field,
             TypeRef::named_nn(input_builder.insert_type_name::<sprint::Entity>()),
         )),
-        CreateSprint { context },
+        ReservedWrite(CreateSprint { context }),
         bindings(),
     );
 }

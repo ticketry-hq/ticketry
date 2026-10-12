@@ -33,15 +33,22 @@ export const e2eDataDirectory = () => {
   return directory;
 };
 
+/** Choose how the next disposable provider process behaves. */
+export async function writeFixtureControl(control: FixtureControl) {
+  await writeFile(join(providerDirectory(), "agent-control.json"), JSON.stringify(control));
+}
+
 /** Launch one work item through Run item with the disposable provider's control. */
 export async function launchFixtureRun(page: Page, itemName: string, control: FixtureControl): Promise<string> {
-  await writeFile(join(providerDirectory(), "agent-control.json"), JSON.stringify(control));
+  await writeFixtureControl(control);
   await openFeatureModule(page, names.module);
   await openWorkItem(page, itemName);
   const launch = await observeConversationLaunch(page, () => page.getByRole("button", { name: "Run item", exact: true }).click());
   await fixtureLaunchEvidence(launch.runId);
   return launch.runId;
 }
+
+export const compactId = (id: string) => id.replace(/-/g, "");
 
 export function rowBadge(page: Page, itemName: string) {
   return page.getByRole("treeitem", { name: new RegExp(itemName) }).getByTestId("agent-state-badge");

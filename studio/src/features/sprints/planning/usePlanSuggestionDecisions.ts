@@ -22,7 +22,7 @@ const useDecisionFeedback = createApolloStore<{ decision: Decision | null; failu
 );
 
 /** Decisions and Undo share the restricted suggestion update; Rust owns membership and proposal conversion. */
-export function usePlanSuggestionDecisions(projectId: string, sprintId: string, onDecision: () => void, policy: { isCurrent: () => boolean; canChange: (id: string, status: DecisionStatus, confirmedBatch?: boolean) => boolean }) {
+export function usePlanSuggestionDecisions(projectId: string, sprintId: string, onDecision: () => void, policy: { isCurrent: () => boolean; resolve: (id: string, status: DecisionStatus, confirmedBatch?: boolean) => DecisionSubject | undefined }) {
   const { update, refresh, inspect, busy } = useUpdateSprintSuggestion({ projectId, sprintId });
   const readiness = useSuggestionReadiness(projectId, sprintId);
   useDecisionFeedback.getState();
@@ -71,9 +71,12 @@ export function usePlanSuggestionDecisions(projectId: string, sprintId: string, 
     return !outcome.refreshFailed;
   };
   const change = async (suggestion: DecisionSubject, status: DecisionStatus, proposedName?: string, inBatch = false, confirmedBatch = false): Promise<boolean> => {
-    if (pending.current || suggestionReadScope(projectId, sprintId).pending() || (batchPending.current && !inBatch) || (useDecisionFeedback.getState().recovery?.kind === "unconfirmed" || useDecisionFeedback.getState().recovery?.kind === "inspectScope") || !policy.canChange(suggestion.id, status, confirmedBatch)) return false;
-    const title = status === "accepted" && !suggestion.issue
-      ? (proposedName ?? editedProposalTitle(suggestion.id))?.trim() : undefined;
+    if (pending.current || suggestionReadScope(projectId, sprintId).pending() || (batchPending.current && !inBatch) || (useDecisionFeedback.getState().recovery?.kind === "unconfirmed" || useDecisionFeedback.getState().recovery?.kind === "inspectScope")) return false;
+    const current = policy.resolve(suggestion.id, status, confirmedBatch);
+    if (!current) return false;
+    // Retry and queued batch entries can outlive a proposal's conversion to a Story.
+    const title = status === "accepted" && !current.issue
+      ? (proposedName ?? editedProposalTitle(current.id))?.trim() : undefined;
     if (title !== undefined && (!title || Array.from(title).length > 512)) {
       toast.error("Enter a story title between 1 and 512 characters.");
       return false;
@@ -83,7 +86,7 @@ export function usePlanSuggestionDecisions(projectId: string, sprintId: string, 
     const command = { suggestion, status, ...(title === undefined ? {} : { proposedName: title }) };
     pending.current = true;
     try {
-      return receive(await update({ id: suggestion.id, status, ...(title !== undefined && title !== suggestion.proposedName ? { proposedName: title } : {}) }), command, selection);
+      return receive(await update({ id: current.id, status, ...(title !== undefined && title !== current.proposedName ? { proposedName: title } : {}) }), command, selection);
     } finally { pending.current = false; }
   };
   const acceptAll = async (suggestions: readonly SprintSuggestionRecordFragment[]) => {

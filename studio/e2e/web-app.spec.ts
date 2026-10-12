@@ -35,7 +35,6 @@ import {
   ReorderWorkTrackerIssueTypesDocument,
   ReorderWorkTrackerStatesDocument,
   SetWorkTrackerStartStateDocument,
-  SetWorkTrackerSubtreeRunDocument,
   UpdateWorkTrackerStateDocument,
 } from "../src/features/workflows/generated/workflows.documents";
 import {
@@ -73,22 +72,8 @@ test.afterEach(async () => {
   expect(legacyProductApiRequests).toEqual([]);
 });
 
-async function ensureModulesPane(
-  page: Page,
-  options: { mayAlreadyBeOpen?: boolean } = {},
-): Promise<Locator> {
+async function visibleModulesPane(page: Page): Promise<Locator> {
   const pane = page.getByTestId("pane-modules");
-  const toggle = page.getByTestId("modules-pane-toggle");
-  if (
-    options.mayAlreadyBeOpen
-    && await toggle.getAttribute("aria-expanded") === "true"
-  ) {
-    await expect(pane).toBeVisible();
-    return pane;
-  }
-  await expect(toggle).toHaveAttribute("aria-label", "Open Modules pane");
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(pane).toBeVisible();
   return pane;
 }
@@ -383,7 +368,7 @@ test.describe("complete browser application", () => {
     page,
   }) => {
     await openModule(page, names.module);
-    const modulesPane = await ensureModulesPane(page);
+    const modulesPane = await visibleModulesPane(page);
     await modulesPane.getByRole("button", { name: "Add module" }).click();
 
     let dialog = page.getByRole("dialog", { name: "Add Module" });
@@ -445,7 +430,7 @@ test.describe("complete browser application", () => {
     page,
   }) => {
     await openModule(page, names.module);
-    const modulesPane = await ensureModulesPane(page);
+    const modulesPane = await visibleModulesPane(page);
     const moduleTabs = page.getByRole("tablist", {
       name: "Project module tabs",
     });
@@ -490,7 +475,7 @@ test.describe("complete browser application", () => {
         .getByRole("tab").allTextContents())
         .filter((label) => [names.module, names.secondModule].includes(label))
     ).toEqual([names.secondModule, names.module]);
-    await ensureModulesPane(page);
+    await visibleModulesPane(page);
     await expect.poll(sidebarModuleNames)
       .toEqual([names.secondModule, names.module]);
   });
@@ -499,7 +484,7 @@ test.describe("complete browser application", () => {
     page,
   }) => {
     await openModule(page, names.module);
-    const modulesPane = await ensureModulesPane(page);
+    const modulesPane = await visibleModulesPane(page);
     const seededNames = [names.module, names.secondModule];
     const paneRow = (moduleName: string) =>
       modulesPane.locator("li[data-module-id]").filter({ hasText: moduleName });
@@ -545,7 +530,7 @@ test.describe("complete browser application", () => {
 
     await page.reload();
     await expect.poll(tabOrder).toEqual(after);
-    await ensureModulesPane(page);
+    await visibleModulesPane(page);
     await expect.poll(paneOrder).toEqual(after);
 
     // Leave the persisted order exactly as it was found, so every later test
@@ -570,7 +555,7 @@ test.describe("complete browser application", () => {
     page,
   }) => {
     await openModule(page, names.module);
-    const modulesPane = await ensureModulesPane(page);
+    const modulesPane = await visibleModulesPane(page);
     const moduleTabs = page.getByRole("tablist", {
       name: "Project module tabs",
     });
@@ -666,9 +651,7 @@ test.describe("complete browser application", () => {
       .filter((module) => visibleNames.includes(module.name));
 
     try {
-      const modulesPane = await ensureModulesPane(page, {
-        mayAlreadyBeOpen: true,
-      });
+      const modulesPane = await visibleModulesPane(page);
       const restored = page.waitForResponse((response) =>
         response.url().endsWith("/graphql") &&
         response.request().postDataJSON()?.operationName ===
@@ -2051,27 +2034,6 @@ test.describe("complete browser application", () => {
     }
   });
 
-  test("persists and restores Modules pane visibility", async ({
-    page,
-  }) => {
-    await openModule(page, names.module);
-    await ensureModulesPane(page);
-    const toggle = page.getByTestId("modules-pane-toggle");
-    await expect(page.getByTestId("pane-modules")).toBeVisible();
-    await expect(toggle).toHaveAttribute("aria-expanded", "true");
-
-    await toggle.click();
-    await expect(page.getByTestId("pane-modules")).toHaveCount(0);
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-
-    await page.reload();
-    await expect(page.getByTestId("pane-modules")).toHaveCount(0);
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await expect(page.getByTestId("pane-modules")).toBeVisible();
-  });
-
   test("focuses story search with a shortcut and returns to the tree", async ({
     page,
   }) => {
@@ -3385,9 +3347,7 @@ test.describe("complete browser application", () => {
 
   test("supports three-zone edit-view keyboard navigation", async ({ page }) => {
     await openModule(page, names.module);
-    await expect(page.getByTestId("modules-pane-toggle"))
-      .toHaveAttribute("aria-expanded", "false");
-    await ensureModulesPane(page, { mayAlreadyBeOpen: true });
+    await visibleModulesPane(page);
     await page.getByRole("button", { name: "Open Settings" }).focus();
     await page.keyboard.press("Backslash");
     await expect(page.getByTestId("pane-modules")).not.toBeVisible();
@@ -3497,126 +3457,6 @@ test.describe("complete browser application", () => {
     await page.keyboard.press("/");
     await expect(page.getByRole("textbox", { name: "Search stories" }))
       .toBeFocused();
-  });
-
-  test("sends serial and parallel subtree launches through the visible controls", async ({
-    page,
-    request,
-  }) => {
-    const root = await getWorkItem(request, fixture.hierarchyParent.id);
-    expect(root.state_id, "the campaign root state").toBeTruthy();
-
-    const readStoryPolicy = async () => {
-      const catalog = await getWorkflowCatalog(request, fixture.project.id);
-      const story = catalog.issue_types.nodes.find((type) =>
-        type.id === fixture.storyType.id
-      );
-      expect(story, "the current Story workflow").toBeTruthy();
-      const binding = story!.launch_bindings.nodes.find((candidate) =>
-        candidate.state === root.state_id
-      );
-      return { story: story!, binding };
-    };
-    const original = await readStoryPolicy();
-    const originalEnabled = original.binding?.subtree_run_enabled ?? false;
-    await graphql(request, SetWorkTrackerSubtreeRunDocument, {
-      issueTypeId: fixture.storyType.id,
-      stateId: root.state_id!,
-      workflowRevision: original.story.workflow_revision,
-      enabled: true,
-    });
-
-    const requestedModes: Array<string | null> = [];
-    let armed = false;
-    await page.route("**/graphql", async (route) => {
-      const body = route.request().postDataJSON() as {
-        operationName?: string;
-        variables?: { rootId?: string; executionMode?: string | null };
-      } | null;
-      if (body?.operationName === "ExecutionGraphRunHolding") {
-        await route.fulfill({
-          contentType: "application/json",
-          body: JSON.stringify({
-            data: {
-              graph_run_holding: {
-                __typename: "GraphRunsConnection",
-                nodes: armed
-                  ? [{
-                    __typename: "GraphRuns",
-                    root_id: fixture.hierarchyParent.id,
-                    execution_mode: requestedModes.at(-1) ?? "parallel",
-                  }]
-                  : [],
-              },
-            },
-          }),
-        });
-        return;
-      }
-      if (
-        body?.operationName === "CreateExecutionGraphRun" ||
-        body?.operationName === "UpdateExecutionGraphRun"
-      ) {
-        const mode = body.variables?.executionMode ?? null;
-        requestedModes.push(mode);
-        armed = true;
-        await route.fulfill({
-          contentType: "application/json",
-          body: JSON.stringify({
-            data: {
-              graph_run_result: {
-                __typename: "GraphRunMutationPayload",
-                graph_run: {
-                  __typename: "GraphRuns",
-                  root_id: fixture.hierarchyParent.id,
-                  execution_mode: mode ?? "parallel",
-                },
-                launched: [fixture.hierarchyChild.id],
-              },
-            },
-          }),
-        });
-        return;
-      }
-      await route.continue();
-    });
-
-    try {
-      await openModule(page, names.module);
-      await openWorkItem(page, names.hierarchyParent);
-      const details = page.getByRole("region", { name: "Details" });
-      const runSerially = details.getByRole("button", { name: "Run serially" });
-      const runSubtree = details.getByRole("button", { name: "Run subtree" });
-      await expect(runSerially).toBeVisible();
-      await expect(runSubtree).toBeVisible();
-
-      await runSerially.click();
-      await expect(page.getByRole("status").filter({
-        hasText: "Serial subtree run started.",
-      })).toBeVisible();
-      const parallelRequested = page.waitForResponse((response) => {
-        const request = response.request();
-        if (!request.url().endsWith("/graphql")) return false;
-        const body = request.postDataJSON();
-        return (
-          body?.operationName === "CreateExecutionGraphRun" ||
-          body?.operationName === "UpdateExecutionGraphRun"
-        ) && body?.variables?.executionMode == null;
-      });
-      await runSubtree.click();
-      await parallelRequested;
-
-      expect(requestedModes).toEqual(["serial", null]);
-    } finally {
-      await page.unroute("**/graphql");
-      const current = await readStoryPolicy();
-      await graphql(request, SetWorkTrackerSubtreeRunDocument, {
-        issueTypeId: fixture.storyType.id,
-        stateId: root.state_id!,
-        workflowRevision: current.story.workflow_revision,
-        enabled: originalEnabled,
-      });
-    }
   });
 
   test("persists the Story Grill policy through Rust", async ({

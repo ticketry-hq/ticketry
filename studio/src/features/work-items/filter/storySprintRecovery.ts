@@ -5,7 +5,7 @@ import { getModuleTreeSnapshot, getWorkItemSnapshot } from "../queries";
 import { getProjectStorySprintIndexSnapshot } from "../queries/useProjectStorySprintIndex";
 import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
 import type { WorkItem } from "../../../shared/api/types";
-import { ROADMAP_ENABLED } from "../../../shared/config/roadmapAvailability";
+import { editionHas } from "../../../shared/config/edition";
 
 export function capturedStoryOutsideResults(projectId: string, created: WorkItem, search: string): boolean {
   const selection = storySprintSelection(projectId);
@@ -16,7 +16,7 @@ export function capturedStoryOutsideResults(projectId: string, created: WorkItem
 }
 
 function storySprintSelection(projectId: string) {
-  if (!ROADMAP_ENABLED) return { mode: "all" as const };
+  if (!editionHas("sprintPlanning")) return { mode: "all" as const };
   const intent = getStorySprintFilterIntent(projectId);
   const reads = getStorySprintReadsSnapshot(projectId, intent.mode === "id" ? intent.sprintId : null);
   return resolveStorySprintFilter(intent, reads.active, reads.selected).selection;
@@ -24,7 +24,7 @@ function storySprintSelection(projectId: string) {
 
 /** Explicit navigation cancels old folder/restoration attempts before selection. */
 export function prepareExplicitStoryReveal(projectId: string, moduleId: string, taskId: string | null): void {
-  if (!ROADMAP_ENABLED) return;
+  if (!editionHas("sprintPlanning")) return;
   const selection = storySprintSelection(projectId);
   const tree = getModuleTreeSnapshot(projectId, moduleId);
   const items = Object.fromEntries(tree.order.flatMap((id) => {

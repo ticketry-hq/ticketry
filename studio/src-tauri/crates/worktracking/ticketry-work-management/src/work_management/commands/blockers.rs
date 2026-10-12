@@ -1,8 +1,9 @@
+use crate::work_management::database::begin_write;
 use std::collections::{HashMap, HashSet};
 
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    QuerySelect, QueryTrait, Set, TransactionTrait,
+    QuerySelect, QueryTrait, Set,
 };
 
 use super::identifiers::database_uuid;
@@ -76,7 +77,7 @@ pub async fn change(
         ));
     }
 
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     // This is the transaction's first statement: reserve SQLite's writer
     // before any task or edge read so concurrent additive changes serialize.
     let reservation = project::Entity::update_many()

@@ -19,7 +19,7 @@ export function useManagerActions() {
       else if (action === "close") {
         await closeTab(moduleId);
         succeeded = getEffectiveModuleTabsSnapshot(started.projectId).entries.find(({ module }) => module.id === moduleId)?.status === "hidden";
-      } else succeeded = await (action === "open" ? navigation.openModule(moduleId, { isCurrent: current }) : navigation.restoreModule(moduleId, { isCurrent: current }));
+      } else succeeded = await (action === "open" ? navigation.openModule(moduleId, { isCurrent: current, leaveSurfaces: true }) : navigation.restoreModule(moduleId, { isCurrent: current }));
       if (!current()) return;
       if (succeeded && action === "open") {
         useModuleManagerStore.setState((state) => ({ pendingActions: { ...state.pendingActions, [moduleId]: false } }));

@@ -1,12 +1,12 @@
 import { compactWorktrackerId, publicWorktrackerId } from "../../../../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../../../../shared/apollo/client";
-import { ROADMAP_ENABLED } from "../../../../shared/config/roadmapAvailability";
+import { editionHas } from "../../../../shared/config/edition";
 import { PlanningGraphDocument, refreshPlanningGraph } from "../../../planning-graph";
 import { refreshSprintChoices } from "../../../sprints";
 
 /** Re-read even an inactive graph, and invalidate retained sprint-choice pages. */
 export async function refreshSprintHoldings(projectId: string): Promise<void> {
-  if (!ROADMAP_ENABLED) return;
+  if (!editionHas("sprintPlanning")) return;
   refreshSprintChoices(projectId);
   const client = studioApolloClient();
   const cachedIds = [...new Set([publicWorktrackerId(projectId), compactWorktrackerId(projectId)])]

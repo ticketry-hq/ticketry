@@ -1,6 +1,12 @@
 //! Add and populate LaunchBinding.entry_skill from migration 0047.
+//!
+//! Every edition adds the column and records the checkpoint. Only editions
+//! granting `reviewedWorkflowDefaults` (Pocock) fill unset entry skills from
+//! the reviewed stage skills; core leaves every binding as it was.
 
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, DbErr, Statement, TransactionTrait};
+
+use ticketry_edition::EditionCapability;
 
 use super::commands::reviewed_defaults;
 
@@ -41,7 +47,8 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
                 )
                 .await?;
         }
-        if table_exists(&transaction, "worktracker_issuetype").await?
+        if ticketry_edition::has(EditionCapability::ReviewedWorkflowDefaults)
+            && table_exists(&transaction, "worktracker_issuetype").await?
             && table_exists(&transaction, "worktracker_state").await?
         {
             seed_reviewed_entries(&transaction).await?;

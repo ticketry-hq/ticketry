@@ -8,7 +8,7 @@ import {
 } from "../../../features/agents/worktrees";
 import { leavePlanWorkspace, openPlanWorkspace, selectPlanWorkspaceActive, usePlanWorkspace } from "../../../features/sprints";
 import { useClientStore } from "../../../state/clientStore";
-import { ROADMAP_ENABLED } from "../../../shared/config/roadmapAvailability";
+import { editionHas } from "../../../shared/config/edition";
 
 export function WorkspaceTabs({ moduleName }: { moduleName?: string }) {
   const projectId = useStudioStore((state) => state.selectedProjectId);
@@ -19,7 +19,7 @@ export function WorkspaceTabs({ moduleName }: { moduleName?: string }) {
   const moduleId = changes.active ? changes.moduleId : planActive ? planModuleId : selectedModuleId;
   const changesLabel = moduleName ? `Changes · ${moduleName}` : "Changes";
   const selectPlan = () => {
-    if (!ROADMAP_ENABLED) return;
+    if (!editionHas("sprintPlanning")) return;
     if (changes.active) leaveChangesWorkspace();
     if (!planActive) openPlanWorkspace();
   };
@@ -46,7 +46,7 @@ export function WorkspaceTabs({ moduleName }: { moduleName?: string }) {
     "flex shrink-0 items-center gap-1 border-r border-pane-border px-3 text-xs disabled:opacity-50 " +
     (selected ? "bg-pane-panel font-semibold text-text-primary shadow-[inset_0_-2px_0_0_#7aa2f7]" : "text-text-muted hover:bg-pane-panel hover:text-text-primary");
   return <>
-    {ROADMAP_ENABLED ? <button type="button" role="tab" data-testid="workspace-tab-plan"
+    {editionHas("sprintPlanning") ? <button type="button" role="tab" data-testid="workspace-tab-plan"
       aria-selected={planActive} tabIndex={planActive ? 0 : -1} disabled={!projectId}
       onClick={selectPlan} onKeyDown={(event) => activate(event, selectPlan)} className={className(planActive)}>
       <span aria-hidden="true">◆</span><span>Plan</span>

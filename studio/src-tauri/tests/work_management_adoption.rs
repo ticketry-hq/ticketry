@@ -6,6 +6,7 @@ use ticketry_work_management::{
 };
 
 use sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
+use ticketry_edition::{has, EditionCapability};
 use ticketry_work_management::{adopt, SourceClassification};
 
 async fn django_fixture(database_path: &Path) {
@@ -213,4 +214,128 @@ async fn reopens_after_sprint_migration_with_all_planning_tables_owned() {
         .expect("reopen sprint-owned database after rank migration");
     assert_eq!(ranked.source, SourceClassification::RustOwned);
     assert!(ranked.restoration_verified);
+}
+
+/// Adopt the Django fixture, then give its Implementation type launch bindings
+/// whose entry skill is unset, empty, or already chosen before migration 0047.
+async fn adopted_bindings_before_entry_skill_adoption(
+    directory: &Path,
+) -> sea_orm::DatabaseConnection {
+    let path = directory.join("state.db");
+    django_fixture(&path).await;
+    normalize_fixture_counters(&path).await;
+    adopt(directory).await.expect("adopt fixture");
+    let database = Database::connect(format!("sqlite:{}?mode=rw", path.display()))
+        .await
+        .expect("open adopted WorkTracker");
+    let project = common::execution_legacy_fixture::PROJECT;
+    database
+        .execute_unprepared(&format!(
+            "INSERT INTO worktracker_state
+                (id,name,\"group\",color,created_at,updated_at,project_id,sort_order,is_protected)
+             VALUES
+                ('00000000000000000000000000089401','Grill','backlog','#60646C',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'{project}',2,0),
+                ('00000000000000000000000000089402','Spec','unstarted','#8E4EC6',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'{project}',3,0),
+                ('00000000000000000000000000089403','Tickets','unstarted','#33B1FF',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'{project}',4,0);
+             ALTER TABLE worktracker_launchbinding ADD COLUMN entry_skill varchar(128) NULL;
+             INSERT INTO worktracker_launchbinding
+                (prompt,created_at,updated_at,issue_type_id,state_id,auto_start,
+                 subtree_run_enabled,required_skills,model_id,reasoning_id,entry_skill)
+             VALUES
+                ('unset',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'00000000000000000000000000089304',
+                 '00000000000000000000000000089401',0,0,'[\"grill-with-docs\"]',NULL,NULL,NULL),
+                ('empty',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'00000000000000000000000000089304',
+                 '00000000000000000000000000089402',0,0,'[\"to-spec\"]',NULL,NULL,''),
+                ('chosen',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'00000000000000000000000000089304',
+                 '00000000000000000000000000089403',0,0,'[\"to-tickets\"]',NULL,NULL,'custom-skill');"
+        ))
+        .await
+        .expect("seed launch bindings before entry-skill adoption");
+    database
+}
+
+async fn entry_skills(database: &sea_orm::DatabaseConnection) -> Vec<(String, Option<String>)> {
+    database
+        .query_all_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT prompt, entry_skill FROM worktracker_launchbinding ORDER BY prompt".to_owned(),
+        ))
+        .await
+        .expect("read entry skills")
+        .into_iter()
+        .map(|row| {
+            (
+                row.try_get("", "prompt").expect("binding prompt"),
+                row.try_get("", "entry_skill").expect("entry skill"),
+            )
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn pocock_entry_skill_adoption_fills_only_unset_reviewed_stage_skills() {
+    if !has(EditionCapability::ReviewedWorkflowDefaults) {
+        return; // Core never fills entry skills; see the core counterpart.
+    }
+    let directory = tempfile::tempdir().expect("create fixture directory");
+    let database = adopted_bindings_before_entry_skill_adoption(directory.path()).await;
+
+    install_launch_binding_entry_skill_schema(&database)
+        .await
+        .expect("adopt reviewed entry skills");
+
+    assert_eq!(
+        entry_skills(&database).await,
+        vec![
+            ("chosen".to_owned(), Some("custom-skill".to_owned())),
+            ("empty".to_owned(), Some(String::new())),
+            ("unset".to_owned(), Some("grill-with-docs".to_owned())),
+        ]
+    );
+}
+
+/// CODING-2862: core records the entry-skill checkpoint without filling any
+/// binding, so unset, empty and chosen entry skills all survive startup.
+#[tokio::test]
+async fn core_entry_skill_checkpoint_leaves_every_binding_unchanged() {
+    if has(EditionCapability::ReviewedWorkflowDefaults) {
+        return; // Pocock fills reviewed stage skills; see the Pocock test.
+    }
+    let directory = tempfile::tempdir().expect("create fixture directory");
+    let database = adopted_bindings_before_entry_skill_adoption(directory.path()).await;
+    let before = entry_skills(&database).await;
+
+    install_launch_binding_entry_skill_schema(&database)
+        .await
+        .expect("record the entry-skill checkpoint");
+    install_launch_binding_entry_skill_schema(&database)
+        .await
+        .expect("repeat the entry-skill checkpoint");
+
+    assert_eq!(
+        before,
+        vec![
+            ("chosen".to_owned(), Some("custom-skill".to_owned())),
+            ("empty".to_owned(), Some(String::new())),
+            ("unset".to_owned(), None),
+        ]
+    );
+    assert_eq!(entry_skills(&database).await, before);
+    let ledger = database
+        .query_one_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            format!(
+                "SELECT migration_id FROM {} WHERE singleton = 1",
+                ticketry_work_management::LAUNCH_BINDING_ENTRY_SKILL_MIGRATION_LEDGER_TABLE
+            ),
+        ))
+        .await
+        .expect("read entry-skill ledger")
+        .expect("entry-skill ledger row");
+    assert_eq!(
+        ledger
+            .try_get::<String>("", "migration_id")
+            .expect("migration id"),
+        ticketry_work_management::LAUNCH_BINDING_ENTRY_SKILL_MIGRATION_MIGRATION_ID
+    );
 }

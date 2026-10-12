@@ -15,7 +15,7 @@ import { clearStorySprintFilter } from "../work-items";
 import { useEffectiveModuleTabs } from "./effectiveModuleTabs";
 import { hiddenModuleIds } from "./modulePresentation";
 import { useRestoreAndSelectModule } from "./useRestoreAndSelectModule";
-import { ROADMAP_ENABLED } from "../../shared/config/roadmapAvailability";
+import { editionHas } from "../../shared/config/edition";
 
 interface ModulePickerProps {
   modules: readonly Module[];
@@ -59,7 +59,7 @@ export function ModulePicker({
   const restoreAndSelectModule = useRestoreAndSelectModule();
   const projectId = useStudioStore((state) => state.selectedProjectId);
   const projection = useEffectiveModuleTabs(projectId, modules, presentations);
-  const restricted = ROADMAP_ENABLED && projection.restricted && projection.selection !== null;
+  const restricted = editionHas("sprintPlanning") && projection.restricted && projection.selection !== null;
   const choices = projection.entries.filter(({ module, status }) => status === "hidden"
     && module.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(({ module }) => module);
   const choiceOffset = restricted ? 2 : 1;

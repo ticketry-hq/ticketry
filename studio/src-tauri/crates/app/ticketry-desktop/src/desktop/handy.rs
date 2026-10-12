@@ -16,8 +16,8 @@ fn record_failure(log: &FileLog, message: impl std::fmt::Display) {
 }
 
 #[tauri::command]
-pub(crate) fn desktop_toggle_handy_transcription(
-    window: tauri::WebviewWindow,
+pub(crate) fn desktop_toggle_handy_transcription<R: tauri::Runtime>(
+    window: tauri::WebviewWindow<R>,
     log: tauri::State<'_, FileLog>,
 ) {
     if window.label() != MAIN_WINDOW_LABEL {

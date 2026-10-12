@@ -4,7 +4,7 @@ import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
 import { useProjectStorySprintIndex } from "../queries/useProjectStorySprintIndex";
 import { useStorySprintFilterIntent, setStorySprintFilterIntent, advanceStorySprintFilterGeneration, useStorySprintFilterNotice, setStorySprintFilterNotice, type StorySprintIntent } from "../internal/storySprintFilterStore";
 import { resolveStorySprintFilter } from "../selectors/storySprintFilter";
-import { ROADMAP_ENABLED } from "../../../shared/config/roadmapAvailability";
+import { editionHas } from "../../../shared/config/edition";
 
 function useController(projectId: string | null) {
   const intent = useStorySprintFilterIntent(projectId);
@@ -57,11 +57,11 @@ export function StorySprintFilterController({ projectId, children }: { projectId
   return inherited ? children : <ControllerOwner projectId={projectId}>{children}</ControllerOwner>;
 }
 function ControllerOwner({ projectId, children }: { projectId: string | null; children: ReactNode }) {
-  return ROADMAP_ENABLED
-    ? <RoadmapControllerOwner projectId={projectId}>{children}</RoadmapControllerOwner>
+  return editionHas("sprintPlanning")
+    ? <SprintPlanningControllerOwner projectId={projectId}>{children}</SprintPlanningControllerOwner>
     : <OrdinaryStoriesOwner projectId={projectId}>{children}</OrdinaryStoriesOwner>;
 }
-function RoadmapControllerOwner({ projectId, children }: { projectId: string | null; children: ReactNode }) {
+function SprintPlanningControllerOwner({ projectId, children }: { projectId: string | null; children: ReactNode }) {
   const controller = useController(projectId);
   return <Context.Provider value={controller}>{children}</Context.Provider>;
 }

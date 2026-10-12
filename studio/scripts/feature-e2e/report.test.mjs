@@ -34,3 +34,24 @@ test('report renders every coverage outcome and records browser gaps without ove
     assert.match(readFileSync(join(root, '.ticketry-dev/e2e-results/latest.md'), 'utf8'), /second\/summary.md/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('summary names the edition and lists features and cases skipped by it', () => {
+  const root = mkdtempSync(join(tmpdir(), 'feature-evidence-'));
+  try {
+    const registry = { features: [
+      { id: 'chrome', suitePath: 'studio/e2e/features/chrome.spec.ts', cases: [{ ids: ['shell-open'], tags: ['@case-shell-open'], title: 'Open' }, { ids: ['sprint-tab'], tags: ['@case-sprint-tab'], title: 'Sprint', editionTags: ['@edition-core'] }], coverage: { columns: [], rows: [] } },
+      { id: 'plan', suitePath: 'studio/e2e/features/plan.spec.ts', editions: ['core'], cases: [{ ids: ['plan-open'], tags: ['@case-plan-open'], title: 'Plan' }], coverage: { columns: [], rows: [] } },
+    ] };
+    const runDirectory = join(root, '.ticketry-dev/e2e-results', 'run');
+    const manifest = { runId: 'run', revision: 'revision', edition: { edition: 'pocock', source: 'default' }, invocations: [],
+      selection: { featureIds: ['chrome'], caseIds: ['shell-open'], complete: true, skippedByEdition: { features: ['plan'], cases: ['sprint-tab'] } } };
+    const result = writeFeatureResults({ runDirectory, manifest, registry, repositoryRoot: root });
+    assert.equal(result.features.find((feature) => feature.id === 'plan').status, 'not in edition');
+    assert.equal(result.features.find((feature) => feature.id === 'chrome').required, 1);
+    assert.equal(result.cases.find((row) => row.id === 'sprint-tab').status, 'not in edition');
+    const summary = readFileSync(join(runDirectory, 'summary.md'), 'utf8');
+    assert.match(summary, /Edition: \*\*pocock\*\* \(default\)/);
+    assert.match(summary, /\| plan \| 0\/0 \| not in edition \|/);
+    assert.match(summary, /## Skipped by edition\n\n- Feature `plan` \(Editions: core\)\n- Case `chrome` \/ `sprint-tab` \(@edition-core\)/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

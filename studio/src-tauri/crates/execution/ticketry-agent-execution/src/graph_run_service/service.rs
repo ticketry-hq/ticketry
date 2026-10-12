@@ -28,8 +28,10 @@ pub(crate) fn set_production_mutations_open(open: bool) {
     PRODUCTION_MUTATIONS_OPEN.store(open, Ordering::Release);
 }
 
+use super::edition_mode::press_mode;
 use super::claim::{serial_frontier_pending, CampaignClaim, ClaimGeneration, ClaimSelection};
 use super::legacy_stage_skills;
+use super::taken_child::taken_by_another_launch;
 use super::{
     DeletedGraphRunResult, GraphRunAdvanceResult, GraphRunRequest, GraphRunResult,
     GraphRunServiceError, GraphRunServiceErrorCode, LaunchedChild, ResetGraphRunResult,
@@ -157,8 +159,8 @@ impl GraphRunService {
     }
 
     /// Execute the MCP compatibility request against the same campaign seam as
-    /// GraphQL create and update. An omitted mode retains the established
-    /// parallel default.
+    /// GraphQL create and update. An omitted mode resolves to the compiled
+    /// edition's campaign mode (see `press_mode`).
     pub async fn execute(
         &self,
         request: GraphRunRequest,
@@ -176,6 +178,8 @@ impl GraphRunService {
     ) -> Result<GraphRunResult, GraphRunServiceError> {
         self.require_mutations_open()?;
         let _mutation = self.mutation_lock.lock().await;
+        // Refuse a mode the edition withholds before reset clears the ledger.
+        press_mode(request.mode)?;
         self.reset_unlocked(&request.root_id, &request.access)
             .await?;
         self.create_or_press_unlocked(request).await
@@ -198,7 +202,7 @@ impl GraphRunService {
         &self,
         request: GraphRunRequest,
     ) -> Result<GraphRunResult, GraphRunServiceError> {
-        let mode = request.mode.unwrap_or(ExecutionMode::Parallel);
+        let mode = press_mode(request.mode)?;
         let initial_facts =
             scheduling_facts(&self.database, &request.root_id, &request.access, None).await?;
         let root_id = compact(&request.root_id);
@@ -301,13 +305,30 @@ impl GraphRunService {
             let accepted = ticketry_diagnostics::requested_by(
                 ticketry_diagnostics::LaunchSurface::DependencyGraph,
                 async {
-                    let accepted = self
+                    let accepted = match self
                         .terminal_launch
                         .prepare_with_participant(
                             terminal_request(&decision, &identity, &child_id, &module_id, prompt),
                             &claim,
                         )
-                        .await?;
+                        .await
+                    {
+                        Ok(accepted) => accepted,
+                        Err(error)
+                            if taken_by_another_launch(
+                                &self.database,
+                                &root_id,
+                                &request.access,
+                                mode,
+                                &child_id,
+                                &error,
+                            )
+                            .await? =>
+                        {
+                            return Ok(None);
+                        }
+                        Err(error) => return Err(error.into()),
+                    };
                     // Runtime settlement is status-driven. Once preparation
                     // commits, a terminal error must not erase this request's
                     // accepted child.
@@ -317,11 +338,11 @@ impl GraphRunService {
                         provider: decision.provider.clone(),
                     };
                     let _ = self.terminal_launch.execute_accepted(accepted).await;
-                    Ok::<LaunchedChild, GraphRunServiceError>(launched)
+                    Ok::<Option<LaunchedChild>, GraphRunServiceError>(Some(launched))
                 },
             )
             .await?;
-            launched.push(accepted);
+            launched.extend(accepted);
         }
 
         let graph_run = graph_run::Entity::find_by_id(&root_id)

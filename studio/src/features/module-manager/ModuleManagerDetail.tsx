@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ROADMAP_ENABLED } from "../../shared/config/roadmapAvailability";
+import { editionHas } from "../../shared/config/edition";
 import type { ModuleTabEntry } from "../module-tabs";
 import { projectRunPresentation } from "../agents/status";
 import { LifecycleBadge } from "../agents/terminal";
@@ -39,7 +39,7 @@ export function ModuleManagerDetail({ entry, folder, onBack, loading = false }: 
     </div>
     <dl className="space-y-5">
       <div><dt className="mb-1 text-text-muted">Local profile folder</dt><dd className="break-all">{folder ?? "Folder not linked"}</dd></div>
-      {ROADMAP_ENABLED ? <div><dt className="mb-1 text-text-muted">Sprint membership</dt><dd>
+      {editionHas("sprintPlanning") ? <div><dt className="mb-1 text-text-muted">Sprint membership</dt><dd>
         {metadata.sprints.state === "available" ? metadata.sprints.memberships.length
           ? <ul className="space-y-1">{metadata.sprints.memberships.map((sprint) => <li key={sprint.id ?? "unsprinted"} className="break-words">{sprint.name}</li>)}</ul>
           : "No story sprint memberships"

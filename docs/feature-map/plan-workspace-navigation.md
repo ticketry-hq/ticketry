@@ -3,6 +3,7 @@
 Plan opens a project-wide planning workspace with a sprint collection, focused sprint visits and keyboard navigation alongside module tabs.
 
 Surfaces: browser, desktop
+Editions: core
 
 ## Sub-features
 
@@ -13,11 +14,11 @@ Surfaces: browser, desktop
 
 Select a project, then activate **Plan** in **Project module tabs** (`workspace-tab-plan`). From a sprint card, **Plan** opens that sprint; **Review in Plan →** opens the sprint whose suggestions are ready. **Back to sprints** or **Done** returns to the Sprints collection. Plan does not require a selected module.
 
-On the top strip, unmodified Left/Right wrap and activate enabled tabs; Home/End activate the first/last enabled tab without entering its body. Enter/Space activate Plan; on Changes they enter **Choose checkout**. These are direct tab handlers, not named keymap actions. Bare Escape closes an open Plan detail first; a subsequent Escape leaves Plan and focuses its tab. The keymap action `plan` (default N) opens a separate module-scoped, taskless agent planning flow that remains available with Roadmap OFF; see [Agent launch — agent-launch-plan](agent-launch.md) for its folder/prompt/picker sequence and coverage limits, and [Keyboard navigation and shortcuts](keyboard-navigation-and-shortcuts.md) for shortcut routing.
+On the top strip, unmodified Left/Right wrap and activate enabled tabs; Home/End activate the first/last enabled tab without entering its body. Enter/Space activate Plan; on Changes they enter **Choose checkout**. These are direct tab handlers, not named keymap actions. Bare Escape closes an open Plan detail first; a subsequent Escape leaves Plan and focuses its tab. The keymap action `plan` (default N) opens a separate module-scoped, taskless agent planning flow that remains available in the Pocock edition; see [Agent launch — agent-launch-plan](agent-launch.md) for its folder/prompt/picker sequence and coverage limits, and [Keyboard navigation and shortcuts](keyboard-navigation-and-shortcuts.md) for shortcut routing.
 
 ## Prerequisites
 
-Use a selected project and a Roadmap-enabled build. `TICKETRY_ROADMAP_ENABLED` is resolved at build time into `__TICKETRY_ROADMAP_ENABLED__`; changing runtime settings or the URL cannot enable a compiled-off app. With Roadmap off, the Plan tab, Sprints collection, sprint Plan view, goal editor, discovery controls and lifecycle dialogs are absent; ordinary module workspaces remain. A planned sprint is needed for a focused visit; an empty project can still open the collection. See [Planner service](../planner-service.md) for the underlying planning contracts.
+Use a selected project and a core-edition build. `TICKETRY_EDITION` (`pocock` default, `core`) is resolved at build time into `__TICKETRY_EDITION__`; changing runtime settings or the URL cannot enable sprint planning in a Pocock build, and changing the edition requires a rebuild. In the Pocock edition, the Plan tab, Sprints collection, sprint Plan view, goal editor, discovery controls and lifecycle dialogs are absent; ordinary module workspaces remain. A planned sprint is needed for a focused visit; an empty project can still open the collection. See [Planner service](../planner-service.md) for the underlying planning contracts.
 
 This build gate applies to the sprint workspace. The independent [N-key agent Plan flow](agent-launch.md) requires a selected project and module and remains available in a compiled-off build; it does not require a sprint or selected work item.
 
@@ -37,7 +38,7 @@ Run `bun run --cwd studio test:e2e:feature plan-workspace-navigation`. Each case
 
 Supplementary browser provenance remains in `studio/e2e/planning-module-manual.spec.ts` and `studio/e2e/planning-module-recovery.spec.ts`; those legacy files stay unchanged until the final migration ticket. Their cross-feature cases do not fill this entry's cells.
 
-Supplementary Roadmap-off coverage is `studio/src/test/overhaulRoadmapOffAcceptance.test.tsx` via `bun run --cwd studio test:roadmap-off`. Browser screenshots cannot prove native rendering or paid-model behavior.
+Supplementary Pocock-edition coverage is `studio/src/test/overhaulPocockEditionAcceptance.test.tsx` via `bun run --cwd studio test:pocock`. Browser screenshots cannot prove native rendering or paid-model behavior.
 
 Supplementary focus and workspace acceptance: `studio/src/test/overhaulWorkspaceSurfacesAcceptance.test.tsx`.
 
@@ -57,7 +58,7 @@ Suite: studio/e2e/features/plan-workspace-navigation.spec.ts
 - `studio/src/features/sprints/planWorkspaceState.ts`, `studio/src/features/sprints/SprintsWorkspace.tsx` and `studio/src/features/sprints/SprintsView.tsx`: project/sprint selection, origin restoration and collection rendering.
 - `studio/src/features/sprints/planning/PlanSprintView.tsx`, `studio/src/features/sprints/planning/PlanHeader.tsx` and `studio/src/features/sprints/planning/planKeyboardNavigation.ts`: focused visit, return controls and Escape routing.
 - `studio/src/features/sprints/suggestions/SuggestionAgentBox.tsx`: explicit review entry.
-- `studio/src/app/navigation/keymapBindings.ts`, `studio/src/shared/config/roadmapAvailability.ts`, `studio/scripts/roadmap-build-policy.mjs` and `studio/vite.config.ts`: separate agent prompt action and build-time gate.
+- `studio/src/app/navigation/keymapBindings.ts`, `studio/src/shared/config/edition.ts`, `studio/scripts/edition-build-policy.mjs` and `studio/vite.config.ts`: separate agent prompt action and build-time edition gate.
 
 ## Gotchas
 

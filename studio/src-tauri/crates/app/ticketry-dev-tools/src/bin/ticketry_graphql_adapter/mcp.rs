@@ -3,17 +3,28 @@ use std::path::Path;
 
 use ticketry_data_directory::DataDirectoryGuard;
 use ticketry_mcp::{McpConfiguration, McpRuntime};
+use ticketry_terminal::{InstantRunTicketTitleService, TerminalLaunchService};
 
+fn configuration(data_directory: &Path) -> McpConfiguration {
+    McpConfiguration {
+        database_path: data_directory.join("state.db"),
+        media_root: data_directory.join("media"),
+    }
+}
+
+/// Serve MCP with the same terminal launcher the browser's GraphQL launches
+/// use, so launch tools start runs here exactly as they do on desktop.
 pub async fn start(
     data_directory: &Path,
     ownership: &DataDirectoryGuard,
+    terminal_launch: TerminalLaunchService,
+    codex_titles: InstantRunTicketTitleService,
 ) -> Result<McpRuntime, String> {
-    McpRuntime::start(
-        McpConfiguration {
-            database_path: data_directory.join("state.db"),
-            media_root: data_directory.join("media"),
-        },
+    McpRuntime::start_with_terminal_launch(
+        configuration(data_directory),
         ownership,
+        terminal_launch,
+        Some(codex_titles),
     )
     .await
     .map_err(|error| error.to_string())
@@ -43,7 +54,9 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         std::fs::File::create(directory.path().join("state.db")).unwrap();
         let ownership = DataDirectoryGuard::acquire(directory.path()).unwrap();
-        let runtime = start(directory.path(), &ownership).await.unwrap();
+        let runtime = McpRuntime::start(configuration(directory.path()), &ownership)
+            .await
+            .unwrap();
         let socket = runtime.socket_path().to_path_buf();
         let mut connection = tokio::net::UnixStream::connect(&socket).await.unwrap();
         connection

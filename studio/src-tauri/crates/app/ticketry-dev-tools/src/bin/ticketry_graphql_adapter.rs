@@ -36,6 +36,9 @@ mod planner;
 #[path = "ticketry_graphql_adapter/recovery.rs"]
 mod recovery;
 
+#[path = "ticketry_graphql_adapter/runtime_configuration.rs"]
+mod runtime_configuration;
+
 #[derive(Clone)]
 struct AdapterState {
     api: TransportApiImpl,
@@ -111,12 +114,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             granted_operations: ticketry_mcp::allowed_provider_operations(),
         });
 
-    let (planner_runtime, mut planner_failure) = planner::start(api.clone()).await?;
-    eprintln!(
-        "Ticketry planner listening on {}",
-        planner_runtime.endpoint().graphql_url
-    );
-    let mcp_runtime = mcp::start(&data_directory, &data_directory_guard).await?;
+    let (planner, mut planner_failures) = planner::start(api.clone()).await?;
+    match planner.endpoint() {
+        Some(endpoint) => eprintln!("Ticketry planner listening on {}", endpoint.graphql_url),
+        None => eprintln!(
+            "Ticketry planner not started: the {} edition has no sprint planning",
+            ticketry_edition::EDITION.name()
+        ),
+    }
+    let terminal_launch = ticketry_terminal::TerminalLaunchService::new(
+        database.clone(),
+        Arc::new(adopted.runtime.terminal_runtime().clone()),
+    )
+    .with_authority(Arc::new(ticketry_launch::LaunchAuthorityService::new(
+        database.clone(),
+    )));
+    let mcp_runtime = mcp::start(
+        &data_directory,
+        &data_directory_guard,
+        terminal_launch,
+        adopted.runtime.instant_run_ticket_titles().clone(),
+    )
+    .await?;
     eprintln!(
         "Ticketry WorkTracker MCP listening on {}",
         mcp_runtime.socket_path().display()
@@ -143,6 +162,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let app = Router::new()
         .route("/graphql", post(execute))
+        .merge(runtime_configuration::routes())
         .route("/graphql/subscribe", post(subscribe))
         .route("/documents/{document_id}/{*asset_path}", get(document))
         .route("/ws/terminal", get(terminal_socket))
@@ -150,12 +170,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut interrupt = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     let result = planner::serve(
-        planner_runtime,
+        planner,
         mcp::serve(listener, app, mcp_runtime, async move {
             tokio::select! {
                 _ = interrupt.recv() => {},
                 _ = terminate.recv() => {},
-                failure = planner_failure.recv() => {
+                failure = planner_failures.failed() => {
                     if let Some(message) = failure {
                         eprintln!("{message}");
                     }

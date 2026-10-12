@@ -19,6 +19,9 @@ Each mapped feature has a browser suite at
 or changed, and `bun run --cwd studio test:e2e:features` for the full app. Keep
 the entry and its suite aligned; the drift check
 (`bun run --cwd studio test:e2e:features --check`) enforces that alignment.
+Each entry declares `Editions:`. Feature runs build the default Pocock edition
+and skip core-only features and `@edition-core` cases; prefix
+`TICKETRY_EDITION=core` to run the core edition.
 
 Use the application's canonical runtime scripts. `bun run desktop:dev` and
 `bun run dev` rebuild and launch the desktop application. `bun run web` starts the
@@ -152,6 +155,15 @@ Browser development renders with xterm over the `browserTerminalClient`
 WebSocket adapter to the Rust terminal adapter. xterm is also the compatibility
 fallback everywhere, including when native rendering is unavailable or fails.
 tmux owns durable terminal sessions under every renderer.
+
+Each build compiles exactly one edition, chosen at build time by
+`TICKETRY_EDITION`: `pocock` is the default when unset (signed releases
+included) and `core` is the only alternative; any other value fails before
+Cargo, Tauri, or Vite starts. Core enables the Rust `edition-core` Cargo
+feature and adds the capabilities in `config/editions.json`, such as Plan and
+sprint planning. Every launcher and `release:build` logs
+`Edition: <edition> (default|explicit)` once. Example:
+`TICKETRY_EDITION=core bun run web`.
 
 Install from the repository root, then run:
 

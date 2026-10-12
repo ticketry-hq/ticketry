@@ -2,10 +2,12 @@ fragment ModuleManagerInspectionStoryFields on WorktrackerIssue {
   __typename id projectId parentId moduleId type isArchived updatedAt stateRevision sprintId sprint { __typename id name }
 }
 
+# Offset pages need a unique order, and rank may tie. sequenceId is unique per
+# project; Seaography cannot apply rank ahead of it (CODING-2915).
 query ModuleManagerInspectionStories($projectId: String!, $moduleId: String!, $offset: Int!, $limit: Int!) {
   stories: worktrackerIssue(
     filters: { projectId: { eq: $projectId }, parentId: { eq: $moduleId }, type: { eq: "task" }, isArchived: { eq: false } }
-    orderBy: { rank: ASC, sequenceId: ASC, id: ASC }
+    orderBy: { sequenceId: ASC }
     pagination: { offset: { offset: $offset, limit: $limit } }
   ) {
     nodes { ...ModuleManagerInspectionStoryFields }
@@ -14,10 +16,13 @@ query ModuleManagerInspectionStories($projectId: String!, $moduleId: String!, $o
   }
 }
 
+# Inspection only counts worktrees and reads their activity, so order is never
+# shown. The unique id keeps offset pages stable; Seaography applies orderBy
+# keys in column order, so a leading ticketSeq cannot precede it (CODING-2915).
 query ModuleManagerInspectionWorktrees($projectId: String!, $moduleId: String!, $offset: Int!, $limit: Int!) {
   worktrees(
     filters: { projectId: { eq: $projectId }, moduleId: { eq: $moduleId }, status: { is_in: ["active", "conflict"] } }
-    orderBy: { ticketSeq: ASC, id: ASC }
+    orderBy: { id: ASC }
     pagination: { offset: { offset: $offset, limit: $limit } }
   ) {
     nodes { __typename id projectId moduleId status updatedAt }

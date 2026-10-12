@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { deriveFeatureRegistry } from "./featureSuites.mjs";
+import { validateFeatureEditions } from "./checkFeatureEditions.mjs";
 
 export function checkFeatureSuites(mapDirectory, e2eDirectory, repositoryRoot) {
   const registry = deriveFeatureRegistry(mapDirectory, e2eDirectory, repositoryRoot);
@@ -53,6 +54,7 @@ export function validateFeatureSuites(registry, existingPaths) {
       }
     }
   }
+  validateFeatureEditions(registry, report);
   const caseOwners = new Map();
   for (const suite of registry.suites) {
     for (const violation of suite.violations) report(violation.rule, violation.path, violation.message.replace(/^.*?: rule \d+: /, ""));

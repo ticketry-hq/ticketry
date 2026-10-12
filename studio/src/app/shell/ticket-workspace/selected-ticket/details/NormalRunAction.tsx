@@ -28,6 +28,10 @@ import { AGENT_RUN_ACTIONS } from "../../../../../app/navigation/actionIds";
 import type { ActiveSubtreeRun } from "../../../../../features/execution";
 import { SubtreeRunButton } from "./internal/SubtreeRunButton";
 import { useSubtreeRunEligibility, useSubtreeRunLaunch } from "./internal/subtreeRun";
+import {
+  PARALLEL_SUBTREE_RUN_OFFERED,
+  useSubtreeNormalRunCommand,
+} from "./internal/subtreeRunShortcut";
 
 export function NormalRunAction({
   task,
@@ -89,10 +93,12 @@ export function SubtreeRunAction({
     },
   });
 
-  useEffect(() => {
-    if (!isBranch || !subtreeEligible || activeRun || runStateLoading) return;
-    return registerNormalRunCommand(task.id, branch.launch);
-  }, [activeRun, branch.launch, isBranch, runStateLoading, subtreeEligible, task.id]);
+  const ownsShortcut = useSubtreeNormalRunCommand({
+    mode: "parallel",
+    taskId: task.id,
+    armed: isBranch && subtreeEligible && !activeRun && !runStateLoading,
+    launch: branch.launch,
+  });
 
   if (task.id === TEMP_TASK_ID) return null;
   if (runStateLoading) return null;
@@ -115,7 +121,7 @@ export function SubtreeRunAction({
       </span>
     );
   }
-  if (isBranch) {
+  if (isBranch && PARALLEL_SUBTREE_RUN_OFFERED) {
     const unavailableReason = subtreeEligible
       ? undefined
       : "Subtree execution is not available in this item's current state.";
@@ -127,7 +133,7 @@ export function SubtreeRunAction({
         onClick={() => startNormalRun(task.id)}
         disabled={!subtreeEligible}
         unavailableReason={unavailableReason}
-        shortcut={subtreeEligible ? shortcut : null}
+        shortcut={subtreeEligible && ownsShortcut ? shortcut : null}
       />
     );
   }

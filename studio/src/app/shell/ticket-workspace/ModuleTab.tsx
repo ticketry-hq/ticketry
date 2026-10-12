@@ -9,6 +9,10 @@ import type {
   DropTargetProps,
 } from "../../../shared/dragDrop/useAxisDragAndDrop";
 import type { Module } from "../../../shared/api/types";
+import { editionHas } from "../../../shared/config/edition";
+
+/** Only sprint planning can lock tab management behind a sprint filter. */
+const LOCKED_HIDE_HINT = editionHas("sprintPlanning") ? "Show all sprints to manage tabs." : undefined;
 
 interface ModuleTabProps {
   module: Module;
@@ -80,8 +84,8 @@ export function ModuleTab({
       <button
         type="button"
         aria-label={"Hide " + module.name + " tab"}
-        title={canHide ? "Hide tab" : "Show all sprints to manage tabs."}
-        aria-description={canHide ? undefined : "Show all sprints to manage tabs."}
+        title={canHide ? "Hide tab" : LOCKED_HIDE_HINT ?? "Hide tab"}
+        aria-description={canHide ? undefined : LOCKED_HIDE_HINT}
         disabled={!canHide}
         onClick={() => { if (canHide) onHide(module.id); }}
         className="group/close absolute top-0 right-0 flex h-full w-7 items-center justify-center text-sm text-text-muted opacity-0 focus:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus-accent group-hover:opacity-100"

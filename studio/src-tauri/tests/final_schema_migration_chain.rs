@@ -16,7 +16,48 @@ use ticketry_work_management::{
 #[path = "final_schema_migration_chain/support.rs"]
 mod support;
 
-use support::{assert_final, fixture, table_exists};
+use support::{
+    assert_final, fixture, ledger_creation_order, schema_objects, table_exists, CHAIN_LEDGERS,
+};
+
+/// The schema the full chain leaves on the 0043 fixture. Both editions must
+/// reach it byte for byte; regenerate it with `TICKETRY_BLESS_FINAL_SCHEMA=1`
+/// only when a chain step deliberately changes the schema.
+const FINAL_SCHEMA_PATH: &str = "tests/final_schema_migration_chain/final_schema.txt";
+
+/// CODING-2862: core skips only the default-adoption data steps, so it records
+/// every checkpoint in the same order as Pocock.
+#[tokio::test]
+async fn every_edition_records_the_chain_checkpoints_in_chain_order() {
+    let (_directory, database) = fixture().await;
+    install_final_schema_migrations(&database)
+        .await
+        .expect("run the full chain");
+    assert_eq!(
+        ledger_creation_order(&database).await,
+        CHAIN_LEDGERS.map(|(table, _)| table.to_owned())
+    );
+}
+
+/// CODING-2862: every DDL step runs in both editions, so `cargo test` and
+/// `cargo test --features edition-core` compare against one recorded schema.
+#[tokio::test]
+async fn every_edition_reaches_the_same_final_schema() {
+    let (_directory, database) = fixture().await;
+    install_final_schema_migrations(&database)
+        .await
+        .expect("run the full chain");
+    let observed = schema_objects(&database).await;
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(FINAL_SCHEMA_PATH);
+    if std::env::var_os("TICKETRY_BLESS_FINAL_SCHEMA").is_some() {
+        std::fs::write(&path, &observed).expect("record the final schema");
+    }
+    let recorded = std::fs::read_to_string(&path).expect("read the recorded final schema");
+    assert!(
+        observed == recorded,
+        "the final schema differs from {FINAL_SCHEMA_PATH}; observed:\n{observed}"
+    );
+}
 
 #[tokio::test]
 async fn full_0044_through_0054_chain_is_lossless_and_reopens() {

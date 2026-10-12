@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { resolveEdition } from "../../scripts/edition-build-policy.mjs";
 import { featureSuite } from "./featureSuite";
 import {
   CreateWorkTrackerProjectDocument,
@@ -27,6 +28,9 @@ import {
  * them up. That is safe — Studio resolves its project by the `CDN` key rather
  * than by position, and the suite runs against a throwaway SQLite profile.
  */
+/** The run's compiled edition; only Pocock seeds the reviewed catalogue. */
+const reviewedWorkflowDefaults = resolveEdition().edition === "pocock";
+
 const REVIEWED_STATES = [
   ["Ideas", "backlog"],
   ["Grill", "backlog"],
@@ -39,7 +43,7 @@ const REVIEWED_STATES = [
 ];
 
 featureSuite("projects", () => {
-  test("provisions the reviewed catalogue when a project is created", { tag: "@case-projects-provision-catalogue" }, async ({
+  test("provisions its edition's catalogue when a project is created", { tag: "@case-projects-provision-catalogue" }, async ({
     request,
   }) => {
     // A project key is exactly three letters, and a lowercase one is
@@ -52,6 +56,14 @@ featureSuite("projects", () => {
     expect(project.slug).toBe("ELC");
 
     const catalog = await getWorkflowCatalog(request, project.id);
+    if (!reviewedWorkflowDefaults) {
+      // CODING-2860: core seeds an empty workflow slate — only the
+      // structural Module type, with no start state.
+      expect(catalog.states.nodes).toEqual([]);
+      expect(catalog.issue_types.nodes.map((type) => [type.name, type.level, type.start_state ?? null, type.transitions.nodes.length, type.launch_bindings.nodes.length]))
+        .toEqual([["Module", "module", null, 0, 0]]);
+      return;
+    }
     expect(
       [...catalog.states.nodes]
         .sort((left, right) => left.sort_order - right.sort_order)

@@ -170,7 +170,7 @@ featureSuite("multi-surface-journeys", { isolation: "case" }, () => {
     } finally { await f.cleanup(); }
   });
 
-  test("closes and restores sprint-filtered module tabs through the strip, picker and Module Manager", { tag: "@case-journey-sprint-close-restore" }, async ({ page, request }) => {
+  test("closes and restores sprint-filtered module tabs through the strip, picker and Module Manager", { tag: ["@case-journey-sprint-close-restore", "@edition-core"] }, async ({ page, request }) => {
     test.setTimeout(90_000);
     const f = await journeyFixture(request, "sprint");
     try {
@@ -352,7 +352,7 @@ featureSuite("multi-surface-journeys", { isolation: "case" }, () => {
     } finally { if (runId) await releaseProvider(runId); await f.cleanup(); }
   });
 
-  test("keeps the sprint filter through cancelled, refused and empty sprint-filtered tab navigation", { tag: "@case-journey-sprint-recovery" }, async ({ page, request }) => {
+  test("keeps the sprint filter through cancelled, refused and empty sprint-filtered tab navigation", { tag: ["@case-journey-sprint-recovery", "@edition-core"] }, async ({ page, request }) => {
     test.setTimeout(90_000);
     const f = await journeyFixture(request, "sprint recovery");
     try {

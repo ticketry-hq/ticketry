@@ -13,10 +13,14 @@ import path from "node:path";
 import test from "node:test";
 import { productIdentity } from "../../scripts/product-identity.mjs";
 
+import { resolveEditionBuild } from "./edition-build-policy.mjs";
 import {
+  buildTauriDevArguments,
+  createDesktopDevEnvironment,
   createStartupTrace,
   createTemporarySqliteProfile,
   formatDevelopmentIdentity,
+  main as launchDesktopDev,
   parseDesktopDevOptions,
   parseDesktopDevMode,
   removeTemporarySqliteProfile,
@@ -276,4 +280,71 @@ test("startup identity is one concise non-secret report with all selected resour
   );
   assert.equal(report.split("\n").length, 1);
   assert.doesNotMatch(report, /token|credential|secret/i);
+});
+
+test("default Pocock desktop development passes no edition feature to tauri dev", () => {
+  for (const environment of [{}, { TICKETRY_EDITION: "pocock" }]) {
+    const args = buildTauriDevArguments({
+      tauriCli: "/cli/tauri.js",
+      config: "{\"productName\":\"Ticketry Dev\"}",
+      editionBuild: resolveEditionBuild(environment),
+    });
+
+    assert.deepEqual(args, ["/cli/tauri.js", "dev", "--no-watch", "--config", "{\"productName\":\"Ticketry Dev\"}"]);
+    assert.equal(args.join(" ").includes("edition-core"), false);
+  }
+});
+
+test("core desktop development passes the edition-core feature to tauri dev", () => {
+  const args = buildTauriDevArguments({
+    tauriCli: "/cli/tauri.js",
+    config: "{}",
+    editionBuild: resolveEditionBuild({ TICKETRY_EDITION: "core" }),
+  });
+
+  assert.deepEqual(args, ["/cli/tauri.js", "dev", "--no-watch", "--features", "edition-core", "--config", "{}"]);
+});
+
+test("the tauri dev environment, which Vite inherits, carries the resolved edition", () => {
+  for (const [environment, edition] of [[{}, "pocock"], [{ TICKETRY_EDITION: "pocock" }, "pocock"], [{ TICKETRY_EDITION: "core" }, "core"]]) {
+    const launched = createDesktopDevEnvironment({
+      editionBuild: resolveEditionBuild({ ...environment, PATH: "/usr/bin" }),
+      dataDirectory: "/tmp/profile",
+      logPath: "/tmp/ticketry.log",
+      startupTraceId: "startup-1",
+      tmuxSocket: "muxed-dev-0123456789abcdef",
+      temporarySqlite: false,
+    });
+
+    assert.equal(launched.TICKETRY_EDITION, edition);
+    assert.equal(launched.PATH, "/usr/bin");
+    assert.equal(launched.MUXED_DATA_DIR, "/tmp/profile");
+    assert.equal(launched.MUXED_TMUX_SOCKET, "muxed-dev-0123456789abcdef");
+    assert.equal(launched.MUXED_FORCE_SQLITE, undefined);
+  }
+  assert.equal(createDesktopDevEnvironment({
+    editionBuild: resolveEditionBuild({}),
+    dataDirectory: "/tmp/profile",
+    logPath: "/tmp/ticketry.log",
+    startupTraceId: "startup-1",
+    tmuxSocket: "muxed-dev-temporary",
+    temporarySqlite: true,
+  }).MUXED_FORCE_SQLITE, "true");
+});
+
+test("an invalid edition fails desktop development before cargo, tauri, or a profile", async () => {
+  const spawned = [];
+  await assert.rejects(
+    launchDesktopDev({
+      argv: ["--temp-sqlite"],
+      environment: { TICKETRY_EDITION: "full" },
+      boundaries: {
+        prepareHookRunner: () => spawned.push("cargo"),
+        run: async () => spawned.push("tauri"),
+        resolveProfile: () => spawned.push("profile"),
+      },
+    }),
+    (error) => /pocock/.test(error.message) && /core/.test(error.message),
+  );
+  assert.deepEqual(spawned, []);
 });

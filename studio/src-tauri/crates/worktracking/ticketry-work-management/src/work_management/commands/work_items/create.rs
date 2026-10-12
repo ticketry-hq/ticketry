@@ -5,10 +5,11 @@ use super::super::{
     CommandError,
 };
 use super::{valid_name, CreateWorkItem};
+use crate::work_management::database::begin_write;
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection,
     DatabaseTransaction, EntityTrait, ExprTrait, JoinType, QueryFilter, QueryOrder, QuerySelect,
-    RelationTrait, Set, TransactionTrait,
+    RelationTrait, Set,
 };
 use ticketry_entities::{issue, issue_type, module_presentation, project, state};
 
@@ -17,7 +18,7 @@ pub async fn create(
     input: CreateWorkItem,
     facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let id = create_in(&transaction, input, facts).await?;
     transaction.commit().await?;
     if let Some(facts) = facts {

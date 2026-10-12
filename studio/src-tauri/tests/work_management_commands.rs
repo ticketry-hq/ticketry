@@ -2488,6 +2488,7 @@ async fn description_appends_serialize_without_losing_content() {
                     id: task,
                     new_content: new_content.to_owned(),
                 },
+                None,
             )
             .await
         })

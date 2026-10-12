@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 ticketry-diagnostics.workspace = true
+ticketry-edition.workspace = true
 async-graphql.workspace = true
 async-trait.workspace = true
 sea-orm.workspace = true

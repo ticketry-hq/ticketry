@@ -17,6 +17,7 @@ use super::support::optional_string;
 use crate::work_management::{
     commands::catalog,
     graphql::{command_error, require_command_database},
+    write_reservation::ReservedWrite,
 };
 use ticketry_entities::project;
 
@@ -55,7 +56,7 @@ pub(super) fn register(builder: &mut Builder) {
                 TypeRef::named(TypeRef::STRING),
             ))
             .hook_owns_authorization(),
-        UpdateProject,
+        ReservedWrite(UpdateProject),
         ViewSerializers::default(),
     );
 }

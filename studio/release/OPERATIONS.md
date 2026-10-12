@@ -65,50 +65,65 @@ It stages the `.app`, `.dmg`, signed `.app.tar.gz` updater archive, matching
 `.app.tar.gz.sig`, and `release-metadata.json` under
 `release-output/0.2.0/macos-aarch64/`.
 
-## Choose compiled Roadmap availability
+## Choosing an edition
 
-`TICKETRY_ROADMAP_ENABLED` accepts exactly `true` or `false`. An unset variable
-uses the build-context default; an empty value, other spelling, whitespace, or
-numeric value fails the build with an actionable error. The explicit override
-always wins.
+Every build compiles exactly one edition, chosen at build time by
+`TICKETRY_EDITION`. It accepts exactly `pocock` or `core`. An unset variable
+resolves to `pocock` in every context: desktop development, supporting browser
+development, signed and unsigned release builds, and local acceptance
+artifacts. Core is opt-in; signing credentials in the environment never change
+the edition. The core edition adds the capabilities listed in
+[`config/editions.json`](../../config/editions.json), including the
+sprint-planning surfaces (Plan tab, Sprints, Story sprint filter, Module
+Manager sprint membership); a Pocock build omits them.
 
-| Build context | Unset override | `true` | `false` |
-| --- | --- | --- | --- |
-| Validated signed release | OFF | ON | OFF |
-| Explicit unsigned release / local acceptance artifact | ON | ON | OFF |
-| Desktop development | ON | ON | OFF |
-| Supporting browser development / direct frontend build | ON | ON | OFF |
-
-Signing credentials in the environment alone do not select the signed default.
-The release orchestrator first validates the selected signed/unsigned policy,
-then resolves one choice and passes it to both the initial frontend build and
-Tauri's packaging frontend rebuild. `desktop:build` uses this same orchestrator
-and policy as `release:build`. Resolution is reported in build logs.
+`release:build` resolves the edition once through
+[`studio/scripts/edition-build-policy.mjs`](../scripts/edition-build-policy.mjs).
+It passes the same `TICKETRY_EDITION` to the frontend build and to Tauri's
+packaging frontend rebuild, and for core it appends `--features edition-core`
+to the Tauri build so the Rust host matches the frontend. The frontend reads
+the compiled `__TICKETRY_EDITION__` constant only through
+`studio/src/shared/config/edition.ts`.
 
 Run from `studio/` (signed examples require the credentials described above):
 
 ```bash
-# Signed release default: Roadmap OFF.
+# Signed release default: Pocock edition.
 bun run release:build -- --target macos-aarch64
-# Explicitly enable Roadmap in a signed release.
-TICKETRY_ROADMAP_ENABLED=true bun run desktop:build -- --target macos-aarch64
-# Unsigned acceptance default: Roadmap ON.
+# Explicitly build the core edition in a signed release.
+TICKETRY_EDITION=core bun run release:build -- --target macos-aarch64
+# Unsigned acceptance default: Pocock edition.
 bun run release:build -- --target macos-aarch64 --allow-unsigned
-# Compile an unsigned OFF artifact for acceptance.
-TICKETRY_ROADMAP_ENABLED=false bun run release:build -- --target macos-aarch64 --allow-unsigned
-# Rebuild and launch desktop development with Roadmap OFF.
-TICKETRY_ROADMAP_ENABLED=false bun run desktop:dev
-# Supporting direct frontend build: ON by default, OFF with an override.
+# Compile an unsigned core-edition artifact for acceptance.
+TICKETRY_EDITION=core bun run release:build -- --target macos-aarch64 --allow-unsigned
+# Rebuild and launch desktop development in the core edition.
+TICKETRY_EDITION=core bun run desktop:dev
+# Supporting direct frontend build: Pocock by default, core with an override.
 bun run build
-TICKETRY_ROADMAP_ENABLED=false bun run build
+TICKETRY_EDITION=core bun run build
 ```
 
-The resulting frontend choice is immutable. Changing the override requires
-rebuilding the frontend/app (and restarting a development frontend server).
-Runtime environment variables, installation settings, and existing planning
-records cannot change an artifact's availability. OFF hides Roadmap workspace
-controls while preserving planning services/data, module workspaces, and the
-separate agent Plan conversation and Plan a feature commands.
+Verify the edition in the build log before publishing. The release build and
+every launcher print one line naming the edition and where it came from:
+
+```text
+Edition: pocock (default)
+Edition: core (explicit)
+```
+
+`default` means `TICKETRY_EDITION` was unset; `explicit` means it was set to a
+legal value. An empty value, other spelling, different case, whitespace, or any
+other literal fails the command with an error naming both legal values before
+any Cargo, Tauri, or Vite process starts, so an invalid value never produces an
+artifact.
+
+The resulting edition is immutable. Changing `TICKETRY_EDITION` requires
+rebuilding the app (and restarting a development launcher). Runtime
+environment variables, installation settings, and existing planning records
+cannot change an artifact's edition. The Pocock edition omits the
+sprint-planning workspace controls while preserving planning services/data,
+module workspaces, and the separate agent Plan conversation and Plan a feature
+commands.
 
 ## Publish the stable update feed
 

@@ -2,6 +2,8 @@ import type { WorkItem } from "../../../../../shared/api/types";
 import type { ActiveSubtreeRun } from "../../../../../features/execution";
 import { SubtreeRunButton } from "./internal/SubtreeRunButton";
 import { useSubtreeRunEligibility, useSubtreeRunLaunch } from "./internal/subtreeRun";
+import { useSubtreeNormalRunCommand } from "./internal/subtreeRunShortcut";
+import { useGlobalShortcutLabel } from "../../../../navigation/useGlobalShortcutLabel";
 
 interface SerialRunActionProps {
   task: WorkItem;
@@ -11,7 +13,10 @@ interface SerialRunActionProps {
   refreshRunState: () => Promise<void>;
 }
 
-/** Starts an eligible branch's existing bounded serial execution mode. */
+/**
+ * Starts an eligible branch's existing bounded serial execution mode. Where the
+ * edition offers no parallel Run subtree, this action also owns Cmd+Enter.
+ */
 export function SerialRunAction({
   task,
   moduleId,
@@ -30,8 +35,16 @@ export function SerialRunAction({
     failureMessage: "Serial subtree execution could not be started",
     refreshRunState,
   });
+  const shortcut = useGlobalShortcutLabel("normal-run-command");
+  const isBranch = task.sub_issues_count > 0;
+  const ownsShortcut = useSubtreeNormalRunCommand({
+    mode: "serial",
+    taskId: task.id,
+    armed: isBranch && eligible && !activeRun && !runStateLoading,
+    launch: serial.launch,
+  });
 
-  if (task.sub_issues_count === 0) return null;
+  if (!isBranch) return null;
   if (runStateLoading || activeRun) return null;
 
   const unavailableReason = eligible
@@ -46,6 +59,7 @@ export function SerialRunAction({
       onClick={serial.launch}
       disabled={!eligible}
       unavailableReason={unavailableReason}
+      shortcut={eligible && ownsShortcut ? shortcut : null}
     />
   );
 }

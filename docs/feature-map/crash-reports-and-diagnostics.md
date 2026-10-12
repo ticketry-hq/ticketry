@@ -3,6 +3,7 @@
 Desktop startup collects local evidence after a Dirty Shutdown and preserves runtime diagnostics for inspection.
 
 Surfaces: desktop, manual
+Editions: pocock, core
 
 ## Sub-features
 

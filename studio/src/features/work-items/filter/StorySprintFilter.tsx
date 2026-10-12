@@ -2,7 +2,7 @@ import { useId, useEffect, useRef, useState } from "react";
 import { useStorySprintHistory } from "../../sprints";
 import { useStorySprintFilter } from "./StorySprintFilterController";
 import { SprintChoicePopover, type BasicSprintChoice } from "./SprintChoicePopover";
-import { ROADMAP_ENABLED } from "../../../shared/config/roadmapAvailability";
+import { editionHas } from "../../../shared/config/edition";
 
 interface StorySprintFilterProps {
   matchingRootCount: number;
@@ -11,7 +11,7 @@ interface StorySprintFilterProps {
 }
 
 export function StorySprintFilter(props: StorySprintFilterProps) {
-  return ROADMAP_ENABLED ? <AvailableStorySprintFilter {...props} /> : null;
+  return editionHas("sprintPlanning") ? <AvailableStorySprintFilter {...props} /> : null;
 }
 
 function AvailableStorySprintFilter({ matchingRootCount, totalRootCount, storiesLoading = false }: StorySprintFilterProps) {

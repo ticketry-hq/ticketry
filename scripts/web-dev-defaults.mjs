@@ -7,6 +7,7 @@ const supportedEnvironment = new Set([
   "MUXED_DATA_DIR",
   "MUXED_FRONTEND_PORT",
   "MUXED_TMUX_SOCKET",
+  "TICKETRY_EDITION",
   "TICKETRY_GRAPHQL_ADAPTER_PORT",
 ]);
 

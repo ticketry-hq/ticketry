@@ -13,7 +13,7 @@ import {
   openFeatureModule as openModule,
   seedProject,
 } from "../work-items-migration-support";
-import { failGraphqlOperation } from "../graphql-failure-injection";
+import { failGraphqlOperation, holdGraphqlOperation } from "../graphql-failure-injection";
 import { openSettings, readPersistedModelSettings } from "../settings-support";
 
 const CHANGED_PROVIDER = "claude";
@@ -228,6 +228,73 @@ featureSuite("settings", { isolation: "case" }, () => {
     expect(stored.global_default?.provider).toBe("codex");
     expect(stored.configurable_providers.find((row) => row.slug === "codex")?.activated)
       .toBe(true);
+  });
+
+  test("reports a failed Models catalog read and recovers on reopening Settings", { tag: "@case-settings-models-load-recovery" }, async ({ page, request }) => {
+    // ProjectOpen includes provider_catalog too. Hold that real bootstrap read
+    // so the failed catalog query cannot be answered from normalized cache.
+    const bootstrap = await holdGraphqlOperation(page, "WorkTrackerProjectOpen");
+    const release = await failGraphqlOperation(page, "LoadProviderCatalog");
+    await page.goto("/");
+    await bootstrap.held;
+    await page.getByRole("button", { name: "Open Settings", exact: true }).click();
+    let dialog = page.getByRole("dialog", { name: "Studio settings" });
+    await expect(dialog.getByRole("alert")).toBeVisible();
+    await expect(dialog.getByRole("alert")).not.toBeEmpty();
+    await expect(dialog.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    await expect(dialog.getByRole("log", { name: "Applied changes" }))
+      .toHaveText("No changes yet.");
+    expect((await getProviderCatalog(request)).global_default?.provider).toBe("codex");
+
+    await release();
+    await bootstrap.release();
+    await dialog.getByRole("button", { name: "Close dialog" }).click();
+    await page.getByRole("tab", { name: names.module, exact: true }).click();
+    await expect(page.getByTestId("module-workspace-region")).toBeVisible();
+    dialog = await openSettings(page);
+    await expect(dialog.getByRole("combobox", { name: "Agent/provider" }))
+      .toHaveValue("codex");
+    await expect(dialog.getByRole("combobox", { name: "Model" }))
+      .toHaveValue("gpt-5.4");
+    await expect(dialog.getByRole("alert")).toHaveCount(0);
+  });
+
+  test("opens and closes Settings during connecting and unavailable startup and recovers the workspace", { tag: "@case-settings-startup-entry" }, async ({ page }) => {
+    let releaseConnecting!: () => void;
+    const connecting = new Promise<void>((resolve) => { releaseConnecting = resolve; });
+    const hold = async (route: import("@playwright/test").Route) => {
+      await connecting;
+      await route.continue();
+    };
+    await page.route("**/graphql", hold);
+    try {
+      await page.goto("/");
+      await expect(page.getByText("One moment…", { exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Open Settings", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Studio settings" });
+      await expect(dialog).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(page.getByText("One moment…", { exact: true })).toBeVisible();
+    } finally {
+      releaseConnecting();
+    }
+    await expect(page.getByRole("tablist", { name: "Project module tabs" })).toBeVisible();
+    await page.unroute("**/graphql", hold);
+
+    const unavailable = async (route: import("@playwright/test").Route) => { await route.abort(); };
+    await page.route("**/graphql", unavailable);
+    await page.reload();
+    await expect(page.getByText("The local server is not running.")).toBeVisible();
+    await page.getByRole("button", { name: "Open Settings", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Studio settings" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Close dialog" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText("The local server is not running.")).toBeVisible();
+    await page.unroute("**/graphql", unavailable);
+    await page.getByRole("button", { name: "Retry", exact: true }).click();
+    await expect(page.getByRole("tablist", { name: "Project module tabs" })).toBeVisible();
   });
 
   test("registers, selects and removes a Codex profile name and saves the default", { tag: "@case-settings-codex-profiles" }, async ({

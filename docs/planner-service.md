@@ -1,6 +1,8 @@
 # Planner service in Ticketry
 
-Ticketry starts one in-process planner listener after installing its authoritative GraphQL endpoint. It uses the same installed endpoint as Studio's native transport. Ticketry resolves and owns the data directory, including a configured non-default directory; the planner does not open another database.
+In the core edition, Ticketry starts one in-process planner listener after installing its authoritative GraphQL endpoint.
+
+The planner exists only where the build edition grants sprint planning (`TICKETRY_EDITION=core`). In the default Pocock edition (CODING-2863) neither desktop composition nor the browser development adapter opens a planner listener, the runtime configuration omits `plannerEndpoint`, no `SprintSuggestionExecutor` is attached, and startup does not recover interrupted sprint discovery. `agent_execution_create` and `agent_execution_update` stay registered so the SDL is identical in both editions, but refuse with `extensions.code = "edition_capability_unavailable"` before reading or writing any row. Existing sprint, goal, suggestion, epic and execution rows are left untouched. The rest of this page describes the core edition. It uses the same installed endpoint as Studio's native transport. Ticketry resolves and owns the data directory, including a configured non-default directory; the planner does not open another database.
 
 No Roadmap refresh or server command is required. This service never calls Roadmap's migration, provenance, receipt or snapshot replacement code. Its reads and guarded writes use Ticketry's current schema and planning operations. Roadmap's legacy frontend operations are not a compatible client contract.
 
@@ -25,7 +27,9 @@ Verification:
 
 ```sh
 cargo test --offline --manifest-path studio/src-tauri/Cargo.toml -p ticketry-planner
-bun run --cwd studio test:planner:desktop
+cargo test --manifest-path studio/src-tauri/Cargo.toml --test sprint_discovery_edition
+cargo test --manifest-path studio/src-tauri/Cargo.toml --features edition-core --test sprint_discovery_edition
+TICKETRY_EDITION=core bun run --cwd studio test:planner:desktop
 ```
 
 The Rust integration test uses Ticketry's production adoption, installation, directory ownership and command-readiness gate on an isolated profile. It creates projects, Stories, sprints and goals across the native and HTTP transports, observes assignments and edits from both, restarts, and checks persistence and the absence of planner copies or Roadmap provenance. Lifecycle cases cover readiness, credentials, browser access, bind conflicts, request draining and port release.

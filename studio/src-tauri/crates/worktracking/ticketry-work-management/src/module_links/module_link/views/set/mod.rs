@@ -2,6 +2,7 @@
 
 //! Restricted upsert of one Module's local folder.
 
+use crate::work_management::write_reservation::ReservedWrite;
 use sea_orm::DatabaseTransaction;
 use seaography::{
     async_graphql::{
@@ -68,7 +69,7 @@ pub(super) fn register(builder: &mut Builder) {
                 "link",
                 TypeRef::named_nn("ModuleLinkPathInput"),
             )),
-        SetModuleLink,
+        ReservedWrite(SetModuleLink),
         ViewSerializers::default(),
     );
 }

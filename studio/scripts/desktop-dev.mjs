@@ -13,6 +13,10 @@ import {
 } from "../../scripts/product-identity.mjs";
 import { awaitStartupRegressionReport } from "../../scripts/startup-trace-regression.mjs";
 import { prepareDesktopHookRunner } from "./desktop-hook-runner.mjs";
+import { buildTauriDevArguments, createDesktopDevEnvironment } from "./desktop-dev-launch-plan.mjs";
+import { resolveEditionBuild } from "./edition-build-policy.mjs";
+
+export { buildTauriDevArguments, createDesktopDevEnvironment };
 
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
 const require = createRequire(import.meta.url);
@@ -305,27 +309,36 @@ export function resolveTauriCliPath(resolver = require.resolve) {
   return resolver("@tauri-apps/cli/tauri.js");
 }
 
-export async function main() {
-  const options = parseDesktopDevOptions(process.argv.slice(2));
-  const { dataDirectory, tmuxSocket } = resolveDesktopDevelopmentProfile({ options });
+export async function main({
+  argv = process.argv.slice(2),
+  environment: launchEnvironment = process.env,
+  boundaries = {},
+} = {}) {
+  // An invalid TICKETRY_EDITION fails here, before any profile, cargo, or tauri.
+  const editionBuild = resolveEditionBuild(launchEnvironment);
+  const {
+    prepareHookRunner = prepareDesktopHookRunner,
+    run: runChild = run,
+    resolveProfile = resolveDesktopDevelopmentProfile,
+  } = boundaries;
+  const options = parseDesktopDevOptions(argv);
+  console.log(editionBuild.description);
+  const { dataDirectory, tmuxSocket } = resolveProfile({ options, environment: launchEnvironment });
   const logPath = prepareDevelopmentLog();
   const startupTrace = createStartupTrace({ logPath });
   startupTrace.record("launcher-started");
-  const buildEnvironment = {
-    ...process.env,
-    MUXED_DATA_DIR: dataDirectory,
-    MUXED_DEVELOPMENT_LOG_PATH: logPath,
-    MUXED_STARTUP_TRACE_ID: startupTrace.id,
-    MUXED_ENABLE_LOCAL_POSTGRES: "true",
-    MUXED_TMUX_SOCKET: tmuxSocket,
-  };
-  if (options.temporarySqlite) {
-    buildEnvironment.MUXED_FORCE_SQLITE = "true";
-  }
+  const buildEnvironment = createDesktopDevEnvironment({
+    editionBuild,
+    dataDirectory,
+    logPath,
+    startupTraceId: startupTrace.id,
+    tmuxSocket,
+    temporarySqlite: options.temporarySqlite,
+  });
   try {
-    prepareDesktopHookRunner({ root: workspaceRoot, environment: buildEnvironment });
+    prepareHookRunner({ root: workspaceRoot, environment: buildEnvironment });
     const frontendPort = await selectFrontendPort({
-      requestedPort: process.env.MUXED_FRONTEND_PORT,
+      requestedPort: launchEnvironment.MUXED_FRONTEND_PORT,
     });
     const frontendOrigin = `http://127.0.0.1:${frontendPort}`;
     startupTrace.record("frontend-port-selected");
@@ -346,13 +359,11 @@ export async function main() {
     startupTrace.record("tauri-cli-spawned");
     // Every launch is a startup measurement; shout into this terminal if it got slower.
     awaitStartupRegressionReport({ logPath, startupId: startupTrace.id }).then((report) => console.error(`\n${report}\n`));
-    await run(process.execPath, [
-      resolveTauriCliPath(),
-      "dev",
-      "--no-watch",
-      "--config",
-      config,
-    ], environment);
+    await runChild(
+      process.execPath,
+      buildTauriDevArguments({ tauriCli: resolveTauriCliPath(), config, editionBuild }),
+      environment,
+    );
   } finally {
     if (options.temporarySqlite) {
       stopTemporaryTmuxServer(tmuxSocket);

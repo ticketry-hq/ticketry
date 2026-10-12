@@ -31,11 +31,11 @@ pub(super) async fn start(directory: &Path, ownership: &DataDirectoryGuard) -> M
         .expect("start MCP runtime")
 }
 
-fn own(directory: &Path) -> DataDirectoryGuard {
+pub(super) fn own(directory: &Path) -> DataDirectoryGuard {
     DataDirectoryGuard::acquire(directory).expect("own the fixture data directory")
 }
 
-async fn prepare_projects(directory: &Path) {
+pub(super) async fn prepare_projects(directory: &Path) {
     let path = directory.join("state.db");
     let database = Database::connect(format!("sqlite:{}?mode=rwc", path.display()))
         .await
@@ -406,7 +406,10 @@ async fn global_connections_read_everything_while_run_connections_stay_scoped() 
     let listed = global
         .request(json!({"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}))
         .await;
-    assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 36);
+    assert_eq!(
+        listed["result"]["tools"].as_array().unwrap().len(),
+        registry::tools().len()
+    );
     assert_eq!(listed["result"]["ttlMs"], 0, "{listed:#}");
     assert_eq!(listed["result"]["cacheScope"], "private", "{listed:#}");
     let projects = global.structured(2, "list_projects", json!({})).await;
@@ -438,6 +441,32 @@ async fn global_connections_read_everything_while_run_connections_stay_scoped() 
         )
         .await;
     assert_eq!(disallowed["reason"], "authorization_tool_disallowed");
+
+    runtime.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_launch_without_a_terminal_launcher_refuses_before_any_launch_policy_work() {
+    let directory = tempfile::tempdir().unwrap();
+    prepare_projects(directory.path()).await;
+    let ownership = own(directory.path());
+    let runtime = start(directory.path(), &ownership).await;
+    let mut global = SocketClient::connect_global(runtime.socket_path()).await;
+
+    // Recording a decision here would let execution reconciliation start the
+    // run later, after the caller was told the launch was refused (CODING-2869).
+    let launched = global
+        .structured(
+            1,
+            "launch_default_coding_agent",
+            json!({"id_or_key": "AUTH-1"}),
+        )
+        .await;
+    assert_eq!(
+        launched["error"], "terminal_launch_unavailable",
+        "{launched:#}"
+    );
+    assert!(launched["target_id"].is_string(), "{launched:#}");
 
     runtime.shutdown().await;
 }

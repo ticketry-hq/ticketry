@@ -57,6 +57,9 @@ async fn assert_suggestion_only(client: &mut SocketClient) {
 
 #[tokio::test]
 async fn sprint_tools_enforce_project_open_sprint_and_current_run_without_assignment() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     let directory = tempfile::tempdir().unwrap();
     prepare_command_database(&directory).await;
     let database = Database::connect(format!(

@@ -1,5 +1,6 @@
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder};
 use tauri_graphql::{TransportApi, TransportApiImpl};
+use ticketry_edition::{has, EditionCapability};
 use ticketry_entities::{issue_type, issue_type_transition, launch_binding, project, state};
 use ticketry_graphql_schema::initialize_with_worktracker_commands_and_install;
 use ticketry_installation as provisioning;
@@ -136,6 +137,9 @@ async fn assert_generated_state_read(api: &TransportApiImpl, project_id: &str) {
 
 #[tokio::test]
 async fn fresh_install_projects_persist_and_read_the_reviewed_state_colors() {
+    if !has(EditionCapability::ReviewedWorkflowDefaults) {
+        return; // Core seeds an empty slate; see the core counterpart below.
+    }
     let directory = tempfile::tempdir().expect("create fresh installation directory");
     provisioning::provision(directory.path())
         .await
@@ -196,8 +200,9 @@ async fn a_catalog_insert_failure_rolls_back_the_whole_project() {
     );
     database
         .execute_unprepared(
-            "CREATE TRIGGER fail_review_seed BEFORE INSERT ON worktracker_state \
-             WHEN NEW.name = 'Review' BEGIN SELECT RAISE(ABORT, 'injected seed failure'); END",
+            // Every edition seeds the Module type, after any reviewed states.
+            "CREATE TRIGGER fail_module_seed BEFORE INSERT ON worktracker_issuetype \
+             WHEN NEW.name = 'Module' BEGIN SELECT RAISE(ABORT, 'injected seed failure'); END",
         )
         .await
         .expect("install deterministic failure");
@@ -211,7 +216,7 @@ async fn a_catalog_insert_failure_rolls_back_the_whole_project() {
         },
     )
     .await
-    .expect_err("Review insert must fail");
+    .expect_err("Module insert must fail");
     assert_eq!(error.code(), "worktracker_storage_failed");
     let after = (
         project::Entity::find().count(&database).await.unwrap(),
@@ -227,4 +232,116 @@ async fn a_catalog_insert_failure_rolls_back_the_whole_project() {
             .unwrap(),
     );
     assert_eq!(after, before);
+}
+
+async fn graphql(api: &TransportApiImpl, request: serde_json::Value) -> serde_json::Value {
+    let response: serde_json::Value =
+        serde_json::from_str(&api.clone().graphql_execute(request.to_string()).await)
+            .expect("parse GraphQL response");
+    assert!(response.get("errors").is_none(), "{response}");
+    response["data"].clone()
+}
+
+/// CODING-2860: in core, both first-run provisioning and `create_project`
+/// give an empty workflow slate — only the structural `Module` type — read
+/// back through the public GraphQL model reads.
+#[tokio::test]
+async fn core_fresh_install_and_created_projects_hold_only_the_module_type() {
+    if has(EditionCapability::ReviewedWorkflowDefaults) {
+        return; // Pocock seeds the reviewed catalog; see the tests above.
+    }
+    let directory = tempfile::tempdir().expect("create fresh installation directory");
+    provisioning::provision(directory.path())
+        .await
+        .expect("provision fresh installation");
+    let state_path = directory.path().join("state.db");
+    let database = open_for_commands(&state_path)
+        .await
+        .expect("open provisioned database");
+    install_project_onboarding_schema(&database)
+        .await
+        .expect("move onboarding onto the project");
+
+    let api = TransportApiImpl::new();
+    let _runtime = initialize_with_worktracker_commands_and_install(
+        &directory.path().join("rust-core.sqlite3"),
+        &state_path,
+        &directory.path().join("media"),
+        &api,
+    )
+    .await
+    .expect("compose production GraphQL model reads");
+    let created = graphql(
+        &api,
+        serde_json::json!({
+            "query": r#"mutation { create_project(name: "Core", slug: "COR") { id } }"#,
+        }),
+    )
+    .await;
+    let projects = graphql(
+        &api,
+        serde_json::json!({ "query": "{ worktrackerProject { nodes { id slug } } }" }),
+    )
+    .await;
+    let project_ids = projects["worktrackerProject"]["nodes"]
+        .as_array()
+        .expect("project nodes")
+        .iter()
+        .map(|node| node["id"].as_str().expect("project id").to_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(project_ids.len(), 2, "installation project and created project");
+    assert!(project_ids.contains(&created["create_project"]["id"].as_str().unwrap().to_owned()));
+
+    for project_id in project_ids {
+        let catalog = graphql(
+            &api,
+            serde_json::json!({
+                "query": include_str!("common/project_workflow_catalog.graphql"),
+                "variables": { "projectId": project_id },
+            }),
+        )
+        .await;
+        assert_eq!(catalog["states"]["nodes"], serde_json::json!([]), "{project_id}");
+        assert_eq!(
+            catalog["issue_types"]["nodes"],
+            serde_json::json!([{
+                "name": "Module",
+                "level": "module",
+                "startStateId": null,
+                "issueTypeTransition": { "nodes": [] },
+                "launchBinding": { "nodes": [] },
+            }]),
+            "{project_id}"
+        );
+    }
+
+    // Module creation needs no workflow: the Module type has no start state.
+    let created_id = created["create_project"]["id"].as_str().unwrap();
+    let module_type = graphql(
+        &api,
+        serde_json::json!({
+            "query": r#"query($projectId: String!) {
+                worktrackerIssuetype(filters: { projectId: { eq: $projectId } }) { nodes { id } }
+            }"#,
+            "variables": { "projectId": created_id },
+        }),
+    )
+    .await["worktrackerIssuetype"]["nodes"][0]["id"]
+        .clone();
+    let module = graphql(
+        &api,
+        serde_json::json!({
+            "query": r#"mutation($projectId: String!, $typeId: String!) {
+                create_work_item(project_id: $projectId, name: "First module", issue_type_id: $typeId) {
+                    name stateId
+                }
+            }"#,
+            "variables": { "projectId": created_id, "typeId": module_type },
+        }),
+    )
+    .await;
+    assert_eq!(
+        module["create_work_item"],
+        serde_json::json!({ "name": "First module", "stateId": null })
+    );
 }

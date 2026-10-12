@@ -2,6 +2,7 @@ import type { ProxyOptions } from "vite";
 
 // Studio dev proxy table (:5174).
 // /graphql forwards same-origin to the Rust browser-development adapter.
+// /runtime-configuration exposes the adapter's compiled edition to e2e.
 //
 // GraphQL subscriptions use an SSE-over-fetch POST. There is
 // no WebSocket entry on that route. Terminal bytes attach through the
@@ -19,6 +20,10 @@ export function developmentProxy(
       changeOrigin: false,
     },
     "/documents": {
+      target: graphQlOrigin,
+      changeOrigin: false,
+    },
+    "/runtime-configuration": {
       target: graphQlOrigin,
       changeOrigin: false,
     },

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use sea_orm::{DatabaseConnection, EntityTrait};
 
@@ -18,6 +18,13 @@ pub struct AcceptedTerminalLaunch {
     effect_state: String,
 }
 
+/// Graph Run mutations serialize per process, not per launch service. Desktop
+/// and the GraphQL adapter compose separate launch services for the GraphQL
+/// press, MCP, and the reconciler; a per-instance lock let the reconciler's
+/// `advance()` claim a child the press was about to launch (CODING-2916).
+static GRAPH_RUN_MUTATION_LOCK: LazyLock<Arc<tokio::sync::Mutex<()>>> =
+    LazyLock::new(|| Arc::new(tokio::sync::Mutex::new(())));
+
 #[derive(Clone)]
 pub struct TerminalLaunchService {
     pub(super) database: DatabaseConnection,
@@ -30,7 +37,6 @@ pub struct TerminalLaunchService {
     pub(super) lease_owner: String,
     pub(super) checkpoints: LaunchCheckpoints,
     pub(super) skill_search_environment: ticketry_provider::SkillSearchEnvironment,
-    graph_run_mutation_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl TerminalLaunchService {
@@ -43,7 +49,6 @@ impl TerminalLaunchService {
             lease_owner: uuid::Uuid::new_v4().simple().to_string(),
             checkpoints: LaunchCheckpoints::default(),
             skill_search_environment: ticketry_provider::SkillSearchEnvironment::from_process(),
-            graph_run_mutation_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 
@@ -56,8 +61,10 @@ impl TerminalLaunchService {
         self
     }
 
+    /// The one process-wide Graph Run mutation lock, whichever launch service
+    /// a Graph Run service was composed with.
     pub fn graph_run_mutation_lock(&self) -> Arc<tokio::sync::Mutex<()>> {
-        Arc::clone(&self.graph_run_mutation_lock)
+        Arc::clone(&GRAPH_RUN_MUTATION_LOCK)
     }
 
     /// Compose the interactive launch authority. Without it the service still

@@ -5,7 +5,8 @@
 //! graph no longer reaches. That cannot be expressed as CRUD on one row, so it
 //! stays a named domain operation in the route/operation registry.
 
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, TransactionTrait};
+use crate::work_management::database::begin_write;
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use super::super::identifiers::database_uuid;
 use super::super::CommandError;
@@ -20,7 +21,7 @@ pub async fn remove_state(
 ) -> Result<(), CommandError> {
     let type_id = database_uuid(&input.issue_type_id, "issue_type_id")?;
     let state_id = database_uuid(&input.state_id, "state_id")?;
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let kind = claim_workflow_revision(&transaction, &type_id, input.workflow_revision).await?;
     require_project_state(&transaction, &kind.project_id, &state_id, "State").await?;
     if kind.start_state_id.as_deref() == Some(&state_id) {

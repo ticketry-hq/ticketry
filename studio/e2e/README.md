@@ -39,6 +39,13 @@ onboarding stays inside the invocation. `startup-and-service-health` and
 `background-discovery-and-recovery` always start when their turn comes.
 Runner-started server output is in each invocation's `web-server.log`.
 
+Each stack's Vite dev server ignores `src-tauri/**`. The shared Cargo target
+holds about 300k files, often symlinked into validation checkouts. Watching it
+made each stack's Bun-hosted Vite crawl it for tens of seconds and reload pages
+on build-script HTML writes. Browser writes then sat pending at the proxy while
+the adapter itself answered in a millisecond (T2914).
+`scripts/feature-e2e/devServerWatch.test.mjs` guards that scope.
+
 The `setup` Playwright project runs before Chromium. It uses the provisioned
 `codex / gpt-5.4 / medium` catalog entry and completes the real
 provider-onboarding UI. Test setup and verification use the same public GraphQL
@@ -206,7 +213,13 @@ Existing workspace tests retain the default holding process. Agent suites write
 before launching, then create `<run-id>.release` to let it finish (failure exits
 23). Optional `states` lists workflow destinations to request through MCP;
 identity comes from the real launch prompt, with `taskId`/`projectId` overrides
-for prompt-free fixtures. `<run-id>.interactive.json` records the actual child
+for prompt-free fixtures. `hooks` lists extra provider events to publish
+through the production hook command right after startup. `calls` lists MCP tool
+calls to make after release. `startCalls` lists calls to make right after startup,
+while the provider is still live; the bridge then disconnects. Both call lists
+record each structured result in `<run-id>.calls.log`. The MCP and hook suites
+(`mcp-server-and-tools`, `hook-runner-and-lifecycle-reporting`) use these
+controls. `<run-id>.interactive.json` records the actual child
 working directory, arguments, identity and PID; `.hooks.log` and `.mcp.log`
 provide hook and transition evidence. `title-control.json` can set the
 external provider's title, including `null`, for the resident title protocol.

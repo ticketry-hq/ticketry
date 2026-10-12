@@ -14,11 +14,15 @@ export function EpicTabStrip({ graph, coordinator }: EpicTabStripProps) {
   const addEpicRef = useRef<HTMLButtonElement>(null);
   const previousTabCount = useRef(visit.epicTabs.length);
   useLayoutEffect(() => {
-    if (previousTabCount.current > 0 && visit.epicTabs.length === 0) addEpicRef.current?.focus();
+    const focus = document.activeElement;
+    const ownedFocus = focus === document.body || stripRef.current?.contains(focus);
+    if (previousTabCount.current > 0 && visit.epicTabs.length === 0 && ownedFocus) addEpicRef.current?.focus();
     previousTabCount.current = visit.epicTabs.length;
   }, [visit.epicTabs.length]);
   return <div ref={stripRef} className="flex shrink-0 items-center border-b border-pane-border bg-pane-title">
-    <TabStrip label="Plan epic tabs" activeId={visit.activeEpicId} onSelect={select} onClose={(epicId) => coordinator.close(epicId, "tab")} tabs={visit.epicTabs.map((id) => {
+    <TabStrip label="Plan epic tabs" activeId={visit.activeEpicId} onSelect={select} onClose={(epicId) => {
+      if (coordinator.close(epicId, "tab") && visit.epicTabs.length === 1) addEpicRef.current?.focus();
+    }} tabs={visit.epicTabs.map((id) => {
       const text = label(id);
       return { id, label: <>{text.name} <span className="text-text-muted">{text.count}{text.waiting ? ` ✦ ${text.waiting}` : ""}</span></>, accessibleLabel: text.accessible, closeLabel: `Close ${text.name}` };
     })} />

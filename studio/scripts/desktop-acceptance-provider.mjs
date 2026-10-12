@@ -5,17 +5,9 @@ import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
-// Parse the generated Codex inline table, whose strings/arrays use JSON escaping.
-export function parseProviderLaunch(argv, environment) {
-  const config = argv.find((value) => value.startsWith("mcp_servers=")) ?? "";
-  const command = config.match(/command=("(?:[^"\\]|\\.)*")/);
-  const args = config.match(/args=(\[.*?\]),command=/);
-  if (!command || !args || !config.includes('env_vars=["TICKETRY_MCP_AUTHORIZATION"]')) {
-    throw new Error("Acceptance provider requires the packaged stdio MCP configuration");
-  }
-  if (!environment.TICKETRY_MCP_AUTHORIZATION) throw new Error("Missing MCP authorization");
-  return { command: JSON.parse(command[1]), args: JSON.parse(args[1]), authorization: environment.TICKETRY_MCP_AUTHORIZATION };
-}
+import { parseHookCommand, parseLaunchPrompt, parseProviderLaunch } from "./desktop-provider-launch.mjs";
+
+export { parseProviderLaunch } from "./desktop-provider-launch.mjs";
 
 export async function runProvider(root, argv) {
   if (argv[0] === "--version") {
@@ -23,15 +15,13 @@ export async function runProvider(root, argv) {
     return;
   }
   const launch = parseProviderLaunch(argv, process.env);
-  const hooks = argv.find((value) => value.startsWith("hooks=")) ?? "";
-  const hookMatch = hooks.match(/command=("(?:[^"\\]|\\.)*")/);
-  if (!hookMatch) throw new Error("Missing lifecycle hook command");
-  const hookCommand = JSON.parse(hookMatch[1]);
+  const hookCommand = parseHookCommand(argv);
   const prompt = argv.at(-1) ?? "";
   const fallback = existsSync(path.join(root, "provider-task"))
     ? readFileSync(path.join(root, "provider-task"), "utf8").split("\n") : [];
-  const taskId = prompt.match(/^Work Item ID: (.+)$/m)?.[1] ?? fallback[0];
-  const projectId = prompt.match(/^Project ID: (.+)$/m)?.[1] ?? fallback[1];
+  const promptIdentity = parseLaunchPrompt(prompt);
+  const taskId = promptIdentity.workItemId ?? fallback[0];
+  const projectId = promptIdentity.projectId ?? fallback[1];
   if (!taskId || !projectId) throw new Error("Missing provider work item identity");
   const bridge = spawn(launch.command, launch.args, { env: process.env, stdio: ["pipe", "pipe", "inherit"] });
   const lines = createInterface({ input: bridge.stdout });

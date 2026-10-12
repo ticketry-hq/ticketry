@@ -14,6 +14,7 @@ use super::support::{work_facts, WakeWorkFacts};
 use crate::work_management::{
     commands::state_configuration,
     graphql::{command_error, require_command_database},
+    write_reservation::ReservedWrite,
 };
 use ticketry_entities::state;
 
@@ -52,7 +53,7 @@ pub(super) fn register(builder: &mut Builder) {
             .argument(string_argument("state_id"))
             .hook_owns_authorization()
             .returns_boolean(),
-        DeleteState,
+        ReservedWrite(DeleteState),
         ViewSerializers::default(),
     );
 }

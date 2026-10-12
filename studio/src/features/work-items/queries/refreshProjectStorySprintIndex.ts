@@ -1,5 +1,5 @@
 import type { ApolloClient, ObservableQuery } from "@apollo/client";
-import { ROADMAP_ENABLED } from "../../../shared/config/roadmapAvailability";
+import { editionHas } from "../../../shared/config/edition";
 import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../../../shared/apollo/client";
 import { ProjectStorySprintModulesDocument } from "../generated/storySprintIndex.documents";
@@ -12,7 +12,7 @@ const refreshes = new WeakMap<ApolloClient, Map<string, Promise<void>>>();
 
 /** Refresh mounted project readers, invalidating only closed memberships in this project. */
 export async function refreshProjectStorySprintIndex(projectId: string, client: ApolloClient = studioApolloClient()): Promise<void> {
-  if (!ROADMAP_ENABLED) return;
+  if (!editionHas("sprintPlanning")) return;
   const project = compactWorktrackerId(projectId);
   let projects = refreshes.get(client);
   if (!projects) { projects = new Map(); refreshes.set(client, projects); }

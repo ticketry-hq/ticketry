@@ -1,4 +1,5 @@
 import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
+import { editionHas } from "../../shared/config/edition";
 import { studioApolloClient } from "../../shared/apollo/client";
 import { dialog, useClientStore } from "../../state/clientStore";
 import { getModuleFolder } from "../module-links";
@@ -15,7 +16,7 @@ export async function archiveManagerModule(projectId: string, moduleId: string, 
   if (!module || module.is_archived || !isCurrent()) return false;
   const projection = getEffectiveModuleTabsSnapshot(projectId);
   const confirmed = await dialog.confirm({ title: `Archive ${module.name}?`,
-    body: `Archiving “${module.name}” archives all descendant Stories and work items on the server. They leave active lists and sprint membership. The module remains available for inspection in Archived.`,
+    body: `Archiving “${module.name}” archives all descendant Stories and work items on the server. They leave active lists${editionHas("sprintPlanning") ? " and sprint membership" : ""}. The module remains available for inspection in Archived.`,
     confirmLabel: "Archive module", danger: true });
   if (!confirmed) return true;
   if (!isCurrent()) return true;

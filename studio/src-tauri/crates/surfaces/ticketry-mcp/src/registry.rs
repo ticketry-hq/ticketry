@@ -1,7 +1,43 @@
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use rmcp::model::{JsonObject, Tool};
 use serde_json::{json, Map, Value};
+use ticketry_edition::{Edition, EditionCapability, EDITION};
+
+/// One registry entry: a tool and the edition capability it requires, if any.
+/// A core-only tool is one entry tagged with [`Entry::requires`].
+struct Entry {
+    tool: Tool,
+    requires: Option<EditionCapability>,
+}
+
+impl Entry {
+    fn requires(mut self, capability: EditionCapability) -> Self {
+        self.requires = Some(capability);
+        self
+    }
+
+    /// Publish `name` and `granted_description` only where `edition` grants
+    /// `capability`; elsewhere the argument and its wording are absent.
+    fn argument(
+        mut self,
+        edition: Edition,
+        capability: EditionCapability,
+        name: &'static str,
+        schema: Value,
+        granted_description: &'static str,
+    ) -> Self {
+        if edition.has(capability) {
+            Arc::make_mut(&mut self.tool.input_schema)
+                .get_mut("properties")
+                .and_then(Value::as_object_mut)
+                .expect("tool schemas carry properties")
+                .insert(name.to_owned(), schema);
+            self.tool.description = Some(Cow::Borrowed(granted_description));
+        }
+        self
+    }
+}
 
 fn schema(properties: Value, required: &[&str]) -> Arc<JsonObject> {
     let mut object = Map::new();
@@ -18,8 +54,11 @@ fn tool(
     description: &'static str,
     properties: Value,
     required: &[&str],
-) -> Tool {
-    Tool::new(name, description, schema(properties, required))
+) -> Entry {
+    Entry {
+        tool: Tool::new(name, description, schema(properties, required)),
+        requires: None,
+    }
 }
 
 fn closed_tool(
@@ -27,11 +66,11 @@ fn closed_tool(
     description: &'static str,
     properties: Value,
     required: &[&str],
-) -> Tool {
-    let mut tool = tool(name, description, properties, required);
-    Arc::make_mut(&mut tool.input_schema)
+) -> Entry {
+    let mut entry = tool(name, description, properties, required);
+    Arc::make_mut(&mut entry.tool.input_schema)
         .insert("additionalProperties".to_owned(), Value::Bool(false));
-    tool
+    entry
 }
 
 fn nullable_string() -> Value {
@@ -46,7 +85,30 @@ fn optional_nullable_string() -> Value {
     json!({"anyOf": [{"type": "string"}, {"type": "null"}]})
 }
 
+const PARALLEL_CAMPAIGN: &str = "Launch eligible direct children of a root task.\n\nOnly direct children participate. Each child launches once after every\nblocker reaches a satisfying workflow state; a durable ledger prevents\nlater re-launches.\n\nPassing ``reset=True`` clears that root's ledger first, then executes\nnewly launchable direct children. The default leaves the ledger intact.\n\nReturns ``root_id`` and task ids launched by this call.";
+
+const SERIAL_CAMPAIGN: &str = "Run a serial campaign over the direct children of a root task.\n\nOnly direct children participate, one at a time: the campaign launches the\nfirst eligible child, and launches the next only after that child reaches a\nsatisfying workflow state and its run and terminal have ended. Each child\nlaunches once after every blocker is satisfied; a durable ledger prevents\nlater re-launches.\n\nPassing ``reset=True`` clears that root's ledger first, then starts the\ncampaign again. The default leaves the ledger intact.\n\nReturns ``root_id`` and task ids launched by this call.";
+
+/// The tools the compiled edition publishes, in registry order.
 pub fn tools() -> Vec<Tool> {
+    tools_for(EDITION)
+}
+
+/// The edition gate: every entry whose required capability `edition` grants.
+fn tools_for(edition: Edition) -> Vec<Tool> {
+    entries(edition)
+        .into_iter()
+        .filter(|entry| {
+            entry
+                .requires
+                .is_none_or(|capability| edition.has(capability))
+        })
+        .map(|entry| entry.tool)
+        .collect()
+}
+
+fn entries(edition: Edition) -> Vec<Entry> {
+    use EditionCapability::{ParallelSubtreeRuns, SprintPlanning};
     vec![
         tool("mcp_ping", "Verify MCP transport and tool execution without touching a backend.", json!({}), &[]),
         tool("terminate_current_run", "Terminate only the Studio run bound to this MCP request. This stops the run without changing or archiving its ticket. A committed handoff keeps the run alive and returns \"continued_by_handoff\" so its queued destination prompt can run.", json!({}), &[]),
@@ -77,15 +139,17 @@ pub fn tools() -> Vec<Tool> {
             "project_id": {"type": "string"}, "parent_id": {"type": "string"}, "name": {"type": "string"},
             "path": {"type": "string"}, "line_start": {"type": "integer"}, "line_end": {"type": "integer"}, "note": nullable_string()
         }), &["project_id", "parent_id", "name", "path", "line_start", "line_end"]),
-        tool("create_sub_task", "Create a sub-task with an explicit type, optionally in a named state. Sprint accepts current, next, or a UUID (with or without hyphens); null or omitted means backlog and keeps the legacy id result. Supplying a sprint returns the assigned sprint with the task identity.", json!({
+        tool("create_sub_task", "Create a sub-task with an explicit type, optionally in a named state.", json!({
             "project_id": {"type": "string"}, "parent_id": {"type": "string"}, "name": {"type": "string"},
-            "issue_type": {"type": "string"}, "description": {"type": "string", "default": ""}, "state_name": nullable_string(), "sprint": optional_nullable_string()
-        }), &["project_id", "parent_id", "name", "issue_type"]),
-        tool("create_task", "Create a task with an explicit type, optionally in a named state. Sprint accepts current, next, or a UUID (with or without hyphens); null or omitted means backlog and keeps the legacy id result. Supplying a sprint returns the assigned sprint with the task identity.", json!({
+            "issue_type": {"type": "string"}, "description": {"type": "string", "default": ""}, "state_name": nullable_string()
+        }), &["project_id", "parent_id", "name", "issue_type"])
+            .argument(edition, SprintPlanning, "sprint", optional_nullable_string(), "Create a sub-task with an explicit type, optionally in a named state. Sprint accepts current, next, or a UUID (with or without hyphens); null or omitted means backlog and keeps the legacy id result. Supplying a sprint returns the assigned sprint with the task identity."),
+        tool("create_task", "Create a task with an explicit type, optionally in a named state.", json!({
             "project_id": {"type": "string"}, "name": {"type": "string"}, "issue_type": {"type": "string"},
-            "description": {"type": "string", "default": ""}, "module_id": nullable_string(), "state_name": nullable_string(), "sprint": optional_nullable_string()
-        }), &["project_id", "name", "issue_type"]),
-        tool("execute_dependency_graph", "Launch eligible direct children of a root task.\n\nOnly direct children participate. Each child launches once after every\nblocker reaches a satisfying workflow state; a durable ledger prevents\nlater re-launches.\n\nPassing ``reset=True`` clears that root's ledger first, then executes\nnewly launchable direct children. The default leaves the ledger intact.\n\nReturns ``root_id`` and task ids launched by this call.", json!({
+            "description": {"type": "string", "default": ""}, "module_id": nullable_string(), "state_name": nullable_string()
+        }), &["project_id", "name", "issue_type"])
+            .argument(edition, SprintPlanning, "sprint", optional_nullable_string(), "Create a task with an explicit type, optionally in a named state. Sprint accepts current, next, or a UUID (with or without hyphens); null or omitted means backlog and keeps the legacy id result. Supplying a sprint returns the assigned sprint with the task identity."),
+        tool("execute_dependency_graph", if edition.has(ParallelSubtreeRuns) { PARALLEL_CAMPAIGN } else { SERIAL_CAMPAIGN }, json!({
             "root_task_id": {"type": "string"}, "agent": nullable_string(), "reset": {"type": "boolean", "default": false}
         }), &["root_task_id"]),
         tool("get_dependency_graph", "Read a task subtree's workflow states and dependency edges.\n\nReturns the root plus factual nodes carrying ``id``, workflow-state\n``state``, ``parent_id``, and ``blocked_by`` ids. This read never\nlaunches agents and does not depend on an execution run.", json!({
@@ -96,7 +160,7 @@ pub fn tools() -> Vec<Tool> {
         }), &["type_id"]),
         closed_tool("get_sprint_goals", "Read the goals with G-numbers for an open sprint in your project.", json!({
             "sprint_id": {"type": "string"}
-        }), &["sprint_id"]),
+        }), &["sprint_id"]).requires(SprintPlanning),
         tool("get_task_details", "Get detailed information about a specific task using its ID or Key (e.g. PROJ-123).", json!({
             "id_or_key": {"type": "string"}
         }), &["id_or_key"]),
@@ -115,7 +179,7 @@ pub fn tools() -> Vec<Tool> {
         tool("list_projects", "List all projects in the worktracker.", json!({}), &[]),
         closed_tool("list_sprints", "Read your project's planned and active sprints in sequence order, with is_current and is_next flags. Completed sprints are omitted.", json!({
             "project_id": {"type": "string"}
-        }), &["project_id"]),
+        }), &["project_id"]).requires(SprintPlanning),
         tool("list_tasks", "List tasks (work items) in a project, optionally filtered by module or state.", json!({
             "project_id": {"type": "string"}, "module_id": nullable_string(), "state_name": nullable_string(),
             "include_description": {"type": "boolean", "default": false}
@@ -149,10 +213,11 @@ pub fn tools() -> Vec<Tool> {
             "sprint_id": {"type": "string"}, "goal_id": {"type": "string"},
             "issue_id": nullable_string(), "proposed_name": nullable_string(),
             "proposed_epic_id": nullable_string(), "reason": {"type": "string"}
-        }), &["sprint_id", "goal_id", "reason"]),
-        tool("update_task", "Replace a task's supplied title and/or full description, or change its sprint. Sprint accepts current, next, or a UUID (with or without hyphens); null returns to backlog and omitted leaves membership unchanged. Sprint is an exclusive patch: do not supply name or description with sprint. The result returns the assigned sprint or null.", json!({
-            "id_or_key": {"type": "string"}, "name": optional_nullable_string(), "description": optional_nullable_string(), "sprint": optional_nullable_string()
-        }), &["id_or_key"]),
+        }), &["sprint_id", "goal_id", "reason"]).requires(SprintPlanning),
+        tool("update_task", "Replace a task's supplied title and/or full description.", json!({
+            "id_or_key": {"type": "string"}, "name": optional_nullable_string(), "description": optional_nullable_string()
+        }), &["id_or_key"])
+            .argument(edition, SprintPlanning, "sprint", optional_nullable_string(), "Replace a task's supplied title and/or full description, or change its sprint. Sprint accepts current, next, or a UUID (with or without hyphens); null returns to backlog and omitted leaves membership unchanged. Sprint is an exclusive patch: do not supply name or description with sprint. The result returns the assigned sprint or null."),
         tool("update_task_status", "Update the status/state of a task (e.g. 'Todo', 'Done').\n\nReturns ``{\"ok\": True, ...}`` on success, or ``{\"ok\": False, ...}`` with\nthe gate's structured reason (``detail``/``code``/``from``/``to``) when\nthe backend refuses an illegal workflow move (#872).\n\nThis tool always identifies the write as agent-origin, so the configured\ngraph and its agent permissions govern the move.", json!({
             "project_id": {"type": "string"}, "task_id": {"type": "string"}, "status_name": {"type": "string"}
         }), &["project_id", "task_id", "status_name"]),
@@ -178,6 +243,9 @@ mod tests {
 
     #[test]
     fn sprint_assignment_schemas_preserve_omitted_update_membership() {
+        if !ticketry_edition::has(EditionCapability::SprintPlanning) {
+            return;
+        }
         let tools = tools();
         for name in ["create_task", "create_sub_task", "update_task"] {
             let tool = tools.iter().find(|tool| tool.name == name).unwrap();
@@ -212,51 +280,11 @@ mod tests {
     }
 
     #[test]
-    fn registry_publishes_36_tools_with_run_scoped_sprint_contracts() {
+    fn sprint_tools_publish_closed_run_scoped_contracts() {
+        if !ticketry_edition::has(EditionCapability::SprintPlanning) {
+            return;
+        }
         let tools = tools();
-        assert_eq!(tools.len(), 36);
-        let names: Vec<&str> = tools.iter().map(|tool| tool.name.as_ref()).collect();
-        assert_eq!(
-            names,
-            vec![
-                "mcp_ping",
-                "terminate_current_run",
-                "add_issue_type_workflow_transition",
-                "add_task_blocker",
-                "add_task_dependent",
-                "add_task_tags",
-                "append_task_description",
-                "attach_file",
-                "clear_issue_type_workflow_launch_binding",
-                "create_review_finding",
-                "create_sub_task",
-                "create_task",
-                "execute_dependency_graph",
-                "get_dependency_graph",
-                "get_issue_type_workflow_settings",
-                "get_sprint_goals",
-                "get_task_details",
-                "get_task_scope_context",
-                "launch_default_coding_agent",
-                "list_issue_types",
-                "list_modules",
-                "list_projects",
-                "list_sprints",
-                "list_tasks",
-                "remove_issue_type_workflow_transition",
-                "rename_codex_thread",
-                "reparent_tasks",
-                "run_now",
-                "set_issue_type_workflow_auto_start",
-                "set_issue_type_workflow_start_state",
-                "set_issue_type_workflow_transition_permission",
-                "set_task_blockers",
-                "suggest_sprint_story",
-                "update_task",
-                "update_task_status",
-                "upsert_issue_type_workflow_launch_binding",
-            ]
-        );
         let list_sprints = tools
             .iter()
             .find(|tool| tool.name == "list_sprints")
@@ -271,14 +299,6 @@ mod tests {
             })
             .as_object()
             .unwrap()
-        );
-        assert_eq!(
-            tools
-                .iter()
-                .find(|tool| tool.name == "create_task")
-                .unwrap()
-                .input_schema["required"],
-            json!(["project_id", "name", "issue_type"])
         );
         for name in ["get_sprint_goals", "suggest_sprint_story"] {
             let tool = tools.iter().find(|tool| tool.name == name).unwrap();
@@ -298,6 +318,19 @@ mod tests {
                 nullable_string()
             );
         }
+    }
+
+    #[test]
+    fn registry_publishes_both_editions_shared_tool_contracts() {
+        let tools = tools();
+        assert_eq!(
+            tools
+                .iter()
+                .find(|tool| tool.name == "create_task")
+                .unwrap()
+                .input_schema["required"],
+            json!(["project_id", "name", "issue_type"])
+        );
         let add_task_tags = tools
             .iter()
             .find(|tool| tool.name == "add_task_tags")

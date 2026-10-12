@@ -280,16 +280,8 @@ export async function openModule(page: Page, moduleName: string): Promise<void> 
   await page.goto("/");
   const moduleTab = page.getByRole("tab", { name: moduleName, exact: true }).last();
   await expect(moduleTab).toBeVisible();
-  const loaded = page.waitForResponse((response) =>
-    response.url().endsWith("/graphql")
-    && response.request().postDataJSON()?.operationName ===
-      "WorkTrackerModuleOpen"
-  );
   await moduleTab.click();
-  await loaded;
   await expect(moduleTab).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("modules-pane-toggle"))
-    .toHaveAttribute("aria-expanded", "false");
   await expect(page.getByTestId("module-workspace-region")).toBeVisible();
 }
 

@@ -3,7 +3,7 @@ import { useClientStore } from "../../state/clientStore";
 import { useStudioStore } from "../projects";
 import { getModuleFolder } from "../module-links";
 import { getEffectiveModuleTabsSnapshot, type EffectiveModuleTabs } from "./effectiveModuleTabs";
-import { ROADMAP_ENABLED } from "../../shared/config/roadmapAvailability";
+import { editionHas } from "../../shared/config/edition";
 
 type SelectionAttempt = { intent: string; target: string; generation: string; pending: boolean; interrupted: boolean };
 
@@ -17,7 +17,7 @@ export function useSprintModuleSelection(projectId: string | null, projection: E
   const [completion, wake] = useReducer((value: number) => value + 1, 0);
   deferredRef.current = deferred;
   useEffect(() => {
-    if (!ROADMAP_ENABLED) return;
+    if (!editionHas("sprintPlanning")) return;
     if (deferred) {
       if (attempt.current?.pending) attempt.current.interrupted = true;
       return;

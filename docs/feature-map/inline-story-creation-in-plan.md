@@ -3,6 +3,7 @@
 Create Stories in the active epic's Backlog or sprint pane with separate drafts and recovery that preserves committed identities.
 
 Surfaces: browser, desktop
+Editions: core
 
 ## Sub-features
 
@@ -15,7 +16,7 @@ Open the project Plan tab (`workspace-tab-plan`), choose a sprint card's Plan bu
 
 ## Prerequisites
 
-The build-time `TICKETRY_ROADMAP_ENABLED` choice must compile `__TICKETRY_ROADMAP_ENABLED__` as enabled. Roadmap-off builds omit the Plan tab, Sprints workspace and these inline editors; runtime URL or settings cannot enable them. Select an epic (or available No epic), use an uncompleted sprint and an available Story creation type, and wait for the planning graph. The [planner service reference](../planner-service.md) documents discovery execution separately; manual creation does not require a discovery run.
+The build-time `TICKETRY_EDITION` choice must be `core` (`__TICKETRY_EDITION__` compiled as core; the default is `pocock`). Pocock-edition builds omit the Plan tab, Sprints workspace and these inline editors; runtime URL or settings cannot enable them. Select an epic (or available No epic), use an uncompleted sprint and an available Story creation type, and wait for the planning graph. The [planner service reference](../planner-service.md) documents discovery execution separately; manual creation does not require a discovery run.
 
 ## Expected behavior
 
@@ -33,7 +34,7 @@ Supplementary browser provenance remains in `studio/e2e/planning-module-manual.s
 
 Supplementary focus acceptance: `studio/src/test/overhaulPlanStoryCreationFocusAcceptance.test.tsx` (`overhaul-809`, `overhaul-810`) covers submitting-pane focus and intentional focus retention during fact-driven collection invalidation. These acceptance cases supplement the browser suite rather than fill its cells.
 
-Supplementary Roadmap-off coverage is `studio/src/test/overhaulRoadmapOffAcceptance.test.tsx` via `bun run --cwd studio test:roadmap-off`. Browser screenshots cannot prove native rendering or paid-model behavior.
+Supplementary Pocock-edition coverage is `studio/src/test/overhaulPocockEditionAcceptance.test.tsx` via `bun run --cwd studio test:pocock`. Browser screenshots cannot prove native rendering or paid-model behavior.
 
 ## End-to-end suite
 
@@ -49,7 +50,7 @@ Suite: studio/e2e/features/inline-story-creation-in-plan.spec.ts
 - [Inline editor](../../studio/src/features/sprints/planning/InlineStoryCreation.tsx) (`studio/src/features/sprints/planning/InlineStoryCreation.tsx`).
 - `studio/src/features/sprints/planning/usePlanVisitCoordinator.ts`: retain the complete observed planning graph for rendering through cache eviction; commands still require current cache reads.
 - [Draft slots](../../studio/src/features/sprints/planning/storyCreationEntries.ts) (`studio/src/features/sprints/planning/storyCreationEntries.ts`) and [pane composition](../../studio/src/features/sprints/planning/PlanSprintView.tsx) (`studio/src/features/sprints/planning/PlanSprintView.tsx`).
-- [Build policy](../../studio/scripts/roadmap-build-policy.mjs) (`studio/scripts/roadmap-build-policy.mjs`) and [compiled gate](../../studio/src/shared/config/roadmapAvailability.ts) (`studio/src/shared/config/roadmapAvailability.ts`).
+- [Build policy](../../studio/scripts/edition-build-policy.mjs) (`studio/scripts/edition-build-policy.mjs`) and [edition seam](../../studio/src/shared/config/edition.ts) (`studio/src/shared/config/edition.ts`).
 - [Planner service](../planner-service.md) owns the discovery architecture and execution contract.
 
 ## Gotchas

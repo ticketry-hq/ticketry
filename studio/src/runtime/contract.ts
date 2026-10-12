@@ -3,6 +3,7 @@ import type { UserNotice } from "./userNotice";
 import type { TypedDocumentNode } from "../graphql-foundation/typedDocument";
 import type { CreateGraphQlTransportProxy } from "./graphQlTransport";
 import type { LaunchkeyRuntime } from "./launchkey";
+import type { Edition } from "../shared/config/edition";
 
 export type StudioPlatform = "browser" | "desktop";
 
@@ -50,6 +51,12 @@ export type SettingsRoutes<TResult> = WorkTrackerReadRoutes<TResult>;
 
 export interface RuntimeStartupConfiguration {
   readonly runtimeInstance?: string;
+  /**
+   * Informational only: the edition the Rust host was compiled as, for e2e
+   * assertions against stale binaries. Rendering never reads it; gating uses
+   * `editionHas()` from the frontend's own compiled edition.
+   */
+  readonly edition?: Edition;
   readonly plannerEndpoint?: PlannerEndpoint | null;
   readonly serviceHealth: ServiceHealth;
   readonly initialNotices: readonly UserNotice[];

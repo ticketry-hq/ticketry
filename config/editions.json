@@ -1,0 +1,10 @@
+{
+  "editions": ["pocock", "core"],
+  "capabilities": {
+    "sprintPlanning": ["core"],
+    "launchkeyMidi": ["core"],
+    "voiceTranscription": ["core"],
+    "parallelSubtreeRuns": ["core"],
+    "reviewedWorkflowDefaults": ["pocock"]
+  }
+}

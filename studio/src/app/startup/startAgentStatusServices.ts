@@ -4,6 +4,7 @@ import {
 } from "../../features/agents/status";
 import { statusStreamFeed } from "../../features/agents/status/stream/statusStreamFeed";
 import { launchkeyStartup } from "../../features/launchkey";
+import { editionHas } from "../../shared/config/edition";
 import { studioRuntime, type StudioRuntime } from "../../runtime";
 import type { CreateGraphQlTransportProxy } from "../../runtime/graphQlTransport";
 
@@ -14,7 +15,8 @@ export function startAgentStatusServices(
 ): () => void {
   statusStreamFeed.start(projectId, { createProxy });
   startStallDeadlines();
-  launchkeyStartup.start(runtime);
+  // Pocock hosts never initialize the LaunchKey plugin, so nothing may invoke it.
+  if (editionHas("launchkeyMidi")) launchkeyStartup.start(runtime);
 
   return () => {
     statusStreamFeed.stop();

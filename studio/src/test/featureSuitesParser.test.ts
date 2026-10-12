@@ -10,7 +10,7 @@ describe('feature suite source contract', () => {
       healthTest.describe('nested', () => { healthTest('creates story', { tag: '@case-create-story' }, async () => {}); });
     });`, 'studio/e2e/features/planning.spec.ts');
     expect(suite.declarations).toEqual([{ id: 'planning', isolation: 'case', profile: 'first-run', topLevel: true }]);
-    expect(suite.cases).toEqual([{ title: 'creates story', titlePath: ['planning', 'nested', 'creates story'], allTags: ['@feature-planning', '@case-create-story'], grepTitlePath: ['planning', '@feature-planning', 'nested', 'creates story', '@case-create-story'], tags: ['@case-create-story'], ids: ['create-story'], literalTitle: true, literalTags: true, insideDeclaration: true }]);
+    expect(suite.cases).toEqual([{ title: 'creates story', titlePath: ['planning', 'nested', 'creates story'], allTags: ['@feature-planning', '@case-create-story'], grepTitlePath: ['planning', '@feature-planning', 'nested', 'creates story', '@case-create-story'], tags: ['@case-create-story'], ids: ['create-story'], editionTags: [], literalTitle: true, literalTags: true, insideDeclaration: true }]);
     expect(suite.violations).toEqual([]);
   });
 });

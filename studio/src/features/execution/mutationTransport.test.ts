@@ -10,7 +10,11 @@ afterEach(() => {
   initializeStudioRuntime(createBrowserRuntime({ environment: {} }));
 });
 
-function installGraphQl(operations: string[], holding: boolean) {
+function installGraphQl(
+  operations: string[],
+  holding: boolean,
+  sentModes: unknown[] = [],
+) {
   const browser = createBrowserRuntime({ environment: {} });
   initializeStudioRuntime({
     ...browser,
@@ -21,6 +25,9 @@ function installGraphQl(operations: string[], holding: boolean) {
           variables: Record<string, unknown>;
         };
         operations.push(request.operationName);
+        if (request.operationName !== "ExecutionGraphRunHolding") {
+          sentModes.push(request.variables.executionMode);
+        }
         if (request.operationName === "ExecutionGraphRunHolding") {
           return JSON.stringify({
             data: {
@@ -95,5 +102,16 @@ describe("Graph Run mutation transport", () => {
       "ExecutionGraphRunHolding",
       "UpdateExecutionGraphRun",
     ]);
+  });
+
+  it("passes core's requested mode through and leaves an omitted mode unset", async () => {
+    const sentModes: unknown[] = [];
+    installGraphQl([], false, sentModes);
+
+    await executeTaskSubtree("root-1");
+    await executeTaskSubtree("root-1", "parallel");
+    await executeTaskSubtree("root-1", "serial");
+
+    expect(sentModes).toEqual([null, "parallel", "serial"]);
   });
 });

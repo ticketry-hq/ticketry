@@ -13,6 +13,7 @@ import {
   type AgentRunActionId,
 } from "./actionIds";
 import { installCaptureKeymapResolver, installModalKeymapResolver } from "../../shared/navigation/keymapResolver";
+import { editionHas } from "../../shared/config/edition";
 
 type ActionHandler = (payload?: unknown) => boolean | Promise<boolean>;
 
@@ -241,6 +242,10 @@ class KeymapRegistry {
     };
   }
 
+  getRegisteredActionIds(): string[] {
+    return [...this.actions.keys()];
+  }
+
   async dispatch(actionId: string, payload?: unknown): Promise<boolean> {
     const handler = this.actions.get(actionId);
     return handler ? await handler(payload) : false;
@@ -312,7 +317,11 @@ installCaptureKeymapResolver((event, actionIds) =>
 installModalKeymapResolver((event, actionIds) =>
   studioKeymapRegistry.resolve("modal", event, actionIds)
 );
-for (const actionId of Object.values(AGENT_RUN_ACTIONS)) {
+// Edition-absent actions are never registered, so they are absent rather than inert.
+const editionAgentRunActions = Object.values(AGENT_RUN_ACTIONS).filter((actionId) =>
+  actionId !== AGENT_RUN_ACTIONS.toggleVoiceTranscription || editionHas("voiceTranscription")
+);
+for (const actionId of editionAgentRunActions) {
   studioKeymapRegistry.registerAction(actionId, async (payload) => {
     const { dispatchAgentRunAction } = await import(
       "../../features/agents/actions/agentRunActions"

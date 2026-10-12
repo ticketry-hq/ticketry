@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { ROADMAP_ENABLED } from "../../../shared/config/roadmapAvailability";
+import { editionHas } from "../../../shared/config/edition";
 import { refreshProjectStorySprintIndex } from "./refreshProjectStorySprintIndex";
 import { useQuery } from "@apollo/client/react";
 import { compactWorktrackerId, publicWorktrackerId } from "../../../shared/api/generatedWorktracker";
@@ -34,7 +34,7 @@ function projectRoots(projectId: string, moduleIds: readonly string[], data: Pro
 }
 
 export function getProjectStorySprintIndexSnapshot(projectId: string | null) {
-  if (!ROADMAP_ENABLED || !projectId) return { roots: NO_ROOTS, complete: false };
+  if (!editionHas("sprintPlanning") || !projectId) return { roots: NO_ROOTS, complete: false };
   const client = studioApolloClient();
   const scope = { projectId: compactWorktrackerId(projectId) };
   const modules = client.readQuery({ query: ProjectStorySprintModulesDocument, variables: scope, optimistic: true });
@@ -46,7 +46,7 @@ export function getProjectStorySprintIndexSnapshot(projectId: string | null) {
 }
 
 export function useProjectStorySprintIndex(projectId: string | null, fetchPolicy: ReadPolicy = "cache-and-network") {
-  const scopeId = ROADMAP_ENABLED ? projectId : null;
+  const scopeId = editionHas("sprintPlanning") ? projectId : null;
   const options = { client: studioApolloClient(), fetchPolicy,
     nextFetchPolicy: fetchPolicy === "cache-only" ? "cache-only" as const : "cache-first" as const,
     notifyOnNetworkStatusChange: true };

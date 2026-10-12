@@ -3,6 +3,7 @@
 The Sprints workspace groups project work by lifecycle, preserves numbered goals and completes unfinished work into a planned sprint or Backlog.
 
 Surfaces: browser, desktop
+Editions: core
 
 ## Sub-features
 
@@ -22,7 +23,7 @@ The **Sprint name** form submits with Enter; Escape or **Cancel** closes it when
 
 ## Prerequisites
 
-Select a project in a Roadmap-enabled build. The build input `TICKETRY_ROADMAP_ENABLED` becomes `__TICKETRY_ROADMAP_ENABLED__`; with it off, Plan, Sprints, goals, discovery controls, focused sprint views and lifecycle dialogs are absent, and retained planning records do not enable them. The off-state harness is `studio/vitest.roadmap-off.config.ts`. A planned sprint is required to Start and an active sprint to Complete; unfinished Stories and another planned sprint exercise carryover. Goals plus the baseline provider setup are needed for discovery. See [Planner service](../planner-service.md) for service contracts rather than duplicating them here.
+Select a project in a core-edition build. The build input `TICKETRY_EDITION` (`pocock` default, `core`) becomes `__TICKETRY_EDITION__`; in the Pocock edition, Plan, Sprints, goals, discovery controls, focused sprint views and lifecycle dialogs are absent, and retained planning records do not enable them. The Pocock-edition harness is `studio/vitest.pocock.config.ts`. A planned sprint is required to Start and an active sprint to Complete; unfinished Stories and another planned sprint exercise carryover. Goals plus the baseline provider setup are needed for discovery. See [Planner service](../planner-service.md) for service contracts rather than duplicating them here.
 
 ## Expected behavior
 
@@ -39,7 +40,7 @@ Browser cases: `studio/e2e/features/sprint-lifecycle-and-goals.spec.ts`.
 
 Run `bun run --cwd studio test:e2e:feature sprint-lifecycle-and-goals`. Observe `sprints-list`, `sprint-card-<id>`, numbered goals, lifecycle dialogs, alerts and progressbars; read authoritative sprint status, goals, order and Story membership through public GraphQL and reload.
 
-Supplementary browser legacy inventory remains in `studio/e2e/planning-module-lifecycle.spec.ts`, `studio/e2e/sprint-planning.spec.ts` and `studio/e2e/planning-module-recovery.spec.ts`; its cases are retained until the final migration title audit. `studio/scripts/desktop-planner-acceptance.mjs` (`bun run --cwd studio test:planner:desktop`) is adjacent native transport coverage and does not fill browser cells. `studio/src/test/overhaulRoadmapOffAcceptance.test.tsx` and `studio/vitest.roadmap-off.config.ts` (`bun run --cwd studio test:roadmap-off`) supplement compiled availability coverage.
+Supplementary browser legacy inventory remains in `studio/e2e/planning-module-lifecycle.spec.ts`, `studio/e2e/sprint-planning.spec.ts` and `studio/e2e/planning-module-recovery.spec.ts`; its cases are retained until the final migration title audit. `studio/scripts/desktop-planner-acceptance.mjs` (`TICKETRY_EDITION=core bun run --cwd studio test:planner:desktop`; it refuses under Pocock) is adjacent native transport coverage and does not fill browser cells. `studio/src/test/overhaulPocockEditionAcceptance.test.tsx` and `studio/vitest.pocock.config.ts` (`bun run --cwd studio test:pocock`) supplement compiled edition coverage; `studio/src/test/overhaulCoreEditionAcceptance.test.tsx` covers the core edition.
 
 ## End-to-end suite
 
@@ -60,7 +61,7 @@ Suite: studio/e2e/features/sprint-lifecycle-and-goals.spec.ts
 - `studio/src/features/sprints`: collection/cards, lifecycle dialogs, goals, planning surfaces, suggestion controls, mutations, selectors and generated operation callers; the other Plan entries detail those remaining behaviors.
 - `studio/src/features/sprints/operations/sprints.graphql` and `studio/src/features/sprints/goals/operations/goals.graphql`: persisted sprint and goal read/write contracts.
 - `studio/src/features/planning-graph/operations/planningGraph.graphql`: authoritative planning graph used for counts, grouping and membership.
-- `studio/src/shared/config/roadmapAvailability.ts`, `studio/scripts/roadmap-build-policy.mjs`, `studio/vite.config.ts` and `studio/vitest.roadmap-off.config.ts`: compile-time availability and off-state configuration.
+- `studio/src/shared/config/edition.ts`, `studio/scripts/edition-build-policy.mjs`, `studio/vite.config.ts` and `studio/vitest.pocock.config.ts`: compile-time edition and Pocock-edition test configuration.
 - [Planner service](../planner-service.md): backend lifecycle, planning and discovery implementation ownership.
 
 ## Gotchas
@@ -70,4 +71,4 @@ The generic feature runner invokes the Chromium project, whose dependency in `st
 - Wait for graph/goals/execution status to settle before asserting buttons; absent goals and unavailable status are distinct discovery prerequisites. Completed sprints retain history, while archived cancelled Stories do not contribute to visible progress.
 - External completion needs two real pages sharing the same disposable project; a mocked refetch alone does not reproduce the browser journey. Completed Plan can still remove old work, so do not treat every disabled incoming control as a fully read-only workspace.
 - Inspect wide/narrow controls, focus and overflow. Browser screenshots and fixture discovery do not establish native Tauri/libghostty behavior, native terminal retention or paid-provider execution; installed desktop lifecycle remains unverified here.
-- Stable identifiers were reconstructed from executable case identities in the recovered Planning inventory because the historical original map was unavailable. Runtime settings cannot change the compiled Roadmap gate; rebuild to change availability.
+- Stable identifiers were reconstructed from executable case identities in the recovered Planning inventory because the historical original map was unavailable. Runtime settings cannot change the compiled edition; rebuild with a different `TICKETRY_EDITION` to change availability.

@@ -11,6 +11,7 @@ use seaolim::{
     register_restricted_model_mutation, string_argument, ModelWrite, PreparedModelWrite,
     RestrictedModelMutation, RestrictedMutationField, ViewSerializers, WritePermit,
 };
+use ticketry_edition::EditionCapability;
 use ticketry_entities::{agent_execution, sprint};
 
 // Generated writes cannot bind sprint ownership, atomically create the run and
@@ -26,6 +27,7 @@ impl RestrictedModelMutation<agent_execution::Entity, agent_execution::ActiveMod
         ctx: &ResolverContext<'_>,
         txn: &DatabaseTransaction,
     ) -> Result<PreparedModelWrite<agent_execution::ActiveModel, agent_execution::Model>> {
+        refuse_outside_sprint_planning()?;
         let service = ctx.data::<SprintSuggestionExecutor>()?.clone();
         service.executable().map_err(error)?;
         let active = create::prepare(
@@ -63,6 +65,7 @@ impl RestrictedModelMutation<agent_execution::Entity, agent_execution::ActiveMod
         ctx: &ResolverContext<'_>,
         txn: &DatabaseTransaction,
     ) -> Result<PreparedModelWrite<agent_execution::ActiveModel, agent_execution::Model>> {
+        refuse_outside_sprint_planning()?;
         ctx.data::<SprintSuggestionExecutor>()?;
         if !ctx.args.try_get("cancel_requested")?.boolean()? {
             return Err(error("Only cancellation can be requested.".into()));
@@ -129,4 +132,17 @@ fn error(detail: String) -> Error {
     Error::new(detail).extend_with(|_, e| {
         e.set("code", "sprint_execution_refused");
     })
+}
+/// Sprint discovery exists only in editions that grant sprint planning. The
+/// mutations stay registered everywhere so the SDL is edition-independent;
+/// elsewhere they refuse before reading or writing any row.
+fn refuse_outside_sprint_planning() -> Result<()> {
+    if ticketry_edition::has(EditionCapability::SprintPlanning) {
+        return Ok(());
+    }
+    Err(Error::new(format!(
+        "Sprint discovery is not available in the {} edition.",
+        ticketry_edition::EDITION.name()
+    ))
+    .extend_with(|_, e| e.set("code", "edition_capability_unavailable")))
 }

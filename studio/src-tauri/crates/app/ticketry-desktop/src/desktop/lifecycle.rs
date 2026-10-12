@@ -3,7 +3,6 @@
 
 use std::sync::atomic::Ordering;
 use tauri::Manager;
-use tauri_plugin_launchkey_adaptor::{LaunchkeyAdaptorExt, PortName};
 
 use crate::desktop::data_directory::{
     release_data_directory_ownership, DesktopDataDirectoryOwnership,
@@ -66,9 +65,7 @@ pub fn tear_down_before_exit(application: &tauri::AppHandle) {
 }
 
 pub fn shutdown_rust_runtime(application: &tauri::AppHandle) {
-    let launchkey = application.launchkey_adaptor();
-    let _ = launchkey.send(PortName::Daw, &[0x9f, 0x0c, 0]);
-    let _ = launchkey.disconnect();
+    crate::desktop::edition_peripherals::release_launchkey(application);
     let state = application.state::<DesktopServiceState>();
     state.stopping.store(true, Ordering::Release);
     shutdown_running_services(application, &state);

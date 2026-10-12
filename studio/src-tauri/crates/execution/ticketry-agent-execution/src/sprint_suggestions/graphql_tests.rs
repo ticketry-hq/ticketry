@@ -9,6 +9,11 @@ use ticketry_entities::{agent_execution, agent_run, session, sprint_suggestion};
 #[tokio::test]
 #[cfg(unix)]
 async fn model_create_restricts_reissued_credentials_for_current_and_replaced_runs() {
+    // Sprint discovery executes only in sprint-planning editions; the
+    // public refusal elsewhere is `tests/sprint_discovery_edition.rs`.
+    if !ticketry_edition::has(ticketry_edition::EditionCapability::SprintPlanning) {
+        return;
+    }
     use sea_orm::ConnectionTrait;
     let (db, dir) = fixture().await;
     let previous = "60000000000000000000000000000001";
@@ -80,6 +85,11 @@ async fn model_create_restricts_reissued_credentials_for_current_and_replaced_ru
 #[tokio::test]
 #[cfg(unix)]
 async fn model_create_drives_typed_exec_and_keeps_terminal_sessions_empty() {
+    // Sprint discovery executes only in sprint-planning editions; the
+    // public refusal elsewhere is `tests/sprint_discovery_edition.rs`.
+    if !ticketry_edition::has(ticketry_edition::EditionCapability::SprintPlanning) {
+        return;
+    }
     let (db, dir) = fixture().await;
     // The terminal table exists solely to prove that execution never writes it.
     let ddl = sea_orm::Schema::new(sea_orm::DbBackend::Sqlite);

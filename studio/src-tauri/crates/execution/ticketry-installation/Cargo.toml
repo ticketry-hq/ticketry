@@ -28,4 +28,6 @@ uuid.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+# The reviewed-catalog test applies only where the edition seeds it.
+ticketry-edition.workspace = true
 tokio.workspace = true

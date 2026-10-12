@@ -4,6 +4,7 @@ import { useClientStore } from "../../state/clientStore";
 import OnboardingTour from "../onboarding/OnboardingTour";
 import { useGlobalKeymap } from "../navigation/useGlobalKeymap";
 import { startAgentStatusServices } from "../startup/startAgentStatusServices";
+import { useCompiledEditionMarker } from "../startup/useCompiledEditionMarker";
 import { StudioFooter } from "./StudioFooter";
 import { StudioLayout } from "./StudioLayout";
 import { StoriesTreeProvider, useStoriesTree } from "../../features/work-items";
@@ -25,6 +26,7 @@ function StudioShellContent() {
   );
 
   useGlobalKeymap(rows);
+  useCompiledEditionMarker();
 
   useEffect(() => synchronizeModuleManagerProject(selectedProjectId), [selectedProjectId]);
 

@@ -8,6 +8,7 @@ import {
   useCloseModuleTab,
   useEffectiveModuleTabs,
   getEffectiveModuleTabsSnapshot,
+  leaveWorkspaceSurfaces,
 } from "../../../features/module-tabs";
 import {
   useModuleReorderDrag,
@@ -18,8 +19,8 @@ import { useClientStore } from "../../../state/clientStore";
 import { ModuleTab } from "./ModuleTab";
 import { useWorkspaceTabNavigation } from "./useWorkspaceTabNavigation";
 import { WorkspaceTabs } from "./WorkspaceTabs";
-import { leavePlanWorkspace, selectPlanWorkspaceActive, usePlanWorkspace } from "../../../features/sprints";
-import { leaveChangesWorkspace, useChangesWorkspace } from "../../../features/agents/worktrees";
+import { selectPlanWorkspaceActive, usePlanWorkspace } from "../../../features/sprints";
+import { useChangesWorkspace } from "../../../features/agents/worktrees";
 
 export function ModuleTabStrip() {
   const tabNavigation = useWorkspaceTabNavigation();
@@ -54,8 +55,7 @@ export function ModuleTabStrip() {
   const handleSelect = useCallback(
     (moduleId: string) => {
       if (dragDrop.consumePostDropClick()) return;
-      if (selectPlanWorkspaceActive(usePlanWorkspace.getState())) leavePlanWorkspace();
-      if (useChangesWorkspace.getState().active) leaveChangesWorkspace();
+      leaveWorkspaceSurfaces();
       const current = getEffectiveModuleTabsSnapshot(selectedProjectId);
       if (current.restricted && current.complete) {
         void selectModule(moduleId, { isCurrent: () =>

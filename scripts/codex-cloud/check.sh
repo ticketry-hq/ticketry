@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$repo_root"
 export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
+source scripts/codex-cloud/edition.sh
 
 failures=()
 check() {
@@ -27,7 +28,8 @@ frontend() {
 
 rust() {
   check 'portable Rust tests' cargo test --locked --manifest-path studio/src-tauri/Cargo.toml \
-    --workspace --exclude ticketry --exclude ticketry-desktop --no-fail-fast
+    --workspace --exclude ticketry --exclude ticketry-desktop --no-fail-fast \
+    ${edition_cargo_features[@]+"${edition_cargo_features[@]}"}
 }
 
 graphql() {

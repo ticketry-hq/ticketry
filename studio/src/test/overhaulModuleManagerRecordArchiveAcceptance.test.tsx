@@ -17,6 +17,7 @@ it("[overhaul-647] confirms the named archive cascade, cancels without a write, 
   fireEvent.click(row);
   const confirmation = await screen.findByRole("dialog", { name: "Archive Roadmap?" });
   expect(confirmation).toHaveTextContent("all descendant Stories and work items");
+  expect(confirmation).toHaveTextContent("They leave active lists and sprint membership.");
   fireEvent.click(within(confirmation).getByRole("button", { name: "Cancel" }));
   await waitFor(() => expect(row).toBeEnabled());
   expect(boundary.calls.filter((call) => call.operation === "ArchiveWorkTrackerWorkItem")).toEqual([]);

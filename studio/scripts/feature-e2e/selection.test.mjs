@@ -122,3 +122,43 @@ test('cases without exactly one case identity are reported as invalid metadata b
     && /Invalid case metadata in studio\/e2e\/features\/broken\.spec\.ts: case <computed title> requires exactly one @case- tag; found none/.test(error.message)
     && /case 'Doubled @case-one @case-two' requires exactly one @case- tag; found @case-one, @case-two/.test(error.message));
 });
+
+const editionRegistry = { features: [
+  entry('chrome', [['shell-open', 'Open shell'], ['sprint-tab', 'Sprint tab']], { editions: ['pocock', 'core'] }),
+  entry('plan', [['plan-open', 'Open plan']], { editions: ['core'] }),
+  entry('pocock-only', [['reviewed-defaults', 'Reviewed defaults']], { editions: ['pocock'] }),
+] };
+editionRegistry.features[0].cases[1].editionTags = ['@edition-core'];
+
+test('Pocock skips core-only features and @edition-core cases and reports both', () => {
+  const selected = selectFeatures(editionRegistry, [], { edition: 'pocock' });
+  assert.equal(selected.edition, 'pocock');
+  assert.deepEqual(selected.features.map(feature => feature.id), ['chrome', 'pocock-only']);
+  assert.deepEqual(selected.cases.map(item => item.id), ['shell-open', 'reviewed-defaults']);
+  assert.deepEqual(selected.skippedByEdition, { features: ['plan'], cases: ['sprint-tab'] });
+  assert.equal(selected.complete, true);
+  assert.deepEqual(planInvocations(selected).map(plan => plan.caseIds), [['shell-open'], ['reviewed-defaults']]);
+});
+
+test('core selects every core feature and case, skipping only features without core', () => {
+  const selected = selectFeatures(editionRegistry, [], { edition: 'core' });
+  assert.deepEqual(selected.features.map(feature => feature.id), ['chrome', 'plan']);
+  assert.deepEqual(selected.cases.map(item => item.id), ['shell-open', 'sprint-tab', 'plan-open']);
+  assert.deepEqual(selected.skippedByEdition, { features: ['pocock-only'], cases: [] });
+});
+
+test('the default edition is Pocock', () => {
+  assert.deepEqual(selectFeatures(editionRegistry, []).skippedByEdition, { features: ['plan'], cases: ['sprint-tab'] });
+});
+
+test('explicitly selecting a feature or case outside the edition names the edition to rerun with', () => {
+  assert.throws(() => selectFeatures(editionRegistry, ['plan'], { edition: 'pocock' }), /Feature plan is not in the pocock edition \(Editions: core\); rerun with TICKETRY_EDITION=core/);
+  assert.throws(() => selectFeatures(editionRegistry, ['--case', 'sprint-tab'], { edition: 'pocock' }), /Case sprint-tab is tagged @edition-core and does not run in the pocock edition; rerun with TICKETRY_EDITION=core/);
+  assert.throws(() => selectFeatures(editionRegistry, ['pocock-only'], { edition: 'core' }), /Feature pocock-only is not in the core edition \(Editions: pocock\); rerun with TICKETRY_EDITION=pocock/);
+});
+
+test('an explicit selection reports the edition-skipped cases of its own features only', () => {
+  const selected = selectFeatures(editionRegistry, ['chrome'], { edition: 'pocock' });
+  assert.deepEqual(selected.cases.map(item => item.id), ['shell-open']);
+  assert.deepEqual(selected.skippedByEdition, { features: [], cases: ['sprint-tab'] });
+});

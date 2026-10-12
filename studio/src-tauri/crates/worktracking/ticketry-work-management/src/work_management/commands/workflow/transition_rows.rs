@@ -4,9 +4,10 @@
 //! `(issue_type_id, from_state_id, to_state_id)`; `workflow_revision` is the
 //! compare-and-set guard. `agent_allowed` and `handoff` are writable policy.
 
+use crate::work_management::database::begin_write;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
-    QueryFilter, Set, TransactionTrait,
+    QueryFilter, Set,
 };
 
 use super::super::identifiers::database_uuid;
@@ -54,7 +55,7 @@ pub async fn create_transition(
             "A workflow transition must change state.",
         ));
     }
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let kind = claim_workflow_revision(&transaction, &type_id, input.workflow_revision).await?;
     require_project_state(&transaction, &kind.project_id, &from_id, "From state").await?;
     require_project_state(&transaction, &kind.project_id, &to_id, "To state").await?;
@@ -96,7 +97,7 @@ pub async fn update_transition(
     let type_id = database_uuid(&input.issue_type_id, "issue_type_id")?;
     let from_id = database_uuid(&input.from_state_id, "from_state_id")?;
     let to_id = database_uuid(&input.to_state_id, "to_state_id")?;
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let kind = claim_workflow_revision(&transaction, &type_id, input.workflow_revision).await?;
     require_project_state(&transaction, &kind.project_id, &from_id, "From state").await?;
     require_project_state(&transaction, &kind.project_id, &to_id, "To state").await?;
@@ -121,7 +122,7 @@ pub async fn delete_transition(
     let type_id = database_uuid(&input.issue_type_id, "issue_type_id")?;
     let from_id = database_uuid(&input.from_state_id, "from_state_id")?;
     let to_id = database_uuid(&input.to_state_id, "to_state_id")?;
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let kind = claim_workflow_revision(&transaction, &type_id, input.workflow_revision).await?;
     require_project_state(&transaction, &kind.project_id, &from_id, "From state").await?;
     require_project_state(&transaction, &kind.project_id, &to_id, "To state").await?;

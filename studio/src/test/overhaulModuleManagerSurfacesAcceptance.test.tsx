@@ -1,9 +1,9 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { expect, it } from "vitest";
-import { roadmapAvailabilityFixture } from "./roadmapAvailabilityFixture";
+import { editionAcceptanceFixture } from "./editionAcceptanceFixture";
 
 it("[overhaul-622] covers Plan and Changes while preserving their mounted surface and active tab", async () => {
-  const boundary = roadmapAvailabilityFixture();
+  const boundary = editionAcceptanceFixture();
   boundary.mount({ selectedTaskId: null });
   await screen.findByRole("button", { name: "Sprint: Sprint 24, Active" });
   const planTab = screen.getByTestId("workspace-tab-plan");

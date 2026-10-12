@@ -122,7 +122,15 @@ featureSuite("startup-and-service-health", () => {
     await page.evaluate(() => localStorage.setItem("studio.recentModule:v1", "00000000-0000-4000-8000-000000000000"));
     await page.reload();
     await expect(page.getByRole("tab", { name: "Onboarding Tour Module", exact: true })).toHaveAttribute("aria-selected", "false");
-    await expect(page.getByRole("region", { name: "Sprint module recovery" })).toContainText("Select a module to view its stories.");
+    // SprintModuleRecovery names its region by the compiled edition; read that
+    // edition from the adapter and require the frontend marker to agree.
+    const runtimeConfiguration = await page.request.get("/runtime-configuration");
+    expect(runtimeConfiguration.ok()).toBe(true);
+    const { edition } = await runtimeConfiguration.json() as { edition: string };
+    await expect(page.locator("html")).toHaveAttribute("data-ticketry-edition", edition);
+    const recoveryLabels: Record<string, string> = { core: "Sprint module recovery", pocock: "Module selection" };
+    expect(Object.keys(recoveryLabels)).toContain(edition);
+    await expect(page.getByRole("region", { name: recoveryLabels[edition], exact: true })).toContainText("Select a module to view its stories.");
     await expect(page.getByRole("form", { name: "Create module", exact: true })).toHaveCount(0);
     await expect(page.getByRole("dialog", { name: /folder/i })).toHaveCount(0);
   });

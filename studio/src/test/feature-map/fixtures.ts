@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 export const entry = `# Startup
 Startup behavior.
 Surfaces: browser, desktop
+Editions: pocock, core
 
 ## Sub-features
 - startup-ready: Startup becomes ready.

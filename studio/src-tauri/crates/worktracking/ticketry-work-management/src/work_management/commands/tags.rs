@@ -1,10 +1,11 @@
 //! Additive, project-scoped tags on Work Items.
 
+use crate::work_management::database::begin_write;
 use std::collections::HashSet;
 
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    QueryOrder, QuerySelect, QueryTrait, Set, TransactionTrait,
+    QueryOrder, QuerySelect, QueryTrait, Set,
 };
 
 use super::{
@@ -23,7 +24,7 @@ pub async fn add(
 ) -> Result<Vec<String>, CommandError> {
     let task_id = database_uuid(task_id, "task_id")?;
     let names = normalize(raw_names);
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
 
     // Reserve the project's writer before reading labels. This serializes
     // same-project get-or-create and additive association changes.

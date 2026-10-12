@@ -58,8 +58,12 @@ fn a_root_alias_resolves_to_an_explicit_leaf_capability() {
 
 #[path = "public_api/attributes.rs"]
 mod attributes;
+#[path = "public_api/body_file_module_fixtures.rs"]
+mod body_file_module_fixtures;
 #[path = "public_api/body_macro_fixtures.rs"]
 mod body_macro_fixtures;
+#[path = "public_api/declaration_expression_fixtures.rs"]
+mod declaration_expression_fixtures;
 #[path = "public_api/compile_fixtures.rs"]
 mod compile_fixtures;
 #[path = "public_api/exception_records.rs"]
@@ -76,6 +80,8 @@ mod inventory;
 mod inventory_fixtures;
 #[path = "public_api/macro_provenance_fixtures.rs"]
 mod macro_provenance_fixtures;
+#[path = "public_api/nested_command_fixtures.rs"]
+mod nested_command_fixtures;
 #[path = "public_api/policy.rs"]
 mod policy;
 #[path = "public_api/policy_fixtures.rs"]

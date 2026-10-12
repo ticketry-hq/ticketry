@@ -3,7 +3,7 @@ import { getModuleFolder } from "../module-links";
 import { useModalStore } from "../../app/modal/modalStore";
 import { getProjectSelectionGeneration, useStudioStore } from "../projects";
 import { getStorySprintFilterGeneration } from "../work-items";
-import { ROADMAP_ENABLED } from "../../shared/config/roadmapAvailability";
+import { editionHas } from "../../shared/config/edition";
 import { TEMP_TASK_ID } from "../agents/types";
 import { writeRecentModule, clearRecentModule, readTaskSelections } from "../../state/persistence";
 import { recordSelectionProfilePoint } from "../../shared/utilities/selectionProfile";
@@ -36,7 +36,7 @@ export function moduleSelectionActions(set: SetWorkspaceState, get: GetWorkspace
       const isCurrent = () => attempt === selectionGeneration
         && useStudioStore.getState().selectedProjectId === projectId
         && getProjectSelectionGeneration() === projectGeneration
-        && (!ROADMAP_ENABLED || getStorySprintFilterGeneration(projectId) === filterGeneration)
+        && (!editionHas("sprintPlanning") || getStorySprintFilterGeneration(projectId) === filterGeneration)
         && options?.isCurrent?.() !== false;
       if (!getModuleFolder(id)) {
         useModalStore.getState().pushModal({

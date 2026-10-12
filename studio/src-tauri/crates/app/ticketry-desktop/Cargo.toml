@@ -40,6 +40,7 @@ ticketry-agent-execution.workspace = true
 ticketry-data-directory.workspace = true
 ticketry-diagnostics.workspace = true
 ticketry-documents.workspace = true
+ticketry-edition.workspace = true
 ticketry-entities.workspace = true
 ticketry-graphql-schema.workspace = true
 ticketry-launch.workspace = true
@@ -56,5 +57,8 @@ tokio.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+async-graphql.workspace = true
 tempfile.workspace = true
+# Mock runtime for the per-edition desktop composition tests.
+tauri = { workspace = true, features = ["test"] }
 ticketry-mcp = { workspace = true, features = ["test-support"] }

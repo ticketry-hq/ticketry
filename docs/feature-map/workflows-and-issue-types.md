@@ -3,6 +3,7 @@
 Project types and state graphs govern permitted moves, stage launch policy and the read-only Story workflow guide.
 
 Surfaces: browser, desktop
+Editions: pocock, core
 
 ## Sub-features
 
@@ -42,7 +43,7 @@ native terminal).
 
 ## Prerequisites
 
-A selected project supplies its catalog. A state configuration panel needs a
+A selected project supplies its catalog; a core-edition project starts with none beyond `Module` (see Expected behavior). A state configuration panel needs a
 state with workflow membership for at least one task-level issue type; it
 prefers Story, then the first eligible type. Otherwise it says
 `No workflow is available for this state.` The guide needs a selected item
@@ -54,6 +55,27 @@ Actually running the policy additionally needs desktop launch readiness;
 [Agent launch](agent-launch.md) owns folder, trust, provider and run preflight.
 
 ## Expected behavior
+
+New projects are seeded by edition (CODING-2860). Pocock, which grants
+`reviewedWorkflowDefaults`, seeds the reviewed catalogue: Ideas → Grill → Spec
+→ Tickets → Implement → Review → Done/Cancelled, Story/PathFind/Implementation
+task types plus Module, edges, launch bindings and grill-with-docs / to-spec /
+to-tickets stage skills. Core seeds only the module-level `Module` type with
+no start state, so it has no states, task types, edges, bindings or Configure
+entry, and Stories shows `No workflow yet`. Core workflows are to be built
+through MCP workflow-builder tools (CODING-2790, not yet built). See
+[Projects](projects.md) for both seeding callers.
+
+Startup adoption is also edition-specific (CODING-2862). Both editions run
+every final-schema DDL step, including adding `entry_skill`, and record every
+ledger checkpoint in the same order, so the resulting schema is identical.
+Pocock also runs the two default-adoption data steps: it rewrites states
+still holding a former reviewed Ideas/Grill/Review color, and fills unset
+Story/PathFind/Implementation launch-binding entry skills from the reviewed
+stage skills. Core skips both and leaves every state color and entry skill
+(set, empty or unset) as it was. Core still records both checkpoints, so a
+later Pocock build on the same data directory does not adopt either; this
+one-way choice awaits owner confirmation on CODING-2783.
 
 The published start state and directed edges determine permitted destinations;
 changing a catalog state alone does not add an edge. Agent moves require the
@@ -101,7 +123,9 @@ Plugin-provided skills are outside the searched locations.
 
 Invalid provider/model/reasoning choices
 show a control error; a stale workflow revision reloads authoritative policy
-and reports `Workflow changed elsewhere. Latest settings loaded.`
+and reports `Workflow changed elsewhere. Latest settings loaded.` An unsaved
+prompt draft remains in the editor across that refresh; closing and reopening
+the panel shows the authoritative binding before retrying.
 
 Retained catalog editors support adding/cancelling a state draft, name/color
 edits, button or drag ordering and deletion preview. Deletion is blocked while
@@ -193,20 +217,45 @@ include `State catalog`, `State name`, `State group`, `State color for <name>`,
   These Studio cases use the host-check / Apollo-GraphQL seams; the provider
   filesystem tests above establish that physical skill directories are not
   written. They do not establish installed-desktop behavior.
+- Edition seeding: Pocock `project_create_returns_the_aggregate_after_seeding_reviewed_defaults`,
+  `fresh_install_projects_persist_and_read_the_reviewed_state_colors` and
+  `a_fresh_installation_project_has_its_reviewed_catalog` return early under core;
+  core `core_project_create_seeds_only_the_module_type` and
+  `core_fresh_install_and_created_projects_hold_only_the_module_type` read the
+  catalog back through public GraphQL. Run
+  `cargo test --manifest-path studio/src-tauri/Cargo.toml --features edition-core --test work_management_schema_contract --test reviewed_default_colors`.
+- Edition startup adoption: `final_schema_migration_chain` asserts the same
+  ledger creation order and the recorded schema
+  (`studio/src-tauri/tests/final_schema_migration_chain/final_schema.txt`) in
+  both editions, with adopted data under Pocock and untouched data under core.
+  Pocock `adopts_only_exact_former_reviewed_defaults_across_projects_and_reopens_stably`,
+  `production_startup_adopts_old_colors_before_generated_state_reads` and
+  `pocock_entry_skill_adoption_fills_only_unset_reviewed_stage_skills` return
+  early under core; core `core_records_the_color_checkpoint_without_rewriting_any_state`,
+  `core_production_startup_keeps_former_reviewed_colors` and
+  `core_entry_skill_checkpoint_leaves_every_binding_unchanged` return early
+  under Pocock. Run `cargo test --manifest-path studio/src-tauri/Cargo.toml
+  --test final_schema_migration_chain --test workflow_color_adoption --test
+  work_management_adoption`, then again with `--features edition-core`.
+  Regenerate the recorded schema with `TICKETRY_BLESS_FINAL_SCHEMA=1` only when
+  a chain step deliberately changes it.
+- `studio/src/test/overhaulCoreEmptyWorkflowAcceptance.test.tsx` covers the core
+  `No workflow yet` Stories state; run `bun run --cwd studio test -- src/test/overhaulCoreEmptyWorkflowAcceptance.test.tsx`.
 - `studio/e2e-desktop/README.md` documents the disposable provider's MCP
   Implement → Review → Done moves, visible UI observation, reload and process
   restart persistence. Run `bun run --cwd studio test:e2e:desktop` on macOS;
   this is the authored fixture-execution path, not paid-provider proof.
 
-No current browser spec walks the Story guide, free-form Stage or Required skills,
-skill availability against a real home directory, or
-retained catalog/topology editor UI. Their component coverage and source
-behavior do not establish native interaction or installed-app persistence.
-Browser and desktop journeys are not executed by map authoring; Vitest
-acceptance cases exercise their documented test boundaries. The browser and
-desktop harnesses inherit the stale module-creation setup described in
-[Onboarding](onboarding.md), so these are authored coverage references rather
-than claims that the current journeys complete successfully.
+The feature suite authors browser journeys for the Details guide, Stage and
+Required skills, real disposable module skill directories, revision conflicts
+and guarded policy writes. Retained catalog/topology editors remain unmounted;
+the migrated catalog cases exercise public GraphQL and visible convergence.
+The case-isolated suite uses first-run profiles: the tour case walks provider,
+module and Story onboarding, while ordinary cases provision and acknowledge
+real provider/catalog state before creating their existing fixtures. That
+first-run setup has a bounded 90-second hook budget; browser cases and assertions
+retain the normal Playwright deadlines.
+Runtime results and passing claims belong to the feature runner's recorded run.
 
 ## End-to-end suite
 
@@ -214,16 +263,16 @@ Suite: studio/e2e/features/workflows-and-issue-types.spec.ts
 
 | Sub-feature | Success | Cancel | Error | Empty | Entry points | Persistence |
 | --- | --- | --- | --- | --- | --- | --- |
-| `workflow-map-issue-types` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-state-catalog` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-transitions` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-agent-permissions` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-launch-bindings` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-entry-automation` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-stage-skills` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-stage-skill-availability` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-required-skills` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-story-guide` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
+| `workflow-map-issue-types` | @case-workflow-issue-type-reorder @case-workflow-issue-type-lifecycle | @case-workflow-type-picker-choices | @case-workflow-issue-type-reorder-guard @case-workflow-story-birth-state | n/a: Pocock projects always seed task types; the core Module-only catalog is covered by Rust and Vitest evidence above, not a browser case | @case-workflow-type-picker-choices | @case-workflow-issue-type-reorder @case-workflow-issue-type-lifecycle |
+| `workflow-map-state-catalog` | @case-workflow-state-catalog-reorder @case-workflow-state-rename-recolour | n/a: retained catalog draft and deletion-confirmation editors have no production mount | @case-workflow-state-delete-guard @case-workflow-state-name-guard @case-workflow-state-group-guard @case-workflow-state-reorder-guard @case-workflow-missing-identity-guard | @case-workflow-unused-state | @case-workflow-unused-state | @case-workflow-state-catalog-reorder @case-workflow-state-rename-recolour @case-workflow-state-delete-guard |
+| `workflow-map-transitions` | @case-workflow-transition-listing @case-workflow-prune-unreachable-edge | n/a: topology impact confirmations have no production mount; mounted policy flags apply immediately | @case-workflow-move-outside-published-edges @case-workflow-transition-listing @case-workflow-revision-conflict | @case-workflow-transition-listing @case-workflow-unused-state | @case-workflow-transition-listing | @case-workflow-transition-listing @case-workflow-move-outside-published-edges @case-workflow-prune-unreachable-edge |
+| `workflow-map-agent-permissions` | @case-workflow-agent-permission @case-workflow-grill-policy | n/a: permission and handoff flags apply immediately, without a cancelable draft | @case-workflow-agent-permission @case-workflow-revision-conflict | @case-workflow-transition-listing | @case-workflow-agent-permission | @case-workflow-agent-permission @case-workflow-grill-policy @case-workflow-revision-conflict |
+| `workflow-map-launch-bindings` | @case-workflow-grill-policy @case-workflow-launch-profile | n/a: picker changes and blurred prompt edits apply immediately; closing does not roll them back | @case-workflow-grill-policy @case-workflow-binding-prompt-guard @case-workflow-launch-binding-conflict | @case-workflow-binding-prompt-guard | @case-workflow-grill-policy @case-workflow-binding-prompt-guard | @case-workflow-grill-policy @case-workflow-launch-profile @case-workflow-launch-binding-conflict |
+| `workflow-map-entry-automation` | @case-workflow-grill-policy @case-workflow-binding-prompt-guard | n/a: automation flags apply immediately, without a cancelable draft | @case-workflow-binding-prompt-guard @case-workflow-automation-provider-guard | @case-workflow-binding-prompt-guard | @case-workflow-grill-policy @case-workflow-binding-prompt-guard | @case-workflow-grill-policy @case-workflow-binding-prompt-guard |
+| `workflow-map-stage-skills` | @case-workflow-stage-skills | n/a: Enter or blur commits a tag and removal applies immediately | @case-workflow-stage-skills | @case-workflow-stage-skills | @case-workflow-stage-skills | @case-workflow-stage-skills |
+| `workflow-map-stage-skill-availability` | @case-workflow-skill-availability | n/a: read-only checks have no cancel action | @case-workflow-skill-availability | @case-workflow-stage-skills | @case-workflow-skill-availability | @case-workflow-skill-availability |
+| `workflow-map-required-skills` | @case-workflow-required-skills | n/a: Enter or blur commits a tag and removal applies immediately | @case-workflow-required-skills | @case-workflow-required-skills | @case-workflow-required-skills | @case-workflow-required-skills |
+| `workflow-map-story-guide` | @case-workflow-story-guide @case-workflow-tour-guide | @case-workflow-story-guide @case-workflow-tour-guide | @case-workflow-story-guide | @case-workflow-story-guide | @case-workflow-story-guide @case-workflow-tour-guide | @case-workflow-story-guide @case-workflow-tour-guide |
 
 ## Relevant code
 
@@ -250,6 +299,11 @@ Suite: studio/e2e/features/workflows-and-issue-types.spec.ts
   `studio/src/app/modal/openStoryWorkflowGuide.ts`: guide modal lifecycle/focus.
 - `studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/commands/workflow`:
   revision, membership, transition and launch-policy enforcement.
+- `studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/commands/default_project_catalog.rs`:
+  edition-chosen seed catalog for created and installation projects.
+- `studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/workflow_color_migration.rs`
+  and `launch_binding_entry_skill_migration.rs`: Pocock-only default adoption
+  inside checkpoints that every edition records.
 - `studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/launch_policy`:
   launch resolution, auto-start and skill composition.
 - `studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/work_item/views/update`:
@@ -275,7 +329,9 @@ workflow, and state-group Configure only exposes eligible task-level types.
 The source-only retained editors are not evidence of reachable Settings tabs.
 
 The guide's familiar-stage explanations supplement configured data; they do
-not promise a fixed Ideas → Done pipeline. Launch settings, entry automation,
+not promise a fixed Ideas → Done pipeline, which only Pocock seeds. Root Rust
+suites and browser journeys that create work items in a fresh project assume
+the reviewed catalog and pass only under Pocock until CODING-2790 lands. Launch settings, entry automation,
 transition permission and handoff are separate controls. Browser state-policy
 editing cannot prove desktop launch/delivery. Live or installed behavior beyond
 the cited tests is unverified by this map-authoring task.

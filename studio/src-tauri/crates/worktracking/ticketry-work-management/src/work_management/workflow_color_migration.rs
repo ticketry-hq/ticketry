@@ -3,8 +3,14 @@
 //! Source commit `3a5f434a90696f40a4911e401a84db009cdfa4e7` changed these defaults.
 //! An existing row changes only when its state name and stored color both match
 //! the former reviewed value. The target values come from the reviewed catalog.
+//!
+//! Only editions granting `reviewedWorkflowDefaults` (Pocock) rewrite colors.
+//! Every other edition (core) records the same checkpoint without adopting, so
+//! a later Pocock build on that data directory never adopts either.
 
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, DbErr, Statement, TransactionTrait};
+
+use ticketry_edition::EditionCapability;
 
 use super::commands::reviewed_defaults;
 
@@ -41,7 +47,9 @@ pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
         return Ok(());
     }
 
-    if table_exists(&transaction, "worktracker_state").await? {
+    if ticketry_edition::has(EditionCapability::ReviewedWorkflowDefaults)
+        && table_exists(&transaction, "worktracker_state").await?
+    {
         for former in FORMER_REVIEWED_COLORS {
             let target = reviewed_defaults::state_color(former.state_name)
                 .map_err(|error| {

@@ -5,6 +5,7 @@ import { StudioShell } from "../app/shell/StudioShell";
 import { getModuleFolder, seedModuleLinks } from "../features/module-links";
 import { useClientStore } from "../state/clientStore";
 import { fixture, mountStudio } from "./seam";
+import { seedStoryWorkflow } from "./storyWorkflowSeed";
 
 describe("idea-entry draft acceptance", () => {
   beforeAll(() => {
@@ -14,6 +15,7 @@ describe("idea-entry draft acceptance", () => {
   it("[overhaul-361] preserves a missing-folder module's mounted draft while Module Manager covers and restores it", async () => {
     const http = fixture();
     http.tree("module-1", { rootIds: [], children: {}, order: [] });
+    seedStoryWorkflow(http);
     seedModuleLinks([]);
     useClientStore.setState({ sidebarVisible: false });
 

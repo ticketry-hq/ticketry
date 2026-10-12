@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { linkPath, markdownLinks, sectionBodies, validStructure } from "./markdown";
 import { citedPaths, codeAreas, filesUnder, tableRows } from "./repository";
+import { entryEditions } from "./entryEditions.mjs";
 
 export interface FeatureMapViolation { code: string; path: string; message: string }
 
@@ -40,6 +41,7 @@ export function checkFeatureMap(mapDirectory: string, repositoryRoot: string): F
     if (!validStructure(source)) {
       violations.push({ code: "structure", path: file, message: "Expected H1, valid Surfaces, and seven nonempty sections in order" });
     }
+    for (const problem of entryEditions(source).problems) violations.push({ code: "editions", path: file, message: problem });
     const bullets = (sectionBodies(source).get("Sub-features") ?? "").split("\n").filter((line) => /^\s*[-*+] /.test(line));
     if (bullets.length === 0) violations.push({ code: "identifier", path: file, message: "Sub-features must contain identifier bullets" });
     for (const bullet of bullets) {

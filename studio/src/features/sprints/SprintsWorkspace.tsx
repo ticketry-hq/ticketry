@@ -6,14 +6,14 @@ import SprintGoals from "./goals/SprintGoals";
 import { SuggestionAgentBox } from "./suggestions/SuggestionAgentBox";
 import PlanSprintView from "./planning/PlanSprintView";
 import { leavePlanWorkspace, openPlanWorkspace, selectPlanWorkspaceActive, usePlanWorkspace } from "./planWorkspaceState";
-import { ROADMAP_ENABLED } from "../../shared/config/roadmapAvailability";
+import { editionHas } from "../../shared/config/edition";
 
 type SprintsWorkspaceProps = Partial<Pick<SprintsViewProps, "renderSprintGoals" | "renderSuggestionAgentBox">> & {
   renderWorkItemDetail: (id: string) => ReactNode;
 };
 
 export function SprintsWorkspace(props: SprintsWorkspaceProps) {
-  return ROADMAP_ENABLED ? <AvailableSprintsWorkspace {...props} /> : null;
+  return editionHas("sprintPlanning") ? <AvailableSprintsWorkspace {...props} /> : null;
 }
 
 function AvailableSprintsWorkspace({ renderWorkItemDetail, renderSprintGoals, renderSuggestionAgentBox }: SprintsWorkspaceProps) {

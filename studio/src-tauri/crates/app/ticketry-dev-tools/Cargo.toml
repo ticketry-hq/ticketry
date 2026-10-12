@@ -9,6 +9,10 @@ autobins = false
 name = "ticketry_dev_tools"
 path = "src/lib.rs"
 
+# CODING-2851 — forwards the Core edition to `ticketry-edition`, which alone reads it.
+[features]
+edition-core = ["ticketry-edition/edition-core"]
+
 [[bin]]
 name = "export_foundation_bindings"
 path = "src/bin/export_foundation_bindings.rs"
@@ -66,6 +70,7 @@ ticketry-agent-execution.workspace = true
 ticketry-data-directory.workspace = true
 ticketry-diagnostics.workspace = true
 ticketry-documents.workspace = true
+ticketry-edition.workspace = true
 ticketry-graphql-schema.workspace = true
 ticketry-launch.workspace = true
 ticketry-mcp.workspace = true

@@ -2,7 +2,7 @@ import { gql } from "@apollo/client";
 import { useApolloClient } from "@apollo/client/react";
 import { compactWorktrackerId } from "../../../shared/api/generatedWorktracker";
 import { useEffect, useRef } from "react";
-import { ROADMAP_ENABLED } from "../../../shared/config/roadmapAvailability";
+import { editionHas } from "../../../shared/config/edition";
 import { toast } from "../../../state/clientStore";
 import { adaptPlanningGraph, backlogCandidates, PlanningGraphDocument, type PlanningGraph } from "../../planning-graph";
 import { useStudioStore } from "../../projects";
@@ -54,11 +54,11 @@ export function usePlanVisitCoordinator<Suggestion extends EpicSuggestion>(proje
   }, []);
   const isCurrent = () => {
     const current = usePlanWorkspace.getState();
-    return mounted.current && ROADMAP_ENABLED && current.active && current.projectId === projectId &&
+    return mounted.current && editionHas("sprintPlanning") && current.active && current.projectId === projectId &&
       current.sprintId === sprintId && current.generation === generation &&
       useStudioStore.getState().selectedProjectId === projectId;
   };
-  const actionable = (data: VisitInputs) => ROADMAP_ENABLED &&
+  const actionable = (data: VisitInputs) => editionHas("sprintPlanning") &&
     data.graph?.project?.id === projectId &&
     Boolean(data.graph?.sprints.some((sprint) => sprint.id === sprintId));
   const recordsReady = (data: VisitInputs) => actionable(data) && !data.loading && !data.error &&
@@ -197,9 +197,14 @@ export function usePlanVisitCoordinator<Suggestion extends EpicSuggestion>(proje
     const suggestion = data.suggestions.find((candidate) => "id" in candidate && candidate.id === id && candidate.sprintId === sprintId);
     return Boolean(suggestion && (status === "waiting" ? suggestion.status === "accepted" || suggestion.status === "dismissed" : suggestion.status === "waiting"));
   };
+  const suggestionForDecision = (status: "accepted" | "dismissed" | "waiting", id: string, confirmedBatch = false) => {
+    if (!canDecideSuggestion(status, id, confirmedBatch)) return undefined;
+    return client.readQuery({ query: SprintSuggestionsDocument, variables: { sprintId }, optimistic: true })
+      ?.worktrackerSprintSuggestion.nodes.find((suggestion) => suggestion.id === id && suggestion.sprintId === sprintId);
+  };
 
   return { moves, requestMove, canMove, visit, epics, activeEpicId, backlog, sprintPane, activeSuggestions, waitingCount: waiting.length,
-    label, select, created, close, next, isCurrent, canDecideSuggestion };
+    label, select, created, close, next, isCurrent, canDecideSuggestion, suggestionForDecision };
 }
 
 export type PlanVisitCoordinator = ReturnType<typeof usePlanVisitCoordinator>;

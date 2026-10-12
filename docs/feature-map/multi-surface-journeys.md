@@ -3,11 +3,12 @@
 Walk connected product paths across creation, workflow execution, sprint navigation, description isolation and durable terminals while keeping browser, desktop and mocked evidence distinct.
 
 Surfaces: browser, desktop, manual
+Editions: pocock, core
 
 ## Sub-features
 
 - `journey-create-run-restart`: [Projects](projects.md), [Onboarding](onboarding.md), [Module Manager](module-manager.md), [Stories list](stories-list.md), [Agent launch](agent-launch.md), [Agent lifecycle and status](agent-lifecycle-and-status.md), [MCP server and tools](mcp-server-and-tools.md) and [Ticket terminals](ticket-terminals.md) compose creation through workflow completion, reload and desktop restart.
-- `journey-sprint-close-restore`: [Stories list](stories-list.md), [Module tabs](module-tabs.md) and [Module Manager](module-manager.md) compose sprint-filtered tab hiding and explicit restoration.
+- `journey-sprint-close-restore` (core): [Stories list](stories-list.md), [Module tabs](module-tabs.md) and [Module Manager](module-manager.md) compose sprint-filtered tab hiding and explicit restoration.
 - `journey-description-story-isolation`: [Stories list](stories-list.md), [Ticket details](ticket-details.md), [Ticket workspace tabs](ticket-workspace-tabs.md) and [Descriptions and documents](descriptions-and-documents.md) keep two Stories' edits and saved descriptions separate.
 - `journey-terminal-manager-reload`: [Agent launch](agent-launch.md), [Ticket workspace tabs](ticket-workspace-tabs.md), [Ticket terminals](ticket-terminals.md), [Module Manager](module-manager.md) and [Module terminal panel](module-terminal-panel.md) distinguish viewer takeover from session loss and restore authoritative terminal identity after reload.
 
@@ -23,10 +24,10 @@ Surfaces: browser, desktop, manual
 
 **`journey-sprint-close-restore`**
 
-1. In a Roadmap-enabled build, use [Stories list](stories-list.md)'s **Sprint: <selection>** chooser to select a sprint with root Stories in at least two linked modules. Observe the shared [Module tabs](module-tabs.md) projection.
-2. Use **Hide <name> tab**, or [Module Manager](module-manager.md)'s **Close <name> tab**, on the selected matching module. Confirm the filter stays active and a linked visible fallback becomes selected; reload and confirm the closed presentation remains hidden.
-3. Use [Module tabs](module-tabs.md)'s **Open module picker** and **Restore <name> module tab** to restore/select it, or [Module Manager](module-manager.md)'s **Restore <name>** to restore without selecting. A matching module keeps the sprint filter; a module excluded from that sprint explicitly clears it before restoration.
-4. Repeat with the last matching tab hidden: [Module tabs](module-tabs.md)'s **All matching module tabs are hidden.** is recovery, not deletion. Restore the matching module explicitly, then inspect persisted visibility and unchanged module/rank records.
+1. In a core-edition build, use [Stories list](stories-list.md)'s **Sprint: <selection>** chooser to select a sprint with root Stories in at least two linked modules. Observe the shared [Module tabs](module-tabs.md) projection.
+2. Use **Hide <name> tab**, or [Module Manager](module-manager.md)'s **Close <name> tab**, on the selected matching module. Confirm the filter stays active and a linked visible fallback becomes selected. Reload, then separately verify persisted `tab_hidden` and that the closed presentation remains hidden; the session-only sprint selection resets on reload.
+3. Reselect the same sprint from Step 1 and wait for authoritative sprint/root membership to resolve before checking restoration. Use [Module tabs](module-tabs.md)'s **Open module picker** and **Restore <name> module tab** to restore/select it, or [Module Manager](module-manager.md)'s **Restore <name>** to restore without selecting. A matching module keeps the sprint filter; a module excluded from that sprint explicitly clears it before restoration.
+4. Reselect the same sprint if the excluded-module variant cleared it, and wait for authoritative membership before repeating with the last matching tab hidden: [Module tabs](module-tabs.md)'s **All matching module tabs are hidden.** is recovery, not deletion. After any reload, verify persisted `tab_hidden` separately, then reselect that sprint and wait for membership before checking recovery. Restore the matching module explicitly, then inspect persisted visibility and unchanged module/rank records.
 
 **`journey-description-story-isolation`**
 
@@ -46,7 +47,7 @@ Surfaces: browser, desktop, manual
 
 - Use the isolated data, provider onboarding, selectors and proof rules in [the index](README.md). This map campaign adds no live walkthroughs or new runnable journeys; those belong to CODING-2685.
 - Creation/run/restart needs macOS, Rust/Tauri prerequisites, tmux, a writable disposable module folder and the desktop harness's disposable Codex-compatible provider. Workflow edges and agent-allowed transitions must permit the requested moves; human-only gates remain enforced. Browser compatibility checks are not paid-provider or native execution evidence.
-- Sprint close/restore needs a Roadmap-enabled build, authoritative sprint/root membership, linked modules and hidden/restorable presentations. With Roadmap off, report this variant unavailable and use ordinary hide/restore coverage instead.
+- Sprint close/restore needs a core-edition build, authoritative sprint/root membership, linked modules and hidden/restorable presentations. In the Pocock edition, report this variant unavailable and use ordinary hide/restore coverage instead.
 - Description isolation needs two concrete Story identities. Terminal takeover/reload needs authoritative run/session records; keep live-session continuity separate from completed resumable history.
 
 ## Expected behavior
@@ -103,6 +104,7 @@ No group ticket (CODING-2711 to CODING-2718) identified an existing browser case
 - `studio/src/features/agents/terminal/NativeGhosttyTerminal.tsx`, `studio/src/features/agents/terminal/RetainedTerminalViewers.tsx` and `studio/src/app/shell/ticket-workspace/TicketWorkspace.tsx`: takeover visibility, retained viewers and workspace composition.
 - `studio/src/features/terminal-panel/moduleShellStore.ts` and `studio/src/features/terminal-panel/panelStore.ts`: authoritative shell rediscovery and local presentation memory.
 - `studio/scripts/desktop-agent-acceptance.mjs` and `studio/scripts/desktop-description-acceptance.mjs`: existing cross-surface fixture orchestration and WebKit description proof.
+- `studio/scripts/desktop-installation.mjs` and `studio/scripts/desktop-installation/`: the reusable isolated desktop installation the Run item journey consumes — temporary root, application/hook copy and native resources, disposable tools and approved `codex` registry, obsolete-MCP-port guard, start/orderly quit/SIGKILL/restart over one data directory, private tmux, failure diagnostics and cleanup on success, failure and SIGINT/SIGTERM. `node --test studio/scripts/desktop-installation.test.mjs` (`bun run --cwd studio test:e2e:desktop:installation`) proves provider registration and interrupt cleanup without building the app.
 
 ## Gotchas
 

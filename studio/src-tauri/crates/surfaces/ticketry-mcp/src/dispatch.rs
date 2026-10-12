@@ -1,6 +1,6 @@
 use super::{
-    attachment_tools, codex_thread_rename, dependency_tools, launch_tools, read_tools,
-    run_termination, scope, sprint_tools, work_item_tools,
+    attachment_tools, codex_thread_rename, dependency_tools, edition_arguments, launch_tools,
+    read_tools, run_termination, scope, sprint_tools, work_item_tools,
     workflow_tools::{self, string},
     RunPrincipal,
 };
@@ -114,6 +114,7 @@ async fn dispatch_checked(
         | "update_task"
         | "append_task_description"
         | "update_task_status" => {
+            edition_arguments::refuse_withheld(name, arguments)?;
             work_item_tools::dispatch(database, principal, name, arguments).await
         }
         "set_task_blockers" | "add_task_blocker" | "add_task_dependent" | "reparent_tasks" => {

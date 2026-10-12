@@ -2,7 +2,17 @@ import net from "node:net";
 import path from "node:path";
 
 // Test tooling only: one explicit global connection per call, with no discovery or retries.
-export function callSocketMcpTool(dataDirectory, name, arguments_ = {}, timeoutMs = 5_000) {
+export async function callSocketMcpTool(dataDirectory, name, arguments_ = {}, timeoutMs = 5_000) {
+  return await requestGlobalSocketMcp(dataDirectory, "tools/call", { name, arguments: arguments_ }, timeoutMs);
+}
+
+// The edition-filtered tool names the global connection publishes.
+export async function listSocketMcpTools(dataDirectory, timeoutMs = 5_000) {
+  const result = await requestGlobalSocketMcp(dataDirectory, "tools/list", {}, timeoutMs);
+  return result.tools.map((tool) => tool.name);
+}
+
+function requestGlobalSocketMcp(dataDirectory, method, params, timeoutMs) {
   return new Promise((resolve, reject) => {
     const socket = net.createConnection(path.join(dataDirectory, "mcp.sock"));
     let buffer = "";
@@ -38,7 +48,7 @@ export function callSocketMcpTool(dataDirectory, name, arguments_ = {}, timeoutM
           } else if (message.id === 1) {
             if (message.error || !message.result) throw new Error("MCP initialization failed");
             send({ jsonrpc: "2.0", method: "notifications/initialized" });
-            send({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name, arguments: arguments_ } });
+            send({ jsonrpc: "2.0", id: 2, method, params });
           } else if (message.id === 2) {
             if (message.error) throw new Error(message.error.message ?? "MCP call failed");
             finish(null, message.result);

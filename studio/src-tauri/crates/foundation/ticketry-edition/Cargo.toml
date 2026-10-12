@@ -1,0 +1,14 @@
+[package]
+name = "ticketry-edition"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# This crate alone declares and reads `edition-core`. Pocock is the absence of
+# the feature, so a plain build is the Pocock edition; the root package and the
+# developer tools only forward the feature here.
+[features]
+edition-core = []
+
+[dev-dependencies]
+serde_json.workspace = true

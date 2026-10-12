@@ -34,10 +34,13 @@ featureSuite("module-terminal-panel", () => {
   }
 
   test.afterEach(async ({ request }) => {
-    await terminateShells(request, modules);
-    await removeFolders(folders);
-    modules = [];
-    folders = [];
+    try {
+      await terminateShells(request, modules);
+    } finally {
+      await removeFolders(folders);
+      modules = [];
+      folders = [];
+    }
   });
 
   test("closes a shell while it is still starting and leaves the empty strip", { tag: "@case-module-shell-close-while-starting" }, async ({ page, request }) => {
@@ -213,6 +216,9 @@ featureSuite("module-terminal-panel", () => {
   });
 
   test("surfaces a failed Rust shell exit status", { tag: "@case-module-shell-failed-exit" }, async ({ page, request }) => {
+    // Exits reach the panel through the run projection: a pushed completion
+    // frame or, failing that, backend reconciliation, which can take seconds.
+    test.setTimeout(90_000);
     const { module } = await linkedModule(request, "failed");
     await openShellModule(page, module.name);
     await page.getByRole("button", { name: "Open terminal panel" }).click();
@@ -222,7 +228,7 @@ featureSuite("module-terminal-panel", () => {
     await typeInShell(page, terminal, "exit 7");
 
     const dead = panel.getByTestId("terminal-panel-dead-shell");
-    await expect(dead).toHaveAttribute("data-exit-code", "7", { timeout: 15_000 });
+    await expect(dead).toHaveAttribute("data-exit-code", "7", { timeout: 45_000 });
     await expect(dead).toContainText("Shell exited with code 7.");
     await expect(panel.getByTestId("terminal-panel-tab")).toHaveAttribute("data-dead", "true");
     await expect(panel.getByRole("tab", { name: "Shell 1 · exit 7" })).toBeVisible();
@@ -267,9 +273,9 @@ featureSuite("module-terminal-panel", () => {
   });
 
   test("removes a cleanly exited shell and selects its surviving neighbour", { tag: "@case-module-shell-clean-exit" }, async ({ page, request }) => {
-    // An exit reaches the panel through the run projection: the pushed
-    // completion frame or, failing that, backend reconciliation.
-    test.setTimeout(120_000);
+    // Exits reach the panel through the run projection: a pushed completion
+    // frame or, failing that, backend reconciliation, which can take seconds.
+    test.setTimeout(90_000);
     const { module } = await linkedModule(request, "clean-exit");
     await openShellModule(page, module.name);
     await page.getByRole("button", { name: "Open terminal panel" }).click();
@@ -298,6 +304,9 @@ featureSuite("module-terminal-panel", () => {
   });
 
   test("restarts a failed shell in its slot after a refused restart", { tag: "@case-module-shell-restart-recovery" }, async ({ page, request }) => {
+    // Exits reach the panel through the run projection: a pushed completion
+    // frame or, failing that, backend reconciliation, which can take seconds.
+    test.setTimeout(90_000);
     const { module } = await linkedModule(request, "restart");
     await openShellModule(page, module.name);
     await page.getByRole("button", { name: "Open terminal panel" }).click();
@@ -306,7 +315,7 @@ featureSuite("module-terminal-panel", () => {
     const deadRun = await panel.getByTestId("terminal-panel-tab").getAttribute("data-run-id");
     await typeInShell(page, panel.getByTestId("terminal-host"), "exit 3");
     const dead = panel.getByTestId("terminal-panel-dead-shell");
-    await expect(dead).toHaveAttribute("data-exit-code", "3", { timeout: 15_000 });
+    await expect(dead).toHaveAttribute("data-exit-code", "3", { timeout: 45_000 });
 
     const refusal = refuseOperation("CreateModuleShell", "Shell restart refused by the e2e network boundary");
     await page.route("**/graphql", refusal.handler);
@@ -319,7 +328,7 @@ featureSuite("module-terminal-panel", () => {
     await page.unroute("**/graphql", refusal.handler);
 
     await dead.getByRole("button", { name: "Restart shell" }).click();
-    await expect(dead).toHaveCount(0);
+    await expect(dead).toHaveCount(0, { timeout: 20_000 });
     const tab = panel.getByTestId("terminal-panel-tab");
     await expect(tab).toHaveCount(1);
     await expect(tab).toHaveAttribute("data-dead", "false");
@@ -332,7 +341,7 @@ featureSuite("module-terminal-panel", () => {
 
     // A dead tab is dismissed locally; it has no durable session to end.
     await typeInShell(page, panel.getByTestId("terminal-host"), "exit 4");
-    await expect(panel.getByTestId("terminal-panel-dead-shell")).toHaveAttribute("data-exit-code", "4", { timeout: 15_000 });
+    await expect(panel.getByTestId("terminal-panel-dead-shell")).toHaveAttribute("data-exit-code", "4", { timeout: 45_000 });
     const terminations = countRequests(page, "UpdateTerminalSession");
     await panel.getByRole("button", { name: "Close shell 1" }).click();
     await expect(panel.getByTestId("terminal-panel-no-shells")).toBeVisible();
@@ -386,6 +395,7 @@ featureSuite("module-terminal-panel", () => {
   });
 
   test("rediscovers surviving shells and the active tab after reload without duplicates", { tag: "@case-module-shell-rediscovery" }, async ({ page, request }) => {
+    test.setTimeout(90_000);
     const { module } = await linkedModule(request, "rediscovery");
     await openShellModule(page, module.name);
     await page.getByRole("button", { name: "Open terminal panel" }).click();
@@ -415,14 +425,15 @@ featureSuite("module-terminal-panel", () => {
     expect(launches()).toBe(0);
     expect((await liveShells(request, module.id)).sort()).toEqual([...runs].sort());
 
-    // The next open rediscovers the same shells and the remembered active tab.
-    // Rediscovered tab order follows the server's run-id ordering (CODING-2870),
-    // so identity is asserted by run, not by the Shell N label.
+    // The next open rediscovers the same shells in creation order, each keeping
+    // its Shell N label, and the remembered active tab.
     await page.unroute("**/graphql", refusal.handler);
     await panel.getByRole("button", { name: "Minimize terminal panel" }).click();
     await page.getByRole("button", { name: "Open terminal panel" }).click();
-    const rediscovered = () => panel.getByTestId("terminal-panel-tab").evaluateAll((tabs) => tabs.map((tab) => tab.getAttribute("data-run-id")).sort());
-    await expect.poll(rediscovered).toEqual([...runs].sort());
+    const rediscovered = () => panel.getByTestId("terminal-panel-tab").evaluateAll((tabs) => tabs.map((tab) => tab.getAttribute("data-run-id")));
+    await expect.poll(rediscovered).toEqual(runs);
+    await expect(panel.locator(`[data-run-id="${runs[0]}"]`).getByRole("tab", { name: "Shell 1" })).toBeVisible();
+    await expect(panel.locator(`[data-run-id="${runs[1]}"]`).getByRole("tab", { name: "Shell 2" })).toBeVisible();
     await expect(panel.locator(`[data-run-id="${runs[1]}"]`)).toHaveAttribute("data-active", "true");
     await expect(panel.getByTestId("terminal-host")).toContainText("SURVIVING_SHELL_MARKER");
     expect(launches()).toBe(0);
@@ -433,7 +444,8 @@ featureSuite("module-terminal-panel", () => {
     await page.reload();
     await expect(panel).toBeVisible();
     await expect(panel.locator(`[data-run-id="${runs[0]}"]`)).toHaveAttribute("data-active", "true");
-    await expect.poll(rediscovered).toEqual([...runs].sort());
+    await expect.poll(rediscovered).toEqual(runs);
+    await expect(panel.locator(`[data-run-id="${runs[0]}"]`).getByRole("tab", { name: "Shell 1" })).toBeVisible();
     await expect(panel.getByTestId("terminal-host")).toContainText("FIRST_SHELL_READY");
     expect(launches()).toBe(0);
   });

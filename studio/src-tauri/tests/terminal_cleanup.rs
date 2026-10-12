@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use common::terminal_lifecycle_harness::{
-    TerminalLifecycleHarness, PROJECT_ID, TASK_ID, TASK_RUN_ID,
+    TerminalLifecycleHarness, DOCUMENT_RUN_ID, PROJECT_ID, TASK_ID, TASK_RUN_ID,
 };
 use sea_orm::{
     sea_query::Expr, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter,
@@ -391,6 +391,55 @@ async fn explicit_termination_waits_for_a_concurrent_writer_instead_of_failing_s
         .unwrap_or_else(|error| panic!("{}: {error}", error.code_str()));
 
     release.await.unwrap();
+    assert!(terminal.terminated_at.is_some());
+    assert!(!terminal.runtime_cleanup_pending);
+}
+
+#[tokio::test]
+async fn explicit_termination_survives_writers_that_commit_between_its_reads_and_writes() {
+    // Other terminals keep committing output activity while one is closed.
+    // A cleanup step that reads before reserving the writer would see its
+    // snapshot invalidated and fail with SQLITE_BUSY_SNAPSHOT (CODING-2782).
+    let harness = TerminalLifecycleHarness::start().await;
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut writers = Vec::new();
+    for _ in 0..4 {
+        let connection = harness.database().await;
+        let stop = stop.clone();
+        writers.push(tokio::spawn(async move {
+            let mut commits = 0_u64;
+            while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                connection
+                    .execute_unprepared(&format!(
+                        "UPDATE agent_terminal_sessions SET output_sequence = output_sequence + 1 \
+                         WHERE agent_run_id = '{DOCUMENT_RUN_ID}'"
+                    ))
+                    .await
+                    .unwrap();
+                commits += 1;
+                tokio::task::yield_now().await;
+            }
+            commits
+        }));
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let runtime = Arc::new(ScriptedRuntime::new([CleanupRuntimeObservation::Missing]));
+    let service = TerminalCleanupService::new(harness.database().await, runtime);
+
+    let closed = service
+        .update_terminal_session(
+            TASK_RUN_ID,
+            TerminationPatch::Request("close-under-contention".to_owned()),
+        )
+        .await;
+
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    let mut commits = 0;
+    for writer in writers {
+        commits += writer.await.unwrap();
+    }
+    let terminal = closed.unwrap_or_else(|error| panic!("{}: {error}", error.code_str()));
+    assert!(commits > 0, "the concurrent writers never committed");
     assert!(terminal.terminated_at.is_some());
     assert!(!terminal.runtime_cleanup_pending);
 }

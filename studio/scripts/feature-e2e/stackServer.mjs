@@ -1,8 +1,9 @@
 import { spawn, spawnSync } from "node:child_process";
-import { createWriteStream, existsSync } from "node:fs";
+import { copyFileSync, createWriteStream, existsSync, mkdirSync, renameSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildWebHookRunnerCommand, graphqlAdapterCargoArguments } from "../../../scripts/web-dev.mjs";
+import { buildWebHookRunnerCommand, graphqlAdapterCargoArgumentsFor } from "../../../scripts/web-dev.mjs";
+import { resolveEditionBuild } from "../edition-build-policy.mjs";
 import { prepareStackProfile, stackServerEnvironment } from "./stackProfile.mjs";
 import { acquireStackSlot, slotWaitReporter } from "./stackSlots.mjs";
 
@@ -11,18 +12,40 @@ const readyTimeoutMs = 600_000;
 const stopTimeoutMs = 10_000;
 
 /**
- * Builds the hook runner and GraphQL adapter once per run, with the same Cargo
- * arguments `bun run web` uses so both share artifacts. Returns null when the
- * binaries are unavailable; servers then fall back to `cargo run` per launch.
+ * Servers of an earlier run may still execute the previous copy, and macOS
+ * kills a process whose signed binary is rewritten in place, so a refresh
+ * writes beside it and renames over it.
  */
-export function buildStackBinaries({ root = repositoryRoot, run = spawnSync } = {}) {
+function replaceExecutable(from, to) {
+  mkdirSync(dirname(to), { recursive: true });
+  const staging = `${to}.${process.pid}.tmp`;
+  copyFileSync(from, staging);
+  renameSync(staging, to);
+}
+
+/**
+ * Builds the hook runner and GraphQL adapter once per run, with the same Cargo
+ * arguments `bun run web` uses for the run's edition so both share artifacts.
+ * Returns null when the binaries are unavailable; servers then fall back to
+ * `cargo run` per launch.
+ */
+export function buildStackBinaries({
+  root = repositoryRoot, run = spawnSync, editionBuild = resolveEditionBuild(),
+  exists = existsSync, copy = replaceExecutable,
+} = {}) {
   const hook = buildWebHookRunnerCommand({ cwd: root });
-  const adapterBinary = join(root, "studio", "src-tauri", "target", "debug", "ticketry_graphql_adapter");
-  for (const [command, args] of [[hook.command, hook.args], ["cargo", ["build", ...graphqlAdapterCargoArguments]]]) {
+  const debug = join(root, "studio", "src-tauri", "target", "debug");
+  const builtAdapter = join(debug, "ticketry_graphql_adapter");
+  for (const [command, args] of [[hook.command, hook.args], ["cargo", ["build", ...graphqlAdapterCargoArgumentsFor(editionBuild)]]]) {
     const result = run(command, args, { cwd: root, stdio: "inherit" });
     if (result.error || result.status !== 0) return null;
   }
-  return existsSync(hook.output) && existsSync(adapterBinary) ? { adapterBinary, hookRunner: hook.output } : null;
+  if (!exists(hook.output) || !exists(builtAdapter)) return null;
+  // Every edition's build lands at the same Cargo output path; servers start a
+  // per-edition copy so a concurrent run of the other edition cannot swap it.
+  const adapterBinary = join(debug, `e2e-${editionBuild.edition}`, "ticketry_graphql_adapter");
+  copy(builtAdapter, adapterBinary);
+  return { adapterBinary, hookRunner: hook.output };
 }
 
 async function waitUntilServing(url, exited, shouldStop) {
@@ -77,6 +100,7 @@ export async function startStackServer({ owner, setup, binaries, environment = p
         ...stackServerEnvironment({
           dataDirectory: setup.profile.dataDirectory, providerDirectory,
           frontendPort: setup.frontendPort, adapterPort: setup.owned.TICKETRY_E2E_ADAPTER_PORT,
+          edition: resolveEditionBuild(environment).edition,
         }),
         ...(binaries ? {
           TICKETRY_GRAPHQL_ADAPTER_BINARY: binaries.adapterBinary,

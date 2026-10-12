@@ -54,12 +54,17 @@ export function validateDesktopConfiguration(value: unknown): RuntimeStartupConf
       (typeof runtimeInstance !== "string" || runtimeInstance.length === 0)) {
     throw new Error("Desktop initialization failed: configuration.runtimeInstance must be a non-empty string when present");
   }
+  const edition = configuration.edition;
+  if (edition !== undefined && edition !== "pocock" && edition !== "core") {
+    throw new Error('Desktop initialization failed: configuration.edition must be "pocock" or "core" when present');
+  }
   const decoded = decodeServiceHealth(configuration.serviceHealth);
   if (!decoded.ok) {
     throw new Error(`Desktop initialization failed: ${decoded.field} ${decoded.expectation}`);
   }
   return Object.freeze({
     runtimeInstance,
+    ...(edition === undefined ? {} : { edition }),
     ...(configuration.plannerEndpoint === undefined ? {} : {
       plannerEndpoint: parsePlannerEndpoint(configuration.plannerEndpoint),
     }),

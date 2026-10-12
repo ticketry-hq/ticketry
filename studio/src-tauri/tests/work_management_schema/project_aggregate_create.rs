@@ -1,5 +1,6 @@
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseBackend, Statement};
 
+use ticketry_edition::{has, EditionCapability};
 use ticketry_work_management::CommandDatabase;
 
 async fn fixture() -> sea_orm::DatabaseConnection {
@@ -61,10 +62,8 @@ async fn row_count(database: &sea_orm::DatabaseConnection, table: &str) -> i64 {
         .unwrap()
 }
 
-#[tokio::test]
-async fn project_create_returns_the_aggregate_after_seeding_reviewed_defaults() {
-    let database = fixture().await;
-    let schema = ticketry_graphql_schema::foundation_schema(
+fn schema(database: &sea_orm::DatabaseConnection) -> seaography::async_graphql::dynamic::Schema {
+    ticketry_graphql_schema::foundation_schema(
         database.clone(),
         Some(database.clone()),
         Some(CommandDatabase(database.clone())),
@@ -75,7 +74,16 @@ async fn project_create_returns_the_aggregate_after_seeding_reviewed_defaults() 
         None,
         None,
     )
-    .unwrap();
+    .unwrap()
+}
+
+#[tokio::test]
+async fn project_create_returns_the_aggregate_after_seeding_reviewed_defaults() {
+    if !has(EditionCapability::ReviewedWorkflowDefaults) {
+        return; // Core seeds an empty slate; see the core counterpart below.
+    }
+    let database = fixture().await;
+    let schema = schema(&database);
 
     let response = schema
         .execute(
@@ -107,4 +115,48 @@ async fn project_create_returns_the_aggregate_after_seeding_reviewed_defaults() 
             "seeded {table}"
         );
     }
+}
+
+/// CODING-2860: core seeds only the structural `Module` type. Read back
+/// through the public GraphQL model reads, as a client would.
+#[tokio::test]
+async fn core_project_create_seeds_only_the_module_type() {
+    if has(EditionCapability::ReviewedWorkflowDefaults) {
+        return; // Pocock seeds the reviewed catalog; see the test above.
+    }
+    let database = fixture().await;
+    let schema = schema(&database);
+
+    let created = schema
+        .execute(r#"mutation { create_project(name: "Core", slug: "cor") { id } }"#)
+        .await;
+    assert!(created.errors.is_empty(), "{:?}", created.errors);
+    let project_id = serde_json::to_value(created.data).unwrap()["create_project"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    let catalog = schema
+        .execute(
+            seaography::async_graphql::Request::new(include_str!(
+                "../common/project_workflow_catalog.graphql"
+            ))
+            .variables(seaography::async_graphql::Variables::from_json(
+                serde_json::json!({ "projectId": project_id }),
+            )),
+        )
+        .await;
+    assert!(catalog.errors.is_empty(), "{:?}", catalog.errors);
+    let catalog = serde_json::to_value(catalog.data).unwrap();
+    assert_eq!(catalog["states"]["nodes"], serde_json::json!([]));
+    assert_eq!(
+        catalog["issue_types"]["nodes"],
+        serde_json::json!([{
+            "name": "Module",
+            "level": "module",
+            "startStateId": null,
+            "issueTypeTransition": { "nodes": [] },
+            "launchBinding": { "nodes": [] },
+        }])
+    );
 }

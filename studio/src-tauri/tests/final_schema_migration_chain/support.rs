@@ -13,6 +13,7 @@ use ticketry_work_management::{
 };
 
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
+use ticketry_edition::{has, EditionCapability};
 use ticketry_settings as provider_catalog_migrations;
 
 use ticketry_workspace_runtime::{
@@ -149,11 +150,18 @@ pub async fn assert_final(database: &DatabaseConnection) {
         .await
         .unwrap()
         .unwrap();
+    // Pocock fills the unset Grill entry skill from the reviewed stage skills
+    // and carries it into stage_skills; core adopts nothing, so it stays empty.
+    let adopted = has(EditionCapability::ReviewedWorkflowDefaults);
     assert_eq!(
         binding
             .try_get::<serde_json::Value>("", "stage_skills")
             .unwrap(),
-        serde_json::json!(["grill-with-docs"])
+        if adopted {
+            serde_json::json!(["grill-with-docs"])
+        } else {
+            serde_json::json!([])
+        }
     );
 
     let colors = database
@@ -171,9 +179,15 @@ pub async fn assert_final(database: &DatabaseConnection) {
             )
         })
         .collect::<BTreeMap<_, _>>();
-    assert_eq!(colors["Ideas"], "#60646C");
-    assert_eq!(colors["Grill"], "#FA4D56");
-    assert_eq!(colors["Review"], "#08BDBA");
+    if adopted {
+        assert_eq!(colors["Ideas"], "#60646C");
+        assert_eq!(colors["Grill"], "#FA4D56");
+        assert_eq!(colors["Review"], "#08BDBA");
+    } else {
+        assert_eq!(colors["Ideas"], "#D12771");
+        assert_eq!(colors["Grill"], "#60646C");
+        assert_eq!(colors["Review"], "#D6409F");
+    }
 
     let presentations = database
         .query_all_raw(Statement::from_string(
@@ -281,70 +295,7 @@ pub async fn assert_final(database: &DatabaseConnection) {
         serde_json::json!([])
     );
 
-    for (table, expected_id) in [
-        (
-            provider_catalog_migrations::CODEX_5_6_LEDGER,
-            provider_catalog_migrations::CODEX_5_6_MIGRATION_ID,
-        ),
-        (
-            PROJECT_ONBOARDING_MIGRATION_LEDGER_TABLE,
-            PROJECT_ONBOARDING_MIGRATION_MIGRATION_ID,
-        ),
-        (
-            LAUNCH_BINDING_ENTRY_SKILL_MIGRATION_LEDGER_TABLE,
-            LAUNCH_BINDING_ENTRY_SKILL_MIGRATION_MIGRATION_ID,
-        ),
-        (
-            WORKFLOW_COLOR_MIGRATION_LEDGER_TABLE,
-            WORKFLOW_COLOR_MIGRATION_MIGRATION_ID,
-        ),
-        (
-            WORKSPACE_TAB_ORDER_MIGRATION_LEDGER_TABLE,
-            WORKSPACE_TAB_ORDER_MIGRATION_MIGRATION_ID,
-        ),
-        (
-            MODULE_PRESENTATION_MIGRATION_LEDGER_TABLE,
-            MODULE_PRESENTATION_MIGRATION_MIGRATION_ID,
-        ),
-        (
-            provider_catalog_migrations::CODEX_SPARK_LEDGER,
-            provider_catalog_migrations::CODEX_SPARK_MIGRATION_ID,
-        ),
-        (PULL_REQUEST_URL_LEDGER_TABLE, PULL_REQUEST_URL_MIGRATION_ID),
-        (
-            WORKFLOW_HANDOFF_MIGRATION_LEDGER_TABLE,
-            WORKFLOW_HANDOFF_MIGRATION_MIGRATION_ID,
-        ),
-        (
-            provider_catalog_migrations::CODEX_ASTRA_LEDGER,
-            provider_catalog_migrations::CODEX_ASTRA_MIGRATION_ID,
-        ),
-        (
-            provider_catalog_migrations::CODEX_6_ASTRA_LEDGER,
-            provider_catalog_migrations::CODEX_6_ASTRA_MIGRATION_ID,
-        ),
-        (
-            LAUNCH_BINDING_PROFILE_MIGRATION_LEDGER_TABLE,
-            LAUNCH_BINDING_PROFILE_MIGRATION_MIGRATION_ID,
-        ),
-        (
-            provider_catalog_migrations::CODEX_GLM_5_3_FLASH_LEDGER,
-            provider_catalog_migrations::CODEX_GLM_5_3_FLASH_MIGRATION_ID,
-        ),
-        (
-            provider_catalog_migrations::CODEX_6_1_SOL_LEDGER,
-            provider_catalog_migrations::CODEX_6_1_SOL_MIGRATION_ID,
-        ),
-        (
-            provider_catalog_migrations::CODEX_6_SOL_LUNA_LEDGER,
-            provider_catalog_migrations::CODEX_6_SOL_LUNA_MIGRATION_ID,
-        ),
-        (SHIP_RECORD_LEDGER_TABLE, SHIP_RECORD_MIGRATION_ID),
-        (
-            LAUNCH_BINDING_STAGE_SKILLS_MIGRATION_LEDGER_TABLE,
-            LAUNCH_BINDING_STAGE_SKILLS_MIGRATION_MIGRATION_ID,
-        ),
-    ] {
+    for (table, expected_id) in CHAIN_LEDGERS {
         let row = database
             .query_one_raw(Statement::from_string(
                 DbBackend::Sqlite,
@@ -367,4 +318,113 @@ pub async fn assert_final(database: &DatabaseConnection) {
         .await
         .unwrap()
         .is_empty());
+}
+
+/// Each chain step's ledger table and migration id, in the order the chain
+/// records them. Both editions record exactly these, in this order.
+pub const CHAIN_LEDGERS: [(&str, &str); 17] = [
+    (
+        provider_catalog_migrations::CODEX_5_6_LEDGER,
+        provider_catalog_migrations::CODEX_5_6_MIGRATION_ID,
+    ),
+    (
+        PROJECT_ONBOARDING_MIGRATION_LEDGER_TABLE,
+        PROJECT_ONBOARDING_MIGRATION_MIGRATION_ID,
+    ),
+    (
+        LAUNCH_BINDING_ENTRY_SKILL_MIGRATION_LEDGER_TABLE,
+        LAUNCH_BINDING_ENTRY_SKILL_MIGRATION_MIGRATION_ID,
+    ),
+    (
+        WORKFLOW_COLOR_MIGRATION_LEDGER_TABLE,
+        WORKFLOW_COLOR_MIGRATION_MIGRATION_ID,
+    ),
+    (
+        WORKSPACE_TAB_ORDER_MIGRATION_LEDGER_TABLE,
+        WORKSPACE_TAB_ORDER_MIGRATION_MIGRATION_ID,
+    ),
+    (
+        MODULE_PRESENTATION_MIGRATION_LEDGER_TABLE,
+        MODULE_PRESENTATION_MIGRATION_MIGRATION_ID,
+    ),
+    (
+        provider_catalog_migrations::CODEX_SPARK_LEDGER,
+        provider_catalog_migrations::CODEX_SPARK_MIGRATION_ID,
+    ),
+    (PULL_REQUEST_URL_LEDGER_TABLE, PULL_REQUEST_URL_MIGRATION_ID),
+    (
+        WORKFLOW_HANDOFF_MIGRATION_LEDGER_TABLE,
+        WORKFLOW_HANDOFF_MIGRATION_MIGRATION_ID,
+    ),
+    (
+        provider_catalog_migrations::CODEX_ASTRA_LEDGER,
+        provider_catalog_migrations::CODEX_ASTRA_MIGRATION_ID,
+    ),
+    (
+        provider_catalog_migrations::CODEX_6_ASTRA_LEDGER,
+        provider_catalog_migrations::CODEX_6_ASTRA_MIGRATION_ID,
+    ),
+    (
+        LAUNCH_BINDING_PROFILE_MIGRATION_LEDGER_TABLE,
+        LAUNCH_BINDING_PROFILE_MIGRATION_MIGRATION_ID,
+    ),
+    (
+        provider_catalog_migrations::CODEX_GLM_5_3_FLASH_LEDGER,
+        provider_catalog_migrations::CODEX_GLM_5_3_FLASH_MIGRATION_ID,
+    ),
+    (SHIP_RECORD_LEDGER_TABLE, SHIP_RECORD_MIGRATION_ID),
+    (
+        LAUNCH_BINDING_STAGE_SKILLS_MIGRATION_LEDGER_TABLE,
+        LAUNCH_BINDING_STAGE_SKILLS_MIGRATION_MIGRATION_ID,
+    ),
+    (
+        provider_catalog_migrations::CODEX_6_SOL_LUNA_LEDGER,
+        provider_catalog_migrations::CODEX_6_SOL_LUNA_MIGRATION_ID,
+    ),
+    (
+        provider_catalog_migrations::CODEX_6_1_SOL_LEDGER,
+        provider_catalog_migrations::CODEX_6_1_SOL_MIGRATION_ID,
+    ),
+];
+
+/// The ledger tables in the order SQLite created them.
+pub async fn ledger_creation_order(database: &DatabaseConnection) -> Vec<String> {
+    let ledgers = CHAIN_LEDGERS.map(|(table, _)| table);
+    database
+        .query_all_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY rowid".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| row.try_get::<String>("", "name").unwrap())
+        .filter(|name| ledgers.contains(&name.as_str()))
+        .collect()
+}
+
+/// Every schema object outside SQLite's internals, with its DDL, by name.
+pub async fn schema_objects(database: &DatabaseConnection) -> String {
+    database
+        .query_all_raw(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT type, name, tbl_name, sql FROM sqlite_master
+             WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name"
+                .to_owned(),
+        ))
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| {
+            format!(
+                "{} {} on {}\n{}\n",
+                row.try_get::<String>("", "type").unwrap(),
+                row.try_get::<String>("", "name").unwrap(),
+                row.try_get::<String>("", "tbl_name").unwrap(),
+                row.try_get::<Option<String>>("", "sql")
+                    .unwrap()
+                    .unwrap_or_default(),
+            )
+        })
+        .collect()
 }

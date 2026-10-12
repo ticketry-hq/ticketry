@@ -17,12 +17,12 @@ import { SuggestionRows } from "./SuggestionRows";
 import { AcceptedSuggestionGoals } from "./AcceptedSuggestionGoals";
 import { NO_EPIC } from "./epicMembership";
 import { PlanFeedback } from "./PlanFeedback";
-import { ROADMAP_ENABLED } from "../../../shared/config/roadmapAvailability";
+import { editionHas } from "../../../shared/config/edition";
 
 export type PlanSprintViewProps = { projectId: string; sprintId: string; renderWorkItemDetail: (id: string) => ReactNode };
 
 export default function PlanSprintView(props: PlanSprintViewProps) {
-  return ROADMAP_ENABLED ? <AvailablePlanSprintView {...props} /> : null;
+  return editionHas("sprintPlanning") ? <AvailablePlanSprintView {...props} /> : null;
 }
 
 function AvailablePlanSprintView(props: PlanSprintViewProps) {
@@ -50,7 +50,7 @@ function SprintPlan({ projectId, sprintId, renderWorkItemDetail }: PlanSprintVie
   };
   const decisions = usePlanSuggestionDecisions(projectId, sprintId, moves.reset, {
     isCurrent: coordinator.isCurrent,
-    canChange: (id, status, confirmedBatch) => coordinator.canDecideSuggestion(status, id, confirmedBatch),
+    resolve: (id, status, confirmedBatch) => coordinator.suggestionForDecision(status, id, confirmedBatch),
   });
   const { busy } = decisions;
   const changeSuggestion = (suggestion: SprintSuggestionRecordFragment, status: "accepted" | "dismissed", proposedName?: string) => {

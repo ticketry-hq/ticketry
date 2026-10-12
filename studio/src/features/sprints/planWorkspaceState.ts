@@ -5,7 +5,7 @@ import { scratchBucketId, TEMP_TASK_ID } from "../agents/terminal";
 import { getModuleTreeSnapshot, loadModuleTree, readWorkItem } from "../work-items";
 import { getVisibleModulesSnapshot, useStudioStore } from "../projects";
 import { adaptPlanningGraph, compareSprintSequence, PlanningGraphDocument } from "../planning-graph";
-import { ROADMAP_ENABLED } from "../../shared/config/roadmapAvailability";
+import { editionHas } from "../../shared/config/edition";
 
 type PlanOrigin = Pick<ClientState,
   | "selectedModuleId"
@@ -44,7 +44,7 @@ export const usePlanWorkspace = createApolloStore<PlanWorkspaceState>(
 
 /** Only an available Plan workspace may own the shell or navigation. */
 export function selectPlanWorkspaceActive(state: Pick<PlanWorkspaceState, "active">): boolean {
-  return ROADMAP_ENABLED && state.active;
+  return editionHas("sprintPlanning") && state.active;
 }
 
 function planningGraph() {
@@ -73,7 +73,7 @@ function planningOrigin(): PlanOrigin {
 }
 
 export function openPlanWorkspace(sprintId?: string | null): void {
-  if (!ROADMAP_ENABLED) return;
+  if (!editionHas("sprintPlanning")) return;
   const projectId = useStudioStore.getState().selectedProjectId;
   const graph = planningGraph();
   const nextSprintId = sprintId ?? graph?.sprints
@@ -105,7 +105,7 @@ export function closePlanSprint(): void {
 }
 
 export async function openPlanItem(workItemId: string, suggestionId?: string): Promise<void> {
-  if (!ROADMAP_ENABLED) return;
+  if (!editionHas("sprintPlanning")) return;
   const graph = planningGraph();
   const item = graph?.workItems.find((candidate) => candidate.id === workItemId);
   const currentWorkspace = usePlanWorkspace.getState();
@@ -141,7 +141,7 @@ export async function openPlanItem(workItemId: string, suggestionId?: string): P
 }
 
 export function leavePlanWorkspace(): void {
-  if (!ROADMAP_ENABLED) return;
+  if (!editionHas("sprintPlanning")) return;
   const { origin, projectId } = usePlanWorkspace.getState();
   usePlanWorkspace.setState((state) => ({ generation: state.generation + 1, active: false, sprintId: null, openItem: null, pendingOpenItem: null, origin: null, defaultSprintPending: false }));
   if (!origin || projectId !== useStudioStore.getState().selectedProjectId) return;

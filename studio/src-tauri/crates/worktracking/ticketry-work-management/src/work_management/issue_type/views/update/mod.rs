@@ -17,7 +17,7 @@ use seaolim::{
     RestrictedModelMutation, RestrictedMutationField, ViewSerializers,
 };
 
-use crate::work_management::{commands::catalog, graphql};
+use crate::work_management::{commands::catalog, graphql, write_reservation::ReservedWrite};
 use ticketry_entities::issue_type;
 
 struct UpdateIssueType;
@@ -62,7 +62,7 @@ pub(super) fn register(builder: &mut Builder) {
                 "workflow_revision",
                 TypeRef::named(TypeRef::INT),
             )),
-        UpdateIssueType,
+        ReservedWrite(UpdateIssueType),
         ViewSerializers::default(),
     );
 }

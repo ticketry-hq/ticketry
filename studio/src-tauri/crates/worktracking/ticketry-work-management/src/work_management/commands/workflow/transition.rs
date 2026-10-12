@@ -1,8 +1,9 @@
+use crate::work_management::database::begin_write;
 use std::collections::HashSet;
 
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, DatabaseTransaction,
-    EntityTrait, QueryFilter, Set, TransactionTrait,
+    EntityTrait, QueryFilter, Set,
 };
 
 use super::super::identifiers::database_uuid;
@@ -77,7 +78,7 @@ pub async fn transition_with_expectation(
         .one(database)
         .await?
         .ok_or_else(|| CommandError::NotFound("Work item not found.".to_owned()))?;
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     project::Entity::update_many()
         .col_expr(
             project::Column::StateRevision,
@@ -116,6 +117,7 @@ pub async fn transition_with_expectation(
             || kind.workflow_revision != expected.workflow_revision
             || kind.name != "Story"
         {
+            eprintln!("RUNNOW_GUARD current_state={:?} expected_source={:?} rev={} expected_rev={} wf={} expected_wf={} kind={}", current.state_id, source_id, current.state_revision, expected.work_item_revision, kind.workflow_revision, expected.workflow_revision, kind.name);
             return Err(CommandError::StaleRevision(
                 "The Work Item or its workflow changed after preflight.".to_owned(),
             ));

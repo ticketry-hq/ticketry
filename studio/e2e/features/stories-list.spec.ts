@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { resolveEdition } from "../../scripts/edition-build-policy.mjs";
 import { CreateWorkTrackerWorkItemDocument } from "../../src/features/work-items/generated/workItems.documents";
 import { getWorkspace, getWorkflowCatalog, graphqlRefusal } from "../support";
 import { managerFixture, refuseNext } from "../module-manager-support";
@@ -11,6 +12,23 @@ import { ids, openItem, installOverhaulFixture } from "../work-items-overhaul-su
 import { names, fixture, seedProject, editDescription, cleanupWorkItemsFixture, openFeatureModule as openModule, dragStoryTo } from "../work-items-migration-support";
 import { getWorkItem, graphql, openWorkItem } from "../support";
 import { UpdateWorkTrackerWorkItemDetailsDocument } from "../../src/features/work-items/generated/workItems.documents";
+
+/** The run's compiled edition; the feature runner builds the app and this worker from one TICKETRY_EDITION. */
+const sprintPlanning = resolveEdition().edition === "core";
+
+/**
+ * Show every eligible Story root. Core opens on the active-sprint intent and
+ * disables reorder until that read resolves, so widen to **All sprints**.
+ * Pocock compiles no sprint chooser and never restricts Stories.
+ */
+async function showAllSprints(page: Page) {
+  await expect(page.getByRole("textbox", { name: "Search stories" })).toBeVisible();
+  const trigger = page.getByRole("button", { name: /^Sprint:/ });
+  if (!sprintPlanning) { await expect(trigger).toHaveCount(0); return; }
+  await trigger.click();
+  await page.getByRole("dialog", { name: "Choose sprint" }).getByRole("option", { name: /All sprints/ }).click();
+  await expect(trigger).toHaveAccessibleName("Sprint: All sprints");
+}
 
 featureSuite("stories-list", () => {
  test.describe("overhaul regression", () => {
@@ -167,6 +185,52 @@ test.describe("Stories production paths", () => {
       await expect(page.getByRole("treeitem", { name: new RegExp(name) })).toBeVisible();
     } finally { await f.cleanup(); }
   });
+  test("captures Stories back to back without losing a typed name", { tag: "@case-stories-capture-back-to-back" }, async ({ page, request }) => {
+    const f = await managerFixture(request, "capture-burst");
+    try {
+      await page.goto("/");
+      await page.getByRole("tab", { name: f.second.name, exact: true }).click();
+      const entry = page.getByRole("textbox", { name: "Capture an idea" });
+      await expect(page.getByRole("button", { name: "Collapse Ideas" })).toBeVisible();
+      const created: string[] = [];
+      page.on("request", (sent) => {
+        const body = sent.postDataJSON?.();
+        if (body?.operationName === "CreateWorkTrackerWorkItem") created.push(body.variables?.name);
+      });
+      // Submit the next name as soon as the previous capture succeeds, with no pauses.
+      const captured = Array.from({ length: 6 }, (_, index) => `${f.prefix} burst ${index + 1}`);
+      for (const name of captured) {
+        await entry.fill(name);
+        await entry.press("Enter");
+        // A submitted name is either sent as a create or still in the field; never silently cleared.
+        const value = await entry.inputValue();
+        expect(value === name || created.includes(name), `"${name}" was neither kept nor sent (field "${value}")`).toBe(true);
+        await expect(page.getByRole("treeitem", { name: new RegExp(name) })).toBeVisible();
+        await expect(entry).toHaveValue("");
+      }
+      expect(created).toEqual(captured);
+      const converged = page.waitForResponse((response) => response.request().postDataJSON()?.operationName === "WorkTrackerProjectOpen");
+      const last = `${f.prefix} burst last`;
+      await entry.fill(last);
+      await entry.press("Enter");
+      await expect(page.getByRole("treeitem", { name: new RegExp(last) })).toBeVisible();
+      const draft = `${f.prefix} typed while converging`;
+      await entry.fill(draft);
+      await converged;
+      await expect(page.getByRole("button", { name: "Collapse Ideas" })).toContainText(String(captured.length + 1));
+      await expect(entry).toHaveValue(draft);
+      await expect(entry).toBeFocused();
+      await entry.press("Enter");
+      await expect(page.getByRole("treeitem", { name: new RegExp(draft) })).toBeVisible();
+      captured.push(last, draft);
+      const persisted = (await getWorkItems(request, f.project.id)).filter((row) => captured.includes(row.name));
+      expect(persisted.map((row) => row.name).sort()).toEqual([...captured].sort());
+      expect(persisted.every((row) => row.parent_id === f.second.id)).toBe(true);
+      await page.reload();
+      await page.getByRole("tab", { name: f.second.name, exact: true }).click();
+      for (const name of captured) await expect(page.getByRole("treeitem", { name: new RegExp(name) })).toBeVisible();
+    } finally { await f.cleanup(); }
+  });
   test("searches names, keys and descendants through mouse and keyboard and recovers from empty results", { tag: "@case-stories-search-tree" }, async ({ page, request }) => {
     const f = await managerFixture(request, "search");
     try {
@@ -207,7 +271,28 @@ test.describe("Stories production paths", () => {
       await expect(root).toBeVisible();
     } finally { await f.cleanup(); }
   });
-  test("chooses sprint scopes with mouse and keyboard, cancels, retries reads and restores empty filters", { tag: "@case-stories-sprint-recovery" }, async ({ page, request }) => {
+  test("keeps every empty workflow section with a zero count until a search hides it", { tag: "@case-stories-empty-state-sections" }, async ({ page, request }) => {
+    const f = await managerFixture(request, "empty-sections");
+    try {
+      const states = (await getWorkflowCatalog(request, f.project.id)).states.nodes;
+      expect(states.length, "the seeded workflow states").toBeGreaterThan(1);
+      await openModule(page, f.second.name);
+      await showAllSprints(page);
+      const header = (name: string) => page.getByRole("button", { name: new RegExp(`^(Collapse|Expand) ${name}$`) });
+      for (const state of states) {
+        await expect(header(state.name)).toHaveText(new RegExp(`${state.name}\\s*0$`));
+        await expect(page.getByRole("button", { name: `Configure ${state.name} state`, exact: true })).toBeVisible();
+      }
+      await expect(page.getByRole("treeitem", { name: new RegExp(f.story.name) })).toHaveCount(0);
+      const search = page.getByRole("textbox", { name: "Search stories" });
+      await search.fill(`${f.prefix} absent-section`);
+      await expect(page.getByText(/No stories match/)).toBeVisible();
+      for (const state of states) await expect(header(state.name)).toHaveCount(0);
+      await page.getByRole("button", { name: "Clear story search" }).click();
+      for (const state of states) await expect(header(state.name)).toHaveText(new RegExp(`${state.name}\\s*0$`));
+    } finally { await f.cleanup(); }
+  });
+  test("chooses sprint scopes with mouse and keyboard, cancels, retries reads and restores empty filters", { tag: ["@case-stories-sprint-recovery", "@edition-core"] }, async ({ page, request }) => {
     const f = await managerFixture(request, "sprint");
     try {
       const name = `${f.prefix} planned`;
@@ -255,8 +340,7 @@ test.describe("Stories production paths", () => {
      await graphql(request, ReorderWorkTrackerWorkItemDocument, { id: second.id, beforeId: f.story.id, afterId: null });
      const child = await createWorkItem(request, f.project.id, { name: `${f.prefix} child`, issue_type_id: f.story.issue_type_id, parent_id: f.story.id });
      await openModule(page, f.first.name);
-     await page.getByRole("button", { name: /^Sprint:/ }).click();
-     await page.getByRole("dialog", { name: "Choose sprint" }).getByRole("option", { name: /All sprints/ }).click();
+     await showAllSprints(page);
      const root = page.getByRole("treeitem", { name: new RegExp(f.story.name) });
      const moving = page.getByRole("treeitem", { name: new RegExp(second.name) });
      await root.getByRole("button", { name: "Expand subtasks" }).click();
@@ -295,8 +379,7 @@ test.describe("Stories production paths", () => {
      const destination = await createWorkItem(request, f.project.id, { name: `${f.prefix} destination`, issue_type_id: f.story.issue_type_id, parent_id: f.first.id });
      await graphql(request, TransitionWorkTrackerWorkItemDocument, { id: destination.id, targetStateId: grill.id });
      await openModule(page, f.first.name);
-     await page.getByRole("button", { name: /^Sprint:/ }).click();
-     await page.getByRole("dialog", { name: "Choose sprint" }).getByRole("option", { name: /All sprints/ }).click();
+     await showAllSprints(page);
      const moving = page.getByRole("treeitem", { name: new RegExp(f.story.name) });
      const header = page.getByRole("button", { name: "Collapse Grill" });
      const original = (await getWorkItem(request, f.story.id)).state_id;
@@ -322,8 +405,7 @@ test.describe("Stories production paths", () => {
      const restore = await refuseNext(page, "WorkTrackerModuleOpen", true);
      const failed = page.waitForResponse((response) => response.request().postDataJSON()?.operationName === "WorkTrackerModuleOpen");
      await openModule(page, f.first.name);
-     await page.getByRole("button", { name: /^Sprint:/ }).click();
-     await page.getByRole("dialog", { name: "Choose sprint" }).getByRole("option", { name: /All sprints/ }).click();
+     await showAllSprints(page);
      await failed;
      const root = page.getByRole("treeitem", { name: new RegExp(f.story.name) });
      await expect(root).toHaveCount(0);

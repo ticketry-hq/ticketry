@@ -32,8 +32,8 @@ fn library_roots_are_the_only_public_facades() {
     let inputs = workspace::load_workspace(&manifest).unwrap();
     assert_eq!(
         inputs.len(),
-        22,
-        "public API audit must scan the root and 21 crates"
+        23,
+        "public API audit must scan the root and 22 crates"
     );
     let names = manifest_dir.join("tests/fixtures/public-api.txt");
     let evidence = manifest_dir.join("tests/fixtures/public-api-evidence.txt");

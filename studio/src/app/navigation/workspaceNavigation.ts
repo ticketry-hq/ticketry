@@ -7,6 +7,7 @@ import { getModuleTreeSnapshot, getWorkItemSnapshot, selectModuleTaskOrder, task
 import { getStatesSnapshot, useStudioStore } from "../../features/projects";
 import { selectLiveTerminalStops, selectLiveTerminalStop, type LiveTerminalCycleDirection } from "../../features/studio/lib/liveTerminalCycle";
 import { loadWorkspaceTabOrder } from "../../features/workspace-tabs/queries";
+import { rememberStudioWorkspaceTarget } from "../../features/workspace-state/studioWorkspaceTarget";
 import { consume } from "./navigationContext";
 
 let liveTerminalCycleQueue = Promise.resolve();
@@ -109,6 +110,14 @@ async function cycleLiveTerminal(
     }
   }
 
+  // Commit the explicit destination before selecting the Story mounts its
+  // workspace and restores the previously remembered surface.
+  if (session.agentRunId) {
+    rememberStudioWorkspaceTarget(next.taskId, {
+      kind: "terminal",
+      agentRunId: session.agentRunId,
+    });
+  }
   useClientStore.setState({
     selectedTaskId: next.taskId,
     workspaceSelection: { kind: "task" },

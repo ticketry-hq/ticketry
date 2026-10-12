@@ -16,6 +16,11 @@ Check that the frontend responds and a POST to its proxied `/graphql` with
 `{"query":"mutation CloudReadiness { __typename }"}` returns a mutation type
 without errors. Diagnostics are in `.ticketry-dev/logs/ticketry.log`.
 
+The scripts build the default Pocock edition. Prefix them with
+`TICKETRY_EDITION=core` to inspect or check the core edition (which includes
+Plan and sprint planning); any value other than `pocock` or `core` fails before
+building. The startup output names the edition as `Edition: <edition> (<source>)`.
+
 The launcher owns a disposable SQLite directory and a dedicated tmux socket.
 Stop its parent process with SIGTERM after inspection so it can clean up.
 

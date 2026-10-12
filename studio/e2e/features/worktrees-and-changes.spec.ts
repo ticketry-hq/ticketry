@@ -696,18 +696,24 @@ featureSuite("worktrees-and-changes", () => {
     await expect(page.getByTestId("workspace-tab-changes")).toBeFocused();
     await expect(page.getByTestId("issue-name")).toContainText(names.origin);
 
-    // Review state is not restored by reload: the origin ticket comes back
-    // with Details, outside the Changes workspace.
-    await page.reload();
-    await expect(page.getByTestId("issue-name")).toContainText(names.origin);
-    await expect(page.getByTestId("workspace-tab-changes")).toHaveAttribute("aria-selected", "false");
-
-    // A ticket's branch chip opens that ticket's own Changes surface.
+    // Module Changes last selected the module checkout; without a reload, a
+    // ticket's branch chip still opens that ticket's own worktree.
     await openWorkItem(page, names.review);
     const worktree = page.getByTestId("worktree-block");
     await worktree.getByRole("button", { name: /^View changes on wt\// }).click();
     await expect(tabs.getByRole("tab", { name: "Changes", exact: true })).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByTestId("workspace-changes-surface").getByTestId("task-worktree-changes")).toContainText("task-feature.txt");
+    const ticketChanges = page.getByTestId("workspace-changes-surface");
+    await expect(ticketChanges.getByTestId("module-version-control")).toHaveCount(0);
+    await expect(ticketChanges.getByTestId("task-worktree-changes")).toContainText("task-feature.txt");
+    await expect(ticketChanges.getByRole("button", { name: "Choose checkout" })).toContainText(/wt\//);
+
+    // Review state is not restored by reload: the origin ticket comes back
+    // with Details, outside the Changes workspace.
+    await openWorkItem(page, names.origin);
+    await expect(tabs.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.reload();
+    await expect(page.getByTestId("issue-name")).toContainText(names.origin);
+    await expect(page.getByTestId("workspace-tab-changes")).toHaveAttribute("aria-selected", "false");
   });
 
   test("navigates checkouts with local keys and keeps the module checkout first", { tag: "@case-changes-checkout-keyboard" }, async ({ page, request }) => {
@@ -748,7 +754,9 @@ featureSuite("worktrees-and-changes", () => {
     await expect(workspace.getByTestId("module-version-control")).toBeVisible();
 
     await page.keyboard.press("Enter");
+    await expect(moduleOption).toBeFocused();
     await page.keyboard.press("End");
+    await expect(cleanOption).toBeFocused();
     await page.keyboard.press("Space");
     await expect(checkouts).toHaveCount(0);
     await expect(trigger).toBeFocused();
@@ -758,7 +766,9 @@ featureSuite("worktrees-and-changes", () => {
 
     await page.keyboard.press("Enter");
     await expect(cleanOption).toHaveAttribute("aria-selected", "true");
+    await expect(cleanOption).toBeFocused();
     await page.keyboard.press("Home");
+    await expect(moduleOption).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(trigger).toContainText("Module checkout");
     await expect(workspace.getByTestId("module-version-control")).toBeVisible();

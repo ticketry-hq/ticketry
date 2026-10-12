@@ -127,6 +127,9 @@ describe("desktop shell security contract", () => {
     const run = await text(
       "../../src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs",
     );
+    const peripherals = await text(
+      "../../src-tauri/crates/app/ticketry-desktop/src/desktop/edition_peripherals.rs",
+    );
     const capability = await json("../../src-tauri/capabilities/studio-main.json");
 
     expect((studioPackage.dependencies as Record<string, string>)[
@@ -138,7 +141,12 @@ describe("desktop shell security contract", () => {
       `tauri-plugin-launchkey-adaptor = { git = "https://github.com/charleeagni/launchkey-adaptor", rev = "${revision}" }`,
     );
     expect(desktopCargo).toContain("tauri-plugin-launchkey-adaptor.workspace = true");
-    expect(run).toContain("tauri_plugin_launchkey_adaptor::init()");
+    // CODING-2864: the plugin joins the builder only where the edition grants
+    // LaunchKey MIDI; the desktop composition tests prove both editions.
+    expect(run).toContain("edition_peripherals::with_launchkey_plugin(builder,");
+    expect(peripherals).toMatch(
+      /if !has\(EditionCapability::LaunchkeyMidi\) \{\s*return builder;\s*\}\s*after_init\(builder\.plugin\(tauri_plugin_launchkey_adaptor::init\(\)\)\)/,
+    );
 
     const permissions = capability.permissions as string[];
     expect(permissions.filter((permission) => permission.startsWith("launchkey-adaptor:")))
@@ -149,21 +157,32 @@ describe("desktop shell security contract", () => {
     const lifecycle = await text(
       "../../src-tauri/crates/app/ticketry-desktop/src/desktop/lifecycle.rs",
     );
+    const peripherals = await text(
+      "../../src-tauri/crates/app/ticketry-desktop/src/desktop/edition_peripherals.rs",
+    );
     const shutdown = lifecycle.match(
       /pub(?:\(crate\))? fn shutdown_rust_runtime[\s\S]*?\n}/,
     )?.[0];
-    const dawExit = shutdown?.match(
+    const release = peripherals.match(
+      /pub\(crate\) fn release_launchkey[\s\S]*?\n}/,
+    )?.[0];
+    const dawExit = release?.match(
       /launchkey\.send\(\s*PortName::Daw,\s*&\[\s*0x9f,\s*0x0c,\s*(?:0x00|0)\s*\]\s*\)/i,
     )?.[0];
 
-    expect(lifecycle).toContain("LaunchkeyAdaptorExt");
-    expect(shutdown).toContain("application.launchkey_adaptor()");
+    expect(peripherals).toContain("LaunchkeyAdaptorExt");
+    expect(release).toContain("application.launchkey_adaptor()");
     expect(dawExit).toBeDefined();
-    expect(shutdown).toContain("launchkey.disconnect()");
-    expect(shutdown!.indexOf(dawExit!)).toBeLessThan(
-      shutdown!.indexOf("launchkey.disconnect()"),
+    expect(release).toContain("launchkey.disconnect()");
+    expect(release!.indexOf(dawExit!)).toBeLessThan(
+      release!.indexOf("launchkey.disconnect()"),
     );
-    expect(shutdown!.indexOf("launchkey.disconnect()")).toBeLessThan(
+    // CODING-2864: release runs only where the edition grants LaunchKey MIDI.
+    expect(peripherals).toMatch(
+      /fn release_launchkey_with\(disconnect: impl FnOnce\(\)\) \{\s*if has\(EditionCapability::LaunchkeyMidi\) \{\s*disconnect\(\);/,
+    );
+    expect(shutdown).toContain("edition_peripherals::release_launchkey(application)");
+    expect(shutdown!.indexOf("release_launchkey(application)")).toBeLessThan(
       shutdown!.indexOf("state.stopping.store"),
     );
   });
@@ -485,7 +504,7 @@ describe("desktop shell security contract", () => {
       "desktop:deploy": "node scripts/desktop-deploy.mjs",
       "release:build": "node scripts/release-build.mjs",
       "release:validate": "node scripts/release-build.mjs --validate",
-      "release:test": "node --test scripts/release-build.test.mjs scripts/release-roadmap-build.test.mjs scripts/roadmap-frontend-build.test.mjs scripts/release-provenance.test.mjs scripts/desktop-deploy.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/packaged-update-build.test.mjs scripts/packaged-update-feed.test.mjs scripts/packaged-update-acceptance.test.mjs scripts/packaged-update-acceptance-command.test.mjs scripts/packaged-update-acceptance-environment.test.mjs scripts/packaged-update-acceptance-driver.test.mjs scripts/packaged-update-acceptance-runner.test.mjs scripts/packaged-update-webdriver.test.mjs scripts/release-publish.test.mjs scripts/public-update-publisher.test.mjs scripts/update-acceptance.test.mjs scripts/update-acceptance-driver.test.mjs",
+      "release:test": "node --test scripts/release-build.test.mjs scripts/release-edition-build.test.mjs scripts/edition-build-policy.test.mjs scripts/edition-frontend-build.test.mjs scripts/release-provenance.test.mjs scripts/desktop-deploy.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/packaged-update-build.test.mjs scripts/packaged-update-feed.test.mjs scripts/packaged-update-acceptance.test.mjs scripts/packaged-update-acceptance-command.test.mjs scripts/packaged-update-acceptance-environment.test.mjs scripts/packaged-update-acceptance-driver.test.mjs scripts/packaged-update-acceptance-runner.test.mjs scripts/packaged-update-webdriver.test.mjs scripts/release-publish.test.mjs scripts/public-update-publisher.test.mjs scripts/update-acceptance.test.mjs scripts/update-acceptance-driver.test.mjs",
       "release:acceptance": "node scripts/installed-artifact-acceptance.mjs",
       "release:acceptance:update": "node scripts/packaged-update-acceptance.mjs",
       "desktop:smoke": "vitest run src/test/desktopShellContract.test.ts src/test/nativeLibghosttyShippingContract.test.ts && node --test scripts/desktop-concurrent-smoke.test.mjs && node scripts/desktop-smoke.mjs && cargo test --manifest-path src-tauri/Cargo.toml",

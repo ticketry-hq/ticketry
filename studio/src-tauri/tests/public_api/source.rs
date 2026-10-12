@@ -133,9 +133,12 @@ impl Loader {
             gates.extend(evidence.gates.clone());
             gates.sort();
             gates.dedup();
-            if matches!(
+            // Every declaration kind can carry export-bearing constant
+            // expressions (bodies, discriminants, array lengths, const generic
+            // defaults). Modules, imports and item macros have dedicated walks.
+            if !matches!(
                 item,
-                Item::Fn(_) | Item::Impl(_) | Item::Trait(_) | Item::Const(_) | Item::Static(_)
+                Item::Mod(_) | Item::Use(_) | Item::ExternCrate(_) | Item::Macro(_)
             ) {
                 let body = source_bodies::inspect(item);
                 self.program.modules[module]

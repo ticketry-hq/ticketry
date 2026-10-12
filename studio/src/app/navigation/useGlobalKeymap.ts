@@ -74,7 +74,7 @@ function isButtonActivation(event: KeyboardEvent): boolean {
 
 function isChangesNavigationTarget(event: KeyboardEvent): boolean {
   return !hasModifier(event) &&
-    ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Enter", " ", "Escape"].includes(event.key) &&
+    ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Enter", " "].includes(event.key) &&
     event.target instanceof HTMLElement &&
     event.target.closest("[data-changes-navigation]") !== null;
 }
@@ -155,6 +155,15 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
         actionId === "workspace-tab-previous"
       ) {
         routeTaskWorkspaceTabAction(event, actionId);
+        return;
+      }
+      // Ahead of body engagement: cycling must leave an agent terminal that
+      // owns typing for the next ticket's live terminal.
+      if (
+        (actionId === "cycle-terminal-forward" ||
+          actionId === "cycle-terminal-backward") &&
+        routeWorkspaceCaptureNavigation(event, taskRowsRef.current, actionId)
+      ) {
         return;
       }
       if (routeThreeZoneBodyEngagement(event)) return;

@@ -3,6 +3,7 @@
 Desktop terminals translate AppKit keys into libghostty input while routing a small set of Studio shortcuts back to the WebView.
 
 Surfaces: desktop, manual
+Editions: pocock, core
 
 ## Sub-features
 

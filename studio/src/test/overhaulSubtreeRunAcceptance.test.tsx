@@ -1,73 +1,17 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { useModalStore } from "../app/modal/modalStore";
+import { globalShortcutLabel } from "../app/navigation/useGlobalShortcutLabel";
 import { TEMP_TASK_ID } from "../features/agents/types";
 import { documentOperationName } from "../graphql-foundation/typedDocument";
-import { fixture, mountStudio, workItem } from "./seam";
+import { mountStudio } from "./seam";
+import {
+  campaignFixture,
+  hasToast,
+  NormalRunShortcutSurface,
+} from "./subtreeRunCampaignFixture";
 import { useClientStore } from "../state/clientStore";
 import { useAgentStatusStore } from "../features/agents/status/testStore";
-
-function NormalRunShortcutSurface() {
-  useGlobalKeymap();
-  return (
-    <>
-      <input aria-label="Typing target" />
-      <textarea
-        aria-label="Prompt target"
-        onKeyDown={(event) => event.preventDefault()}
-      />
-      <select aria-label="Select target" />
-      <div aria-label="Editor target" contentEditable />
-      <button
-        type="button"
-        onKeyDown={(event) => event.preventDefault()}
-      >
-        Local Cmd+Enter
-      </button>
-    </>
-  );
-}
-
-function hasToast(kind: "success" | "error", text: string): boolean {
-  return useClientStore
-    .getState()
-    .toasts.some((toast) => toast.kind === kind && toast.message.includes(text));
-}
-
-function campaignFixture() {
-  const http = fixture();
-  http.tree("module-1", {
-    rootIds: ["story-1"],
-    children: {
-      "story-1": ["branch-1"],
-      "branch-1": ["child-1"],
-      "child-1": [],
-    },
-    order: ["story-1", "branch-1", "child-1"],
-  });
-  http.workItems([
-    workItem({
-      id: "story-1",
-      name: "Campaign root",
-      sub_issues_count: 1,
-    }),
-    workItem({
-      id: "branch-1",
-      name: "Nested branch",
-      key: "MEML-2",
-      parent_id: "story-1",
-      sub_issues_count: 1,
-    }),
-    workItem({
-      id: "child-1",
-      name: "Implementation child",
-      key: "MEML-3",
-      parent_id: "branch-1",
-    }),
-  ]);
-  return http;
-}
 
 async function openCampaignDetails(): Promise<HTMLElement> {
   const stories = await screen.findByRole("region", { name: "Stories" });
@@ -252,6 +196,11 @@ describe("overhaul acceptance — subtree execution", () => {
     const runItem = within(details).getByRole("button", { name: "Run item" });
     expect(runSubtree).toHaveAttribute("title", "Run subtree");
     expect(runSerially).toHaveAttribute("title", "Run subtree serially");
+    // Core's parallel action owns the normal-run shortcut hint.
+    const shortcut = globalShortcutLabel("normal-run-command");
+    expect(shortcut).toBeTruthy();
+    expect(runSubtree).toHaveTextContent(`Run subtree${shortcut}`);
+    expect(runSerially).toHaveTextContent(/^Run subtree serially$/);
     const statusRow = screen.getByTestId("status-row");
     const statusButtons = within(statusRow).getAllByRole("button");
     expect(statusButtons.indexOf(runItem)).toBeLessThan(

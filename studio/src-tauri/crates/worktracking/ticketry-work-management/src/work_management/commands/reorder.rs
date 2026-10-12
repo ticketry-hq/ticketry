@@ -1,9 +1,9 @@
+use crate::work_management::database::begin_write;
 use std::collections::{HashMap, HashSet};
 
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection,
     DatabaseTransaction, EntityTrait, JoinType, QueryFilter, QuerySelect, RelationTrait, Set,
-    TransactionTrait,
 };
 
 use super::fractional_rank;
@@ -105,7 +105,7 @@ async fn reorder(
             "is_archived": candidate.is_archived,
         }),
     );
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     // Reserve the SQLite writer slot before reading ranks. This is the local
     // equivalent of locking the project row for both first and later drags.
     lock_project(&transaction, &candidate.project_id).await?;

@@ -108,6 +108,22 @@ starts that profile empty, removes it after a clean exit, and stops only tmux
 sessions created in its temporary namespace. Normal shutdown preserves
 intentional tmux sessions.
 
+Every build compiles exactly one edition, chosen by `TICKETRY_EDITION`. It
+accepts exactly `pocock` (the default when unset, including for signed
+releases) or `core`; any other value fails the command before Cargo, Tauri, or
+Vite starts. Core adds the capabilities listed in
+[`config/editions.json`](config/editions.json), such as the Plan tab and sprint
+planning. `bun run dev`, `bun run desktop:dev`, `bun run web`, and the release
+build give the Rust host and the frontend the same edition and log
+`Edition: <edition> (default|explicit)` once. `.ticketry-dev/web-defaults.json`
+may also set `TICKETRY_EDITION` for the web launchers. Changing the edition
+requires restarting the launcher so both sides rebuild:
+
+```bash
+TICKETRY_EDITION=core bun run web
+TICKETRY_EDITION=core bun run desktop:dev
+```
+
 ## Production diagnostics
 
 The installed app records frontend and Rust diagnostics by default, including

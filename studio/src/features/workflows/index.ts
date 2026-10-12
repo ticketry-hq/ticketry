@@ -51,7 +51,6 @@ export {
   readWorkflowStates,
   readSubtreeRunCapabilities,
   setWorkflowIssueTypes,
-  setWorkflowProviderCapabilities,
   setWorkflowStateCounts,
   setWorkflowStates,
   useProjectWorkflowSettings,
@@ -70,4 +69,9 @@ export { deriveWorkflowImpact, workflowMemberStateIds } from "./selectors";
 export type { WorkflowEditorResources } from "./queries";
 export { useWorkflowEditorStore } from "./workflowEditorStore";
 export { setIssueTypeMetadata } from "./queries/issueTypeMetadata";
+export {
+  NO_WORKFLOW_MESSAGE,
+  useProjectWorkflowPresence,
+} from "./queries/projectWorkflowPresence";
+export type { ProjectWorkflowPresence } from "./queries/projectWorkflowPresence";
 export type { SkillAvailabilityResult } from "./skillAvailability";

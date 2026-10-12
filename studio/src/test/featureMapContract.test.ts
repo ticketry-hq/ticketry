@@ -101,6 +101,20 @@ describe("feature map contract", () => {
     expect(check({ "docs/feature-map/startup.md": content }))
       .toEqual(expect.arrayContaining([expect.objectContaining({ code: "structure" })]));
   });
+  it.each([
+    ["missing Editions line", entry.replace("Editions: pocock, core\n", "")],
+    ["illegal edition", entry.replace("Editions: pocock, core", "Editions: pocock, enterprise")],
+    ["empty Editions line", entry.replace("Editions: pocock, core", "Editions:")],
+    ["duplicate edition", entry.replace("Editions: pocock, core", "Editions: core, core")],
+    ["Editions not directly after Surfaces", entry.replace("Surfaces: browser, desktop\nEditions: pocock, core", "Editions: pocock, core\nSurfaces: browser, desktop")],
+    ["second Editions line", entry.replace("Wait for readiness.", "Wait for readiness.\nEditions: core")],
+  ])("rejects entry editions: %s", (_name, content) => {
+    expect(check({ "docs/feature-map/startup.md": content }))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ code: "editions", path: "startup.md" })]));
+  });
+  it.each(["pocock", "core", "pocock, core", "core, pocock"])("accepts Editions: %s", (value) => {
+    expect(check({ "docs/feature-map/startup.md": entry.replace("Editions: pocock, core", `Editions: ${value}`) })).toEqual([]);
+  });
   it.each(["UPPER-case", "wrong_id", "-bad-start"])("rejects malformed identifier %s", (id) => {
     expect(check({ "docs/feature-map/startup.md": entry.replace("startup-ready", id) }))
       .toEqual(expect.arrayContaining([expect.objectContaining({ code: "identifier" })]));

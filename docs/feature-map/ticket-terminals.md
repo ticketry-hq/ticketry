@@ -3,6 +3,7 @@
 A selected ticket presents its durable run through a retained terminal viewer, with native desktop rendering and an xterm compatibility path.
 
 Surfaces: browser, desktop
+Editions: pocock, core
 
 ## Sub-features
 
@@ -18,7 +19,7 @@ Surfaces: browser, desktop
 
 Select a Story in Stories and choose its provider/run terminal tab in **Workspace tabs** (`workspace-tabs`). **Run item**, the Agent launcher or **Open in Terminal** supplies a run; see [Agent launch](agent-launch.md). The selected terminal is rendered by `studio/src/features/task-workspace/terminals/SelectedTicketTerminal.tsx`; tab selection and dormant history are mapped in [Ticket workspace tabs](ticket-workspace-tabs.md).
 
-Default capture actions `cycle-terminal-forward` (Cmd+Backslash) and `cycle-terminal-backward` (Cmd+Shift+Backslash, also the resulting Cmd+Shift+Pipe chord) cycle eligible live agent terminals, including a ticket inside a collapsed branch. `workspace-tab-next` / `workspace-tab-previous` (Cmd+Right / Cmd+Left) select neighboring workspace tabs. Enter engages the highlighted terminal body; Cmd+Escape disengages input. `close-tab` uses fixed Cmd+W. `toggle-terminal-panel` uses Control+Backtick to reach the separate [Module terminal panel](module-terminal-panel.md); shell tabs are not agent-cycle destinations. Source: `studio/src/app/navigation/keymapBindings.ts`, `studio/src/app/navigation/workspaceNavigation.ts`, `studio/src/test/overhaulTerminalNavigationAcceptance.test.tsx` and `studio/src/test/overhaulTerminalPanelExitAcceptance.test.tsx`.
+Default capture actions `cycle-terminal-forward` (Cmd+Backslash) and `cycle-terminal-backward` (Cmd+Shift+Backslash, also the resulting Cmd+Shift+Pipe chord) cycle eligible live agent terminals, including a ticket inside a collapsed branch. The cycle presents the target ticket's agent terminal tab even when that ticket last remembered Details, because it publishes the terminal as the ticket's remembered workspace target before selecting it. In the WebView the chords route ahead of body engagement, so they also leave an xterm agent terminal that owns typing; an engaged native libghostty terminal does not forward them (they are not native terminal chords), so press Cmd+Escape first there. `workspace-tab-next` / `workspace-tab-previous` (Cmd+Right / Cmd+Left) select neighboring workspace tabs. Enter engages the highlighted terminal body; Cmd+Escape disengages input. `close-tab` uses fixed Cmd+W. `toggle-terminal-panel` uses Control+Backtick to reach the separate [Module terminal panel](module-terminal-panel.md); shell tabs are not agent-cycle destinations. Source: `studio/src/app/navigation/keymapBindings.ts`, `studio/src/app/navigation/workspaceNavigation.ts`, `studio/src/test/overhaulTerminalNavigationAcceptance.test.tsx` and `studio/src/test/overhaulTerminalPanelExitAcceptance.test.tsx`.
 
 ## Prerequisites
 
@@ -42,7 +43,7 @@ Use `terminal-host-wrapper` and, where edit-view chrome is present, `terminal-mo
 
 | Sub-feature | Existing coverage | Narrow command |
 | --- | --- | --- |
-| Live agent cycle and collapsed-branch selection | `studio/src/test/overhaulTerminalNavigationAcceptance.test.tsx`: `overhaul-08`, `overhaul-173`; resume history `overhaul-16`, `overhaul-204`, `overhaul-249`. | `bun run --cwd studio test -- src/test/overhaulTerminalNavigationAcceptance.test.tsx` |
+| Live agent cycle and collapsed-branch selection | `studio/src/test/overhaulTerminalNavigationAcceptance.test.tsx`: `overhaul-08`, `overhaul-173`, `overhaul-838` (cycle while typing), `overhaul-839` (terminal over remembered Details); resume history `overhaul-16`, `overhaul-204`, `overhaul-249`. | `bun run --cwd studio test -- src/test/overhaulTerminalNavigationAcceptance.test.tsx` |
 | Dead, dismissed, stale snapshot and exited history | `studio/src/test/overhaulTerminalLifecycleAcceptance.test.tsx`: `overhaul-09`, `overhaul-10`, `overhaul-15`, `overhaul-36`, `overhaul-137`, `overhaul-138`; lifecycle/read mocks. | `bun run --cwd studio test -- src/test/overhaulTerminalLifecycleAcceptance.test.tsx` |
 | Authoritative termination versus later output/reconnect | `studio/src/test/overhaulTerminalOutcomeAuthorityAcceptance.test.tsx`: `overhaul-140`, `overhaul-141`, `overhaul-238`. | `bun run --cwd studio test -- src/test/overhaulTerminalOutcomeAuthorityAcceptance.test.tsx` |
 | Mounted workspace and retained-view cap | `studio/src/test/overhaulTerminalWorkspaceAcceptance.test.tsx`: `overhaul-50`, `overhaul-70`; `studio/src/test/overhaulNativeViewerRetentionAcceptance.test.tsx`: `overhaul-67`, `overhaul-228`, `overhaul-235`. Native commands are mocked. | `bun run --cwd studio test -- src/test/overhaulTerminalWorkspaceAcceptance.test.tsx src/test/overhaulNativeViewerRetentionAcceptance.test.tsx` |
@@ -75,8 +76,6 @@ Run `bun run --cwd studio test:e2e:feature ticket-terminals`. `studio/e2e/featur
 
 Observed browser behavior these cases pin down: a ticket shell's tab (**shell terminal**) is not auto-selected; a clean shell exit or an agent run's completion removes its tab rather than leaving an ended viewer; completed runs become enabled **Resume** history; explicit close leaves a disabled **Terminated** chip; an externally killed session leaves a blank, unselected tab until backend reconciliation retires the run (about ten seconds), then the tab is removed. `terminal-ended-state` (**Terminal ended**) was not reachable in any browser flow exercised here, because the tab leaves the strip once the run is exited; ended-row cells therefore cite the history, close and lost-session outcomes. Assertions compare run IDs by membership, not row order (CODING-2870). The browser has no second foreground owner for a ticket run, so ownership is proven as one visible viewer per run; native **View here** and fallback-notice paths remain desktop evidence listed under Verifying it.
 
-Open defect: `@case-ticket-terminal-live-cycle` fails because Cmd+Backslash selects the next live ticket but presents its Details tab instead of its agent terminal (CODING-2874). The case is kept unweakened.
-
 ## Relevant code
 
 - `studio/src/features/task-workspace/terminals/SelectedTicketTerminal.tsx` and `studio/src/features/task-workspace/internal/WorkspaceTabBody.tsx`: selected bucket, retained host and engagement selectors.
@@ -84,7 +83,7 @@ Open defect: `@case-ticket-terminal-live-cycle` fails because Cmd+Backslash sele
 - `studio/src/features/agents/terminal/internal/rendererSelection.ts`, `studio/src/features/agents/terminal/internal/nativeViewerSessionLiveness.ts`, `studio/src/features/agents/terminal/internal/terminalClientRuntime.ts` and `studio/src/features/agents/terminal/internal/browserTerminalClient.ts`: renderer eligibility and surface-specific attach transports.
 - `studio/src/features/agents/terminal/internal/nativeViewerMountRegistry.ts`, `studio/src/features/agents/terminal/internal/nativeViewerLifecycle.ts` and `studio/src/features/agents/terminal/internal/useTerminalOwnership.ts`: native attachment versus foreground ownership.
 - `studio/src/app/navigation/keymapBindings.ts` and `studio/src/app/navigation/workspaceNavigation.ts`: configurable capture actions and live-terminal navigation.
-- `studio/src-tauri/native/libghostty_view_bridge.m` and `studio/scripts/desktop-agent-acceptance.mjs`: native surface boundary and installed-runtime fixture proof.
+- `studio/src-tauri/native/libghostty_view_bridge.m`, `studio/scripts/desktop-agent-acceptance.mjs` and `studio/scripts/desktop-installation/installation-layout.mjs`: native surface boundary, installed-runtime fixture proof and the native resources staged beside the installed binary.
 - `CLAUDE.md` and `AGENTS.md`: current renderer, narrow IPC and durable tmux constraints.
 
 ## Gotchas

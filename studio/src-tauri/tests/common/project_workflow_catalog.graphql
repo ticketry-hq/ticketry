@@ -1,0 +1,19 @@
+# CODING-2860: a project's whole workflow catalog through the public model
+# reads — states, issue types, and each type's transitions and launch bindings.
+query ProjectWorkflowCatalog($projectId: String!) {
+  states: worktrackerState(filters: { projectId: { eq: $projectId } }) {
+    nodes { name }
+  }
+  issue_types: worktrackerIssuetype(
+    filters: { projectId: { eq: $projectId } }
+    orderBy: { sortOrder: ASC }
+  ) {
+    nodes {
+      name
+      level
+      startStateId
+      issueTypeTransition { nodes { id } }
+      launchBinding { nodes { id } }
+    }
+  }
+}

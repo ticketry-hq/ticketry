@@ -4,8 +4,16 @@ const commaIds = (value, kind) => value.split(',').map(value => {
   return id;
 });
 
-/** Select from the derived registry; original feature records remain authoritative. */
-export function selectFeatures(registry, args = []) {
+const inEdition = (feature, edition) => !feature.editions || feature.editions.includes(edition);
+const coreOnly = (item) => (item.editionTags ?? []).includes('@edition-core');
+const caseInEdition = (item, edition) => edition === 'core' || !coreOnly(item);
+
+/**
+ * Select from the derived registry; original feature records remain
+ * authoritative. Features whose `Editions:` exclude the built edition, and
+ * `@edition-core` cases outside core, are reported in `skippedByEdition`.
+ */
+export function selectFeatures(registry, args = [], { edition = 'pocock' } = {}) {
   const featureIds = [], caseIds = [], greps = [];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -40,7 +48,23 @@ export function selectFeatures(registry, args = []) {
   for (const id of caseIds) {
     if (!registry.features.some(feature => feature.cases.some(item => item.ids.includes(id)))) throw new Error(`Unknown case: ${id}`);
   }
-  let features = registry.features.filter(feature => !feature.suite?.exclusion && (!featureIds.length || featureIds.includes(feature.id)));
+  const rerun = (editions) => `rerun with TICKETRY_EDITION=${editions.find(value => value !== edition) ?? editions[0]}`;
+  for (const id of featureIds) {
+    const feature = registry.features.find(feature => feature.id === id);
+    if (!inEdition(feature, edition)) throw new Error(`Feature ${id} is not in the ${edition} edition (Editions: ${feature.editions.join(', ')}); ${rerun(feature.editions)}`);
+  }
+  for (const feature of registry.features) for (const item of feature.cases) {
+    const id = item.ids.find(value => caseIds.includes(value));
+    if (!id) continue;
+    if (!inEdition(feature, edition)) throw new Error(`Case ${id} belongs to feature ${feature.id}, which is not in the ${edition} edition (Editions: ${feature.editions.join(', ')}); ${rerun(feature.editions)}`);
+    if (!caseInEdition(item, edition)) throw new Error(`Case ${id} is tagged @edition-core and does not run in the ${edition} edition; rerun with TICKETRY_EDITION=core`);
+  }
+  const requested = registry.features.filter(feature => !feature.suite?.exclusion && (!featureIds.length || featureIds.includes(feature.id)));
+  const skippedByEdition = {
+    features: requested.filter(feature => !inEdition(feature, edition)).map(feature => feature.id),
+    cases: requested.filter(feature => inEdition(feature, edition)).flatMap(feature => feature.cases.filter(item => !caseInEdition(item, edition)).flatMap(item => item.ids)),
+  };
+  let features = requested.filter(feature => inEdition(feature, edition));
   for (const feature of features) if (!feature.suitePath) throw new Error(`Missing suite for feature: ${feature.id}`);
   for (const feature of features) {
     const invalid = feature.cases.filter(item => item.ids.length !== 1).map(item =>
@@ -50,16 +74,16 @@ export function selectFeatures(registry, args = []) {
   const identities = new Map(features.flatMap(feature => feature.cases.map(item => [item.ids[0],
     `${feature.profile === 'first-run' ? 'first-run' : 'chromium'} ${feature.suitePath.replace(/^studio\/e2e\//, '')} ${(item.grepTitlePath ?? [feature.id, `@feature-${feature.id}`, item.title, ...item.tags]).join(' ')}`,
   ])));
-  const cases = features.flatMap(feature => feature.cases.map(item => ({
+  const cases = features.flatMap(feature => feature.cases.filter(item => caseInEdition(item, edition)).map(item => ({
     id: item.ids[0], tag: item.tags[0], title: item.title, featureId: feature.id,
     file: feature.suitePath, project: feature.profile === 'first-run' ? 'first-run' : 'chromium',
   }))).filter(item => !caseIds.length || caseIds.includes(item.id)).filter(item => greps.every(grep => grep.test(identities.get(item.id))));
-  if (!cases.length) throw new Error('Empty selection: no feature cases match');
+  if (!cases.length) throw new Error(`Empty selection: no feature cases match in the ${edition} edition`);
   for (const id of featureIds) {
     if (!cases.some(item => item.featureId === id)) throw new Error(`No matching cases for selected feature: ${id}`);
   }
   features = features.filter(feature => cases.some(item => item.featureId === feature.id));
-  return { features, cases, complete: !args.length, filtered: !!args.length };
+  return { features, cases, complete: !args.length, filtered: !!args.length, edition, skippedByEdition };
 }
 
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

@@ -11,7 +11,7 @@ fragment GeneratedWorkTrackerModuleFields on WorktrackerIssue {
 }
 
 query WorkTrackerOnboarding {
-  projects: worktrackerProject(orderBy: { createdAt: ASC, id: ASC }) {
+  projects: worktrackerProject(orderBy: { createdAt: ASC }) {
     nodes {
       id
       slug

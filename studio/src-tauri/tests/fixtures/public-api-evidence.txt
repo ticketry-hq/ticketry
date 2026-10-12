@@ -107,6 +107,7 @@ ticketry-desktop|__cmd__native_terminal_retention_benchmark|macro|cfg (all (targ
 ticketry-desktop|__cmd__native_terminal_retention_benchmark|macro|cfg (feature = "desktop-acceptance");cfg (not (all (target_os = "macos" , feature = "native-libghostty")))
 ticketry-desktop|__cmd__native_terminal_set_frame|macro|cfg (all (target_os = "macos" , feature = "native-libghostty"))
 ticketry-desktop|__cmd__native_terminal_set_frame|macro|cfg (not (all (target_os = "macos" , feature = "native-libghostty")))
+ticketry-desktop|__cmd__native_terminal_set_module_manager_shortcut|macro|
 ticketry-desktop|__cmd__native_terminal_set_webview_interaction|macro|cfg (all (target_os = "macos" , feature = "native-libghostty"))
 ticketry-desktop|__cmd__native_terminal_set_webview_interaction|macro|cfg (not (all (target_os = "macos" , feature = "native-libghostty")))
 ticketry-desktop|__cmd__native_terminal_show|macro|cfg (all (target_os = "macos" , feature = "native-libghostty"))
@@ -150,6 +151,7 @@ ticketry-desktop|__tauri_command_name_native_terminal_retention_benchmark|macro|
 ticketry-desktop|__tauri_command_name_native_terminal_retention_benchmark|macro|cfg (feature = "desktop-acceptance");cfg (not (all (target_os = "macos" , feature = "native-libghostty")))
 ticketry-desktop|__tauri_command_name_native_terminal_set_frame|macro|cfg (all (target_os = "macos" , feature = "native-libghostty"))
 ticketry-desktop|__tauri_command_name_native_terminal_set_frame|macro|cfg (not (all (target_os = "macos" , feature = "native-libghostty")))
+ticketry-desktop|__tauri_command_name_native_terminal_set_module_manager_shortcut|macro|
 ticketry-desktop|__tauri_command_name_native_terminal_set_webview_interaction|macro|cfg (all (target_os = "macos" , feature = "native-libghostty"))
 ticketry-desktop|__tauri_command_name_native_terminal_set_webview_interaction|macro|cfg (not (all (target_os = "macos" , feature = "native-libghostty")))
 ticketry-desktop|__tauri_command_name_native_terminal_show|macro|cfg (all (target_os = "macos" , feature = "native-libghostty"))
@@ -287,6 +289,10 @@ ticketry-documents|settle_paths|fn|
 ticketry-documents|slugify|fn|
 ticketry-documents|task_design_dir|fn|
 ticketry-documents|task_dir_name|fn|
+ticketry-edition|EDITION|const|
+ticketry-edition|EditionCapability|enum|
+ticketry-edition|Edition|enum|
+ticketry-edition|has|fn|
 ticketry-entities|AppendReceipt|struct|
 ticketry-entities|DESIGN_DOCUMENT_OBJECT|const|
 ticketry-entities|MODULE_LINK_OBJECT|const|

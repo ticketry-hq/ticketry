@@ -89,7 +89,16 @@ vi.mock("../features/projects/queries/readTransport", async () => {
       const [projects, modules] = await Promise.all([api.listProjects(), api.listModules(projectId)]);
       const project = projects.find((candidate: { id: string }) => candidate.id === projectId) ?? projects[0];
       if (!project) throw new Error(`Project ${projectId} was not found.`);
-      return projectOpenFixture(project, modules);
+      const open = projectOpenFixture(project, modules);
+      // Pocock's catalogue: its Story type lets the tour continue to capture.
+      (open.data as { issue_types: { nodes: unknown[] } }).issue_types.nodes = [{
+        __typename: "WorktrackerIssuetype", id: "story-type", project: project.id, name: "Story",
+        level: "task", color: "", sort_order: 1, start_state: null, workflow_revision: 1, is_pathfind: false,
+        created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+        transitions: { __typename: "WorktrackerIssuetypetransitionConnection", nodes: [] },
+        launch_bindings: { __typename: "WorktrackerLaunchbindingConnection", nodes: [] },
+      }];
+      return open;
     },
     readOnboardingProjects: vi.fn(),
   };

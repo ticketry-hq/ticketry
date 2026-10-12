@@ -13,6 +13,8 @@ use seaography::{Builder, BuilderContext};
 use ticketry_agent_execution::ExecutionReconciliationService;
 use ticketry_agent_execution::{ExecutionMode, GraphAccess};
 use ticketry_agent_execution::{GraphRunCaller, GraphRunRequest, GraphRunService};
+use ticketry_agent_execution::GraphRunServiceErrorCode;
+use ticketry_edition::{has, EditionCapability};
 use ticketry_entities::{agent_run, launch_material, session};
 use ticketry_launch::TerminalLaunchError;
 use ticketry_terminal::{
@@ -68,8 +70,37 @@ impl TerminalLaunchRuntime for Runtime {
     }
 }
 
+/// A runtime whose spawn takes as long as a real tmux plus provider start, so
+/// a press stays mid-campaign long enough for the reconciler to run.
+#[derive(Default)]
+struct SlowRuntime {
+    inner: Runtime,
+}
+
+#[async_trait]
+impl TerminalLaunchRuntime for SlowRuntime {
+    async fn observe(&self, agent_run_id: &str) -> TerminalRuntimeObservation {
+        self.inner.observe(agent_run_id).await
+    }
+
+    async fn materialize_and_create(
+        &self,
+        material: &launch_material::Model,
+        checkpoint: &dyn TerminalLaunchCheckpoint,
+    ) -> Result<(), TerminalLaunchError> {
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        self.inner
+            .materialize_and_create(material, checkpoint)
+            .await
+    }
+}
+
+/// Core: an omitted mode keeps the parallel default.
 #[tokio::test]
 async fn create_press_policy_refresh_inert_success_and_reset_are_serialized() {
+    if !has(EditionCapability::ParallelSubtreeRuns) {
+        return; // Pocock refuses parallel presses; see the Pocock mode test.
+    }
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;
     seed(&database, harness.data_directory()).await;
@@ -171,27 +202,76 @@ async fn create_press_policy_refresh_inert_success_and_reset_are_serialized() {
     );
 }
 
+/// CODING-2865: Pocock campaigns are serial-only. An omitted mode arms a
+/// serial campaign, and an explicit parallel press is refused before any
+/// Graph Run, claim, or Agent Run is written.
+#[tokio::test]
+async fn pocock_resolves_an_omitted_mode_to_serial_and_refuses_explicit_parallel() {
+    if has(EditionCapability::ParallelSubtreeRuns) {
+        return; // Core keeps the parallel default; see the create/press test.
+    }
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    seed(&database, harness.data_directory()).await;
+    database
+        .execute_unprepared(&format!(
+            "UPDATE worktracker_issue SET is_archived=1 WHERE id IN ('{BLOCKED}','{READY}')"
+        ))
+        .await
+        .unwrap();
+    let service = service(&database);
+    let request = |mode| GraphRunRequest {
+        root_id: TASK_ID.to_owned(),
+        access: GraphAccess::caller_roots(PROJECT_ID, [TASK_ID]),
+        mode,
+        provider_override: None,
+    };
+    let seeded_runs = scalar(&database, "SELECT COUNT(*) FROM agent_runs").await;
+
+    for refused in [
+        service
+            .create_or_press(request(Some(ExecutionMode::Parallel)))
+            .await
+            .unwrap_err(),
+        service
+            .execute(request(Some(ExecutionMode::Parallel)))
+            .await
+            .unwrap_err(),
+    ] {
+        assert_eq!(
+            refused.code(),
+            GraphRunServiceErrorCode::EditionCapabilityUnavailable
+        );
+        assert_eq!(refused.code_str(), "edition_capability_unavailable");
+        assert_eq!(
+            refused.to_string(),
+            "Parallel subtree runs are not available in the pocock edition."
+        );
+    }
+    for table in ["graph_runs", "launched_tasks"] {
+        assert_eq!(
+            scalar(&database, &format!("SELECT COUNT(*) FROM {table}")).await,
+            0,
+            "a refused press writes no {table}"
+        );
+    }
+    assert_eq!(
+        scalar(&database, "SELECT COUNT(*) FROM agent_runs").await,
+        seeded_runs,
+        "a refused press starts no Agent Run"
+    );
+
+    let armed = service.create_or_press(request(None)).await.unwrap();
+    assert_eq!(armed.graph_run.execution_mode, "serial");
+    assert_eq!(task_ids(&armed), [CHILD_A]);
+}
+
 #[tokio::test]
 async fn graph_run_graphql_contract_returns_authoritative_models_and_child_ids() {
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;
     seed(&database, harness.data_directory()).await;
-    let service = service(&database);
-    let context = Box::leak(Box::new(BuilderContext::default()));
-    let builder = ticketry_entities::register_work_management_entities(Builder::new(
-        context,
-        database.clone(),
-    ));
-    let mut builder = ticketry_entities::register_execution_entities(builder);
-    seaography::register_entity!(builder, agent_run, mutation: false);
-    seaography::register_entity!(builder, session, mutation: false);
-    let schema = ticketry_agent_execution::register_graph_run_graphql(builder)
-        .schema_builder()
-        .data(database.clone())
-        .data(service)
-        .data(GraphRunCaller)
-        .finish()
-        .unwrap();
+    let schema = graph_run_schema(&database);
 
     let missing_update = serde_json::to_value(
         schema
@@ -241,17 +321,27 @@ async fn graph_run_graphql_contract_returns_authoritative_models_and_child_ids()
         "graph_run_already_exists"
     );
 
-    let updated = schema
-        .execute(format!(
-            "mutation {{ graph_run_update(root_id: \"{TASK_ID}\", execution_mode: \"parallel\") {{ graph_run {{ rootId executionMode }} prepared_child_ids }} }}"
-        ))
-        .await;
-    assert!(updated.errors.is_empty(), "{:?}", updated.errors);
-    let updated = updated.data.into_json().unwrap();
-    assert_eq!(
-        updated["graph_run_update"]["graph_run"]["executionMode"],
-        "parallel"
-    );
+    let updated = serde_json::to_value(
+        schema
+            .execute(format!(
+                "mutation {{ graph_run_update(root_id: \"{TASK_ID}\", execution_mode: \"parallel\") {{ graph_run {{ rootId executionMode }} prepared_child_ids }} }}"
+            ))
+            .await,
+    )
+    .unwrap();
+    if has(EditionCapability::ParallelSubtreeRuns) {
+        assert!(updated.get("errors").is_none(), "{updated}");
+        assert_eq!(
+            updated["data"]["graph_run_update"]["graph_run"]["executionMode"],
+            "parallel"
+        );
+    } else {
+        assert_eq!(
+            updated["errors"][0]["extensions"]["code"],
+            "edition_capability_unavailable",
+            "{updated}"
+        );
+    }
 
     let deleted = schema
         .execute(format!(
@@ -274,8 +364,126 @@ async fn graph_run_graphql_contract_returns_authoritative_models_and_child_ids()
     );
 }
 
+/// CODING-2865: public Graph Run create resolves an omitted mode to the
+/// edition's campaign (parallel in core, serial in Pocock), and Pocock refuses
+/// an explicit parallel create with a typed edition error and writes nothing.
+#[tokio::test]
+async fn graph_run_create_arms_the_editions_campaign_mode() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    seed(&database, harness.data_directory()).await;
+    database
+        .execute_unprepared(&format!(
+            "UPDATE worktracker_issue SET is_archived=1 WHERE id IN ('{BLOCKED}','{READY}')"
+        ))
+        .await
+        .unwrap();
+    let schema = graph_run_schema(&database);
+    let parallel = has(EditionCapability::ParallelSubtreeRuns);
+    let seeded_runs = scalar(&database, "SELECT COUNT(*) FROM agent_runs").await;
+
+    if !parallel {
+        let refused = serde_json::to_value(
+            schema
+                .execute(format!(
+                    "mutation {{ graph_run_create(root_id: \"{TASK_ID}\", execution_mode: \"parallel\") {{ graph_run {{ rootId }} }} }}"
+                ))
+                .await,
+        )
+        .unwrap();
+        assert_eq!(refused["data"], serde_json::Value::Null, "{refused}");
+        assert_eq!(
+            refused["errors"][0]["extensions"]["code"],
+            "edition_capability_unavailable",
+            "{refused}"
+        );
+        assert_eq!(
+            scalar(&database, "SELECT COUNT(*) FROM graph_runs").await,
+            0
+        );
+        assert_eq!(
+            scalar(&database, "SELECT COUNT(*) FROM agent_runs").await,
+            seeded_runs
+        );
+    }
+
+    let created = schema
+        .execute(format!(
+            "mutation {{ graph_run_create(root_id: \"{TASK_ID}\") {{ graph_run {{ rootId executionMode }} prepared_child_ids }} }}"
+        ))
+        .await;
+    assert!(created.errors.is_empty(), "{:?}", created.errors);
+    let created = created.data.into_json().unwrap();
+    assert_eq!(
+        created["graph_run_create"]["graph_run"]["executionMode"],
+        if parallel { "parallel" } else { "serial" }
+    );
+    assert_eq!(
+        created["graph_run_create"]["prepared_child_ids"]
+            .as_array()
+            .unwrap()
+            .len(),
+        if parallel { 2 } else { 1 }
+    );
+}
+
+/// A Graph Run persisted as parallel (for example, before an install became
+/// Pocock) keeps its stored mode: advancement still claims every eligible
+/// child in every edition.
+#[tokio::test]
+async fn a_persisted_parallel_campaign_advances_in_parallel_in_every_edition() {
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    seed(&database, harness.data_directory()).await;
+    database
+        .execute_unprepared(&format!(
+            "UPDATE worktracker_issue SET is_archived=1 WHERE id IN ('{BLOCKED}','{READY}'); \
+             INSERT INTO worktracker_issue_blocked_by(from_issue_id,to_issue_id) VALUES ('{CHILD_A}','{EXTERNAL}'),('{CHILD_B}','{EXTERNAL}')"
+        ))
+        .await
+        .unwrap();
+    let service = service(&database);
+    let armed = service
+        .create_or_press(GraphRunRequest {
+            root_id: TASK_ID.to_owned(),
+            access: GraphAccess::project(PROJECT_ID),
+            mode: None,
+            provider_override: None,
+        })
+        .await
+        .unwrap();
+    assert!(armed.launched.is_empty());
+    database
+        .execute_unprepared(&format!(
+            "UPDATE graph_runs SET execution_mode='parallel'; \
+             UPDATE worktracker_issue SET state_id='{REVIEW}' WHERE id='{EXTERNAL}'"
+        ))
+        .await
+        .unwrap();
+
+    let advanced = service.advance(TASK_ID).await.unwrap();
+    let mut launched: Vec<&str> = advanced
+        .launched
+        .iter()
+        .map(|child| child.task_id.as_str())
+        .collect();
+    launched.sort_unstable();
+    assert_eq!(launched, [CHILD_A, CHILD_B]);
+    assert_eq!(
+        scalar(
+            &database,
+            "SELECT COUNT(*) FROM graph_runs WHERE execution_mode='parallel'"
+        )
+        .await,
+        1
+    );
+}
+
 #[tokio::test]
 async fn serial_skips_a_blocked_lower_child_and_parallel_press_races_launch_once() {
+    if !has(EditionCapability::ParallelSubtreeRuns) {
+        return; // Pocock refuses parallel presses; see the Pocock mode test.
+    }
     let harness = TerminalLifecycleHarness::start().await;
     let database = harness.database().await;
     seed(&database, harness.data_directory()).await;
@@ -372,7 +580,7 @@ async fn committed_claim_survives_a_stopped_response_and_reconciles_the_same_gen
     let request = GraphRunRequest {
         root_id: TASK_ID.to_owned(),
         access: GraphAccess::project(PROJECT_ID),
-        mode: Some(ExecutionMode::Parallel),
+        mode: None,
         provider_override: None,
     };
     let stopped = before_commit_service
@@ -426,7 +634,7 @@ async fn deliberate_retry_requires_settled_cleanup_and_reuses_the_child_claim() 
     let request = GraphRunRequest {
         root_id: TASK_ID.to_owned(),
         access: GraphAccess::project(PROJECT_ID),
-        mode: Some(ExecutionMode::Parallel),
+        mode: None,
         provider_override: None,
     };
     service.create_or_press(request.clone()).await.unwrap();
@@ -659,7 +867,7 @@ async fn durable_external_blocker_event_advances_only_its_relevant_armed_root() 
         .create_or_press(GraphRunRequest {
             root_id: TASK_ID.to_owned(),
             access: GraphAccess::project(PROJECT_ID),
-            mode: Some(ExecutionMode::Parallel),
+            mode: None,
             provider_override: None,
         })
         .await
@@ -680,11 +888,21 @@ async fn durable_external_blocker_event_advances_only_its_relevant_armed_root() 
     assert_eq!(reconciliation.roots.len(), 1);
     assert_eq!(reconciliation.roots[0].launched_task_ids, [BLOCKED]);
 
-    let parallel_claim = claim_tuple(&database, BLOCKED).await;
+    let claim = claim_tuple(&database, BLOCKED).await;
     let termination_only = reconciliation_service
-        .reconcile_agent_run(&parallel_claim.1)
+        .reconcile_agent_run(&claim.1)
         .await;
-    assert!(termination_only.roots.is_empty());
+    if has(EditionCapability::ParallelSubtreeRuns) {
+        // Parallel scheduling is dependency-based: a run event wakes no root.
+        assert!(termination_only.roots.is_empty());
+    } else {
+        // A serial frontier's run event re-checks its root, which starts
+        // nothing while the frontier's run is still live.
+        assert!(termination_only
+            .roots
+            .iter()
+            .all(|root| root.launched_task_ids.is_empty()));
+    }
 
     let duplicate = reconciliation_service
         .reconcile_work_item(EXTERNAL, PROJECT_ID)
@@ -710,7 +928,7 @@ async fn an_invalid_armed_root_does_not_starve_a_later_ready_root() {
         .create_or_press(GraphRunRequest {
             root_id: TASK_ID.to_owned(),
             access: GraphAccess::project(PROJECT_ID),
-            mode: Some(ExecutionMode::Parallel),
+            mode: None,
             provider_override: None,
         })
         .await
@@ -736,6 +954,155 @@ async fn an_invalid_armed_root_does_not_starve_a_later_ready_root() {
     assert_eq!(report.roots.len(), 2);
     assert!(report.roots[0].error.is_some());
     assert_eq!(report.roots[1].launched_task_ids, [BLOCKED]);
+}
+
+/// Each production surface composes its own `TerminalLaunchService`. A slow
+/// parallel press must still exclude the reconciler's `advance()` pass, so the
+/// press neither fails with a launch conflict nor double-launches a child.
+#[tokio::test]
+async fn parallel_press_excludes_advance_from_a_separately_composed_launch_service() {
+    if !has(EditionCapability::ParallelSubtreeRuns) {
+        return; // Pocock refuses parallel presses; see the Pocock mode test.
+    }
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    seed(&database, harness.data_directory()).await;
+    let policy = LaunchPolicyResolver::new(database.clone());
+    // One tmux server, two launch services: the GraphQL press and the
+    // reconciler are composed separately, as desktop and the adapter do.
+    let runtime = Arc::new(SlowRuntime::default());
+    let press_service = GraphRunService::new(
+        database.clone(),
+        policy.clone(),
+        launch_service(database.clone(), runtime.clone()),
+    );
+    let reconciler = GraphRunService::new(
+        database.clone(),
+        policy,
+        launch_service(database.clone(), runtime),
+    );
+    let pressing = std::sync::atomic::AtomicBool::new(true);
+
+    let press = async {
+        let result = press_service
+            .create_or_press(GraphRunRequest {
+                root_id: TASK_ID.to_owned(),
+                access: GraphAccess::project(PROJECT_ID),
+                mode: Some(ExecutionMode::Parallel),
+                provider_override: None,
+            })
+            .await;
+        pressing.store(false, std::sync::atomic::Ordering::SeqCst);
+        result
+    };
+    let advance = async {
+        while pressing.load(std::sync::atomic::Ordering::SeqCst) {
+            let _ = reconciler.advance(TASK_ID).await;
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    };
+    let (pressed, ()) = tokio::join!(press, advance);
+
+    let pressed = pressed.expect("the press must not fail when advance claims a child");
+    let mut launched = task_ids(&pressed);
+    launched.sort_unstable();
+    assert_eq!(launched, [CHILD_A, CHILD_B, BLOCKED, READY]);
+    for child in [CHILD_A, CHILD_B, BLOCKED, READY] {
+        assert_eq!(
+            scalar_where(&database, "agent_runs", "issue_id", child).await,
+            1,
+            "exactly one run for {child}"
+        );
+    }
+}
+
+/// Interactive launches take no Graph Run lock. A child that one of them
+/// takes mid-press is skipped; the press still launches every other child.
+#[tokio::test]
+async fn parallel_press_skips_a_child_another_launch_took_mid_press() {
+    if !has(EditionCapability::ParallelSubtreeRuns) {
+        return; // Pocock refuses parallel presses; see the Pocock mode test.
+    }
+    let harness = TerminalLifecycleHarness::start().await;
+    let database = harness.database().await;
+    seed(&database, harness.data_directory()).await;
+    let runtime = Arc::new(SlowRuntime::default());
+    let terminal = launch_service(database.clone(), runtime);
+    let press_service = service_with_terminal(&database, terminal.clone());
+
+    let press = press_service.create_or_press(GraphRunRequest {
+        root_id: TASK_ID.to_owned(),
+        access: GraphAccess::project(PROJECT_ID),
+        mode: Some(ExecutionMode::Parallel),
+        provider_override: None,
+    });
+    let interactive = async {
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        terminal.create(task_shell_request(READY)).await
+    };
+    let (pressed, shell) = tokio::join!(press, interactive);
+
+    let shell = shell.expect("the interactive shell launches");
+    let pressed = pressed.expect("the press skips the child another launch took");
+    let mut launched = task_ids(&pressed);
+    launched.sort_unstable();
+    assert_eq!(launched, [CHILD_A, CHILD_B, BLOCKED]);
+    // The only run on the taken child is the interactive shell's own.
+    assert_eq!(
+        scalar(
+            &database,
+            &format!(
+                "SELECT COUNT(*) FROM agent_runs WHERE issue_id='{READY}' AND id<>'{}'",
+                shell.agent_run_id
+            ),
+        )
+        .await,
+        0
+    );
+}
+
+fn task_shell_request(task_id: &str) -> ticketry_launch::CreateTerminalSession {
+    ticketry_launch::CreateTerminalSession {
+        client_request_id: format!("interactive-shell-{task_id}"),
+        project_id: PROJECT_ID.to_owned(),
+        issue_id: task_id.to_owned(),
+        module_id: MODULE_ID.to_owned(),
+        target_id: task_id.to_owned(),
+        kind: ticketry_launch::TerminalLaunchKind::TaskShell,
+        provider: None,
+        profile: None,
+        model: None,
+        reasoning: None,
+        policy_reference: None,
+        prompt: None,
+        resume_from_agent_run_id: None,
+        automation_attempt_id: None,
+        required_skills: Vec::new(),
+        stage_skills: Vec::new(),
+        working_directory_identity: format!("task:{task_id}"),
+        design_directory_identity: None,
+        document_relative_path: None,
+        columns: 120,
+        rows: 40,
+    }
+}
+
+fn graph_run_schema(database: &DatabaseConnection) -> seaography::async_graphql::dynamic::Schema {
+    let context = Box::leak(Box::new(BuilderContext::default()));
+    let builder = ticketry_entities::register_work_management_entities(Builder::new(
+        context,
+        database.clone(),
+    ));
+    let mut builder = ticketry_entities::register_execution_entities(builder);
+    seaography::register_entity!(builder, agent_run, mutation: false);
+    seaography::register_entity!(builder, session, mutation: false);
+    ticketry_agent_execution::register_graph_run_graphql(builder)
+        .schema_builder()
+        .data(database.clone())
+        .data(service(database))
+        .data(GraphRunCaller)
+        .finish()
+        .unwrap()
 }
 
 fn service(database: &DatabaseConnection) -> GraphRunService {

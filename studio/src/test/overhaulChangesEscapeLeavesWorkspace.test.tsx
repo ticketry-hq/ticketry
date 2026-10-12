@@ -13,6 +13,23 @@ function Keymap() {
   return <input aria-label="typing" />;
 }
 
+function ChangesToolbarKeymap() {
+  useGlobalKeymap();
+  return (
+    <div role="toolbar" data-changes-navigation>
+      <button type="button">Push</button>
+      <div
+        role="dialog"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") event.stopPropagation();
+        }}
+      >
+        <button type="button">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 describe("overhaul acceptance - Escape leaves Changes", () => {
   afterEach(() => act(() => dismissChangesWorkspace()));
 
@@ -28,6 +45,17 @@ describe("overhaul acceptance - Escape leaves Changes", () => {
     expect(useChangesWorkspace.getState().active).toBe(true);
 
     fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(useChangesWorkspace.getState().active).toBe(false);
+  });
+
+  it("leaves Changes on Escape from a toolbar control while popups keep their Escape", () => {
+    const { getByRole } = render(<ChangesToolbarKeymap />);
+    act(() => openModuleChangesWorkspace("module-1"));
+
+    fireEvent.keyDown(getByRole("button", { name: "Cancel" }), { key: "Escape" });
+    expect(useChangesWorkspace.getState().active).toBe(true);
+
+    fireEvent.keyDown(getByRole("button", { name: "Push" }), { key: "Escape" });
     expect(useChangesWorkspace.getState().active).toBe(false);
   });
 });

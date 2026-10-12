@@ -11,8 +11,13 @@ The root-keyed `GraphRun` header. It stores the execution mode and immutable
 launch-policy data for children that have not started.
 
 **Execution mode**:
-The armed root's scheduling mode, `parallel` or `serial`. An omitted mode means
-`parallel`. Parallel advancement claims every eligible direct child. Serial
+The armed root's scheduling mode, `parallel` or `serial`. A press resolves an
+omitted mode from the compiled edition: `parallel` where the edition grants
+`parallelSubtreeRuns` (core), `serial` otherwise (Pocock). Pocock refuses an
+explicit `parallel` press with `edition_capability_unavailable` before any
+write. A persisted Graph Run keeps its stored mode, so a parallel campaign armed
+before an install became Pocock still advances in parallel until a press
+refreshes it. Parallel advancement claims every eligible direct child. Serial
 advancement claims the first eligible child only when the serial frontier is
 clear.
 

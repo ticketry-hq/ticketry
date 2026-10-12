@@ -104,6 +104,7 @@ export function useTaskWorkspace({
   }, [bucket, ensureWorkspace]);
 
   const {
+    restorationEntry,
     restoreRequestRef,
     restoreGenerationRef,
     restoreTerminalTarget,
@@ -190,6 +191,7 @@ export function useTaskWorkspace({
     owner,
     documents: workspaceDocuments,
     documentsFetched: documentQuery.isFetched,
+    restorationEntry,
     restoreRequestRef,
     restoreGenerationRef,
     isCurrentRestoration,

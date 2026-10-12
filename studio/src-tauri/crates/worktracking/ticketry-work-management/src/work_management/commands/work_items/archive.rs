@@ -6,10 +6,8 @@ use super::super::{
     CommandError,
 };
 use super::next_revision;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
-    TransactionTrait,
-};
+use crate::work_management::database::begin_write;
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 use ticketry_entities::issue;
 
 pub async fn archive(
@@ -25,7 +23,7 @@ pub async fn archive(
     if existing.is_archived {
         return Ok(id);
     }
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let revision = next_revision(&transaction, &existing.project_id).await?;
     let mut frontier = vec![id.clone()];
     let mut archived: Vec<String> = Vec::new();

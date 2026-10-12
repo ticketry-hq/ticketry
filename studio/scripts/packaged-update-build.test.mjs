@@ -34,6 +34,44 @@ function trustedBuild(overrides = {}) {
   };
 }
 
+test("default Pocock packaged update builds pass no edition feature", () => {
+  for (const edition of [undefined, "pocock"]) {
+    const base = trustedBuild();
+    const build = createPackagedUpdateBuildCommand({
+      ...base,
+      environment: edition ? { ...base.environment, TICKETRY_EDITION: edition } : base.environment,
+    });
+
+    assert.equal(build.args[build.args.indexOf("--features") + 1], "desktop-acceptance");
+    assert.equal(build.args.join(" ").includes("edition-core"), false);
+    assert.equal(build.environment.TICKETRY_EDITION, "pocock");
+  }
+});
+
+test("core packaged update builds merge edition-core and carry core to Vite", () => {
+  const base = trustedBuild();
+  const build = createPackagedUpdateBuildCommand({
+    ...base,
+    environment: { ...base.environment, TICKETRY_EDITION: "core" },
+  });
+
+  assert.equal(build.args[build.args.indexOf("--features") + 1], "desktop-acceptance,edition-core");
+  assert.equal(build.args.filter((argument) => argument === "--features").length, 1);
+  assert.equal(build.environment.TICKETRY_EDITION, "core");
+  assert.equal(build.editionDescription, "Edition: core (explicit)");
+});
+
+test("an invalid edition refuses the packaged update build command", () => {
+  const base = trustedBuild();
+  assert.throws(
+    () => createPackagedUpdateBuildCommand({
+      ...base,
+      environment: { ...base.environment, TICKETRY_EDITION: "full" },
+    }),
+    /pocock.*core/,
+  );
+});
+
 test("arm64 acceptance builds use the shipping renderer feature selection", () => {
   const build = createPackagedUpdateBuildCommand(trustedBuild());
   const configIndex = build.args.indexOf("--config");
@@ -71,6 +109,7 @@ test("arm64 acceptance builds use the shipping renderer feature selection", () =
   });
   assert.deepEqual(build.environment, {
     PATH: "/usr/bin:/bin",
+    TICKETRY_EDITION: "pocock",
     CI: "true",
     TAURI_SIGNING_PRIVATE_KEY: "/keys/trusted-updater.key",
     TAURI_SIGNING_PRIVATE_KEY_PASSWORD: "acceptance-only",

@@ -1,8 +1,9 @@
 //! Neighbor-identity Sprint moves within one locked project sequence.
 
+use crate::work_management::database::begin_write;
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
-    IntoActiveModel, QueryFilter, QuerySelect, QueryTrait, Set, TransactionTrait,
+    IntoActiveModel, QueryFilter, QuerySelect, QueryTrait, Set,
 };
 use ticketry_entities::{project, sprint, SPRINT_PLANNED};
 
@@ -35,7 +36,7 @@ pub(crate) async fn reorder_sprint(
             "A sprint reorder requires at least one neighbor.",
         ));
     }
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     project::Entity::update_many()
         .col_expr(
             project::Column::StateRevision,

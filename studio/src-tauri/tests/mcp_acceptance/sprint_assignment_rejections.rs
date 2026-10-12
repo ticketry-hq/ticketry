@@ -44,6 +44,9 @@ async fn assert_selector_rollback(fixture: &mut Fixture, selector: Value, code: 
 
 #[tokio::test]
 async fn current_without_an_active_project_sprint_rolls_back_every_write_tool() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     let mut fixture = Fixture::new(false).await;
     assert_selector_rollback(&mut fixture, json!("current"), "no_active_sprint", true).await;
     fixture.runtime.shutdown().await;
@@ -51,6 +54,9 @@ async fn current_without_an_active_project_sprint_rolls_back_every_write_tool() 
 
 #[tokio::test]
 async fn next_without_a_planned_project_sprint_rolls_back_every_write_tool() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     for active in [true, false] {
         let mut fixture = Fixture::without_planned(active).await;
         let mut arguments = create_arguments("Keep existing membership");
@@ -87,6 +93,9 @@ async fn next_without_a_planned_project_sprint_rolls_back_every_write_tool() {
 
 #[tokio::test]
 async fn unavailable_and_malformed_sprints_return_distinct_codes_without_changes() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     let mut fixture = Fixture::new(true).await;
     for (selector, code, field) in [
         (json!(COMPLETED), "completed_sprint", true),
@@ -103,6 +112,9 @@ async fn unavailable_and_malformed_sprints_return_distinct_codes_without_changes
 
 #[tokio::test]
 async fn module_level_create_and_update_cannot_join_a_sprint() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     let mut fixture = Fixture::new(true).await;
     let before = fixture.snapshot().await;
     for (id, tool, arguments) in [
@@ -130,6 +142,9 @@ async fn module_level_create_and_update_cannot_join_a_sprint() {
 
 #[tokio::test]
 async fn sprint_patch_with_name_or_description_is_rejected_atomically() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     let mut fixture = Fixture::new(true).await;
     let mut arguments = create_arguments("Keep original name");
     arguments["description"] = json!("Keep original description");

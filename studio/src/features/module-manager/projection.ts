@@ -1,8 +1,11 @@
 import type { ModuleTabEntry, ModuleTabStatus } from "../module-tabs";
+import { editionHas } from "../../shared/config/edition";
 
+/** Sprint exclusion only exists where sprint planning is compiled in. */
 export const MODULE_MANAGER_GROUPS: readonly { id: ModuleTabStatus; title: string }[] = [
   { id: "open", title: "Open" }, { id: "hidden", title: "Hidden" },
-  { id: "not-in-sprint", title: "Not in sprint" }, { id: "archived", title: "Archived" },
+  ...(editionHas("sprintPlanning") ? [{ id: "not-in-sprint" as const, title: "Not in sprint" }] : []),
+  { id: "archived", title: "Archived" },
 ];
 export interface ModuleManagerGroup {
   id: ModuleTabStatus;

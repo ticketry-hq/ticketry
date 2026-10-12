@@ -17,6 +17,7 @@ use super::support::{optional_string, work_facts, WakeWorkFacts};
 use crate::work_management::{
     commands::catalog,
     graphql::{command_error, require_command_database},
+    write_reservation::ReservedWrite,
 };
 use ticketry_entities::state;
 
@@ -59,7 +60,7 @@ pub(super) fn register(builder: &mut Builder) {
             .argument(string_argument("group"))
             .argument(InputValue::new("color", TypeRef::named(TypeRef::STRING)))
             .hook_owns_authorization(),
-        CreateState,
+        ReservedWrite(CreateState),
         ViewSerializers::default(),
     );
 }

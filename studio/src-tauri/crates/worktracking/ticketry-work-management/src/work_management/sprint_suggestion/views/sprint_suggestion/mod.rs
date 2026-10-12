@@ -2,6 +2,7 @@ use super::super::super::{
     commands::{sprint_suggestions, status_facts::WorkFactRecorder, workflow::PatchValue},
     graphql::{command_error, require_command_database},
 };
+use crate::work_management::write_reservation::ReservedWrite;
 use sea_orm::{DatabaseTransaction, EntityName, IdenStatic};
 use seaography::{
     async_graphql::{
@@ -75,7 +76,7 @@ pub(crate) fn register_mutations(mut builder: Builder) -> Builder {
                 TypeRef::named(TypeRef::STRING),
             ))
             .hook_owns_authorization(),
-        UpdateSuggestion,
+        ReservedWrite(UpdateSuggestion),
         ViewSerializers::default(),
     );
     builder

@@ -1,6 +1,7 @@
+use crate::work_management::database::begin_write;
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, DatabaseTransaction,
-    EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter, TransactionTrait,
+    EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter,
 };
 
 use super::identifiers::database_uuid;
@@ -15,7 +16,7 @@ pub async fn delete_state(
     database: &DatabaseConnection,
     state_id: &str,
 ) -> Result<(), CommandError> {
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let (_, active) = prepare_state_delete(&transaction, state_id, None).await?;
     active.delete(&transaction).await?;
     transaction.commit().await?;

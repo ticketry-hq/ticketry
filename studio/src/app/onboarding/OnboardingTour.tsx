@@ -136,6 +136,30 @@ export default function OnboardingTour({ onSelectStory }: Props) {
     );
   }
 
+  if (step === "module-ready") {
+    return (
+      <CoachMark
+        anchor="workspace"
+        portal
+        title="Your first module is ready"
+        description="The module is selected in your workspace. This project has no Story type yet, so there is nothing to capture; the tour ends here."
+      >
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            data-testid="onboarding-finish"
+            className={buttonClass}
+            disabled={busy}
+            onClick={() => void dismiss()}
+          >
+            {busy ? "Finishing…" : "Finish tour"}
+          </button>
+        </div>
+        {errorNode}
+      </CoachMark>
+    );
+  }
+
   if (step === "story-create") {
     return (
       <CoachMark

@@ -4,10 +4,8 @@ use super::super::{
     CommandError,
 };
 use super::{next_revision, valid_name, UpdateWorkItem};
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
-    TransactionTrait,
-};
+use crate::work_management::database::begin_write;
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 use ticketry_entities::{issue, issue_type};
 
 pub async fn update(
@@ -47,7 +45,7 @@ pub async fn update(
         return Ok(id);
     }
 
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let revision = next_revision(&transaction, &existing.project_id).await?;
     let identity = WorkItemIdentity::of(&existing);
     let now = super::super::timestamp::now();

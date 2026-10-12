@@ -247,7 +247,7 @@ fn derived(domain: &str, seed: &str) -> String {
     format!("{:x}", hash.finalize())[..32].to_owned()
 }
 
-fn parse_mode(value: &str) -> Option<ExecutionMode> {
+pub(super) fn parse_mode(value: &str) -> Option<ExecutionMode> {
     match value {
         "parallel" => Some(ExecutionMode::Parallel),
         "serial" => Some(ExecutionMode::Serial),
@@ -255,7 +255,7 @@ fn parse_mode(value: &str) -> Option<ExecutionMode> {
     }
 }
 
-fn compact(value: &str) -> String {
+pub(super) fn compact(value: &str) -> String {
     uuid::Uuid::parse_str(value)
         .map(|value| value.simple().to_string())
         .unwrap_or_else(|_| value.to_owned())

@@ -3,6 +3,7 @@
 Settings configures available providers, launch defaults, conversation instructions and shortcuts, with explicit draft commits and a modal-local model change ledger.
 
 Surfaces: browser, desktop
+Editions: pocock, core
 
 ## Sub-features
 
@@ -39,6 +40,7 @@ Prefer dialog **Studio settings**, tablist **Settings sections**, region **Model
 
 | Existing coverage | What it establishes | Narrow command |
 | --- | --- | --- |
+| `studio/src/test/overhaulProviderCatalogColdStoreAcceptance.test.tsx` | Workflow editor store initialization leaves the provider catalog unread; overhaul-840 cold-opens Settings from the footer after that initialization, reports a failed catalog read, and reopens onto the saved default without an update. | `bun run --cwd studio test src/test/overhaulProviderCatalogColdStoreAcceptance.test.tsx` |
 | `studio/src/test/overhaulSettingsAcceptance.test.tsx` | overhaul-22 cold Models opening without workflow catalog reads; overhaul-122 shortcut persistence; overhaul-368 accessible binding names; additional cases cover model validation, discard/save failure, ledger, close/Escape and focus. | `bun run --cwd studio test src/test/overhaulSettingsAcceptance.test.tsx` |
 | `studio/src/test/overhaulInstantSettingsAcceptance.test.tsx` | overhaul-203 edits/clears the prompt; overhaul-313 preserves failed drafts, retries, discards and reports failed reads using a substituted GraphQL runtime. | `bun run --cwd studio test src/test/overhaulInstantSettingsAcceptance.test.tsx` |
 | `studio/src/test/overhaulCodexProfilesAcceptance.test.tsx` | overhaul-297 registers/deduplicates/selects/saves/removes profiles and disables model/reasoning for a selected profile; CODING-1826 covers ledger additions/removals. | `bun run --cwd studio test src/test/overhaulCodexProfilesAcceptance.test.tsx` |
@@ -53,12 +55,12 @@ Not proven in the browser: native-chord entry and native terminal occlusion (des
 
 Suite: studio/e2e/features/settings.spec.ts
 
-Each case runs in its own disposable profile (`isolation: "case"`) because Models and Conversations write host-wide settings. Failure cases abort the named GraphQL operation at the network boundary; every success path reads Rust state back.
+Each case runs in its own disposable profile (`isolation: "case"`) because Models and Conversations write host-wide settings. Failure cases abort the named GraphQL operation at the network boundary; every saved configuration reads Rust state back. The catalog-read case holds the real project-open request, which also contains the provider catalog, and opens Settings from the connecting gate before aborting its catalog read; it then releases the real request and reopens Settings after restoring the network. The startup-entry case opens and cancels Settings from both connecting and unavailable gates before restoring the real workspace.
 
 | Sub-feature | Success | Cancel | Error | Empty | Entry points | Persistence |
 | --- | --- | --- | --- | --- | --- | --- |
-| `settings-modal-sections` | @case-settings-sections-entry-and-close @case-settings-every-section | @case-settings-sections-entry-and-close | n/a: Opening and switching sections makes no request of its own; each section's load and save failures are proven in that section's row. | n/a: The rail always lists the same four sections. | @case-settings-sections-entry-and-close | n/a: The selected section is transient UI state with nothing to store; Settings reopens on Models. |
-| `settings-model-configuration` | @case-settings-models-database @case-settings-every-section @case-settings-codex-profiles | @case-settings-every-section @case-settings-default-provider-guard | @case-settings-default-provider-guard @case-settings-change-ledger | @case-settings-codex-profiles | @case-settings-models-database @case-settings-sections-entry-and-close | @case-settings-models-database @case-settings-codex-profiles @case-settings-change-ledger |
+| `settings-modal-sections` | @case-settings-sections-entry-and-close @case-settings-every-section @case-settings-startup-entry | @case-settings-sections-entry-and-close @case-settings-startup-entry | @case-settings-startup-entry | n/a: The rail always lists the same four sections. | @case-settings-sections-entry-and-close @case-settings-startup-entry | n/a: The selected section is transient UI state with nothing to store; Settings reopens on Models. |
+| `settings-model-configuration` | @case-settings-models-database @case-settings-every-section @case-settings-codex-profiles | @case-settings-every-section @case-settings-default-provider-guard | @case-settings-default-provider-guard @case-settings-change-ledger @case-settings-models-load-recovery | @case-settings-codex-profiles | @case-settings-models-database @case-settings-sections-entry-and-close | @case-settings-models-database @case-settings-codex-profiles @case-settings-change-ledger |
 | `settings-instant-launch-defaults` | @case-settings-conversation-prompt @case-settings-conversation-header-entry | @case-settings-conversation-prompt | @case-settings-conversation-failures | @case-settings-conversation-prompt | @case-settings-conversation-prompt @case-settings-conversation-header-entry | @case-settings-conversation-prompt @case-settings-conversation-failures |
 | `settings-change-ledger` | @case-settings-change-ledger | @case-settings-change-ledger | @case-settings-change-ledger | @case-settings-change-ledger @case-settings-conversation-header-entry | @case-settings-change-ledger | @case-settings-change-ledger |
 
@@ -74,6 +76,7 @@ Each case runs in its own disposable profile (`isolation: "case"`) because Model
 
 ## Gotchas
 
+- Apollo alone owns the provider catalog. The workflow editor store's `providerCapabilities` is a read-only view of that catalog and never writes provider rows back (CODING-2913): its initial empty value once seeded a synthetic empty catalog that cold Settings adopted instead of reading Rust. `@case-settings-models-load-recovery` and overhaul-840 guard that a cold Models open reads the real catalog, reports a failed read and recovers on reopen without saving.
 - The visible rail says **Conversations**; `instant` and `instant_launch` remain implementation/storage names. Auto-close remains a stored field and is passed back unchanged by prompt edits, but there is no visible auto-close control. Do not invent that UI from the stored shape.
 - Catalog saves and model default readback use the existing generated GraphQL operations; there is no product REST API. Follow [CLAUDE.md](../../CLAUDE.md) and the [Work Management context](../../studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/CONTEXT.md). Link the [route/operation registry](../../studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/graphql/operation_registry.rs) rather than cloning its exceptions. When verification also moves a WorkItem, use its identity-scoped update with an exclusive state patch; agent-origin transitions obey workflow permissions, including human-only edges, as detailed in [MCP server and tools](mcp-server-and-tools.md).
 - Models stays mounted while its tab is hidden; its draft survives rail navigation. Conversations is conditionally mounted, so switching away loses its unsaved draft. Closing is not a save operation or a confirmation flow.

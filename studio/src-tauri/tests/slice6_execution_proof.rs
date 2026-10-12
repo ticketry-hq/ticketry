@@ -84,12 +84,17 @@ async fn a_factual_graph_read_of_unusable_work_is_refused_with_a_stable_code() {
 
 #[tokio::test]
 async fn a_parallel_press_starts_every_ready_direct_child_exactly_once() {
+    if !ExecutionHarness::parallel_subtree_runs() {
+        return; // Pocock refuses parallel presses; see a_studio_press_arms_the_editions_campaign.
+    }
     let mut harness = ExecutionHarness::start().await;
-    let executed = harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT).await;
+    let executed = harness
+        .press_parallel(fixture::PARALLEL_CAMPAIGN_ROOT)
+        .await;
 
     // Grandchildren, archived branches, and a child held by an outside blocker
     // are never candidates, and the root's own blocker does not gate them.
-    assert_eq!(launched_ids(&executed), ready_children(), "{executed}");
+    assert_eq!(prepared(&executed), ready_children(), "{executed}");
     let database = harness.database().await;
     assert_eq!(claimed_children(&database).await, ready_children());
     assert_eq!(harness.live_runtimes().len(), 2);
@@ -97,9 +102,11 @@ async fn a_parallel_press_starts_every_ready_direct_child_exactly_once() {
 
     // A repeated press finds nothing startable, and says so with an accepted
     // empty result rather than a failure.
-    let again = harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT).await;
-    assert_eq!(launched_ids(&again), Vec::<String>::new(), "{again}");
-    assert!(again.get("error").is_none(), "{again}");
+    let again = harness
+        .press_parallel(fixture::PARALLEL_CAMPAIGN_ROOT)
+        .await;
+    assert_eq!(prepared(&again), Vec::<String>::new(), "{again}");
+    assert!(again.get("errors").is_none(), "{again}");
     assert_eq!(harness.live_runtimes().len(), 2);
     assert_eq!(count_campaign_runs(&database).await, 2);
     harness.shutdown().await;
@@ -107,8 +114,13 @@ async fn a_parallel_press_starts_every_ready_direct_child_exactly_once() {
 
 #[tokio::test]
 async fn a_released_outside_blocker_lets_the_held_child_start_without_another_press() {
+    if !ExecutionHarness::parallel_subtree_runs() {
+        return; // Pocock refuses parallel presses; see a_studio_press_arms_the_editions_campaign.
+    }
     let mut harness = ExecutionHarness::start().await;
-    harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT).await;
+    harness
+        .press_parallel(fixture::PARALLEL_CAMPAIGN_ROOT)
+        .await;
     assert_eq!(harness.live_runtimes().len(), 2);
 
     let moved = harness.set_state(fixture::OUTSIDE_BLOCKER, "Done").await;
@@ -214,8 +226,13 @@ async fn termination_before_satisfaction_advances_the_same_serial_frontier() {
 
 #[tokio::test]
 async fn a_terminated_parallel_child_does_not_advance_its_campaign_by_itself() {
+    if !ExecutionHarness::parallel_subtree_runs() {
+        return; // Pocock refuses parallel presses; see a_studio_press_arms_the_editions_campaign.
+    }
     let mut harness = ExecutionHarness::start().await;
-    harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT).await;
+    harness
+        .press_parallel(fixture::PARALLEL_CAMPAIGN_ROOT)
+        .await;
     let database = harness.database().await;
     let first_run = claim_run(&database, fixture::READY_FIRST).await;
     harness.end_runtime(&first_run).await;
@@ -285,17 +302,24 @@ async fn an_ended_but_unsatisfied_serial_child_stalls_until_a_deliberate_press()
 
 #[tokio::test]
 async fn a_press_preserves_unrelated_launch_facts_in_the_same_campaign() {
+    if !ExecutionHarness::parallel_subtree_runs() {
+        return; // Pocock refuses parallel presses; see a_studio_press_arms_the_editions_campaign.
+    }
     let mut harness = ExecutionHarness::start().await;
-    harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT).await;
+    harness
+        .press_parallel(fixture::PARALLEL_CAMPAIGN_ROOT)
+        .await;
     let database = harness.database().await;
     let untouched = claim_tuple(&database, fixture::READY_SECOND).await;
 
     // Retry the first child only; the sibling's launch history must survive.
     let first_run = claim_run(&database, fixture::READY_FIRST).await;
     harness.end_runtime(&first_run).await;
-    let pressed = harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT).await;
+    let pressed = harness
+        .press_parallel(fixture::PARALLEL_CAMPAIGN_ROOT)
+        .await;
     assert_eq!(
-        launched_ids(&pressed),
+        prepared(&pressed),
         vec![public_id(fixture::READY_FIRST)],
         "{pressed}"
     );
@@ -309,8 +333,13 @@ async fn a_press_preserves_unrelated_launch_facts_in_the_same_campaign() {
 
 #[tokio::test]
 async fn the_studio_contract_refreshes_mode_and_policy_for_work_that_has_not_started() {
+    if !ExecutionHarness::parallel_subtree_runs() {
+        return; // Pocock refuses parallel presses; see a_studio_press_arms_the_editions_campaign.
+    }
     let mut harness = ExecutionHarness::start().await;
-    harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT).await;
+    harness
+        .press_parallel(fixture::PARALLEL_CAMPAIGN_ROOT)
+        .await;
     let database = harness.database().await;
     assert_eq!(
         mode(&database, fixture::PARALLEL_CAMPAIGN_ROOT).await,
@@ -342,8 +371,13 @@ async fn the_studio_contract_refreshes_mode_and_policy_for_work_that_has_not_sta
 
 #[tokio::test]
 async fn the_studio_contract_resets_the_ledger_without_starting_or_ending_work() {
+    if !ExecutionHarness::parallel_subtree_runs() {
+        return; // Pocock refuses parallel presses; see a_studio_press_arms_the_editions_campaign.
+    }
     let mut harness = ExecutionHarness::start().await;
-    harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT).await;
+    harness
+        .press_parallel(fixture::PARALLEL_CAMPAIGN_ROOT)
+        .await;
     let database = harness.database().await;
     let runs_before = count_campaign_runs(&database).await;
     let live_before = harness.live_runtimes();
@@ -365,12 +399,59 @@ async fn the_studio_contract_resets_the_ledger_without_starting_or_ending_work()
     // A campaign the reset forgot is unarmed again, and the live children it
     // forgot are still left alone.
     let unarmed = harness
-        .graphql(UPDATE, parallel(fixture::PARALLEL_CAMPAIGN_ROOT))
+        .graphql(UPDATE, omitted_mode(fixture::PARALLEL_CAMPAIGN_ROOT))
         .await;
     assert_eq!(error_code(&unarmed), "graph_run_not_found", "{unarmed}");
-    let rearmed = harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT).await;
-    assert_eq!(launched_ids(&rearmed), Vec::<String>::new(), "{rearmed}");
+    let rearmed = harness
+        .press_parallel(fixture::PARALLEL_CAMPAIGN_ROOT)
+        .await;
+    assert_eq!(prepared(&rearmed), Vec::<String>::new(), "{rearmed}");
     assert_eq!(harness.live_runtimes(), live_before);
+    harness.shutdown().await;
+}
+
+/// CODING-2865: the Studio contract arms the edition's campaign. An omitted
+/// mode is parallel where the edition runs subtrees in parallel and serial in
+/// Pocock, which refuses an explicit parallel create or update with a typed
+/// edition error before any campaign row, claim, or Agent Run is written.
+#[tokio::test]
+async fn a_studio_press_arms_the_editions_campaign() {
+    let mut harness = ExecutionHarness::start().await;
+    let database = harness.database().await;
+    let parallel = ExecutionHarness::parallel_subtree_runs();
+    let explicit_parallel = json!({
+        "rootId": fixture::PARALLEL_CAMPAIGN_ROOT,
+        "executionMode": "parallel",
+    });
+    if !parallel {
+        let refused = harness.graphql(CREATE, explicit_parallel.clone()).await;
+        assert_eq!(error_code(&refused), "edition_capability_unavailable", "{refused}");
+        assert_eq!(count(&database, "graph_runs").await, 0);
+        assert_eq!(count(&database, "launched_tasks").await, 0);
+        assert_eq!(count_campaign_runs(&database).await, 0);
+    }
+
+    let created = harness
+        .graphql(CREATE, omitted_mode(fixture::PARALLEL_CAMPAIGN_ROOT))
+        .await;
+    let expected = if parallel { "parallel" } else { "serial" };
+    assert_eq!(
+        created["data"]["graph_run_result"]["graph_run"]["execution_mode"], expected,
+        "{created}"
+    );
+    let campaign: Vec<String> = mcp_campaign_children()
+        .iter()
+        .map(|child| public_id(child))
+        .collect();
+    assert_eq!(prepared(&created), campaign, "{created}");
+    assert_eq!(mode(&database, fixture::PARALLEL_CAMPAIGN_ROOT).await, expected);
+
+    if !parallel {
+        let refused = harness.graphql(UPDATE, explicit_parallel).await;
+        assert_eq!(error_code(&refused), "edition_capability_unavailable", "{refused}");
+        assert_eq!(mode(&database, fixture::PARALLEL_CAMPAIGN_ROOT).await, "serial");
+        assert_eq!(count_campaign_runs(&database).await, 1);
+    }
     harness.shutdown().await;
 }
 
@@ -382,17 +463,17 @@ async fn rejections_are_stable_coded_and_leave_no_partial_campaign() {
     for (label, variables, expected) in [
         (
             "empty graph",
-            parallel(fixture::CHILDLESS_ROOT),
+            omitted_mode(fixture::CHILDLESS_ROOT),
             "graph_empty",
         ),
         (
             "unknown root",
-            parallel("00000000000000000000000000000001"),
+            omitted_mode("00000000000000000000000000000001"),
             "task_not_found",
         ),
         (
             "archived root",
-            parallel(fixture::ARCHIVED_CHILD),
+            omitted_mode(fixture::ARCHIVED_CHILD),
             "graph_root_archived",
         ),
         (
@@ -407,7 +488,7 @@ async fn rejections_are_stable_coded_and_leave_no_partial_campaign() {
 
     // A press on a root that was never armed is not an update.
     let unarmed = harness
-        .graphql(UPDATE, parallel(fixture::SERIAL_CAMPAIGN_ROOT))
+        .graphql(UPDATE, omitted_mode(fixture::SERIAL_CAMPAIGN_ROOT))
         .await;
     assert_eq!(error_code(&unarmed), "graph_run_not_found", "{unarmed}");
 
@@ -423,7 +504,7 @@ async fn results_and_errors_omit_prompts_paths_commands_and_runtime_identity() {
     let mut harness = ExecutionHarness::start().await;
     let executed = harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT).await;
     let refused = harness
-        .graphql(CREATE, parallel(fixture::CHILDLESS_ROOT))
+        .graphql(CREATE, omitted_mode(fixture::CHILDLESS_ROOT))
         .await;
     let pressed = harness
         .graphql(UPDATE, serial(fixture::PARALLEL_CAMPAIGN_ROOT))
@@ -454,7 +535,15 @@ async fn results_and_errors_omit_prompts_paths_commands_and_runtime_identity() {
 #[tokio::test]
 async fn mcp_reset_and_execute_uses_the_same_serialized_service_as_the_studio_contract() {
     let mut harness = ExecutionHarness::start().await;
-    harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT).await;
+    // MCP presses arm the edition's campaign, so the children it starts are
+    // both ready children in parallel or the first alone in serial.
+    let campaign = mcp_campaign_children();
+    let started = campaign
+        .iter()
+        .map(|child| public_id(child))
+        .collect::<Vec<_>>();
+    let executed = harness.execute(fixture::PARALLEL_CAMPAIGN_ROOT).await;
+    assert_eq!(launched_ids(&executed), started, "{executed}");
     let database = harness.database().await;
 
     // Reset-and-execute clears the ledger through the same serialized reset,
@@ -473,17 +562,17 @@ async fn mcp_reset_and_execute_uses_the_same_serialized_service_as_the_studio_co
     );
     assert_eq!(count(&database, "launched_tasks").await, 0);
     assert_eq!(count(&database, "graph_runs").await, 1);
-    assert_eq!(count_campaign_runs(&database).await, 2);
+    assert_eq!(count_campaign_runs(&database).await, campaign.len() as i64);
 
     // Once those runtimes end while the children remain unsatisfied, the same
     // compatibility request re-arms them. A reset does not end an Agent Run, so
     // re-arming replays the generation it forgot: the same predetermined launch
     // tuple is validated and reused rather than a second agent being created
     // for one child.
-    let before = [
-        agent_run_for(&database, fixture::READY_FIRST).await,
-        agent_run_for(&database, fixture::READY_SECOND).await,
-    ];
+    let mut before = Vec::new();
+    for child in &campaign {
+        before.push(agent_run_for(&database, child).await);
+    }
     for run in &before {
         harness.end_runtime(run).await;
     }
@@ -493,16 +582,14 @@ async fn mcp_reset_and_execute_uses_the_same_serialized_service_as_the_studio_co
             json!({"root_task_id": fixture::PARALLEL_CAMPAIGN_ROOT, "reset": true}),
         )
         .await;
-    assert_eq!(launched_ids(&rearmed), ready_children(), "{rearmed}");
-    assert_eq!(count_campaign_runs(&database).await, 2);
-    assert_eq!(
-        [
-            agent_run_for(&database, fixture::READY_FIRST).await,
-            agent_run_for(&database, fixture::READY_SECOND).await,
-        ],
-        before
-    );
-    assert_eq!(claimed_children(&database).await, ready_children());
+    assert_eq!(launched_ids(&rearmed), started, "{rearmed}");
+    assert_eq!(count_campaign_runs(&database).await, campaign.len() as i64);
+    let mut after = Vec::new();
+    for child in &campaign {
+        after.push(agent_run_for(&database, child).await);
+    }
+    assert_eq!(after, before);
+    assert_eq!(claimed_children(&database).await, started);
     harness.shutdown().await;
 }
 
@@ -573,7 +660,7 @@ fn serial(root_id: &str) -> Value {
     json!({"rootId": root_id, "executionMode": "serial"})
 }
 
-fn parallel(root_id: &str) -> Value {
+fn omitted_mode(root_id: &str) -> Value {
     json!({"rootId": root_id, "executionMode": null})
 }
 
@@ -582,6 +669,16 @@ fn ready_children() -> Vec<String> {
         public_id(fixture::READY_FIRST),
         public_id(fixture::READY_SECOND),
     ]
+}
+
+/// The children an omitted-mode press (MCP or Studio) starts on the parallel
+/// fixture in this edition.
+fn mcp_campaign_children() -> Vec<&'static str> {
+    if ExecutionHarness::parallel_subtree_runs() {
+        vec![fixture::READY_FIRST, fixture::READY_SECOND]
+    } else {
+        vec![fixture::READY_FIRST]
+    }
 }
 
 fn prepared(response: &Value) -> Vec<String> {

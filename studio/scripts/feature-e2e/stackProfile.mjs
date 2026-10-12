@@ -29,9 +29,10 @@ exec ${quoteShell(interpreter)} ${quoteShell(sprintProviderFixture)} "$@"
   return { providerDirectory, fixtureCodex };
 }
 
-/** Environment for `scripts/web-dev.mjs` serving one e2e profile. */
-export function stackServerEnvironment({ dataDirectory, providerDirectory, frontendPort, adapterPort }) {
+/** Environment for `scripts/web-dev.mjs` serving one e2e profile in one edition. */
+export function stackServerEnvironment({ dataDirectory, providerDirectory, frontendPort, adapterPort, edition }) {
   return {
+    TICKETRY_EDITION: edition,
     MUXED_FRONTEND_PORT: String(frontendPort),
     ...(adapterPort ? { TICKETRY_GRAPHQL_ADAPTER_PORT: String(adapterPort) } : {}),
     MUXED_DATA_DIR: dataDirectory,

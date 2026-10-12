@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { relative, resolve, basename } from 'node:path';
 import { markdownLinks, sectionBodies } from './markdown.mjs';
+import { entryEditions } from './entryEditions.mjs';
 import ts from 'typescript';
 
 const literal = (node) => node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) ? node.text : null;
@@ -81,7 +82,9 @@ export function parseFeatureSuite(source, path) {
         if (details && !ts.isArrowFunction(details) && !ts.isFunctionExpression(details) && !ts.isObjectLiteralExpression(details)) literalTags = false;
         for (const item of properties(details)) if (!ts.isPropertyAssignment(item) || ts.isComputedPropertyName(item.name)) literalTags = false;
         const ids = tags.map((tag) => tag.slice(6));
-        cases.push({ title, tags, ids, titlePath: [...titlePath, ...(title === null ? [] : [title])], allTags: [...new Set([...inheritedTags, ...detailTags(details)])], grepTitlePath: [...grepTitlePath, ...(title === null ? [] : [title]), ...detailTags(details)], literalTitle: title !== null, literalTags, insideDeclaration: inside });
+        const allTags = [...new Set([...inheritedTags, ...detailTags(details)])];
+        const editionTags = [...new Set([...(title?.match(/@edition-[^\s]+/g) ?? []), ...allTags.filter((tag) => tag.startsWith('@edition-'))])];
+        cases.push({ title, tags, ids, editionTags, titlePath: [...titlePath, ...(title === null ? [] : [title])], allTags, grepTitlePath: [...grepTitlePath, ...(title === null ? [] : [title]), ...detailTags(details)], literalTitle: title !== null, literalTags, insideDeclaration: inside });
         if (title === null) report(4, `computed case title: ${node.arguments[0]?.getText(tree) ?? '<missing>'}`);
         if (!literalTags) report(4, `computed case tags for ${title ?? '<computed title>'}`);
       }
@@ -114,10 +117,12 @@ export function deriveFeatureRegistry(mapDirectory, e2eDirectory, repositoryRoot
     const table = rows(bodies.get('End-to-end suite') ?? '');
     const coverage = { columns: table[0] ?? [], rows: table.slice(1).map(([id, ...cells]) => ({ id, cells })) };
     const subFeatures = [...(bodies.get('Sub-features') ?? '').matchAll(/^\s*[-*+]\s+(?:`([a-z0-9]+(?:-[a-z0-9]+)*)`|([a-z0-9]+(?:-[a-z0-9]+)*))(?=\s|:)/gm)].map((match) => match[1] ?? match[2]);
+    const coreSubFeatures = [...(bodies.get('Sub-features') ?? '').matchAll(/^\s*[-*+]\s+(?:`([a-z0-9]+(?:-[a-z0-9]+)*)`|([a-z0-9]+(?:-[a-z0-9]+)*))\s+\(core\)/gm)].map((match) => match[1] ?? match[2]);
+    const { editions, problems: editionProblems } = entryEditions(source);
     const parsed = suites.find((item) => item.path === suite?.path);
     const declaration = parsed?.declarations[0];
     const cellCitations = coverage.rows.flatMap((row) => row.cells.map((cell, index) => ({ subFeature: row.id, dimension: coverage.columns[index + 1], ids: /^@case-[a-z0-9]+(?:-[a-z0-9]+)*(?:[\s,]+@case-[a-z0-9]+(?:-[a-z0-9]+)*)*$/.test(cell) ? [...cell.matchAll(/@case-([a-z0-9]+(?:-[a-z0-9]+)*)/g)].map((match) => match[1]) : [] })));
-    return { id: basename(entryPath, '.md'), path: repoPath(entryPath), suiteLines, suite, suitePath: suite?.path ?? null, subFeatures, coverage, isolation: declaration?.isolation ?? 'suite', profile: declaration?.profile ?? 'onboarded', cases: parsed?.cases ?? [], cellCitations };
+    return { id: basename(entryPath, '.md'), path: repoPath(entryPath), editions, editionProblems, coreSubFeatures, suiteLines, suite, suitePath: suite?.path ?? null, subFeatures, coverage, isolation: declaration?.isolation ?? 'suite', profile: declaration?.profile ?? 'onboarded', cases: parsed?.cases ?? [], cellCitations };
   });
   const nonFeatureSpecs = rows(sectionBodies(index).get('Non-feature browser specs') ?? '').slice(1).map(([path, reason = '']) => ({ path, reason }));
   return { features, suites, nonFeatureSpecs, browserSpecs };

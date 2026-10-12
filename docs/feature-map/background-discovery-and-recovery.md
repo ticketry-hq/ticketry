@@ -3,6 +3,7 @@
 Find Story suggestions for sprint goals through the typed Rust execution host, then review results or recover cancellation, failure and status reads.
 
 Surfaces: browser, desktop
+Editions: core
 
 ## Sub-features
 
@@ -33,12 +34,14 @@ execution directory. Automated journeys use a disposable provider rather than
 a paid account. Follow the [planner service](../planner-service.md) for transport,
 startup, credentials and service verification.
 
-Roadmap availability is compiled from `TICKETRY_ROADMAP_ENABLED` into
-`__TICKETRY_ROADMAP_ENABLED__`. A Roadmap-off build omits the Plan tab, Sprints
+Sprint planning is a build-time edition capability: `TICKETRY_EDITION` (`pocock`
+default, or `core`) compiles into `__TICKETRY_EDITION__`, and
+`editionHas("sprintPlanning")` in `studio/src/shared/config/edition.ts` is true
+only in the core edition. A Pocock build omits the Plan tab, Sprints
 workspace, goals, suggestion review and Find stories controls, and direct Plan
 mounts render nothing. Runtime settings or URL parameters cannot enable them.
-`bun run --cwd studio test:roadmap-off` selects
-`studio/vitest.roadmap-off.config.ts` for this compiled-off coverage.
+`bun run --cwd studio test:pocock` selects
+`studio/vitest.pocock.config.ts` for this Pocock-edition coverage.
 
 ## Expected behavior
 
@@ -89,9 +92,9 @@ existing/proposed/ungrouped results, real zero-result output, keyboard launch
 and review, transport retries and persistence within this feature's suite.
 
 Supplementary state derivation coverage is
-`studio/src/features/sprints/suggestions/agentState.test.ts`. Off-state absence
-is asserted in `studio/src/test/overhaulRoadmapOffAcceptance.test.tsx` under
-`bun run --cwd studio test:roadmap-off`; neither fills browser cells.
+`studio/src/features/sprints/suggestions/agentState.test.ts`. Pocock-edition absence
+is asserted in `studio/src/test/overhaulPocockEditionAcceptance.test.tsx` under
+`bun run --cwd studio test:pocock`; neither fills browser cells.
 
 ## End-to-end suite
 
@@ -117,7 +120,7 @@ Suite: studio/e2e/features/background-discovery-and-recovery.spec.ts
 - `studio/src/features/agents/status/stream/sprintInvalidation.ts`
 - `studio/src-tauri/crates/execution/ticketry-agent-execution/src/sprint_suggestions/`
 - `studio/src/app/shell/ticket-workspace/WorkspaceTabs.tsx`
-- `studio/src/shared/config/roadmapAvailability.ts`
+- `studio/src/shared/config/edition.ts`
 - `studio/vite.config.ts`
 
 ## Gotchas

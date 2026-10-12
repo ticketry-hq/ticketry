@@ -286,6 +286,11 @@ mod tests {
 
     #[tokio::test]
     async fn a_fresh_installation_project_has_its_reviewed_catalog() {
+        if !ticketry_edition::has(ticketry_edition::EditionCapability::ReviewedWorkflowDefaults) {
+            // Core provisions only the Module type; the root package's
+            // `reviewed_default_colors` suite reads that back over GraphQL.
+            return;
+        }
         let directory = tempfile::tempdir().expect("create a data directory");
         super::provision(directory.path())
             .await

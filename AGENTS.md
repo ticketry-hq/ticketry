@@ -18,6 +18,9 @@ Each mapped feature has a browser suite at
 or changed, and `bun run --cwd studio test:e2e:features` for the full app. Keep
 the entry and its suite aligned; the drift check
 (`bun run --cwd studio test:e2e:features --check`) enforces that alignment.
+Each entry declares `Editions:`. Feature runs build the default Pocock edition
+and skip core-only features and `@edition-core` cases; prefix
+`TICKETRY_EDITION=core` to run the core edition.
 
 Use `bun run desktop:dev` or `bun run dev` from the repository root for local
 desktop development. Both commands rebuild and launch Ticketry. Keep browser-
@@ -113,6 +116,15 @@ when native rendering is unavailable or fails. CODING-1487 removed the
 snapshot and recovery steps are in `docs/archive/ghostty-wasm-restore.md`. tmux
 remains responsible for durable sessions, and a renderer change must not change
 a run, tmux session identity, or persisted terminal record.
+
+Each build compiles exactly one edition, chosen at build time by
+`TICKETRY_EDITION`: `pocock` is the default when unset (signed releases
+included) and `core` is the only alternative; any other value fails before
+Cargo, Tauri, or Vite starts. Core enables the Rust `edition-core` Cargo
+feature and adds the capabilities in `config/editions.json`, such as Plan and
+sprint planning. Every launcher and `release:build` logs
+`Edition: <edition> (default|explicit)` once. Example:
+`TICKETRY_EDITION=core bun run web`.
 
 Development data must remain isolated from live application data. Generated
 databases, caches, native libraries, and build output must not be

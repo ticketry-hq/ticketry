@@ -3,6 +3,7 @@
 Conversations launch taskless Instant agents in a module, collect optional first messages, retain user titles and select each conversation's terminal.
 
 Surfaces: browser, desktop
+Editions: pocock, core
 
 ## Sub-features
 

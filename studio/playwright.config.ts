@@ -5,6 +5,7 @@ import { basename, join, resolve } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 import { featurePlaywrightProjects } from "./scripts/feature-e2e/playwright-projects.mjs";
 import { prepareStackProfile, stackServerEnvironment } from "./scripts/feature-e2e/stackProfile.mjs";
+import { resolveEdition } from "./scripts/edition-build-policy.mjs";
 
 const frontendPort = Number(process.env.TICKETRY_E2E_FRONTEND_PORT ?? 4173);
 const adapterPort = process.env.TICKETRY_E2E_ADAPTER_PORT;
@@ -47,7 +48,7 @@ export default defineConfig({
     // Queues behind other e2e servers on this machine so memory stays bounded.
     command: "exec node studio/scripts/with-e2e-stack-slot.mjs node scripts/web-dev.mjs",
     cwd: "..",
-    env: stackServerEnvironment({ dataDirectory, providerDirectory, frontendPort, adapterPort }),
+    env: stackServerEnvironment({ dataDirectory, providerDirectory, frontendPort, adapterPort, edition: resolveEdition().edition }),
     url: `http://127.0.0.1:${frontendPort}`,
     reuseExistingServer: false,
     gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },

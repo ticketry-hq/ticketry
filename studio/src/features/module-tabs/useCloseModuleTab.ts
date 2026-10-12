@@ -3,7 +3,7 @@ import { useClientStore } from "../../state/clientStore";
 import { getModuleFolder } from "../module-links";
 import { getModulesSnapshot, useStudioStore } from "../projects";
 import { getStorySprintFilterGeneration } from "../work-items";
-import { ROADMAP_ENABLED } from "../../shared/config/roadmapAvailability";
+import { editionHas } from "../../shared/config/edition";
 import { getEffectiveModuleTabsSnapshot } from "./effectiveModuleTabs";
 import { useSetModuleTabHidden } from "./useSetModuleTabHidden";
 
@@ -19,7 +19,7 @@ export function useCloseModuleTab() {
     const selection = JSON.stringify(projection.selection);
     const scopeCurrent = () => useStudioStore.getState().selectedProjectId === projectId
       && getEffectiveModuleTabsSnapshot(projectId).projectGeneration === projection.projectGeneration
-      && (!ROADMAP_ENABLED || (getStorySprintFilterGeneration(projectId) === filterGeneration
+      && (!editionHas("sprintPlanning") || (getStorySprintFilterGeneration(projectId) === filterGeneration
         && JSON.stringify(getEffectiveModuleTabsSnapshot(projectId).selection) === selection));
     const state = useClientStore.getState();
     const closingSelected = state.selectedModuleId === moduleId;

@@ -1,8 +1,17 @@
 import { expect, test, type Page } from "@playwright/test";
 import { resolve } from "node:path";
+import { resolveEdition } from "../../scripts/edition-build-policy.mjs";
 import { CreateWorkTrackerStateDocument, CreateWorkTrackerTransitionDocument } from "../../src/features/workflows/generated/workflows.documents";
 import { featureSuite } from "./featureSuite";
 import { CODEX_TEST_MODEL, CODEX_TEST_REASONING, ensureCodexTestModel, getModules, getProviderCatalog, getWorkItems, getWorkspace, getWorkflowCatalog, graphql } from "../support";
+
+/**
+ * CODING-2860/2861: only Pocock provisions a task-level Story type, so only
+ * Pocock tours continue to Story capture; core's tour finishes at its first
+ * module.
+ */
+const storyTour = resolveEdition().edition === "pocock";
+const moduleReady = (page: Page) => page.getByRole("dialog", { name: "Your first module is ready" });
 
 async function failOperation(page: Page, operation: string) {
   await page.route("**/graphql", async (route) => {
@@ -37,7 +46,7 @@ async function createModule(page: Page, name: string) {
   await form.getByRole("textbox", { name: "Module folder", exact: true }).fill(resolve(".."));
   await form.getByRole("button", { name: "Create module", exact: true }).click();
   await expect(form).toHaveCount(0);
-  await expect(page.getByRole("dialog", { name: "Create your first story" })).toBeVisible();
+  await expect(storyTour ? page.getByRole("dialog", { name: "Create your first story" }) : moduleReady(page)).toBeVisible();
 }
 
 async function captureStory(page: Page, name: string) {
@@ -58,16 +67,18 @@ featureSuite("onboarding", { profile: "first-run", isolation: "case" }, () => {
     });
     expect((await getWorkspace(request)).onboarding_required).toBe(true);
     await ensureCodexTestModel(request);
-    const workflow = await getWorkflowCatalog(request, (await getWorkspace(request)).id);
-    const storyType = workflow.issue_types.nodes.find((row) => row.name === "Story")!;
-    const done = workflow.states.nodes.find((row) => row.name === "Cancelled")!;
-    const custom = (await graphql(request, CreateWorkTrackerStateDocument, {
-      projectId: (await getWorkspace(request)).id, name: "Onboarding guide archive", group: "completed", color: "#777777",
-    })).create_state;
-    await graphql(request, CreateWorkTrackerTransitionDocument, {
-      issueTypeId: storyType.id, fromStateId: done.id, toStateId: custom.id,
-      workflowRevision: storyType.workflow_revision, agentAllowed: true, handoff: false,
-    });
+    if (storyTour) {
+      const workflow = await getWorkflowCatalog(request, (await getWorkspace(request)).id);
+      const storyType = workflow.issue_types.nodes.find((row) => row.name === "Story")!;
+      const done = workflow.states.nodes.find((row) => row.name === "Cancelled")!;
+      const custom = (await graphql(request, CreateWorkTrackerStateDocument, {
+        projectId: (await getWorkspace(request)).id, name: "Onboarding guide archive", group: "completed", color: "#777777",
+      })).create_state;
+      await graphql(request, CreateWorkTrackerTransitionDocument, {
+        issueTypeId: storyType.id, fromStateId: done.id, toStateId: custom.id,
+        workflowRevision: storyType.workflow_revision, agentAllowed: true, handoff: false,
+      });
+    }
     await page.goto("/");
     await expect(page.getByTestId("onboarding-welcome")).toBeVisible();
     await expect(page.getByTestId("onboarding-skip-tour")).toHaveCount(0);
@@ -87,19 +98,21 @@ featureSuite("onboarding", { profile: "first-run", isolation: "case" }, () => {
     await expect(page.getByTestId("onboarding-welcome")).toHaveCount(0);
     await createModule(page, "Provider onboarding module");
     expect(await getWorkItems(request, (await getWorkspace(request)).id)).toHaveLength(0);
-    await captureStory(page, "Provider onboarding captured story");
-    await expect(page.getByRole("dialog", { name: "Your first story is ready" })).toContainText("launch still depends on the executable, login, profile, and backend checks");
-    await page.getByTestId("onboarding-story-workflow-guide").click();
     const guide = page.getByRole("dialog", { name: "Story workflow guide", exact: true });
-    await expect(guide).toContainText("Provider onboarding captured story");
-    await expect(guide).toContainText("This Story's workflow");
-    await expect(guide).toContainText("Current state");
-    await guide.getByText("Stage instructions", { exact: true }).last().click();
-    await expect(guide).toContainText("No agent instructions configured.");
-    await expect(guide).toContainText("does not start an agent");
-    await expect(guide.getByRole("button", { name: /^(Run item|Run now)$/ })).toHaveCount(0);
-    await guide.getByRole("button", { name: "Close", exact: true }).click();
-    await expect(page.getByTestId("onboarding-story-workflow-guide")).toBeFocused();
+    if (storyTour) {
+      await captureStory(page, "Provider onboarding captured story");
+      await expect(page.getByRole("dialog", { name: "Your first story is ready" })).toContainText("launch still depends on the executable, login, profile, and backend checks");
+      await page.getByTestId("onboarding-story-workflow-guide").click();
+      await expect(guide).toContainText("Provider onboarding captured story");
+      await expect(guide).toContainText("This Story's workflow");
+      await expect(guide).toContainText("Current state");
+      await guide.getByText("Stage instructions", { exact: true }).last().click();
+      await expect(guide).toContainText("No agent instructions configured.");
+      await expect(guide).toContainText("does not start an agent");
+      await expect(guide.getByRole("button", { name: /^(Run item|Run now)$/ })).toHaveCount(0);
+      await guide.getByRole("button", { name: "Close", exact: true }).click();
+      await expect(page.getByTestId("onboarding-story-workflow-guide")).toBeFocused();
+    }
     await page.getByTestId("onboarding-finish").click();
     await expect(page.getByTestId("onboarding-finish")).toHaveCount(0);
     const catalog = await getProviderCatalog(request);
@@ -108,12 +121,14 @@ featureSuite("onboarding", { profile: "first-run", isolation: "case" }, () => {
     expect((await getWorkspace(request)).onboarding_required).toBe(false);
     await page.reload();
     await expect(page.getByTestId("onboarding-welcome")).toHaveCount(0);
-    await expect(page.getByTestId("issue-name")).toContainText("Provider onboarding captured story");
-    await page.getByRole("button", { name: "Story workflow guide", exact: true }).click();
-    await expect(guide).toContainText("Provider onboarding captured story");
-    await page.keyboard.press("Escape");
-    await expect(guide).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Story workflow guide", exact: true })).toBeFocused();
+    if (storyTour) {
+      await expect(page.getByTestId("issue-name")).toContainText("Provider onboarding captured story");
+      await page.getByRole("button", { name: "Story workflow guide", exact: true }).click();
+      await expect(guide).toContainText("Provider onboarding captured story");
+      await page.keyboard.press("Escape");
+      await expect(guide).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Story workflow guide", exact: true })).toBeFocused();
+    }
     expect(launches).toEqual([]);
   });
 
@@ -126,13 +141,16 @@ featureSuite("onboarding", { profile: "first-run", isolation: "case" }, () => {
     const project = await getWorkspace(request);
     const before = await getWorkItems(request, project.id);
     expect(before).toEqual([]);
+    // Core's tour ends at its first module, which offers Finish tour and no Skip tour.
+    const complete = page.getByTestId(storyTour ? "onboarding-skip-tour" : "onboarding-finish");
+    if (!storyTour) await expect(page.getByTestId("onboarding-skip-tour")).toHaveCount(0);
     await failOperation(page, "AcknowledgeWorkTrackerOnboarding");
-    await page.getByTestId("onboarding-skip-tour").click();
+    await complete.click();
     await expect(page.getByTestId("onboarding-step-error")).toBeVisible();
     expect((await getWorkspace(request)).onboarding_required).toBe(true);
     await page.unroute("**/graphql");
-    await page.getByTestId("onboarding-skip-tour").click();
-    await expect(page.getByTestId("onboarding-skip-tour")).toHaveCount(0);
+    await complete.click();
+    await expect(complete).toHaveCount(0);
     expect((await getWorkspace(request)).onboarding_required).toBe(false);
     await page.reload();
     await expect(page.getByTestId("onboarding-welcome")).toHaveCount(0);
@@ -199,6 +217,12 @@ featureSuite("onboarding", { profile: "first-run", isolation: "case" }, () => {
     await page.unroute("**/graphql");
     await form.getByRole("button", { name: "Save folder", exact: true }).click();
     await expect(form).toHaveCount(0);
+    if (!storyTour) {
+      // Core has no Story type: the saved folder link ends the module step.
+      await expect(moduleReady(page)).toBeVisible();
+      expect((await getModules(request, project.id)).filter((module) => module.name === "Recovery onboarding module")).toHaveLength(1);
+      return;
+    }
     await failOperation(page, "CreateWorkTrackerWorkItem");
     const idea = page.getByRole("textbox", { name: "Capture an idea" });
     await idea.fill("Recovery onboarding story");
@@ -231,5 +255,35 @@ featureSuite("onboarding", { profile: "first-run", isolation: "case" }, () => {
     await page.reload();
     await expect(page.getByTestId("issue-name")).toContainText("Recovery onboarding story");
     expect((await getWorkItems(request, project.id)).filter((item) => item.name === "Recovery onboarding story")).toHaveLength(1);
+  });
+
+  test("finishes the tour at the first module when the project has no Story type", { tag: ["@case-onboarding-core-module-finish", "@edition-core"] }, async ({ page, request }) => {
+    const project = await getWorkspace(request);
+    expect(project.onboarding_required).toBe(true);
+    const catalog = await getWorkflowCatalog(request, project.id);
+    expect(catalog.issue_types.nodes.filter((type) => type.level === "task" && type.name === "Story")).toEqual([]);
+    await start(page);
+    expect((await getProviderCatalog(request)).configurable_providers.filter((provider) => provider.activated)).toEqual([]);
+    await createModule(page, "Core onboarding module");
+    const card = moduleReady(page);
+    await expect(card).toHaveAttribute("aria-modal", "false");
+    await expect(card.getByTestId("onboarding-finish")).toHaveText("Finish tour");
+    await expect(page.getByTestId("onboarding-skip-tour")).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: "Create your first story" })).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: "Your first story is ready" })).toHaveCount(0);
+    await expect(page.getByTestId("onboarding-story-workflow-guide")).toHaveCount(0);
+    expect((await getModules(request, project.id)).map((module) => module.name)).toContain("Core onboarding module");
+    expect(await getWorkItems(request, project.id)).toEqual([]);
+    expect((await getWorkspace(request)).onboarding_required).toBe(true);
+    await card.getByTestId("onboarding-finish").click();
+    await expect(card).toHaveCount(0);
+    await expect(page.getByTestId("onboarding-finish")).toHaveCount(0);
+    expect((await getWorkspace(request)).onboarding_required).toBe(false);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Open Module Manager", exact: true })).toBeVisible();
+    await expect(page.getByTestId("onboarding-welcome")).toHaveCount(0);
+    await expect(card).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: "Add your first module" })).toHaveCount(0);
+    expect(await getWorkItems(request, project.id)).toEqual([]);
   });
 });

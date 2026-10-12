@@ -230,8 +230,13 @@ fn build_schema(
     let builder = ticketry_workspace_runtime::register_design_document_graphql(builder);
     let builder = ticketry_workspace_runtime::register_directory_completion_graphql(builder);
     let mut schema = builder.schema_builder().data(entity_database);
-    if let (Some(work_items), Some(directory)) = (&worktracker_database, &readiness_data_directory)
-    {
+    // Sprint discovery runs only where the edition grants sprint planning; its
+    // mutations stay registered and refuse elsewhere.
+    if let (Some(work_items), Some(directory), true) = (
+        &worktracker_database,
+        &readiness_data_directory,
+        ticketry_edition::has(ticketry_edition::EditionCapability::SprintPlanning),
+    ) {
         schema = schema.data(ticketry_agent_execution::SprintSuggestionExecutor::new(
             work_items.clone(),
             directory.clone(),

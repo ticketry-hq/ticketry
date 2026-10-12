@@ -18,7 +18,8 @@ import { loadIssueTypes } from "../../../../../features/settings";
 import { useClientStore } from "../../../../../state/clientStore";
 import { focusFirstStory } from "../storiesFocus";
 
-export function IdeaEntry() {
+/** `unavailableReason` disables capture and is shown in place of the prompt. */
+export function IdeaEntry({ unavailableReason = null }: { unavailableReason?: string | null } = {}) {
   const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
   const selectedModuleId = useClientStore((state) => state.selectedModuleId);
   const createStory = useCreateWorkItem({
@@ -56,7 +57,10 @@ export function IdeaEntry() {
 
   async function submit(): Promise<void> {
     const name = draft.trim();
-    if (!name || !selectedProjectId || !selectedModuleId || inFlightRef.current) {
+    if (
+      !name || !selectedProjectId || !selectedModuleId || inFlightRef.current ||
+      unavailableReason
+    ) {
       return;
     }
     const projectId = selectedProjectId;
@@ -142,14 +146,15 @@ export function IdeaEntry() {
           aria-label="Capture an idea"
           aria-busy={pending}
           rows={1}
-          value={draft}
+          value={unavailableReason ? "" : draft}
           readOnly={pending}
-          placeholder="Capture an idea…"
+          disabled={unavailableReason !== null}
+          placeholder={unavailableReason ?? "Capture an idea…"}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          className="block min-h-7 w-full resize-none overflow-hidden bg-transparent px-2 py-1 text-sm leading-5 text-text-primary caret-focus-accent outline-none placeholder:text-text-muted"
+          className="block min-h-7 w-full resize-none overflow-hidden bg-transparent px-2 py-1 text-sm leading-5 text-text-primary caret-focus-accent outline-none placeholder:text-text-muted disabled:cursor-not-allowed"
         />
       </div>
       {capturedOutsideResults && selectedProjectId ? <CapturedIdeaRecovery projectId={selectedProjectId}

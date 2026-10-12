@@ -22,8 +22,10 @@ impl TerminalCleanupService {
     /// Every journal transaction reads before it writes. A deferred WAL
     /// transaction cannot wait to upgrade: SQLite skips the busy handler and
     /// refuses at once while another connection writes, as happens while a
-    /// shell is still starting (CODING-2751). Reserve the writer first so the
-    /// pool's busy timeout queues cleanup behind that writer.
+    /// shell is still starting (CODING-2751), or with SQLITE_BUSY_SNAPSHOT
+    /// once another connection has committed since the read (CODING-2782).
+    /// Reserve the writer first so the pool's busy timeout queues cleanup
+    /// behind that writer.
     async fn begin_write(&self) -> Result<DatabaseTransaction, TerminalCleanupError> {
         Ok(self
             .database

@@ -3,6 +3,7 @@ import { createApolloStore } from "../../shared/apollo/localState";
 export type OnboardingTourStep =
   | "inactive"
   | "module-create"
+  | "module-ready"
   | "story-create"
   | "handoff";
 
@@ -12,7 +13,8 @@ interface OnboardingTourState {
   moduleId: string | null;
   storyId: string | null;
   start: (projectId: string) => void;
-  moduleCreated: (moduleId: string) => void;
+  /** Without a Story type the tour ends at `module-ready` instead of Story capture. */
+  moduleCreated: (moduleId: string, storyCaptureAvailable: boolean) => void;
   storyCreated: (storyId: string) => void;
   reset: () => void;
 }
@@ -30,7 +32,8 @@ export const useOnboardingTourStore = createApolloStore<OnboardingTourState>("on
   start: (projectId) =>
     // One installation project: the tour opens on creating the first module.
     set({ ...INACTIVE, step: "module-create", projectId }),
-  moduleCreated: (moduleId) => set({ step: "story-create", moduleId }),
+  moduleCreated: (moduleId, storyCaptureAvailable) =>
+    set({ step: storyCaptureAvailable ? "story-create" : "module-ready", moduleId }),
   storyCreated: (storyId) =>
     set((state) =>
       state.step === "story-create"

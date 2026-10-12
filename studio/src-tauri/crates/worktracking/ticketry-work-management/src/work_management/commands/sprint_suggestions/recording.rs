@@ -2,9 +2,10 @@ use super::{
     database_uuid, lock_sprint, open_sprint, validate_epic, validate_name, validate_story,
     CommandError,
 };
+use crate::work_management::database::begin_write;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
-    QueryFilter, QueryOrder, Set, TransactionTrait,
+    QueryFilter, QueryOrder, Set,
 };
 use ticketry_entities::{sprint_goal, sprint_suggestion};
 
@@ -34,7 +35,7 @@ pub async fn record_for_run(
     run_id: &str,
     input: RecordSprintSuggestion,
 ) -> Result<sprint_suggestion::Model, CommandError> {
-    let txn = database.begin().await?;
+    let txn = begin_write(database).await?;
     let row = record_in(&txn, project_id, run_id, input).await?;
     txn.commit().await?;
     Ok(row)

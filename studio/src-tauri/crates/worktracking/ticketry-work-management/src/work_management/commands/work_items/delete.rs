@@ -4,9 +4,8 @@ use super::super::{
     CommandError,
 };
 use super::next_revision;
-use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait, QueryFilter, TransactionTrait,
-};
+use crate::work_management::database::begin_write;
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait, QueryFilter};
 use ticketry_entities::{design_document, issue};
 
 pub async fn delete(
@@ -29,7 +28,7 @@ pub async fn delete(
             "Issue has children; empty or re-parent them first.".to_owned(),
         ));
     }
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let revision = next_revision(&transaction, &existing.project_id).await?;
     let identity = WorkItemIdentity::of(&existing);
     let now = super::super::timestamp::now();

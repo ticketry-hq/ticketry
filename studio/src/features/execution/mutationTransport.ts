@@ -6,8 +6,12 @@ import {
   UpdateExecutionGraphRunDocument,
 } from "./generated/graphRuns.documents";
 import type { ExecutionGraphRunHoldingQuery } from "./generated/graphRuns.documents";
+import {
+  graphRunRequestMode,
+  type GraphRunExecutionMode,
+} from "./graphRunRequestMode";
 
-export type GraphRunExecutionMode = "parallel" | "serial";
+export type { GraphRunExecutionMode };
 export type GraphRunHolding = ExecutionGraphRunHoldingQuery[
   "graph_run_holding"
 ]["nodes"][number];
@@ -34,7 +38,7 @@ export async function executeTaskSubtree(
       : UpdateExecutionGraphRunDocument;
     const response = await client.mutate({
       mutation,
-      variables: { rootId, executionMode: mode ?? null },
+      variables: { rootId, executionMode: graphRunRequestMode(mode) },
     });
     if (!response.data) throw new Error("Graph Run mutation returned no data.");
     const authoritative = response.data.graph_run_result.graph_run;

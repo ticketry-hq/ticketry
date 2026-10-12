@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import { cp, mkdir, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
+import { editionFeatureArguments, resolveEditionBuild } from "./edition-build-policy.mjs";
+
 export class PackagedUpdateBuildError extends Error {}
 
 function fail(message) {
@@ -42,6 +44,8 @@ export function createPackagedUpdateBuildCommand({
   feedUrl,
   environment = {},
 }) {
+  // An invalid TICKETRY_EDITION fails here, before any build is spawned.
+  const editionBuild = resolveEditionBuild(environment);
   const privateKey = requireText(
     updaterPrivateKey,
     "updater signing private key",
@@ -78,8 +82,7 @@ export function createPackagedUpdateBuildCommand({
       "build",
       "--target",
       "aarch64-apple-darwin",
-      "--features",
-      "desktop-acceptance",
+      ...editionFeatureArguments(editionBuild, ["desktop-acceptance"]),
       "--config",
       JSON.stringify(config),
       "--",
@@ -87,10 +90,11 @@ export function createPackagedUpdateBuildCommand({
       "ticketry",
     ],
     environment: unsignedEnvironment(
-      environment,
+      editionBuild.environment,
       privateKey,
       privateKeyPassword,
     ),
+    editionDescription: editionBuild.description,
   };
 }
 

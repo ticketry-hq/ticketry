@@ -1,9 +1,9 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { expect, it } from "vitest";
-import { roadmapAvailabilityFixture } from "./roadmapAvailabilityFixture";
+import { editionAcceptanceFixture } from "./editionAcceptanceFixture";
 
 it("[overhaul-581] Escape closes the epic picker before leaving the mounted Plan workspace", async () => {
-  const f = roadmapAvailabilityFixture();
+  const f = editionAcceptanceFixture();
   f.mount();
   await screen.findByRole("tab", { name: "Roadmap" });
   fireEvent.click(screen.getByRole("tab", { name: "Plan" }));
@@ -40,7 +40,7 @@ it("[overhaul-581] Escape closes the epic picker before leaving the mounted Plan
 });
 
 it("[overhaul-582] closing the final epic focuses Add epic and keeps the Plan visit recoverable", async () => {
-  const f = roadmapAvailabilityFixture();
+  const f = editionAcceptanceFixture();
   f.mount();
   await screen.findByRole("tab", { name: "Roadmap" });
   fireEvent.click(screen.getByRole("tab", { name: "Plan" }));

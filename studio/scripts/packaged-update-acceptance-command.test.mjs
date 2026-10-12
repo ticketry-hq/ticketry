@@ -139,7 +139,7 @@ test("the command builds a real boundary set around the generated plan", async (
   assert.equal(calls.runnerOptions.tls, tls);
   assert.equal(calls.runBoundaries.manifest, manifest);
   assert.deepEqual(events, ["tls:dispose", "workspace:dispose"]);
-  assert.deepEqual(logs, ["Packaged update acceptance passed."]);
+  assert.deepEqual(logs, ["Edition: pocock (default)", "Packaged update acceptance passed."]);
 });
 
 test("retention preserves files but always removes temporary TLS trust", async () => {
@@ -182,6 +182,23 @@ test("retention preserves files but always removes temporary TLS trust", async (
 
   assert.deepEqual(workspaceOptions, { keep: true });
   assert.deepEqual(events, ["tls:dispose", "workspace:dispose"]);
+});
+
+test("an invalid edition fails packaged update acceptance before any workspace, key, or build", async () => {
+  const calls = [];
+  const record = (name) => async () => { calls.push(name); };
+  await assert.rejects(
+    runPackagedUpdateAcceptanceCommand({
+      environment: { TICKETRY_EDITION: "full" },
+      log: (message) => calls.push(`log:${message}`),
+      dependencies: Object.fromEntries([
+        "loadManifest", "createWorkspace", "generateKeyPair", "createTls",
+        "createPlan", "buildArtifacts", "startFeed", "startRunner", "runAcceptance",
+      ].map((name) => [name, record(name)])),
+    }),
+    /pocock.*core/,
+  );
+  assert.deepEqual(calls, []);
 });
 
 test("the default B version is the next patch release", () => {

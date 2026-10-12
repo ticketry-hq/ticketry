@@ -6,6 +6,7 @@ export {
   visibleModules,
 } from "./modulePresentation";
 export { useModuleNavigation } from "./useModuleNavigation";
+export { leaveWorkspaceSurfaces } from "./leaveWorkspaceSurfaces";
 export { ModulePresentationAction } from "./ModulePresentationAction";
 export { useRestoreAndSelectModule } from "./useRestoreAndSelectModule";
 export { useSetModuleTabHidden } from "./useSetModuleTabHidden";

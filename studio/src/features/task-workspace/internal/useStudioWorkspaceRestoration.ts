@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   type MutableRefObject,
 } from "react";
@@ -90,6 +91,14 @@ export function useStudioWorkspaceRestoration({
     return true;
   }, [cancelRestoration]);
 
+  // Identity of the current workspace entry. Each entry, including retained
+  // visibility reentry, issues a fresh restoration request; consumers that
+  // settle requests from unchanged hydrated inputs rerun when it changes.
+  const restorationEntry = useMemo(
+    () => ({}),
+    [bucket, projectId, moduleId, owner, explicitTerminalRunId, workspaceActive],
+  );
+
   // Invalidate the previous entry before hydration/reconciliation can commit.
   // Cleanup also distinguishes A→B→A, retained visibility reentry and disposal.
   // Hidden workspaces may hydrate selection (including scratch startup), but
@@ -118,12 +127,10 @@ export function useStudioWorkspaceRestoration({
     }
     return cancelRestoration;
   }, [
+    restorationEntry,
     bucket,
-    projectId,
-    moduleId,
     owner,
     explicitTerminalRunId,
-    workspaceActive,
     cancelRestoration,
     setActive,
   ]);
@@ -172,6 +179,7 @@ export function useStudioWorkspaceRestoration({
   );
 
   return {
+    restorationEntry,
     restoreRequestRef,
     restoreGenerationRef,
     restoreTerminalTarget,
@@ -186,6 +194,7 @@ export function useStudioDocumentRestoration({
   owner,
   documents,
   documentsFetched,
+  restorationEntry,
   restoreRequestRef,
   restoreGenerationRef,
   isCurrentRestoration,
@@ -196,6 +205,8 @@ export function useStudioDocumentRestoration({
   owner: ForegroundOwner;
   documents: readonly DesignDoc[];
   documentsFetched: boolean;
+  /** Changes with each entry so an already-hydrated document settles its fresh request. */
+  restorationEntry: object;
   restoreRequestRef: MutableRefObject<{
     bucket: string;
     generation: number;
@@ -232,6 +243,7 @@ export function useStudioDocumentRestoration({
     bucket,
     documents,
     documentsFetched,
+    restorationEntry,
     owner,
     isCurrentRestoration,
     restoreGenerationRef,

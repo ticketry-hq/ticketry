@@ -3,6 +3,7 @@
 The desktop checks the stable release feed, shares availability with Settings and installs an update only after the user requests it.
 
 Surfaces: browser, desktop, manual
+Editions: pocock, core
 
 ## Sub-features
 

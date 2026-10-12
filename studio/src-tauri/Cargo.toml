@@ -31,6 +31,11 @@ development-tools = []
 # build script uses it to stage the resources owned by `tauri.conf.json`.
 desktop-acceptance = ["ticketry-desktop/desktop-acceptance"]
 native-libghostty = ["ticketry-desktop/native-libghostty"]
+# CODING-2851 — builds the Core edition. Pocock is the absence of this feature,
+# so a raw `cargo build` is Pocock and the release manifest's
+# `--no-default-features` refusal stays valid. `ticketry-edition` alone reads
+# it; launcher and release wiring arrive in a later ticket.
+edition-core = ["ticketry-edition/edition-core"]
 
 [[bin]]
 name = "ticketry"
@@ -50,6 +55,7 @@ tauri-plugin-launchkey-adaptor.workspace = true
 tauri-plugin-opener.workspace = true
 ticketry-desktop.workspace = true
 ticketry-diagnostics.workspace = true
+ticketry-edition.workspace = true
 ticketry-installation.workspace = true
 ticketry-terminal.workspace = true
 
@@ -140,6 +146,7 @@ ticketry-desktop = { path = "crates/app/ticketry-desktop" }
 ticketry-dev-tools = { path = "crates/app/ticketry-dev-tools" }
 ticketry-diagnostics = { path = "crates/foundation/ticketry-diagnostics" }
 ticketry-documents = { path = "crates/worktracking/ticketry-documents" }
+ticketry-edition = { path = "crates/foundation/ticketry-edition" }
 ticketry-entities = { path = "crates/foundation/ticketry-entities" }
 ticketry-graphql-schema = { path = "crates/surfaces/ticketry-graphql-schema" }
 ticketry-installation = { path = "crates/execution/ticketry-installation" }

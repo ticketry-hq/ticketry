@@ -148,7 +148,11 @@ featureSuite("module-tabs", { isolation: "case" }, () => {
     await tab(page, names.first).press("End");
     await expect(tab(page, names.second)).toHaveAttribute("aria-selected", "true");
     await tab(page, names.second).press("Home");
-    await expect(page.getByTestId("workspace-tab-plan")).toHaveAttribute("aria-selected", "true");
+    // Home selects the first enabled workspace surface: Plan in core, Changes in Pocock (which renders no Plan tab).
+    const firstSurface = tabs(page).locator('[role="tab"]:not([disabled])').first();
+    await expect(firstSurface).toHaveAttribute("data-testid", await page.getByTestId("workspace-tab-plan").count() ? "workspace-tab-plan" : "workspace-tab-changes");
+    await expect(firstSurface).toHaveAttribute("aria-selected", "true");
+    await expect(tab(page, names.second)).toHaveAttribute("aria-selected", "false");
     await select(page, names.second);
     await page.reload();
     await expect(tab(page, names.second)).toHaveAttribute("aria-selected", "true");
@@ -247,7 +251,31 @@ featureSuite("module-tabs", { isolation: "case" }, () => {
     await expect(tab(page, names.first)).toBeVisible();
   });
 
-  test("filters sprint membership and explicitly recovers hidden matching tabs", { tag: "@case-module-tabs-sprint-recovery" }, async ({ page }) => {
+  test("refuses an unlinked module tab until a refused folder save is retried", { tag: "@case-module-tabs-unlinked-selection-error" }, async ({ page, request }) => {
+    const unlinked = names.first.replace("Tabs first", "Tabs unlinked");
+    const moduleType = (await getWorkflowCatalog(request, projectId)).issue_types.nodes.find(row => row.name === "Module")!;
+    await createModule(request, projectId, { name: unlinked, issue_type_id: moduleType.id });
+    await page.reload();
+    await select(page, names.first);
+    await tab(page, unlinked).click();
+    const dialog = page.getByRole("dialog", { name: "Module Folder", exact: true });
+    await expect(dialog).toBeVisible();
+    await expect(tab(page, unlinked)).toHaveAttribute("aria-selected", "false");
+    await expect(tab(page, names.first)).toHaveAttribute("aria-selected", "true");
+    await dialog.getByPlaceholder("Local folder (optional)").fill(folder);
+    const failed = await refuseOnce(page, "SetModuleLink");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(dialog.getByRole("alert")).toBeVisible();
+    expect(failed()).toBeTruthy();
+    await expect(tab(page, unlinked)).toHaveAttribute("aria-selected", "false");
+    await expect(tab(page, names.first)).toHaveAttribute("aria-selected", "true");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(tab(page, unlinked)).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("module-workspace-region")).toBeVisible();
+  });
+
+  test("filters sprint membership and explicitly recovers hidden matching tabs", { tag: ["@case-module-tabs-sprint-recovery", "@edition-core"] }, async ({ page }) => {
     const trigger = page.getByRole("button", { name: /^Sprint: / });
     await trigger.click();
     await page.keyboard.press("Escape");
@@ -276,7 +304,7 @@ featureSuite("module-tabs", { isolation: "case" }, () => {
     await expect(tab(page, names.first)).toBeVisible();
     await expect(tab(page, names.second)).toBeVisible();
   });
-  test("recovers failed sprint membership reads and an empty sprint projection", { tag: "@case-module-tabs-sprint-read-empty" }, async ({ page }) => {
+  test("recovers failed sprint membership reads and an empty sprint projection", { tag: ["@case-module-tabs-sprint-read-empty", "@edition-core"] }, async ({ page }) => {
     const failed = await refuseOnce(page, "ProjectStorySprintIndex");
     await page.reload();
     await expect(page.getByText("Sprint filter unavailable.", { exact: false })).toBeVisible();

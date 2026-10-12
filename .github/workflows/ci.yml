@@ -66,6 +66,15 @@ jobs:
       - name: Desktop Rust tests
         run: cargo test --manifest-path studio/src-tauri/Cargo.toml --features native-libghostty --no-fail-fast
 
+      # Pocock refuses parallel presses (CODING-2865), so the parallel Graph
+      # Run proofs are core-edition tests; run their suites in core too.
+      - name: Core-edition Graph Run tests
+        run: >-
+          cargo test --manifest-path studio/src-tauri/Cargo.toml
+          --features native-libghostty,edition-core --no-fail-fast
+          --test graph_run_service --test slice6_execution_proof
+          --test slice6_execution_recovery --test mcp_graph_run_mode
+
       - name: Frontend-to-agent desktop acceptance
         timeout-minutes: 30
         run: bun run --cwd studio test:e2e:desktop
@@ -80,6 +89,72 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: desktop-acceptance-diagnostics
+          path: studio/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  desktop-subtree:
+    name: Desktop subtree journey (${{ matrix.edition }})
+    # Same repository-only guard as the desktop job: macOS runners are
+    # expensive, so forks never start them.
+    if: >-
+      github.event_name == 'push' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-26
+    timeout-minutes: 45
+    strategy:
+      # One edition failing must not cancel the other's evidence.
+      fail-fast: false
+      matrix:
+        edition: [pocock, core]
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.1.1.app/Contents/Developer
+      CARGO_INCREMENTAL: "0"
+      TICKETRY_EDITION: ${{ matrix.edition }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install JavaScript packages
+        run: bun install --frozen-lockfile
+
+      - name: Install terminal prerequisite
+        run: |
+          command -v tmux || brew install tmux
+          tmux -V
+
+      # tauri-build requires the externalBin sidecar to exist; stage it the
+      # same way desktop:dev does.
+      - name: Stage ticketry-hook sidecar
+        run: >-
+          node --input-type=module -e 'import { prepareDesktopHookRunner } from
+          "./studio/scripts/desktop-hook-runner.mjs";
+          prepareDesktopHookRunner({ root: process.cwd() });'
+
+      - name: Subtree journey pure checks
+        run: |
+          bun run --cwd studio test:e2e:desktop:subtree:checks
+          bun run --cwd studio test:e2e:desktop:providers
+
+      # Builds this leg's edition (with libghostty preparation), proves the
+      # running app is that edition, then runs its fixed case list.
+      - name: Desktop subtree journey
+        run: bun run --cwd studio test:e2e:desktop:subtree
+
+      - name: Preserve desktop subtree diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-subtree-diagnostics-${{ matrix.edition }}
           path: studio/test-results/
           if-no-files-found: ignore
           retention-days: 7

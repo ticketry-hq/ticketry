@@ -3,6 +3,7 @@
 Launchkey Record toggles the external Handy application through a fixed desktop command.
 
 Surfaces: desktop, manual
+Editions: core
 
 ## Sub-features
 
@@ -12,13 +13,20 @@ Surfaces: desktop, manual
 
 ## How to get to it
 
+Voice transcription exists only in the core edition (`TICKETRY_EDITION=core`;
+capability `voiceTranscription`). A Pocock build compiles the Handy command and
+its microphone code, but does not register `desktop_toggle_handy_transcription`
+in the invoke handler, does not request microphone authorization on
+`RunEvent::Ready`, and does not register the `toggle-voice-transcription` keymap
+action. Pocock never asks for the microphone (CODING-2864).
+
 With [Launchkey MIDI control](launchkey-midi-control.md) connected, press its physical **Record** button. It dispatches action `toggle-voice-transcription`; there is no registered default keyboard chord or Studio transcription button. Press Record again to send another toggle. The desktop invokes `/Applications/Handy.app/Contents/MacOS/handy --toggle-transcription`; this is an external tool integration, not an in-app recorder/editor. Sources: `studio/src/features/launchkey/launchkeyController.ts`, `studio/src/features/agents/actions/agentRunActions.ts` and `studio/src-tauri/crates/app/ticketry-desktop/src/desktop/handy.rs`.
 
 ## Prerequisites
 
 - macOS desktop with supported Launchkey hardware connected; browser runtime does not supply this native action.
 - Handy installed at `/Applications/Handy.app`, configured and able to use the microphone. Follow the [hardware-check prerequisites](../../studio/docs/launchkey-hardware-check.md).
-- Desktop startup requests macOS microphone permission for terminal voice tools, except automated startup-exit profiles. This does not prove Handy's own permissions are satisfied. Source: `studio/src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs` and `studio/src-tauri/crates/app/ticketry-desktop/src/desktop/microphone_permission.rs`.
+- Core desktop startup requests macOS microphone permission for terminal voice tools, except automated startup-exit profiles; Pocock never requests it. This does not prove Handy's own permissions are satisfied. Source: `studio/src-tauri/crates/app/ticketry-desktop/src/desktop/run.rs` and `studio/src-tauri/crates/app/ticketry-desktop/src/desktop/microphone_permission.rs`.
 
 ## Expected behavior
 
@@ -35,6 +43,8 @@ There is no production transcript DOM selector or GraphQL row. Observe the physi
 | --- | --- | --- |
 | `studio/src/test/desktopHandyContract.test.ts` | `bun run --cwd studio test -- src/test/desktopHandyContract.test.ts` | Source assertions for command registration, permissions, fixed executable/argument and nonblocking spawn. |
 | `studio/src/test/overhaulMicrophonePermissionAcceptance.test.tsx`, `overhaul-500` | `bun run --cwd studio test -- src/test/overhaulMicrophonePermissionAcceptance.test.tsx` | Source assertions for macOS usage description, entitlement and permission request on ordinary startup; no microphone capture. |
+| `studio/src-tauri/crates/app/ticketry-desktop/src/desktop/edition_peripherals_tests.rs` | `cargo test --manifest-path studio/src-tauri/Cargo.toml -p ticketry-desktop --lib edition_peripherals`, plus the same with `--features ticketry-edition/edition-core` | A mock desktop application has no Handy command and no Ready microphone request in Pocock; both are present in core. |
+| `studio/src/test/overhaulPocockLaunchkeyVoiceAcceptance.test.tsx` / `studio/src/test/overhaulCoreLaunchkeyVoiceAcceptance.test.tsx` | `bun run --cwd studio test:pocock src/test/overhaulPocockLaunchkeyVoiceAcceptance.test.tsx`; `bun run --cwd studio test src/test/overhaulCoreLaunchkeyVoiceAcceptance.test.tsx` | Pocock leaves the voice action unregistered and ignores a stored override; core registers and dispatches it. |
 | `studio/src/test/runtime/desktopRuntime.test.ts` | `bun run --cwd studio test -- src/test/runtime/desktopRuntime.test.ts -t 'Handy\|MIDI transport'` | Mocked fixed native invocation and swallowed failures. |
 | `studio/src/test/overhaulAgentRunActionsAcceptance.test.tsx` | `bun run --cwd studio test -- src/test/overhaulAgentRunActionsAcceptance.test.tsx -t 'voice toggle'` | Agent action routes through the runtime contract. |
 | `studio/src/features/launchkey/launchkeyController.inputRouting.test.ts` | `bun run --cwd studio test -- src/features/launchkey/launchkeyController.inputRouting.test.ts` | Fake MIDI Record/light and reconnect behavior. |
@@ -52,6 +62,7 @@ Suite: excluded (desktop-only): the only dispatcher of `toggle-voice-transcripti
 - `studio/src/features/agents/actions/agentRunActions.ts` and `studio/src/app/navigation/actionIds.ts`: voice action dispatch and identity.
 - `studio/src/runtime/desktopRuntime.ts` and `studio/src/runtime/launchkey.ts`: native call and inert unsupported runtime.
 - `studio/src-tauri/crates/app/ticketry-desktop/src/desktop/handy.rs`: fixed external command and silent failure logging.
+- `studio/src-tauri/crates/app/ticketry-desktop/src/desktop/edition_peripherals.rs`: edition-gated Handy command registration and Ready microphone request.
 - `studio/src-tauri/crates/app/ticketry-desktop/src/desktop/microphone_permission.rs`: macOS authorization request.
 - `studio/src-tauri/crates/app/ticketry-desktop/native/microphone_permission.m`: request only when authorization is not yet determined.
 - [Desktop Runtime](../../studio/src-tauri/crates/app/ticketry-desktop/src/desktop/CONTEXT.md): desktop boundary ownership.

@@ -8,11 +8,12 @@ use super::{
 };
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
-use ticketry_agent_execution::GraphAccess;
+use ticketry_agent_execution::{ExecutionMode, GraphAccess};
 use ticketry_agent_execution::{
     GraphRunRequest, GraphRunResult, GraphRunService, GraphRunServiceError,
 };
 use ticketry_agent_execution::{RunNowCaller, RunNowRequest, RunNowService};
+use ticketry_edition::EditionCapability;
 use ticketry_terminal::{TerminalCleanupService, TerminalLaunchService};
 use ticketry_work_management::CommandError;
 use ticketry_work_management::{CallerScope, LaunchPolicyRequest, LaunchPolicyResolver};
@@ -47,23 +48,24 @@ pub(super) async fn dispatch(
                 terminal_launch.clone(),
                 work_facts(database).await,
             );
-            let result = service
-                .execute(RunNowRequest {
-                    request_identity: if principal.is_global() {
-                        format!("mcp:global:{id_or_key}")
-                    } else {
-                        format!("mcp:{}:{}", principal.agent_run_id, id_or_key)
-                    },
-                    id_or_key,
-                    caller: if principal.is_global() {
-                        RunNowCaller::Human
-                    } else {
-                        RunNowCaller::Agent {
-                            authenticated_run_id: principal.agent_run_id.clone(),
-                        }
-                    },
-                })
-                .await;
+            // Run Now's conversion-and-launch future is deep enough to overflow a
+            // worker stack when inlined into dispatch (CODING-2869); keep it boxed.
+            let result = Box::pin(service.execute(RunNowRequest {
+                request_identity: if principal.is_global() {
+                    format!("mcp:global:{id_or_key}")
+                } else {
+                    format!("mcp:{}:{}", principal.agent_run_id, id_or_key)
+                },
+                id_or_key,
+                caller: if principal.is_global() {
+                    RunNowCaller::Human
+                } else {
+                    RunNowCaller::Agent {
+                        authenticated_run_id: principal.agent_run_id.clone(),
+                    }
+                },
+            }))
+            .await;
             Ok(DispatchOutput::direct(
                 match result {
                     Ok(success) => serde_json::to_value(success),
@@ -83,9 +85,9 @@ pub(super) async fn dispatch(
             let access = GraphAccess::caller_roots(&task.project_id, [&task.id]);
             let request = graph_run_request(&task.id, access, arguments);
             let result = if reset_requested(arguments) {
-                graph_runs.reset_and_execute(request).await
+                Box::pin(graph_runs.reset_and_execute(request)).await
             } else {
-                graph_runs.execute(request).await
+                Box::pin(graph_runs.execute(request)).await
             };
             match result {
                 Ok(result) => Ok(DispatchOutput::direct(graph_run_success(&task.id, result))),
@@ -94,6 +96,15 @@ pub(super) async fn dispatch(
         }
         "launch_default_coding_agent" => {
             let task = scope::task(database, principal, string(arguments, "id_or_key")?).await?;
+            // Refuse before recording a decision: execution reconciliation
+            // delivers recorded decisions, so a refusal after recording would
+            // still start the run the caller was told did not launch.
+            if terminal_launch.is_none() {
+                return Ok(DispatchOutput::direct(json!({
+                    "target_id": task.id,
+                    "error": "terminal_launch_unavailable",
+                })));
+            }
             let decision = match launch_policy
                 .resolve(LaunchPolicyRequest {
                     task_id: task.id.clone(),
@@ -150,12 +161,19 @@ fn graph_run_request(
     GraphRunRequest {
         root_id: root_id.to_owned(),
         access,
-        mode: None,
+        mode: campaign_mode(),
         provider_override: optional_string(arguments, "agent")
             .map(str::trim)
             .filter(|agent| !agent.is_empty())
             .map(str::to_owned),
     }
+}
+
+/// Editions without parallel subtree runs campaign serially; the others keep
+/// the Graph Run service's parallel default. Callers never choose the mode.
+fn campaign_mode() -> Option<ExecutionMode> {
+    (!ticketry_edition::has(EditionCapability::ParallelSubtreeRuns))
+        .then_some(ExecutionMode::Serial)
 }
 
 fn reset_requested(arguments: &Map<String, Value>) -> bool {
@@ -189,7 +207,7 @@ mod graph_run_contract_tests {
     use ticketry_entities::graph_run;
 
     #[test]
-    fn execution_request_keeps_parallel_default_provider_override_and_reset_meaning() {
+    fn execution_request_keeps_the_editions_campaign_mode_provider_override_and_reset_meaning() {
         let arguments = Map::from_iter([
             ("agent".to_owned(), json!(" claude ")),
             ("reset".to_owned(), json!(true)),
@@ -201,7 +219,11 @@ mod graph_run_contract_tests {
             GraphRunRequest {
                 root_id: "root".to_owned(),
                 access,
-                mode: None,
+                mode: if ticketry_edition::has(EditionCapability::ParallelSubtreeRuns) {
+                    None
+                } else {
+                    Some(ExecutionMode::Serial)
+                },
                 provider_override: Some("claude".to_owned()),
             }
         );

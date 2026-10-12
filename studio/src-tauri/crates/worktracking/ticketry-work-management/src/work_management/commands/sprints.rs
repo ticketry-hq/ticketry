@@ -2,10 +2,10 @@
 
 mod lifecycle;
 
+use crate::work_management::database::begin_write;
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection,
     DatabaseTransaction, EntityTrait, IntoActiveModel, QueryFilter, QuerySelect, QueryTrait, Set,
-    TransactionTrait,
 };
 
 use super::{
@@ -26,7 +26,7 @@ pub async fn plan_work_item(
     sprint_id: PatchValue<SprintSelector>,
     facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let id = assign_work_item_sprint(&transaction, id, sprint_id, facts).await?;
     transaction.commit().await?;
     if let Some(facts) = facts {

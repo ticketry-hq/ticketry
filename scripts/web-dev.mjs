@@ -5,6 +5,10 @@ import net from "node:net";
 import path from "node:path";
 
 import { createDevelopmentLogCapture } from "./dev-log-capture.mjs";
+import {
+  editionFeatureArguments,
+  resolveEditionBuild,
+} from "../studio/scripts/edition-build-policy.mjs";
 import { loadWebDevDefaults } from "./web-dev-defaults.mjs";
 import {
   resolveProductDataDirectory,
@@ -27,10 +31,12 @@ function cleanupActiveLaunch() {
   cleanupLaunch = null;
 }
 
-function startTemporaryProfileWatchdog(launch) {
+const nodeProcessLauncher = { spawn, spawnSync };
+
+function startTemporaryProfileWatchdog(launch, launcher) {
   if (!launch.temporaryProfile) return;
   const script = fileURLToPath(new URL("./temporary-profile-watchdog.mjs", import.meta.url));
-  const watchdog = spawn(process.execPath, [
+  const watchdog = launcher.spawn(process.execPath, [
     script,
     launch.dataDirectory,
     String(process.pid),
@@ -147,13 +153,40 @@ export function buildWebFrontendCommand(frontendPort) {
     "--host", "127.0.0.1", "--port", String(frontendPort), "--strictPort", "--open"];
 }
 
-export const graphqlAdapterCargoArguments = ["--locked", "--manifest-path",
-  "studio/src-tauri/Cargo.toml", "-p", "ticketry-dev-tools", "--bin", "ticketry_graphql_adapter"];
+/** Cargo arguments for the adapter of one resolved edition; core adds `--features edition-core`. */
+export function graphqlAdapterCargoArgumentsFor(editionBuild) {
+  return ["--locked", "--manifest-path", "studio/src-tauri/Cargo.toml",
+    "-p", "ticketry-dev-tools", ...editionFeatureArguments(editionBuild),
+    "--bin", "ticketry_graphql_adapter"];
+}
+
+/** The default (Pocock) adapter arguments, kept for callers that prebuild the adapter. */
+export const graphqlAdapterCargoArguments = graphqlAdapterCargoArgumentsFor(resolveEditionBuild({}));
 
 /** A caller that built the adapter once (the e2e warm pool) skips Cargo per launch. */
-export function buildGraphqlAdapterCommand(environment = process.env) {
+export function buildGraphqlAdapterCommand(
+  environment = process.env,
+  editionBuild = resolveEditionBuild(environment),
+) {
   const binary = environment.TICKETRY_GRAPHQL_ADAPTER_BINARY;
-  return binary ? [binary] : ["cargo", "run", ...graphqlAdapterCargoArguments];
+  return binary ? [binary] : ["cargo", "run", ...graphqlAdapterCargoArgumentsFor(editionBuild)];
+}
+
+/**
+ * Plans one `bun run web` launch from the defaults-merged environment: the
+ * resolved edition, the environment every child inherits (always carrying
+ * TICKETRY_EDITION), and the adapter command (null when an adapter is reused).
+ * An invalid TICKETRY_EDITION throws here, before any child process exists.
+ */
+export function planWebLaunch({ environment = process.env, reuseGraphqlAdapter = false } = {}) {
+  const editionBuild = resolveEditionBuild(environment);
+  return {
+    editionBuild,
+    environment: editionBuild.environment,
+    adapterCommand: reuseGraphqlAdapter
+      ? null
+      : buildGraphqlAdapterCommand(editionBuild.environment, editionBuild),
+  };
 }
 
 export function buildWebHookRunnerCommand({
@@ -178,10 +211,10 @@ export function buildWebHookRunnerCommand({
   };
 }
 
-function prepareWebHookRunner() {
+function prepareWebHookRunner(launcher) {
   const build = buildWebHookRunnerCommand();
   mkdirSync(path.dirname(build.output), { recursive: true });
-  const result = spawnSync(build.command, build.args, {
+  const result = launcher.spawnSync(build.command, build.args, {
     cwd: root,
     stdio: "inherit",
   });
@@ -234,14 +267,24 @@ export function buildWebDevelopmentEnvironment({
   };
 }
 
+/** The environment shared by the Rust adapter and Vite children of one launch. */
+export function buildWebChildEnvironment({ launch, adapterPort, hookRunner, logToFile, logPath }) {
+  return withWebFileLogging({
+    ...launch.environment,
+    TICKETRY_GRAPHQL_ADAPTER_PORT: String(adapterPort),
+    TICKETRY_GRAPHQL_ADAPTER_HOOK_RUNNER: hookRunner,
+    MUXED_VITE_GRAPHQL_ORIGIN: `http://127.0.0.1:${adapterPort}`,
+  }, { enabled: logToFile, logPath });
+}
+
 export function cleanupTemporaryWebLaunch(launch) {
   if (!launch.temporaryProfile) return;
   removeTemporarySqliteProfile(launch.dataDirectory);
   stopTemporaryTmuxServer(launch.environment.MUXED_TMUX_SOCKET);
 }
 
-function start(name, command, args, environment, logs) {
-  const child = spawn(command, args, {
+function start(launcher, name, command, args, environment, logs) {
+  const child = launcher.spawn(command, args, {
     cwd: root,
     env: environment,
     stdio: ["inherit", "pipe", "pipe"],
@@ -264,18 +307,27 @@ function start(name, command, args, environment, logs) {
   child.once("error", (error) => console.error(`[web] Could not start ${name}: ${error.message}`));
 }
 
-export async function main() {
-  const options = parseWebDevOptions(process.argv.slice(2));
-  const defaults = loadWebDevDefaults();
+export async function main({
+  argv = process.argv.slice(2),
+  loadDefaults = loadWebDevDefaults,
+  launcher = nodeProcessLauncher,
+} = {}) {
+  const options = parseWebDevOptions(argv);
+  const defaults = loadDefaults();
+  const plan = planWebLaunch({
+    environment: defaults.environment,
+    reuseGraphqlAdapter: defaults.reuseGraphqlAdapter,
+  });
+  console.log(`[web] ${plan.editionBuild.description}`);
   const logToFile = options.logToFile || defaults.logToFile;
   const launch = buildWebDevelopmentEnvironment({
-    environment: defaults.environment,
+    environment: plan.environment,
     developmentProfile: options.developmentProfile,
     temporarySqlite: options.temporarySqlite,
   });
   cleanupLaunch = () => cleanupTemporaryWebLaunch(launch);
   process.once("exit", cleanupActiveLaunch);
-  startTemporaryProfileWatchdog(launch);
+  startTemporaryProfileWatchdog(launch, launcher);
   mkdirSync(launch.dataDirectory, { recursive: true });
   const adapterPort = defaults.reuseGraphqlAdapter
     ? configuredWebPort(
@@ -292,14 +344,11 @@ export async function main() {
   });
   const hookRunner = defaults.reuseGraphqlAdapter || defaults.environment.TICKETRY_GRAPHQL_ADAPTER_BINARY
     ? defaults.environment.TICKETRY_GRAPHQL_ADAPTER_HOOK_RUNNER
-    : prepareWebHookRunner();
+    : prepareWebHookRunner(launcher);
   const logs = createDevelopmentLogCapture();
-  const environment = withWebFileLogging({
-    ...launch.environment,
-    TICKETRY_GRAPHQL_ADAPTER_PORT: String(adapterPort),
-    TICKETRY_GRAPHQL_ADAPTER_HOOK_RUNNER: hookRunner,
-    MUXED_VITE_GRAPHQL_ORIGIN: `http://127.0.0.1:${adapterPort}`,
-  }, { enabled: logToFile, logPath: logs.logPath });
+  const environment = buildWebChildEnvironment({
+    launch, adapterPort, hookRunner, logToFile, logPath: logs.logPath,
+  });
   const dataSource = launch.productDataDirectory
     ? `product profile ${launch.productDataDirectory}`
     : launch.temporarySqlite
@@ -323,13 +372,13 @@ export async function main() {
   };
   process.once("SIGINT", () => stop("SIGINT"));
   process.once("SIGTERM", () => stop("SIGTERM"));
-  if (!defaults.reuseGraphqlAdapter) {
-    const [adapterCommand, ...adapterArguments] = buildGraphqlAdapterCommand(defaults.environment);
-    start("rust-graphql", adapterCommand, adapterArguments, environment, logs);
+  if (plan.adapterCommand) {
+    const [adapterCommand, ...adapterArguments] = plan.adapterCommand;
+    start(launcher, "rust-graphql", adapterCommand, adapterArguments, environment, logs);
   }
   await waitUntilGraphqlReady(adapterPort, 180_000, () => stopping);
   const [frontend, ...frontendArgs] = buildWebFrontendCommand(frontendPort);
-  start("frontend", frontend, frontendArgs, environment, logs);
+  start(launcher, "frontend", frontend, frontendArgs, environment, logs);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

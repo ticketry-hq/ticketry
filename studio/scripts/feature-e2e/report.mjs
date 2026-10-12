@@ -13,7 +13,7 @@ function visualArtifacts(directory) {
 }
 function renderSummary({ result, manifest, runDirectory }) {
   const link = (path) => slash(relative(runDirectory, path));
-  const lines = ['# Feature browser results', '', `Run: \`${safe(manifest.runId)}\`. Revision: \`${safe(manifest.revision)}\`${manifest.dirty ? ' with local changes' : ''}.`, '', `Started: ${safe(manifest.startedAt)}. Finished: ${safe(manifest.finishedAt)}.`, '', `Complete map: **${result.verified ? 'verified' : 'not verified'}**. Selected features: **${result.successful ? 'verified' : 'not verified'}**.`, '', `Playwright totals: ${result.totals.passed} passed, ${result.totals.failed} failed, ${result.totals.skipped} skipped, ${result.totals.flaky} flaky (including onboarding).`, '', '[Manifest](manifest.json) · [Registry snapshot](registry.json) · [Machine results](results.json)', '', '| Feature | Verified cases | Outcome |', '| --- | --- | --- |'];
+  const lines = ['# Feature browser results', '', `Run: \`${safe(manifest.runId)}\`. Revision: \`${safe(manifest.revision)}\`${manifest.dirty ? ' with local changes' : ''}.`, '', `Started: ${safe(manifest.startedAt)}. Finished: ${safe(manifest.finishedAt)}.`, '', `Edition: **${safe(manifest.edition?.edition ?? 'pocock')}** (${safe(manifest.edition?.source ?? 'default')}).`, '', `Complete map: **${result.verified ? 'verified' : 'not verified'}**. Selected features: **${result.successful ? 'verified' : 'not verified'}**.`, '', `Playwright totals: ${result.totals.passed} passed, ${result.totals.failed} failed, ${result.totals.skipped} skipped, ${result.totals.flaky} flaky (including onboarding).`, '', '[Manifest](manifest.json) · [Registry snapshot](registry.json) · [Machine results](results.json)', '', '| Feature | Verified cases | Outcome |', '| --- | --- | --- |'];
   for (const feature of result.features) lines.push(`| ${safe(feature.id)} | ${feature.passed}/${feature.required} | ${feature.status} |`);
   const gaps = [];
   for (const feature of result.features) {
@@ -48,6 +48,13 @@ function renderSummary({ result, manifest, runDirectory }) {
       if (existsSync(providers)) evidence.push(`[provider fixture output](${link(providers)})`);
     }
     lines.push(`| ${safe(row.featureId)} / \`${safe(row.id)}\` | ${row.status} | ${evidence.join(' · ')} |`);
+  }
+  const skipped = manifest.selection.skippedByEdition ?? { features: [], cases: [] };
+  if (skipped.features.length || skipped.cases.length) {
+    const feature = (id) => result.features.find((item) => item.id === id);
+    lines.push('', '## Skipped by edition', '',
+      ...skipped.features.map((id) => `- Feature \`${safe(id)}\` (Editions: ${safe(feature(id)?.editions?.join(', ') ?? 'unknown')})`),
+      ...skipped.cases.map((id) => `- Case \`${safe(result.cases.find((row) => row.id === id)?.featureId)}\` / \`${safe(id)}\` (@edition-core)`));
   }
   if (result.problems.length) lines.push('', '## Run problems', '', ...result.problems.map((problem) => `- ${safe(problem)}`));
   lines.push('', '## Not verified by the browser', '', ...(gaps.length ? gaps.map((gap) => `- ${safe(gap)}`) : ['No explicit manual, desktop-only or excluded entries.']), '', 'Filtered selections never verify the complete map. Browser evidence does not establish native rendering or paid-provider behavior.');

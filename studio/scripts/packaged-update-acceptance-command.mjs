@@ -10,6 +10,7 @@ import {
   createTrustedLoopbackTls,
   generateUpdaterKeyPair,
 } from "./packaged-update-acceptance-environment.mjs";
+import { resolveEditionBuild } from "./edition-build-policy.mjs";
 import { startPackagedUpdateFeed } from "./packaged-update-feed.mjs";
 import { startPackagedUpdateAcceptanceRunner } from "./packaged-update-acceptance-runner.mjs";
 import { loadManifest } from "./release-build.mjs";
@@ -71,6 +72,9 @@ export async function runPackagedUpdateAcceptanceCommand({
   log = console.log,
   dependencies = {},
 } = {}) {
+  // Both packaged versions build this one edition; an invalid value stops here.
+  const editionBuild = resolveEditionBuild(environment);
+  log(editionBuild.description);
   const services = { ...defaultDependencies, ...dependencies };
   let workspace;
   let tls;

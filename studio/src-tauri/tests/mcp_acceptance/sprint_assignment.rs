@@ -81,6 +81,9 @@ fn assert_sprint(result: &Value, id: &str, name: &str, status: &str) {
 
 #[tokio::test]
 async fn create_task_assigns_current_sprint_and_returns_its_identity() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     let directory = tempfile::tempdir().unwrap();
     prepare_command_database(&directory).await;
     seed_sprints(&directory).await;

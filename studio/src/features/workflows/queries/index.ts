@@ -20,10 +20,7 @@ import {
   type WorkTrackerProjectIssueTypeMetadataQuery,
 } from "./issueTypeMetadata";
 import { loadProviderCapabilities } from "../providerQueries";
-import {
-  getProviderCapabilitiesSnapshot,
-  setProviderCapabilities,
-} from "../providerQueries";
+import { getProviderCapabilitiesSnapshot } from "../providerQueries";
 import {
   readSubtreeRunCapabilities,
   readWorkflowIssueTypes,
@@ -98,12 +95,6 @@ export function getWorkflowStateCountsSnapshot(
   projectId: string,
 ): Record<string, number> {
   return stateCounts.get(projectId) ?? EMPTY_COUNTS;
-}
-
-export function setWorkflowProviderCapabilities(
-  capabilities: WorkflowEditorResources["providerCapabilities"],
-): void {
-  setProviderCapabilities(capabilities);
 }
 
 export function getWorkflowProviderCapabilitiesSnapshot(): WorkflowEditorResources["providerCapabilities"] {

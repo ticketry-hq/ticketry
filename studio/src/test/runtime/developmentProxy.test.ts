@@ -9,6 +9,7 @@ describe("developmentProxy", () => {
     expect(proxy["/graphql/subscribe"].target).toBe("http://127.0.0.1:43210");
     expect(proxy["/graphql"].target).toBe("http://127.0.0.1:43210");
     expect(proxy["/documents"].target).toBe("http://127.0.0.1:43210");
+    expect(proxy["/runtime-configuration"].target).toBe("http://127.0.0.1:43210");
     expect(proxy["/graphql"].changeOrigin).toBe(false);
   });
 
@@ -33,6 +34,7 @@ describe("developmentProxy", () => {
       "/graphql/subscribe",
       "/graphql",
       "/documents",
+      "/runtime-configuration",
       "/ws/terminal",
     ]);
   });

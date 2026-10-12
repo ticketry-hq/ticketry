@@ -73,9 +73,15 @@ export function analyzeFeatureResults({ manifest, registry, reports }) {
       problems.push(`${row.id}: expected one execution across reports, got ${executions} executions`);
     }
   }
+  // Edition-skipped work is reported as such, never as unrun or verified.
+  const skipped = manifest.selection.skippedByEdition ?? { features: [], cases: [] };
+  for (const row of cases) if (skipped.features.includes(row.featureId) || skipped.cases.includes(row.id)) row.status = 'not in edition';
   const features = registry.features.map((feature) => {
     const mapped = cases.filter((row) => row.featureId === feature.id);
-    return { ...feature, required: mapped.length, passed: mapped.filter((row) => row.status === 'verified').length, status: feature.suite?.exclusion ? 'excluded' : aggregate(mapped.map((row) => row.status)) };
+    const status = feature.suite?.exclusion ? 'excluded' : skipped.features.includes(feature.id) ? 'not in edition'
+      : aggregate(mapped.filter((row) => row.status !== 'not in edition').map((row) => row.status));
+    const required = mapped.filter((row) => row.status !== 'not in edition').length;
+    return { ...feature, required, passed: mapped.filter((row) => row.status === 'verified').length, status };
   });
   const selectedFeatures = features.filter((feature) => featureIds.has(feature.id));
   const successful = featureIds.size > 0 && selected.size > 0 && !problems.length && selectedFeatures.length === featureIds.size && selectedFeatures.every((feature) => feature.status === 'verified');

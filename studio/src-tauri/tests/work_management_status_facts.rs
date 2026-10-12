@@ -7,10 +7,10 @@ use ticketry_entities::{issue, project, worktree};
 use ticketry_runs::{outbox_adopted, RunsServices};
 use ticketry_work_management::WorkFactRecorder;
 use ticketry_work_management::{
-    archive_work_item, create_state, create_work_item, delete_work_item, reorder_states,
-    reorder_work_item, reparent_work_item, transition, update_state, update_work_item, CreateState,
-    CreateWorkItem, ReorderWorkItem, ReparentWorkItem, TransitionOrigin, TransitionWorkItem,
-    UpdateState, UpdateWorkItem,
+    append_description, archive_work_item, create_state, create_work_item, delete_work_item,
+    reorder_states, reorder_work_item, reparent_work_item, transition, update_state,
+    update_work_item, AppendDescription, CreateState, CreateWorkItem, ReorderWorkItem,
+    ReparentWorkItem, TransitionOrigin, TransitionWorkItem, UpdateState, UpdateWorkItem,
 };
 use ticketry_work_management::{
     install_module_presentation_schema, install_workspace_tab_order_schema,
@@ -241,6 +241,44 @@ async fn an_ordinary_field_edit_claims_no_membership_change() {
     // The outbox cursor is global and strictly increasing, so a consumer can
     // resume from the last fact it applied.
     assert!(published[1].cursor > published[0].cursor);
+}
+
+#[tokio::test]
+async fn appending_to_a_description_publishes_the_version_it_wrote() {
+    let (_directory, database, recorder) = fixture().await;
+    let id = create_work_item(&database, create_input("First", None), Some(&recorder))
+        .await
+        .unwrap();
+
+    append_description(
+        &database,
+        AppendDescription {
+            id: id.clone(),
+            new_content: "Agent note".to_owned(),
+        },
+        Some(&recorder),
+    )
+    .await
+    .expect("append to the description");
+
+    let published = facts(&database).await;
+    assert_eq!(published.len(), 2);
+    let fact = &published[1];
+    assert_eq!(fact.kind, "work_item.changed");
+    assert_eq!(fact.work_item_id.as_deref(), Some(id.as_str()));
+    assert_eq!(fact.payload["changeKind"], "updated");
+    assert_eq!(fact.payload["membershipChanged"], false);
+    // An open ticket refetches unless the fact names a version it already adopted.
+    let written = issue::Entity::find_by_id(id)
+        .one(&database)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(written.description, "Agent note");
+    assert_eq!(
+        fact.payload["revision"].as_i64(),
+        Some(written.state_revision)
+    );
 }
 
 #[tokio::test]

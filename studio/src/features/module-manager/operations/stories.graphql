@@ -24,10 +24,13 @@ fragment ModuleManagerStoryFields on WorktrackerIssue {
   blocks_edges: blocksEdges { nodes { id from_issue_id: fromIssueId } }
 }
 
+# Offset pages need a unique order, and rank may tie. sequenceId is unique per
+# project; Seaography cannot apply rank ahead of it, so readers present the
+# complete set through orderedWorkItems (CODING-2915).
 query ModuleManagerStories($projectId: String!, $moduleId: String!, $offset: Int!, $limit: Int!) {
   stories: worktrackerIssue(
     filters: { projectId: { eq: $projectId }, moduleId: { eq: $moduleId }, parentId: { eq: $moduleId }, type: { eq: "task" }, isArchived: { eq: false } }
-    orderBy: { rank: ASC, sequenceId: ASC, id: ASC }
+    orderBy: { sequenceId: ASC }
     pagination: { offset: { offset: $offset, limit: $limit } }
   ) {
     __typename

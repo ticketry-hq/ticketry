@@ -11,6 +11,8 @@ pub enum GraphRunServiceErrorCode {
     CampaignChanged,
     TerminalLaunch,
     Storage,
+    /// The compiled edition does not grant what the request asked for.
+    EditionCapabilityUnavailable,
 }
 
 #[derive(Debug)]

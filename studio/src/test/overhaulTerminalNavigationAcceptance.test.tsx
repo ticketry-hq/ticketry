@@ -288,6 +288,113 @@ describe("overhaul acceptance — terminals", () => {
       .toBe("session-b");
   });
 
+  it("[overhaul-838] cycles live terminals while the current terminal owns typing", async () => {
+    const first = workItem({ id: "story-1", name: "First", state: TODO.id, rank: "A" });
+    const second = workItem({ id: "story-2", name: "Second", key: "MEML-2", state: TODO.id, rank: "B" });
+    seedModuleOpenFixture("module-1", [first, second]);
+    setStatesSorted("project-1", [TODO]);
+    useTerminalStore.setState({
+      sessions: {
+        "session-first": session("session-first", "story-1", "run-first"),
+        "session-second": session("session-second", "story-2", "run-second"),
+      },
+      sessionByRun: {
+        "run-first": "session-first",
+        "run-second": "session-second",
+      },
+    });
+    useAgentStatusStore.setState({
+      runs: {
+        "run-first": run("run-first", "story-1"),
+        "run-second": run("run-second", "story-2"),
+      },
+    });
+    useClientStore.setState({
+      selectedTaskId: "story-2",
+      activeByTask: { "story-2": "session-second" },
+      sidebarVisible: false,
+      editViewZone: "active-tab-body",
+      editViewBodyEngaged: true,
+    });
+    render(<KeymapHarness rows={[]} />);
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "\\",
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+
+    await waitFor(() => expect(useClientStore.getState().selectedTaskId)
+      .toBe("story-1"));
+    expect(useClientStore.getState().activeByTask["story-1"]).toBe("session-first");
+  });
+
+  it("[overhaul-839] presents the cycled ticket's terminal over its remembered Details", async () => {
+    const first = workItem({ id: "story-1", name: "First", state: TODO.id, rank: "A" });
+    const second = workItem({ id: "story-2", name: "Second", key: "MEML-2", state: TODO.id, rank: "B" });
+    seedModuleOpenFixture("module-1", [first, second]);
+    setStatesSorted("project-1", [TODO]);
+    useTerminalStore.setState({
+      sessions: {
+        "session-first": session("session-first", "story-1", "run-first"),
+        "session-second": session("session-second", "story-2", "run-second"),
+      },
+      sessionByRun: {
+        "run-first": "session-first",
+        "run-second": "session-second",
+      },
+    });
+    useAgentStatusStore.setState({
+      runs: {
+        "run-first": run("run-first", "story-1"),
+        "run-second": run("run-second", "story-2"),
+      },
+    });
+    // The first ticket was last left on Details; the second shows its terminal.
+    localStorage.setItem("studio.activeWorkspaceByBucket:v1", JSON.stringify({
+      "story-1": { kind: "details" },
+      "story-2": { kind: "terminal", agentRunId: "run-second" },
+    }));
+    useClientStore.setState({
+      selectedTaskId: "story-2",
+      focusedPane: "details-or-terminal",
+      activeByTask: { "story-1": "session-first", "story-2": "session-second" },
+    });
+    function SelectedWorkspace() {
+      const bucket = useClientStore((state) => state.selectedTaskId);
+      return (
+        <SelectedTicketContent
+          bucket={bucket}
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      );
+    }
+    render(<><KeymapHarness rows={[]} /><SelectedWorkspace /></>);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "codex terminal" }))
+      .toHaveAttribute("aria-selected", "true"));
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "\\",
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+
+    await waitFor(() => expect(useClientStore.getState().selectedTaskId)
+      .toBe("story-1"));
+    await waitFor(() => expect(screen.getByRole("tab", { name: "codex terminal" }))
+      .toHaveAttribute("aria-selected", "true"));
+    expect(screen.getByTestId("selected-ticket-terminal")).toHaveAttribute("data-active", "true");
+  });
+
   it("[overhaul-16] closes, refreshes, and resumes a provider conversation in place", async () => {
     const resumableSession = {
       agent_run_id: "run-old",

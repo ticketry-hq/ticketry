@@ -17,6 +17,7 @@ use seaolim::{
 use crate::work_management::{
     commands::{sprints, status_facts::WorkFactRecorder, workflow::PatchValue},
     graphql::{command_error, require_command_database},
+    write_reservation::ReservedWrite,
 };
 use ticketry_entities::sprint;
 
@@ -67,7 +68,7 @@ pub(super) fn register(builder: &mut Builder) {
                 TypeRef::named(TypeRef::STRING),
             ))
             .hook_owns_authorization(),
-        UpdateSprint,
+        ReservedWrite(UpdateSprint),
         ViewSerializers::default(),
     );
 }

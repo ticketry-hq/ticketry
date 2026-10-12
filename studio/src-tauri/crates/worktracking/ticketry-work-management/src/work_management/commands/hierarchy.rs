@@ -1,8 +1,9 @@
+use crate::work_management::database::begin_write;
 use std::collections::{HashMap, HashSet};
 
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, ExprTrait,
-    QueryFilter, Set, TransactionTrait,
+    QueryFilter, Set,
 };
 
 use super::fractional_rank;
@@ -45,7 +46,7 @@ pub async fn reparent(
         .one(database)
         .await?
         .ok_or_else(|| CommandError::NotFound("Work item not found.".to_owned()))?;
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     lock_project(&transaction, &candidate.project_id).await?;
     let current = issue::Entity::find_by_id(&id)
         .one(&transaction)

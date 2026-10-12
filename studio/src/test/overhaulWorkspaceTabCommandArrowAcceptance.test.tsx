@@ -24,7 +24,7 @@ describe("overhaul acceptance — Command-arrow workspace tab navigation", () =>
   });
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-  it("[overhaul-2781] lands an engaged Command-arrow arrival on a document in navigation mode so the next Command-arrow leaves it", async () => {
+  it("[overhaul-833] lands an engaged Command-arrow arrival on a document in navigation mode so the next Command-arrow leaves it", async () => {
     useClientStore.setState({ sidebarVisible: false, editViewBodyEngaged: true, editViewZone: "active-tab-body" });
     render(<><KeymapHarness /><TaskWorkspace bucket="story-a" projectId="project-1" moduleId="module-1"
       owner="studio" details={<div>Story A details</div>} /></>);

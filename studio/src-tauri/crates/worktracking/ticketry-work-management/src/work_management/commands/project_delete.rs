@@ -7,10 +7,8 @@
 
 use super::identifiers::database_uuid;
 use super::CommandError;
-use sea_orm::{
-    ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect,
-    TransactionTrait,
-};
+use crate::work_management::database::begin_write;
+use sea_orm::{ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 use ticketry_entities::{
     issue, issue_blocker, issue_type, issue_type_transition, launch_binding, project, state,
 };
@@ -20,7 +18,7 @@ pub async fn delete_project(
     project_id: &str,
 ) -> Result<(), CommandError> {
     let id = database_uuid(project_id, "project_id")?;
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     if project::Entity::find_by_id(&id)
         .one(&transaction)
         .await?

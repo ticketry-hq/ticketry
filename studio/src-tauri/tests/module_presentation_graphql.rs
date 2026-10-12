@@ -15,6 +15,9 @@ async fn fixture() -> DatabaseConnection {
     database
         .execute_unprepared(&format!(
             r#"
+            CREATE TABLE worktracker_project (
+                id char(32) PRIMARY KEY, state_revision bigint NOT NULL
+            );
             CREATE TABLE worktracker_issue (
                 sprint_id char(32) NULL, id char(32) PRIMARY KEY, project_id char(32) NOT NULL,
                 type text NOT NULL, issue_type_id char(32) NOT NULL,

@@ -44,6 +44,22 @@ describe("desktop runtime contract", () => {
     });
   });
 
+  it("keeps the host's compiled edition as informational startup data", async () => {
+    const invoke = vi.fn().mockResolvedValue({ ...startupConfiguration(), edition: "core" });
+
+    const runtime = await createDesktopRuntime({ invoke });
+
+    expect(runtime.startup().edition).toBe("core");
+  });
+
+  it("rejects a host edition outside the manifest's editions", async () => {
+    const invoke = vi.fn().mockResolvedValue({ ...startupConfiguration(), edition: "full" });
+
+    await expect(createDesktopRuntime({ invoke })).rejects.toThrow(
+      "Desktop initialization failed: configuration.edition must be \"pocock\" or \"core\" when present",
+    );
+  });
+
   it("reports only capabilities implemented by this desktop slice", async () => {
     const invoke = vi.fn().mockResolvedValue(startupConfiguration());
 

@@ -5,6 +5,9 @@ use super::fixture::{assert_sprint, create_arguments, task_id, Fixture, ACTIVE, 
 
 #[tokio::test]
 async fn create_and_subtask_accept_current_and_both_explicit_uuid_shapes() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     let mut fixture = Fixture::new(true).await;
     let parent = fixture
         .client
@@ -49,6 +52,9 @@ async fn create_and_subtask_accept_current_and_both_explicit_uuid_shapes() {
 
 #[tokio::test]
 async fn create_without_sprint_or_with_null_preserves_the_legacy_uuid_result() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     let mut fixture = Fixture::new(true).await;
     let mut parent_id = String::new();
     for (index, tool, explicit_null) in [

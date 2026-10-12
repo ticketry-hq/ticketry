@@ -322,7 +322,7 @@ featureSuite("module-manager", { isolation: "case" }, () => {
     } finally { await fixture.cleanup(); }
   });
 
-  test("classifies excluded and hidden modules and clears sprint restriction only for explicit navigation", { tag: "@case-manager-sprint-groups" }, async ({ page, request }) => {
+  test("classifies excluded and hidden modules and clears sprint restriction only for explicit navigation", { tag: ["@case-manager-sprint-groups", "@edition-core"] }, async ({ page, request }) => {
     const fixture = await managerFixture(request, "sprint-groups");
     try {
       const manager = await visitManager(page, fixture.first.name);

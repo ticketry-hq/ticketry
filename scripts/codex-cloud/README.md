@@ -63,6 +63,21 @@ The frontend URL and data directory are printed at startup. Logs go to
 `.ticketry-dev/logs/ticketry.log`. Playwright manages a separate temporary
 profile and runtime, so a running inspection server is not a prerequisite.
 
+The cloud scripts build the default Pocock edition. Set `TICKETRY_EDITION` to
+`pocock` or `core` to choose explicitly; it is passed through unchanged to the
+Bun launcher, frontend build, and Playwright web server, which resolve it with
+`studio/scripts/edition-build-policy.mjs`. The direct Cargo calls in
+`install.sh` and `check.sh rust` source [`edition.sh`](edition.sh), which adds
+`--features edition-core` only for `core`, prints `Edition: <edition>
+(default|explicit)`, and exits before installing or building on any other
+value. Prepare and check with the same edition so Rust caches match:
+
+```bash
+TICKETRY_EDITION=core bash scripts/codex-cloud/install.sh
+TICKETRY_EDITION=core bash scripts/codex-cloud/check.sh all
+TICKETRY_EDITION=core bash scripts/codex-cloud/start.sh
+```
+
 `check.sh` defaults to the frontend checks. `all` also runs portable Rust tests,
 generated-contract drift checks, and browser E2E. Provider-launch tests may
 require additional CLI installations and authentication; a test failure is

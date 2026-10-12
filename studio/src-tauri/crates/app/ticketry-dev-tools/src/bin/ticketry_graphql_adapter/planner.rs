@@ -1,12 +1,37 @@
 use std::{env, future::Future};
 
 use tauri_graphql::TransportApiImpl;
-use ticketry_planner::{PlannerFrontendOrigin, PlannerService};
+use ticketry_planner::{PlannerEndpoint, PlannerFrontendOrigin, PlannerService};
 use tokio::sync::mpsc;
 
+/// The adapter's planner listener, absent in editions without sprint planning.
+pub(super) struct BrowserPlanner(Option<PlannerService>);
+
+impl BrowserPlanner {
+    pub(super) fn endpoint(&self) -> Option<&PlannerEndpoint> {
+        self.0.as_ref().map(PlannerService::endpoint)
+    }
+}
+
+/// Failures the planner listener reports; an absent planner never reports one.
+pub(super) struct PlannerFailures(Option<mpsc::UnboundedReceiver<String>>);
+
+impl PlannerFailures {
+    pub(super) async fn failed(&mut self) -> Option<String> {
+        match self.0.as_mut() {
+            Some(failures) => failures.recv().await,
+            None => std::future::pending().await,
+        }
+    }
+}
+
+/// Open the planner listener where the edition grants sprint planning.
 pub(super) async fn start(
     api: TransportApiImpl,
-) -> Result<(PlannerService, mpsc::UnboundedReceiver<String>), String> {
+) -> Result<(BrowserPlanner, PlannerFailures), String> {
+    if !ticketry_edition::has(ticketry_edition::EditionCapability::SprintPlanning) {
+        return Ok((BrowserPlanner(None), PlannerFailures(None)));
+    }
     let port = match env::var("TICKETRY_PLANNER_PORT") {
         Ok(port) => port
             .parse::<u16>()
@@ -34,15 +59,17 @@ pub(super) async fn start(
         let _ = failure.send(message);
     })
     .await?;
-    Ok((runtime, failed))
+    Ok((BrowserPlanner(Some(runtime)), PlannerFailures(Some(failed))))
 }
 
 pub(super) async fn serve(
-    runtime: PlannerService,
+    planner: BrowserPlanner,
     server: impl Future<Output = std::io::Result<()>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let result = server.await;
-    runtime.shutdown().await?;
+    if let Some(runtime) = planner.0 {
+        runtime.shutdown().await?;
+    }
     result?;
     Ok(())
 }
@@ -55,7 +82,19 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn browser_planner_serves_the_installed_schema_and_joins_shutdown_on_server_failure() {
+    async fn browser_adapter_opens_no_planner_without_sprint_planning() {
+        if ticketry_edition::has(ticketry_edition::EditionCapability::SprintPlanning) {
+            return;
+        }
+        let (planner, mut failures) = start(installed_api()).await.unwrap();
+        assert!(planner.endpoint().is_none(), "Pocock opens no planner listener");
+        let failure =
+            tokio::time::timeout(std::time::Duration::from_millis(50), failures.failed()).await;
+        assert!(failure.is_err(), "an absent planner never reports a failure");
+        serve(planner, async { Ok(()) }).await.unwrap();
+    }
+
+    fn installed_api() -> TransportApiImpl {
         let query = Object::new("Query").field(Field::new(
             "ready",
             TypeRef::named_nn(TypeRef::BOOLEAN),
@@ -69,8 +108,16 @@ mod tests {
                 .unwrap(),
         ))
         .unwrap();
-        let (runtime, _failed) = start(api).await.unwrap();
-        let endpoint = runtime.endpoint().clone();
+        api
+    }
+
+    #[tokio::test]
+    async fn browser_planner_serves_the_installed_schema_and_joins_shutdown_on_server_failure() {
+        if !ticketry_edition::has(ticketry_edition::EditionCapability::SprintPlanning) {
+            return;
+        }
+        let (runtime, _failures) = start(installed_api()).await.unwrap();
+        let endpoint = runtime.endpoint().expect("core opens the planner").clone();
         let origin = env::var("MUXED_DESKTOP_ORIGIN").unwrap_or_else(|_| {
             format!(
                 "http://127.0.0.1:{}",

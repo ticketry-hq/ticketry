@@ -116,9 +116,11 @@ export function WorkspaceTabBody({
   const selectedChangesTaskId = useChangesCheckoutSelection(
     (state) => moduleId ? state.taskIdByModule[moduleId] : undefined,
   );
-  const changesTaskId = selectedChangesTaskId === undefined
-    ? isScratchBucket(bucket) ? null : bucket
-    : selectedChangesTaskId;
+  // Only the module's scratch bucket follows the remembered checkout; a
+  // ticket's bucket always reviews that ticket's own worktree.
+  const changesTaskId = isScratchBucket(bucket)
+    ? selectedChangesTaskId ?? null
+    : bucket;
   const openModuleChanges = useCallback(() => {
     if (moduleId) openModuleChangesWorkspace(moduleId);
   }, [moduleId]);

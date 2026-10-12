@@ -132,9 +132,10 @@ Empty leftover folders are ignored; they do not represent a product area.
 
 ## Entry contract
 
-Each purpose-named kebab-case Markdown file has one H1, a one-sentence summary
-and a `Surfaces:` line listing `browser`, `desktop` and/or `manual`, followed
-by these seven required non-empty H2 sections in order. The optional
+Each purpose-named kebab-case Markdown file has one H1, a one-sentence summary,
+a `Surfaces:` line listing `browser`, `desktop` and/or `manual`, and directly
+after it an `Editions:` line (see [Editions](#editions)), followed by these
+seven required non-empty H2 sections in order. The optional
 **End-to-end suite** H2 belongs directly after **Verifying it** and before
 **Relevant code**; the structural checker accepts it now, and the final
 feature-suite migration gate will require it:
@@ -164,6 +165,37 @@ Plain `Suite: studio/e2e/features/<feature-id>.spec.ts` declarations in
 **End-to-end suite** also count as browser-spec citations and must point to
 existing files. They do not claim code-area ownership; the independent suite
 drift check still validates suite identity and coverage tables.
+
+## Editions
+
+Each build compiles one edition, chosen by `TICKETRY_EDITION`: `pocock` is the
+default and `core` adds the capabilities in
+[`config/editions.json`](../../config/editions.json). Every entry declares the
+editions it exists in on the line directly after `Surfaces:`:
+
+- `Editions: pocock, core`: the feature exists in both editions.
+- `Editions: core`: the whole feature is core-only. Plan workspace navigation,
+  Sprint lifecycle and goals, Epic planning, Inline Story creation in Plan,
+  Story moves, Suggestion review, Background discovery and recovery, Launchkey
+  MIDI control and Voice transcription are core-only.
+- `Editions: pocock`: the feature exists only in Pocock.
+
+A core-only sub-feature inside an entry that also ships in Pocock is marked by
+`(core)` directly after its identifier, for example
+`` - `dependency-graph-parallel-run` (core): … ``. Every browser case that
+exists only in core carries the Playwright tag `@edition-core`, on the case
+(`{ tag: ["@case-<id>", "@edition-core"] }`) or on an enclosing
+`test.describe`. `@edition-core` is the only edition tag.
+
+The drift check (rule 10) requires one legal `Editions:` line per entry and
+keeps tags and markers aligned:
+
+- `@edition-core` cases and `(core)` sub-features appear only in entries whose
+  `Editions:` include `core`.
+- Every coverage row that cites an `@edition-core` case is a `(core)`
+  sub-feature.
+- In an entry that also ships in Pocock, a case cited only by `(core)` rows
+  carries `@edition-core`.
 
 ## End-to-end suite contract
 
@@ -222,6 +254,29 @@ Run from the repository root:
 - `bun run --cwd studio test:e2e:features --check` reports all map/suite drift
   and exits non-zero for violations.
 
+The runner builds and serves one edition per run, resolved like every other
+launcher: Pocock by default, core with `TICKETRY_EDITION=core`. It logs
+`Edition: <edition> (default|explicit)` once, prebuilds the adapter and starts
+each web stack in that edition, and gives the Playwright child the same
+`TICKETRY_EDITION`. A Pocock run skips features whose `Editions:` omit `pocock`
+and drops `@edition-core` cases; a core run skips only features whose
+`Editions:` omit `core`. Skipped features and cases are printed when the run
+starts and listed under **Skipped by edition** in the run summary, never
+counted as passed or unrun. Explicitly naming a feature or case that the
+edition does not contain fails and names the edition to rerun with. A
+complete-map claim covers only the edition it ran; verify both editions with
+two runs:
+
+```bash
+bun run --cwd studio test:e2e:feature <feature-id>                        # Pocock
+TICKETRY_EDITION=core bun run --cwd studio test:e2e:feature <feature-id>  # core
+bun run --cwd studio test:e2e:features                                    # Pocock sweep
+TICKETRY_EDITION=core bun run --cwd studio test:e2e:features              # core sweep
+```
+
+`bun run --cwd studio test:e2e:planning` runs the seven core-only planning
+suites in core. `--check` and `--list` do not depend on the edition.
+
 A feature change updates its map entry and its suite together: new or changed
 sub-features, coverage cells and `@case-` cases land in the same change, and
 `--check` reports any mismatch between them.
@@ -272,4 +327,6 @@ onboarding, unexpected identities, dirty cleanup, source changes and a nonzero
 Playwright exit that no failing case explains invalidate every case the
 invocation owns.
 The runner tests are `node --test studio/scripts/run-feature-e2e.test.mjs
-studio/scripts/feature-e2e/*.test.mjs`.
+studio/scripts/feature-e2e/*.test.mjs`. `feature-e2e/devServerWatch.test.mjs`
+keeps each stack's dev server from watching `src-tauri/**`. Crawling the shared
+Cargo target starved the proxy that carries browser GraphQL writes (T2914).

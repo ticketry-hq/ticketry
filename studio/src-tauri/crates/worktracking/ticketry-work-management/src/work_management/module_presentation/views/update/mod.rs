@@ -11,7 +11,7 @@ use seaolim::{
     RestrictedModelMutation, RestrictedMutationField, ViewSerializers,
 };
 
-use crate::work_management::{commands, graphql};
+use crate::work_management::{commands, graphql, write_reservation::ReservedWrite};
 use ticketry_entities::{issue, module_presentation};
 
 struct UpdateModulePresentation;
@@ -77,7 +77,7 @@ pub(super) fn register(builder: &mut Builder) {
                 "tab_hidden",
                 TypeRef::named_nn(TypeRef::BOOLEAN),
             )),
-        UpdateModulePresentation,
+        ReservedWrite(UpdateModulePresentation),
         ViewSerializers::default(),
     );
 }

@@ -55,7 +55,9 @@ query WorkTrackerModuleOpen($moduleId: String!) {
       type: { eq: "task" }
       isArchived: { eq: false }
     }
-    orderBy: { rank: ASC, sequenceId: ASC }
+    # Seaography applies orderBy keys in column order, where sequenceId precedes
+    # rank; orderedWorkItems breaks rank ties on the client (CODING-2915).
+    orderBy: { rank: ASC }
   ) {
     nodes {
       ...GeneratedWorkTrackerWorkItemFields @nonreactive
@@ -80,7 +82,8 @@ query WorkTrackerModuleOpen($moduleId: String!) {
 query WorkTrackerReviewFindings($parentId: String!) {
   findings: worktrackerIssue(
     filters: { parentId: { eq: $parentId }, type: { eq: "task" } }
-    orderBy: { rank: ASC, sequenceId: ASC }
+    # orderedWorkItems breaks rank ties on the client (CODING-2915).
+    orderBy: { rank: ASC }
   ) {
     nodes { ...GeneratedWorkTrackerWorkItemFields }
   }

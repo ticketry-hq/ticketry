@@ -3,7 +3,7 @@ import { usePlanningGraph } from "../planning-graph";
 import { useCreateSprint, useUpdateSprint } from "./mutations";
 import { openPlanItem, openPlanSprint, usePlanWorkspace } from "./planWorkspaceState";
 import SprintsList, { type SprintsListProps } from "./SprintsList";
-import { ROADMAP_ENABLED } from "../../shared/config/roadmapAvailability";
+import { editionHas } from "../../shared/config/edition";
 import { useReorderSprint } from "./useReorderSprint";
 
 export type SprintsViewProps = Pick<SprintsListProps,
@@ -11,7 +11,7 @@ export type SprintsViewProps = Pick<SprintsListProps,
 > & { projectId: string; renderWorkItemDetail?: (id: string) => ReactNode };
 
 export default function SprintsView(props: SprintsViewProps) {
-  return ROADMAP_ENABLED ? <ProjectSprintsView key={props.projectId} {...props} /> : null;
+  return editionHas("sprintPlanning") ? <ProjectSprintsView key={props.projectId} {...props} /> : null;
 }
 
 function ProjectSprintsView({ projectId, renderWorkItemDetail, ...slots }: SprintsViewProps) {

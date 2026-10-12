@@ -13,7 +13,7 @@ fragment ModuleManagerArchivedModuleFields on WorktrackerIssue {
 query ModuleManagerArchivedModules($projectId: String!, $offset: Int!, $limit: Int!) {
   modules: worktrackerIssue(
     filters: { projectId: { eq: $projectId }, type: { eq: "module" }, isArchived: { eq: true } }
-    orderBy: { sequenceId: ASC, id: ASC }
+    orderBy: { sequenceId: ASC }
     pagination: { offset: { offset: $offset, limit: $limit } }
   ) {
     __typename

@@ -3,6 +3,7 @@
 Edit a ticket's Markdown description and its registered design documents while preserving drafts and resolving external changes.
 
 Surfaces: browser, desktop
+Editions: pocock, core
 
 ## Sub-features
 
@@ -88,5 +89,5 @@ Browser cases live in `studio/e2e/features/descriptions-and-documents.spec.ts`.
 - Description and file documents have different save/conflict rules. Description unmount explicitly requests a save; pending external-change choice blocks normal timer/blur saves, so do not infer that switching away with an unresolved notice is a verified safe cancellation path.
 - The module scratch registry is backend infrastructure without a visible document entry on either surface. `SelectedTicket.tsx` hides the New conversation workspace unconditionally, and `useTaskWorkspace.ts` supplies no documents when `conversationRunId` is set. It is therefore not a document UI sub-feature or a desktop-only coverage exemption. New conversation launch belongs to conversations; public scratch-registry contract proof belongs to agent-facing services. Historical “Local scratch workspace” wording in the browser spec title does not establish a visible document feature.
 - Browser HTML proof does not establish native document-protocol asset behavior. Report native cases skipped separately when macOS/WKWebView is unavailable.
-- Browser setup is partly stale: `studio/e2e/web-app.spec.ts` still expects `Open Modules pane` and historical sidebar recovery text. Its shared `studio/e2e/support.ts` `openModule` helper expects `modules-pane-toggle` to report `aria-expanded="false"`; current module chrome uses the Module Manager. Report a setup failure as such instead of claiming that the description/document scenario ran or failed. The shared helper also affects the document and rich-description specs cited above.
+- Browser setup is partly stale: `studio/e2e/web-app.spec.ts` still expects `Open Modules pane` and historical sidebar recovery text. Its shared `studio/e2e/support.ts` `openModule` helper waits only for the selected module tab and module workspace region (CODING-2847); current module chrome uses the Module Manager. Report a setup failure as such instead of claiming that the description/document scenario ran or failed. The shared helper also serves the document and rich-description specs cited above.
 - The [e2e skill](../../.claude/skills/e2e/SKILL.md) still mentions Django. Use the [index](README.md) and Rust GraphQL adapter launcher for isolated browser setup; do not direct document writes at live data.

@@ -17,6 +17,7 @@ use super::support::{optional_i32, optional_string, work_facts, WakeWorkFacts};
 use crate::work_management::{
     commands::catalog,
     graphql::{command_error, require_command_database},
+    write_reservation::ReservedWrite,
 };
 use ticketry_entities::state;
 
@@ -61,7 +62,7 @@ pub(super) fn register(builder: &mut Builder) {
             .argument(InputValue::new("color", TypeRef::named(TypeRef::STRING)))
             .argument(InputValue::new("sort_order", TypeRef::named(TypeRef::INT)))
             .hook_owns_authorization(),
-        UpdateState,
+        ReservedWrite(UpdateState),
         ViewSerializers::default(),
     );
 }

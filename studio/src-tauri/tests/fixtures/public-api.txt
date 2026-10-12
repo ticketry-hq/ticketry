@@ -100,6 +100,7 @@ ticketry-desktop|__cmd__native_terminal_hide
 ticketry-desktop|__cmd__native_terminal_reconcile_frame
 ticketry-desktop|__cmd__native_terminal_retention_benchmark
 ticketry-desktop|__cmd__native_terminal_set_frame
+ticketry-desktop|__cmd__native_terminal_set_module_manager_shortcut
 ticketry-desktop|__cmd__native_terminal_set_webview_interaction
 ticketry-desktop|__cmd__native_terminal_show
 ticketry-desktop|__cmd__native_terminal_trace
@@ -133,6 +134,7 @@ ticketry-desktop|__tauri_command_name_native_terminal_hide
 ticketry-desktop|__tauri_command_name_native_terminal_reconcile_frame
 ticketry-desktop|__tauri_command_name_native_terminal_retention_benchmark
 ticketry-desktop|__tauri_command_name_native_terminal_set_frame
+ticketry-desktop|__tauri_command_name_native_terminal_set_module_manager_shortcut
 ticketry-desktop|__tauri_command_name_native_terminal_set_webview_interaction
 ticketry-desktop|__tauri_command_name_native_terminal_show
 ticketry-desktop|__tauri_command_name_native_terminal_trace
@@ -268,6 +270,10 @@ ticketry-documents|settle_paths
 ticketry-documents|slugify
 ticketry-documents|task_design_dir
 ticketry-documents|task_dir_name
+ticketry-edition|EDITION
+ticketry-edition|Edition
+ticketry-edition|EditionCapability
+ticketry-edition|has
 ticketry-entities|AppendReceipt
 ticketry-entities|DESIGN_DOCUMENT_OBJECT
 ticketry-entities|MODULE_LINK_OBJECT

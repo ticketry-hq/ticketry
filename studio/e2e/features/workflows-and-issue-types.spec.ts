@@ -1,5 +1,6 @@
 import { expect, test, type Locator } from "@playwright/test";
 import { featureSuite } from "./featureSuite";
+import { proveTourWorkflowGuide } from "../workflow-onboarding-support";
 import {
   CreateWorkTrackerWorkItemDocument,
   DeleteWorkTrackerWorkItemDocument,
@@ -25,6 +26,8 @@ import {
   captureLegacyProductApiRequests,
   CODEX_TEST_MODEL,
   CODEX_TEST_REASONING,
+  configureCodexDefault,
+  ensureCodexTestModel,
   createWorkItem,
   getProjects,
   getProviderCatalog,
@@ -59,13 +62,33 @@ import {
   selectState,
 } from "../work-items-migration-support";
 
-featureSuite("workflows-and-issue-types", { isolation: "case" }, () => {
+featureSuite("workflows-and-issue-types", { profile: "first-run", isolation: "case" }, () => {
   let legacyProductApiRequests: string[] = [];
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeAll(async ({ request }, testInfo) => {
+    // First-run catalog and fixture provisioning has its own bounded budget;
+    // browser cases retain the project's normal test and assertion deadlines.
+    testInfo.setTimeout(90_000);
+    // Case isolation gives the tour its untouched first-run profile. All other
+    // cases provision the same real provider state as the onboarded project.
+    if (testInfo.tags.includes("@case-workflow-tour-guide")) {
+      await ensureCodexTestModel(request);
+      return;
+    }
+    await configureCodexDefault(request);
+    const catalog = await getProviderCatalog(request);
+    await graphql(request, UpdateProviderCatalogDocument, {
+      activatedProviders: ["codex", "claude"],
+      codexProfiles: catalog.codex_profiles,
+      defaultProvider: "codex",
+      defaultModel: CODEX_TEST_MODEL,
+      defaultReasoning: CODEX_TEST_REASONING,
+    });
     await seedProject(request);
   });
-  test.afterAll(cleanupWorkItemsFixture);
+  test.afterAll(async ({}, testInfo) => {
+    if (!testInfo.tags.includes("@case-workflow-tour-guide")) await cleanupWorkItemsFixture();
+  });
 
   test.beforeEach(async ({ page }) => {
     legacyProductApiRequests = captureLegacyProductApiRequests(page);
@@ -74,6 +97,8 @@ featureSuite("workflows-and-issue-types", { isolation: "case" }, () => {
   test.afterEach(async () => {
     expect(legacyProductApiRequests).toEqual([]);
   });
+
+  test("opens the Story workflow guide from the first-run tour without launching work", { tag: "@case-workflow-tour-guide" }, proveTourWorkflowGuide);
 
   test("reorders the state catalog through Rust and regroups the open tree", { tag: "@case-workflow-state-catalog-reorder" }, async ({
     page,
@@ -827,22 +852,29 @@ featureSuite("workflows-and-issue-types", { isolation: "case" }, () => {
     await expect(model.locator('option[value="unsupported-e2e-model"]'))
       .toHaveCount(0);
     const grillState = fixture.states.find((state) => state.name === "Grill")!;
-    const storyRevision = (await getWorkflowCatalog(request, fixture.project.id))
-      .issue_types.nodes.find((type) => type.id === fixture.storyType.id)!
-      .workflow_revision;
+    const storyType = (await getWorkflowCatalog(request, fixture.project.id))
+      .issue_types.nodes.find((type) => type.id === fixture.storyType.id)!;
+    const grillBinding = storyType.launch_bindings.nodes
+      .find((row) => row.state === grillState.id)!;
     const refusedModel = await graphqlRefusal(
       request,
       UpsertWorkTrackerLaunchBindingDocument,
       {
         issueTypeId: fixture.storyType.id,
         stateId: grillState.id,
-        workflowRevision: storyRevision,
+        workflowRevision: storyType.workflow_revision,
         prompt: changedPrompt,
-        modelId: "unsupported-e2e-model",
-        reasoningId: CODEX_TEST_REASONING,
+        // A well-formed identity that names no catalog model.
+        modelId: "00000000-0000-4000-8000-0000000000e2",
+        reasoningId: null,
+        profile: null,
+        requiredSkills: grillBinding.required_skills as string[],
+        stageSkills: grillBinding.stage_skills,
+        autoStart: grillBinding.auto_start,
+        subtreeRunEnabled: grillBinding.subtree_run_enabled,
       },
     );
-    expect(refusedModel.message).toMatch(/model/i);
+    expect(refusedModel.message).toBe("Model is not in the agent catalog.");
     expect(launchBindingWrites).toBe(writesBeforeRefusal);
 
     await page.reload();
@@ -1167,6 +1199,59 @@ featureSuite("workflows-and-issue-types", { isolation: "case" }, () => {
     }
   });
 
+  test("recovers a launch binding edit after another writer advances its workflow revision", { tag: "@case-workflow-launch-binding-conflict" }, async ({
+    page,
+    request,
+  }) => {
+    const grill = seededState("Grill");
+    const binding = () => launchBinding(request, fixture.storyType.id, grill.id);
+    const original = (await binding())!;
+    expect(original).toBeTruthy();
+    await openModule(page, names.module);
+    await openWorkItem(page, names.parent);
+    const panel = await openStatePolicy(page, grill.name);
+    const prompt = panel.getByRole("textbox", { name: "Prompt" });
+    const hold = await holdGraphqlOperation(page, "UpsertWorkTrackerLaunchBinding");
+    await prompt.fill("E2E stale prompt edit.");
+    await prompt.blur();
+    await hold.held;
+    // Send the real competing write through the same public mutation seam.
+    const winningPrompt = "E2E prompt saved by the competing writer.";
+    await graphql(request, UpsertWorkTrackerLaunchBindingDocument, {
+      issueTypeId: fixture.storyType.id,
+      stateId: grill.id,
+      workflowRevision: (await issueTypeNode(request, fixture.storyType.id)).workflow_revision,
+      prompt: winningPrompt,
+      modelId: original.model,
+      reasoningId: original.reasoning,
+      profile: original.profile,
+      autoStart: original.auto_start,
+      subtreeRunEnabled: original.subtree_run_enabled,
+      stageSkills: original.stage_skills,
+      requiredSkills: original.required_skills,
+    });
+    await hold.release();
+    await expect(panel).toContainText("Workflow changed elsewhere. Latest settings loaded.");
+    // The editor protects an unsaved prompt draft while the workflow refreshes.
+    await expect(prompt).toHaveValue("E2E stale prompt edit.");
+    expect((await binding())?.prompt).toBe(winningPrompt);
+    await closeStatePolicy(page, grill.name);
+    await openStatePolicy(page, grill.name);
+    await expect(prompt).toHaveValue(winningPrompt);
+    const saved = workflowWrite(page, "UpsertWorkTrackerLaunchBinding");
+    await prompt.fill("E2E prompt retry after refreshed revision.");
+    await prompt.blur();
+    await saved;
+    await expect(panel).not.toContainText("Workflow changed elsewhere.");
+    expect((await binding())?.prompt).toBe("E2E prompt retry after refreshed revision.");
+    expect((await binding())?.required_skills).toEqual(original.required_skills);
+    expect((await binding())?.stage_skills).toEqual(original.stage_skills);
+    await page.reload();
+    const reopened = await openStatePolicy(page, grill.name);
+    await expect(reopened.getByRole("textbox", { name: "Prompt" }))
+      .toHaveValue("E2E prompt retry after refreshed revision.");
+  });
+
   test("applies and clears a Codex profile override on a stage", { tag: "@case-workflow-launch-profile" }, async ({
     page,
     request,
@@ -1220,13 +1305,15 @@ featureSuite("workflows-and-issue-types", { isolation: "case" }, () => {
     const automation = await disposableTaskType(request, "E2E Automation", ideas.id);
     const prompt = "Automate the E2E stage.";
     try {
+      // Auto-start only toggles an existing binding, and none exists yet.
       const refused = await graphqlRefusal(request, SetWorkTrackerAutoStartDocument, {
         issueTypeId: automation.id,
         stateId: ideas.id,
         workflowRevision: (await issueTypeNode(request, automation.id)).workflow_revision,
         autoStart: true,
       });
-      expect(refused.message).toContain("non-empty prompt");
+      expect(refused.message).toBe("Launch binding not found.");
+      expect(await launchBinding(request, automation.id, ideas.id)).toBeUndefined();
 
       await openModule(page, names.module);
       await openWorkItem(page, names.parent);
@@ -1249,10 +1336,20 @@ featureSuite("workflows-and-issue-types", { isolation: "case" }, () => {
       await saved;
       await expect(panel).not.toContainText("A launch binding must have a non-empty prompt.");
       await expect(autoStart).toBeEnabled();
-      saved = workflowWrite(page, "SetWorkTrackerAutoStart");
+      // An interrupted automation write must leave the authoritative flag off.
+      const release = await failGraphqlOperation(page, "SetWorkTrackerAutoStart");
       await autoStart.click();
+      await expect(panel.getByText(/failed to fetch|network|could not/i)).toBeVisible();
+      expect((await launchBinding(request, automation.id, ideas.id))?.auto_start).toBe(false);
+      await release();
+      await page.reload();
+      panel = await openStatePolicy(page, ideas.name, automation.name);
+      const recoveredAutoStart = panel.getByRole("checkbox", { name: `Auto-start ${ideas.name}` });
+      await expect(recoveredAutoStart).not.toBeChecked();
+      saved = workflowWrite(page, "SetWorkTrackerAutoStart");
+      await recoveredAutoStart.click();
       await saved;
-      await expect(autoStart).toBeChecked();
+      await expect(recoveredAutoStart).toBeChecked();
       await expect.poll(async () => (await launchBinding(request, automation.id, ideas.id))?.auto_start)
         .toBe(true);
       expect((await launchBinding(request, automation.id, ideas.id))?.prompt).toBe(prompt);
@@ -1285,8 +1382,13 @@ featureSuite("workflows-and-issue-types", { isolation: "case" }, () => {
       stateId: grill.id,
       workflowRevision: (await issueTypeNode(request, fixture.storyType.id)).workflow_revision,
       prompt: before!.prompt,
-      modelId: geminiModel!.name,
+      modelId: geminiModel!.id,
+      reasoningId: null,
+      profile: null,
+      requiredSkills: before!.required_skills as string[],
+      stageSkills: before!.stage_skills,
       autoStart: true,
+      subtreeRunEnabled: before!.subtree_run_enabled,
     });
     expect(refused.message).toContain("must be activated");
     expect(await launchBinding(request, fixture.storyType.id, grill.id)).toEqual(before);
@@ -1384,7 +1486,8 @@ featureSuite("workflows-and-issue-types", { isolation: "case" }, () => {
     panel = await openStatePolicy(page, grill.name);
     await expect(panel.getByRole("list", { name: "Selected skills" }).getByRole("listitem"))
       .toHaveCount(0);
-    await expect(panel.getByRole("status", { name: "Skill availability" })).toHaveCount(0);
+    await expect(panel.getByRole("status", { name: "Skill availability", exact: true }))
+      .toHaveCount(0);
   });
 
   test("shows each stage skill's availability for the stage provider and rechecks without writing", { tag: "@case-workflow-skill-availability" }, async ({
@@ -1409,7 +1512,7 @@ featureSuite("workflows-and-issue-types", { isolation: "case" }, () => {
     }
     const input = panel.getByRole("textbox", { name: "Skills", exact: true });
     const chip = (name: string) => panel.getByRole("listitem", { name: `Skill ${name}`, exact: true });
-    const status = panel.getByRole("status", { name: "Skill availability" });
+    const status = panel.getByRole("status", { name: "Skill availability", exact: true });
     const add = async (name: string) => {
       const saved = workflowWrite(page, "UpsertWorkTrackerLaunchBinding");
       await input.fill(name);
@@ -1507,7 +1610,7 @@ featureSuite("workflows-and-issue-types", { isolation: "case" }, () => {
     await expect.poll(requiredSkills).toEqual(["grill-with-docs"]);
     const requiredChip = panel.getByRole("listitem", { name: "Required skill grill-with-docs" });
     await expect(requiredChip).toContainText(/Available to \w+|Missing for \w+/);
-    await expect(panel.getByRole("status", { name: "Required skill availability" }))
+    await expect(panel.getByRole("status", { name: "Required skill availability", exact: true }))
       .toBeVisible();
 
     // A disk-visible name outside the pinned catalog is refused.
@@ -1521,6 +1624,15 @@ featureSuite("workflows-and-issue-types", { isolation: "case" }, () => {
     expect(await requiredSkills()).toEqual(["grill-with-docs"]);
     expect((await binding())?.stage_skills).toEqual(stageSkills);
 
+    await page.reload();
+    panel = await openStatePolicy(page, grill.name);
+    await expect(panel.getByRole("list", { name: "Selected required skills" }).getByRole("listitem"))
+      .toHaveText([/^grill-with-docs/]);
+    const release = await failGraphqlOperation(page, "UpsertWorkTrackerLaunchBinding");
+    await panel.getByRole("button", { name: 'Remove required skill "grill-with-docs"' }).click();
+    await expect(panel.getByText(/failed to fetch|network|could not/i)).toBeVisible();
+    expect(await requiredSkills()).toEqual(["grill-with-docs"]);
+    await release();
     await page.reload();
     panel = await openStatePolicy(page, grill.name);
     await expect(panel.getByRole("list", { name: "Selected required skills" }).getByRole("listitem"))
@@ -1542,6 +1654,27 @@ featureSuite("workflows-and-issue-types", { isolation: "case" }, () => {
       .filter((edge) => edge.from_state === start.id)
       .map((edge) => fixture.states.find((state) => state.id === edge.to_state)!.name);
     expect(destinations.length).toBeGreaterThan(0);
+    // Seed an actual workflow member without a launch binding. Built-in Ideas
+    // has launch instructions, so it cannot establish the empty-stage path.
+    const terminal = fixture.states.find((state) =>
+      state.id !== start.id && !story.transitions.nodes.some((edge) => edge.from_state === state.id)
+      && story.transitions.nodes.some((edge) => edge.to_state === state.id))!;
+    expect(terminal, "a terminal Story workflow state").toBeTruthy();
+    const emptyState = (await graphql(request, CreateWorkTrackerStateDocument, {
+      projectId: fixture.project.id,
+      name: "E2E Guide unconfigured stage",
+      group: "completed",
+      color: "#64748B",
+    })).create_state;
+    await graphql(request, CreateWorkTrackerTransitionDocument, {
+      issueTypeId: fixture.storyType.id,
+      fromStateId: terminal.id,
+      toStateId: emptyState.id,
+      workflowRevision: (await issueTypeNode(request, fixture.storyType.id)).workflow_revision,
+      agentAllowed: false,
+      handoff: false,
+    });
+    expect(await launchBinding(request, fixture.storyType.id, emptyState.id)).toBeUndefined();
     const mutations: string[] = [];
     page.on("request", (sent) => {
       if (!sent.url().endsWith("/graphql")) return;
@@ -1567,6 +1700,10 @@ featureSuite("workflows-and-issue-types", { isolation: "case" }, () => {
     const current = guide.locator(`li[data-state-id="${start.id}"]`);
     await expect(current).toContainText("Current state");
     await expect(current).toContainText(`Next: ${destinations.join(", ")}.`);
+    const emptyStage = guide.locator(`li[data-state-id="${emptyState.id}"]`);
+    await expect(emptyStage).toContainText("Launch binding: Not configured.");
+    await emptyStage.getByText("Stage instructions", { exact: true }).click();
+    await expect(emptyStage).toContainText("No agent instructions configured.");
     await expect(guide.getByText("No outgoing transitions configured.").first()).toBeVisible();
     await expect(guide).toContainText("This guide does not start work.");
     await guide.getByRole("button", { name: "Close", exact: true }).click();
@@ -1582,6 +1719,12 @@ featureSuite("workflows-and-issue-types", { isolation: "case" }, () => {
     await expect(guide).toHaveCount(0);
     expect(mutations.slice(before)).toEqual([]);
     expect((await getWorkItem(request, fixture.parent.id)).state_id).toBe(start.id);
+    await page.reload();
+    await openWorkItem(page, names.parent);
+    await page.getByRole("button", { name: "Story workflow guide", exact: true }).click();
+    await expect(guide.locator(`li[data-state-id="${start.id}"]`)).toContainText("Current state");
+    await expect(guide.locator(`li[data-state-id="${start.id}"]`))
+      .toContainText(`Next: ${destinations.join(", ")}.`);
   });
 
   /**

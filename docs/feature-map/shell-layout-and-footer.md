@@ -3,6 +3,7 @@
 The Studio shell keeps the module workspace, resizable Stories and ticket panes, footer controls, and shared feedback surfaces together.
 
 Surfaces: browser, desktop
+Editions: pocock, core
 
 ## Sub-features
 
@@ -82,7 +83,7 @@ those skipped baseline cases as passes.
 - Browsers cache a failed dynamic import by URL, so a fresh `React.lazy` wrapper alone cannot recover a network-aborted modal chunk (CODING-2749). `studio/src/app/modal/recoverableChunkImport.ts` reads the failed URL from the import error and, on **Retry**, imports it again with a unique `chunk-retry` query, without a page reload. Chromium and Firefox name the URL in the error; WebKit's `Importing a module script failed.` does not, so WebKit falls back to the plain re-import. A failure in a nested static dependency of the modal chunk stays cached under the dependency's URL. `@case-shell-modal-recovery` passes in full-suite run `2026-10-11T20-26-31-575Z-a3d6437d` (the earlier failure is in `2026-10-10T15-50-36-796Z-03ac9f09`).
 
 - CODING-2711 updates the shared onboarded setup to the CODING-2643 Module Manager path; legacy specs retain their old steps until the final migration ticket.
-- Historical Modules-pane cases in `studio/e2e/web-app.spec.ts` still request removed `modules-pane-toggle` and `pane-modules` selectors. Current shell source uses the Module Manager; those cases are not evidence for the current manager or layout.
+- Historical Modules-pane cases in `studio/e2e/web-app.spec.ts` still request the removed `pane-modules` selector. Current shell source uses the Module Manager; those cases are not evidence for the current manager or layout.
 - The reassignment descriptor has no production caller (only store and test references); its candidate and empty-candidate paths cannot be exercised through the browser UI. Footer hint browser coverage is in the feature suite.
 - A hidden or covered workspace can remain mounted. Assert user reachability and focus, not mere DOM existence. JSDOM separator tests cannot prove actual pointer geometry, native stacking, or persisted installed-app behavior.
 - Success/info severity announcements and native placement are supplementary source/unit coverage, not established by the browser error-delivery case.

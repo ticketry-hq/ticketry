@@ -1,10 +1,10 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { useClientStore } from "../state/clientStore";
-import { roadmapAvailabilityFixture } from "./roadmapAvailabilityFixture";
+import { editionAcceptanceFixture } from "./editionAcceptanceFixture";
 
 it("[overhaul-528] Plan owns the full-width shell while retained work and the saved Stories/workspace split restore on exit", async () => {
-  const f = roadmapAvailabilityFixture();
+  const f = editionAcceptanceFixture();
   f.mount({ sidebar: true });
   await screen.findByRole("tab", { name: "Roadmap" });
   expect(screen.queryByTestId("pane-modules")).toBeNull();

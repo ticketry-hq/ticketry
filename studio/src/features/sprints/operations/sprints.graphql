@@ -31,7 +31,7 @@ mutation ReorderSprint($sprintId: String!, $beforeId: String, $afterId: String) 
 query SprintSuggestions($sprintId: String!) {
   worktrackerSprintSuggestion(
     filters: { sprintId: { eq: $sprintId } }
-    orderBy: { createdAt: ASC, id: ASC }
+    orderBy: { createdAt: ASC }
   ) {
     nodes {
       ...SprintSuggestionRecord

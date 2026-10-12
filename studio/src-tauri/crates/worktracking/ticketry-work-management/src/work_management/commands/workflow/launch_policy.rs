@@ -1,6 +1,6 @@
+use crate::work_management::database::begin_write;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, ExprTrait, QueryFilter, Set,
-    TransactionTrait,
 };
 
 use super::super::identifiers::database_uuid;
@@ -68,7 +68,7 @@ pub async fn patch_launch_binding(
         || !matches!(input.profile, PatchValue::Unset)
         || !matches!(model_patch, PatchValue::Unset)
         || !matches!(reasoning_patch, PatchValue::Unset);
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let claimed = issue_type::Entity::update_many()
         .col_expr(
             issue_type::Column::WorkflowRevision,
@@ -297,7 +297,7 @@ pub async fn delete_launch_binding(
 ) -> Result<(), CommandError> {
     let type_id = database_uuid(&input.issue_type_id, "issue_type_id")?;
     let state_id = database_uuid(&input.state_id, "state_id")?;
-    let transaction = database.begin().await?;
+    let transaction = begin_write(database).await?;
     let kind = claim_workflow_revision(&transaction, &type_id, input.workflow_revision).await?;
     require_project_state(&transaction, &kind.project_id, &state_id, "State").await?;
     launch_binding::Entity::delete_many()

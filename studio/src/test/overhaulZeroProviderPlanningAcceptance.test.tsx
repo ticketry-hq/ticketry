@@ -168,7 +168,7 @@ describe("zero-provider planning acceptance", () => {
     await waitFor(() => {
       expect(useOnboardingTourStore.getState().step).toBe("module-create");
     });
-    act(() => useOnboardingTourStore.getState().moduleCreated("module-1"));
+    act(() => useOnboardingTourStore.getState().moduleCreated("module-1", true));
     act(() => useOnboardingTourStore.getState().storyCreated(task.id));
     fireEvent.click(screen.getByRole("button", { name: "Finish tour" }));
     await waitFor(() => {
@@ -251,7 +251,7 @@ describe("zero-provider planning acceptance", () => {
       expect(useOnboardingTourStore.getState().step).toBe("module-create");
     });
 
-    act(() => useOnboardingTourStore.getState().moduleCreated("module-1"));
+    act(() => useOnboardingTourStore.getState().moduleCreated("module-1", true));
     fireEvent.click(screen.getByRole("button", { name: "Skip tour" }));
     await waitFor(() => {
       expect(projectApi.acknowledgeOnboarding).toHaveBeenCalledWith(
@@ -289,7 +289,7 @@ describe("zero-provider planning acceptance", () => {
       expect(useOnboardingTourStore.getState().step).toBe("module-create");
     });
 
-    act(() => useOnboardingTourStore.getState().moduleCreated("module-1"));
+    act(() => useOnboardingTourStore.getState().moduleCreated("module-1", true));
     act(() => useOnboardingTourStore.getState().storyCreated("story-1"));
     fireEvent.click(screen.getByRole("button", { name: "Finish tour" }));
 

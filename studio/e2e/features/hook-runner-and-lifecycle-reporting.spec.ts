@@ -66,10 +66,12 @@ featureSuite("hook-runner-and-lifecycle-reporting", { isolation: "case" }, () =>
     const badge = rowBadge(page, names.parent);
     const moduleTab = page.getByRole("tab", { name: names.module, exact: true }).last();
     await expect(badge.getByLabel(lifecycleChip.working, { exact: true })).toBeVisible();
+    await expect(moduleTab.getByLabel(lifecycleChip.working, { exact: true })).toBeVisible();
 
     // Codex Stop means the agent awaits input, not that the process exited.
     expect(publishHook(hook.command, hookEvent("Stop"))).toEqual({ status: 0, stdout: "", stderr: "" });
     await expect(badge.getByLabel(lifecycleChip.needsInput, { exact: true })).toBeVisible();
+    await expect(moduleTab.getByLabel(lifecycleChip.needsInput, { exact: true })).toBeVisible();
     await expect.poll(async () => (await runHolding(request, fixture.project.id, runId))?.state).toBe("needs_input");
     await expectSpoolDrained(hook.spoolDirectory);
 
@@ -81,7 +83,8 @@ featureSuite("hook-runner-and-lifecycle-reporting", { isolation: "case" }, () =>
     const claude = `MUXED_AGENT_RUN_ID=${runId} '${hook.executable}' hook claude --spool-dir '${hook.spoolDirectory}'`;
     expect(publishHook(claude, hookEvent("Stop"))).toEqual({ status: 0, stdout: "", stderr: "" });
     await expect(badge.getByLabel(lifecycleChip.turnComplete, { exact: true })).toBeVisible();
-    await expect(moduleTab.getByLabel(lifecycleChip.turnComplete, { exact: true })).toBeVisible();
+    // Module tabs aggregate only working, input, permission and error runs.
+    await expect(moduleTab.getByLabel(lifecycleChip.working, { exact: true })).toHaveCount(0);
     await expect.poll(async () => (await runHolding(request, fixture.project.id, runId))?.state).toBe("turn_complete");
     await expectSpoolDrained(hook.spoolDirectory);
 
@@ -96,7 +99,7 @@ featureSuite("hook-runner-and-lifecycle-reporting", { isolation: "case" }, () =>
 
     await page.reload();
     await expect(rowBadge(page, names.parent).getByLabel(lifecycleChip.turnComplete, { exact: true })).toBeVisible();
-    await expect(page.getByRole("tab", { name: names.module, exact: true }).last().getByLabel(lifecycleChip.turnComplete, { exact: true })).toBeVisible();
+    await expect(page.getByRole("tab", { name: names.module, exact: true }).last().getByLabel(lifecycleChip.working, { exact: true })).toHaveCount(0);
 
     await releaseConversation(runId);
     await waitForAgentExit(request, fixture.parent.id, runId);
@@ -140,6 +143,8 @@ featureSuite("hook-runner-and-lifecycle-reporting", { isolation: "case" }, () =>
     const badge = rowBadge(page, names.parent);
     await expect(badge.getByLabel(lifecycleChip.working, { exact: true })).toBeVisible();
     const silent = { status: 0, stdout: "", stderr: "" };
+    // Start from a drained spool so any file below could only come from a failed publish.
+    await expectSpoolDrained(hook.spoolDirectory);
 
     const missing = `${hook.spoolDirectory}-missing`;
     expect(publishHook(hook.command.replace(hook.spoolDirectory, missing), hookEvent("Stop"))).toEqual(silent);

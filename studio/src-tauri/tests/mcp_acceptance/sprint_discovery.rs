@@ -7,6 +7,9 @@ use super::fixture::{Fixture, ACTIVE, FOREIGN_PROJECT, LATER, PLANNED};
 
 #[tokio::test]
 async fn list_sprints_returns_only_open_sprints_in_sequence_order_with_selection_flags() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     let mut fixture = Fixture::new(true).await;
     let tools = fixture
         .client
@@ -41,6 +44,9 @@ async fn list_sprints_returns_only_open_sprints_in_sequence_order_with_selection
 
 #[tokio::test]
 async fn list_sprints_marks_next_without_an_active_sprint() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     let mut fixture = Fixture::new(false).await;
     let listed = fixture
         .client
@@ -61,6 +67,9 @@ async fn list_sprints_marks_next_without_an_active_sprint() {
 
 #[tokio::test]
 async fn list_sprints_has_no_next_when_only_the_current_sprint_or_history_remains() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     for active in [true, false] {
         let mut fixture = Fixture::without_planned(active).await;
         let listed = fixture
@@ -80,6 +89,9 @@ async fn list_sprints_has_no_next_when_only_the_current_sprint_or_history_remain
 
 #[tokio::test]
 async fn list_sprints_rejects_a_foreign_project_without_disclosing_its_sprints() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     let mut fixture = Fixture::new(true).await;
     let rejected = fixture
         .client

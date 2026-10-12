@@ -3,10 +3,15 @@ import { useStudioStore } from "../projects";
 import { clearStorySprintFilter } from "../work-items";
 import { useClientStore } from "../../state/clientStore";
 import { getEffectiveModuleTabsSnapshot } from "./effectiveModuleTabs";
+import { leaveWorkspaceSurfaces } from "./leaveWorkspaceSurfaces";
 import { useSetModuleTabHidden } from "./useSetModuleTabHidden";
 
 /** Explicit presentation actions; inspection and ordinary selection use no writes. */
-interface ModuleNavigationOptions { isCurrent?: () => boolean }
+interface ModuleNavigationOptions {
+  isCurrent?: () => boolean;
+  /** Exit Plan and Changes once every guard passes, immediately before selecting. */
+  leaveSurfaces?: boolean;
+}
 export function useModuleNavigation() {
   const projectId = useStudioStore((state) => state.selectedProjectId);
   const selectModule = useClientStore((state) => state.selectModule);
@@ -40,6 +45,7 @@ export function useModuleNavigation() {
     if (!isCurrent()) return false;
     if (select) {
       if (getEffectiveModuleTabsSnapshot(projectId).entries.find(({ module }) => module.id === moduleId)?.status !== "open") return false;
+      if (options?.leaveSurfaces) leaveWorkspaceSurfaces();
       await selectModule(moduleId, { isCurrent });
       return isCurrent() && useClientStore.getState().selectedModuleId === moduleId;
     }

@@ -17,6 +17,11 @@ import { StateHeaderRow } from "./components/StateHeaderRow";
 import { ConversationsHeaderRow } from "./components/ConversationsHeaderRow";
 import { LoadingPlaceholderRow } from "./components/LoadingPlaceholderRow";
 import { IdeaEntry } from "./components/IdeaEntry";
+import { NoWorkflowNotice } from "./components/NoWorkflowNotice";
+import {
+  NO_WORKFLOW_MESSAGE,
+  useProjectWorkflowPresence,
+} from "../../../../features/workflows";
 import { StoriesSearchInput } from "./components/StoriesSearchInput";
 import { StoryTreeList } from "../../../../features/stories/StoryTreeList";
 import { groupRootBlocks } from "../../../../features/stories/storyRootBlocks";
@@ -59,6 +64,8 @@ function TasksPaneContent() {
   const selectedRowId = useSelectedPlanningRowId();
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
   const states = useCachedStates(selectedProjectId);
+  const workflowMissing =
+    useProjectWorkflowPresence(selectedProjectId) === "missing";
   const toggleExpanded = useClientStore((s) => s.toggleExpanded);
   const collapsedStateIds = useClientStore((s) => s.collapsedStateIds);
   const toggleStateCollapsed = useClientStore((s) => s.toggleStateCollapsed);
@@ -154,13 +161,15 @@ function TasksPaneContent() {
     <PaneShell pane="tasks">
       <StoriesSearchInput />
       <StorySprintFilter matchingRootCount={matchingRootCount} totalRootCount={totalRootCount} storiesLoading={loadingTasks} />
-      <IdeaEntry />
-      {noStoryMatches ? (
+      <IdeaEntry unavailableReason={workflowMissing ? NO_WORKFLOW_MESSAGE : null} />
+      {workflowMissing ? (
+        <NoWorkflowNotice />
+      ) : noStoryMatches ? (
         <StoriesFilterEmptyState />
       ) : null}
       {hasConversationDesignPrototype() ? (
         <ConversationDesignPrototype />
-      ) : loadingTasks && rows.length === 0 ? (
+      ) : rows.length === 0 && workflowMissing ? null : loadingTasks && rows.length === 0 ? (
         <div className="text-text-muted">…</div>
       ) : rows.length === 0 ? (
         <div className="text-text-muted">No stories</div>

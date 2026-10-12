@@ -7160,6 +7160,7 @@ dependencies = [
  "ticketry-desktop",
  "ticketry-diagnostics",
  "ticketry-documents",
+ "ticketry-edition",
  "ticketry-entities",
  "ticketry-graphql-schema",
  "ticketry-installation",
@@ -7193,6 +7194,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "ticketry-diagnostics",
+ "ticketry-edition",
  "ticketry-entities",
  "ticketry-launch",
  "ticketry-provider",
@@ -7234,6 +7236,7 @@ dependencies = [
 name = "ticketry-desktop"
 version = "0.0.0"
 dependencies = [
+ "async-graphql",
  "axum",
  "base64 0.22.1",
  "cc",
@@ -7259,6 +7262,7 @@ dependencies = [
  "ticketry-data-directory",
  "ticketry-diagnostics",
  "ticketry-documents",
+ "ticketry-edition",
  "ticketry-entities",
  "ticketry-graphql-schema",
  "ticketry-launch",
@@ -7294,6 +7298,7 @@ dependencies = [
  "ticketry-data-directory",
  "ticketry-diagnostics",
  "ticketry-documents",
+ "ticketry-edition",
  "ticketry-graphql-schema",
  "ticketry-installation",
  "ticketry-launch",
@@ -7341,6 +7346,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ticketry-edition"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "ticketry-entities"
 version = "0.0.0"
 dependencies = [
@@ -7372,6 +7384,7 @@ dependencies = [
  "ticketry-agent-execution",
  "ticketry-diagnostics",
  "ticketry-documents",
+ "ticketry-edition",
  "ticketry-entities",
  "ticketry-installation",
  "ticketry-launch",
@@ -7412,6 +7425,7 @@ dependencies = [
  "ticketry-agent-execution",
  "ticketry-data-directory",
  "ticketry-documents",
+ "ticketry-edition",
  "ticketry-entities",
  "ticketry-runs",
  "ticketry-settings",
@@ -7458,6 +7472,7 @@ dependencies = [
  "tempfile",
  "ticketry-agent-execution",
  "ticketry-data-directory",
+ "ticketry-edition",
  "ticketry-entities",
  "ticketry-provider",
  "ticketry-runs",
@@ -7608,6 +7623,7 @@ dependencies = [
  "tempfile",
  "ticketry-data-directory",
  "ticketry-diagnostics",
+ "ticketry-edition",
  "ticketry-entities",
  "ticketry-provider",
  "ticketry-runs",

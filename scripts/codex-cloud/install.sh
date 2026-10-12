@@ -12,6 +12,7 @@ if ! command -v node >/dev/null || [[ $(node -p 'process.versions.node.split("."
   echo 'Select Node.js 22 in the cloud environment before running this installer.' >&2
   exit 1
 fi
+source scripts/codex-cloud/edition.sh
 
 privilege=()
 if [[ $EUID != 0 ]]; then privilege=(sudo); fi
@@ -48,9 +49,11 @@ bun run --cwd studio playwright install --with-deps chromium
 
 cargo fetch --locked --manifest-path studio/src-tauri/Cargo.toml
 cargo build --locked --manifest-path studio/src-tauri/Cargo.toml \
-  -p ticketry-dev-tools -p ticketry-hook --bins
+  -p ticketry-dev-tools -p ticketry-hook --bins \
+  ${edition_cargo_features[@]+"${edition_cargo_features[@]}"}
 cargo test --locked --manifest-path studio/src-tauri/Cargo.toml \
-  --workspace --exclude ticketry --exclude ticketry-desktop --no-run
+  --workspace --exclude ticketry --exclude ticketry-desktop --no-run \
+  ${edition_cargo_features[@]+"${edition_cargo_features[@]}"}
 
 echo 'Cloud dependencies and portable Rust test binaries are prepared.'
 echo 'Run bash scripts/codex-cloud/check.sh all before publishing.'

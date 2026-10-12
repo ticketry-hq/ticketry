@@ -2,15 +2,17 @@ import { lstatSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { featureSuite } from "./featureSuite";
-import { createProject, getWorkflowCatalog, getWorkItems, graphql, openWorkItem } from "../support";
+import { createProject, createWorkItem, getWorkflowCatalog, getWorkItem, getWorkItems, graphql, openWorkItem } from "../support";
+import { TaskResumableTerminalSessionsDocument, TaskTerminalSessionsDocument } from "../../src/features/agents/terminal/generated/terminalSessions.documents";
 import { CreateSprintDocument } from "../../src/features/sprints/generated/sprints.documents";
 import { CreateSprintGoalDocument } from "../../src/features/sprints/goals/generated/goals.documents";
 import { withProviderMcp } from "../fixtures/provider-mcp.mjs";
 import { agentStatus, waitForAgentExit } from "../agent-lifecycle-support";
 import { releaseConversation } from "../conversation-support";
 import { fixtureLaunchEvidence } from "../agent-launch-support";
-import { chooseSprint } from "../multi-surface-journeys-support";
 import {
+  compactId,
+  writeFixtureControl,
   bridgeInitialize,
   e2eDataDirectory,
   fixtureBridgeCalls,
@@ -505,7 +507,7 @@ featureSuite("mcp-server-and-tools", { isolation: "case" }, () => {
     expect(await callMcpTool("mcp_ping", {})).toEqual({ status: "ok", server: "ticketry" });
   });
 
-  test("discovers open sprints and assigns, creates and clears Story sprint membership", { tag: "@case-mcp-sprint-assignment" }, async ({ page, request }) => {
+  test("discovers open sprints and assigns, creates and clears Story sprint membership", { tag: ["@case-mcp-sprint-assignment", "@edition-core"] }, async ({ page, request }) => {
     expect(await callMcpTool("list_sprints", { project_id: fixture.project.id })).toEqual({ sprints: [] });
     const name = "MCP assignment sprint";
     const sprint = (await graphql(request, CreateSprintDocument, { data: { projectId: fixture.project.id, name } })).worktrackerSprintCreateOne;
@@ -524,22 +526,26 @@ featureSuite("mcp-server-and-tools", { isolation: "case" }, () => {
     });
     expect(created).toMatchObject({ ok: true, sprint: { id: sprint.id, name } });
 
+    // The Sprint scope filter is a Core-edition surface, so membership is read
+    // back through public GraphQL around a reload in every edition.
+    const sprintOf = async (id: string) => {
+      const row = await getWorkItem(request, id) as { sprint_id?: string | null };
+      return row.sprint_id ? compactId(row.sprint_id) : null;
+    };
     await openModule(page, names.module);
-    await chooseSprint(page, name);
-    await expect(page.getByRole("treeitem", { name: new RegExp(names.moving) })).toBeVisible();
     await expect(page.getByRole("treeitem", { name: new RegExp(createdName) })).toBeVisible();
-    await expect(page.getByRole("treeitem", { name: new RegExp(names.parent) })).toHaveCount(0);
-    // The sprint scope is per page load, so choose it again after each reload.
     await page.reload();
-    await chooseSprint(page, name);
-    await expect(page.getByRole("treeitem", { name: new RegExp(names.moving) })).toBeVisible();
+    await expect(page.getByRole("treeitem", { name: new RegExp(createdName) })).toBeVisible();
+    expect(await sprintOf(fixture.moving.id)).toBe(compactId(sprint.id));
+    expect(await sprintOf((created as { task_id: string }).task_id)).toBe(compactId(sprint.id));
+    expect(await sprintOf(fixture.parent.id)).toBeNull();
 
     expect(await callMcpTool("update_task", { id_or_key: fixture.moving.id, sprint: null }))
       .toMatchObject({ ok: true, updated_fields: ["sprint"], sprint: null });
     await page.reload();
-    await chooseSprint(page, name);
-    await expect(page.getByRole("treeitem", { name: new RegExp(createdName) })).toBeVisible();
-    await expect(page.getByRole("treeitem", { name: new RegExp(names.moving) })).toHaveCount(0);
+    await expect(page.getByRole("treeitem", { name: new RegExp(names.moving) })).toBeVisible();
+    expect(await sprintOf(fixture.moving.id)).toBeNull();
+    expect(await sprintOf((created as { task_id: string }).task_id)).toBe(compactId(sprint.id));
   });
 
   test("proves an agent move by its structured result and authoritative state readback", { tag: "@case-mcp-state-readback" }, async ({ page, request }) => {
@@ -571,12 +577,22 @@ featureSuite("mcp-server-and-tools", { isolation: "case" }, () => {
     await expect(page.getByTestId("status-row")).toContainText("Ideas");
   });
 
-  test("refuses MCP launch of unknown work and global run termination without starting runs", { tag: "@case-mcp-launch-refusals" }, async ({ page, request }) => {
+  test("refuses MCP launch of unknown or unlaunchable work and global run termination without starting runs", { tag: "@case-mcp-launch-refusals" }, async ({ page, request }) => {
     expect(await callMcpTool("launch_default_coding_agent", { id_or_key: "CDN-999999" }))
       .toEqual({ ok: false, code: "not_found", detail: "Work item not found." });
     expect(await callMcpTool("terminate_current_run", {}))
       .toEqual({ ok: false, error: "caller_run_unbound", reason: "authorization_missing" });
+    // A policy refusal records nothing, so reconciliation never starts the run later (CODING-2869).
+    await writeFixtureControl({ mode: "success" });
+    const unlinked = await createWorkItem(request, fixture.project.id, {
+      name: "MCP launch without a module folder", parent_id: fixture.staleModule.id, issue_type_id: fixture.storyType.id,
+    });
+    const refused = await callMcpTool<{ target_id: string; error: string }>("launch_default_coding_agent", { id_or_key: unlinked.id });
+    expect(compactId(refused.target_id)).toBe(compactId(unlinked.id));
+    expect(refused.error).toBe("module_folder_unusable");
+    await page.waitForTimeout(8_000);
     expect((await agentStatus(request, fixture.project.id)).agent_run_holdings).toEqual([]);
+    expect((await graphql(request, TaskTerminalSessionsDocument, { taskId: unlinked.id, limit: 25 })).terminal_sessions.sessions).toEqual([]);
     await openModule(page, names.module);
     await expect(page.getByRole("treeitem", { name: new RegExp(names.parent) })).toBeVisible();
     await expect(page.getByTestId("agent-state-badge")).toHaveCount(0);
@@ -614,34 +630,45 @@ featureSuite("mcp-server-and-tools", { isolation: "case" }, () => {
   test("serves a launched provider's bridge inside its run project and keeps the run live after the bridge disconnects", { tag: "@case-mcp-provider-run-scope" }, async ({ page, request }) => {
     test.setTimeout(120_000);
     const second = await createProject(request, { name: "MCP run foreign project", slug: "MCR", description: "" });
-    const sprintName = "MCP run-scoped sprint";
-    const sprint = (await graphql(request, CreateSprintDocument, { data: { projectId: fixture.project.id, name: sprintName } })).worktrackerSprintCreateOne;
-    const goal = (await graphql(request, CreateSprintGoalDocument, { sprintId: sprint.id, text: "Prove run-scoped goals" })).create_sprint_goal;
-    const appended = "Run-scoped bridge note.";
+    const childName = "Run-scoped bridge child";
     const runId = await launchFixtureRun(page, names.parent, { mode: "success", startCalls: [
       { name: "list_projects", arguments: {} },
       { name: "list_tasks", arguments: { project_id: second.id } },
       { name: "list_tasks", arguments: { project_id: fixture.project.id, state_name: "Done" } },
-      { name: "get_sprint_goals", arguments: { sprint_id: sprint.id } },
-      { name: "suggest_sprint_story", arguments: { sprint_id: sprint.id, goal_id: goal.id, reason: "Not a suggestion run", issue_id: fixture.parent.id } },
-      { name: "append_task_description", arguments: { project_id: fixture.project.id, task_id: fixture.parent.id, new_content: appended } },
+      { name: "create_sub_task", arguments: { project_id: fixture.project.id, parent_id: fixture.parent.id, name: childName, issue_type: "Implementation" } },
     ] });
-    const [projects, foreign, empty, goals, suggestion, append] = await fixtureBridgeCalls(runId, 6);
+    const [projects, foreign, empty, child] = await fixtureBridgeCalls(runId, 4);
     expect((projects.result.result as Array<{ identifier: string }>).map(project => project.identifier)).toEqual(["CDN"]);
     expect(foreign.result).toEqual({ ok: false, detail: "The caller is not authorized for that project.", code: "foreign_scope" });
     expect(empty.result).toEqual({ result: [] });
-    expect(goals.result).toMatchObject({ name: sprintName, status: "planned", goals: [{ number: "G1", text: "Prove run-scoped goals" }] });
-    expect(suggestion.result).toEqual({ ok: false, detail: "The suggestion run is no longer current.", code: "run_not_current" });
-    expect(append.result).toEqual({ result: true });
+    expect(child.result).toEqual({ result: expect.any(String) });
 
     // The provider's bridge has disconnected; that alone does not cancel the run.
     await expect(rowBadge(page, names.parent).getByLabel(lifecycleChip.working, { exact: true })).toBeVisible();
     expect((await runHolding(request, fixture.project.id, runId))?.state).toBe("working");
-    await expect(page.getByTestId("issue-description")).toContainText(appended);
+    await expect(page.getByTestId("child-issues")).toContainText(childName);
     await page.reload();
-    await expect(page.getByTestId("issue-description")).toContainText(appended);
+    await expect(page.getByTestId("child-issues")).toContainText(childName);
     await expect(rowBadge(page, names.parent).getByLabel(lifecycleChip.working, { exact: true })).toBeVisible();
 
+    await releaseConversation(runId);
+    await waitForAgentExit(request, fixture.parent.id, runId);
+  });
+
+  test("serves sprint goals to a launched provider and refuses its suggestion outside the current suggestion run", { tag: ["@case-mcp-provider-sprint-scope", "@edition-core"] }, async ({ page, request }) => {
+    test.setTimeout(120_000);
+    const sprintName = "MCP run-scoped sprint";
+    const sprint = (await graphql(request, CreateSprintDocument, { data: { projectId: fixture.project.id, name: sprintName } })).worktrackerSprintCreateOne;
+    const goal = (await graphql(request, CreateSprintGoalDocument, { sprintId: sprint.id, text: "Prove run-scoped goals" })).create_sprint_goal;
+    const runId = await launchFixtureRun(page, names.parent, { mode: "success", startCalls: [
+      { name: "get_sprint_goals", arguments: { sprint_id: sprint.id } },
+      { name: "suggest_sprint_story", arguments: { sprint_id: sprint.id, goal_id: goal.id, reason: "Not a suggestion run", issue_id: fixture.parent.id } },
+    ] });
+    const [goals, suggestion] = await fixtureBridgeCalls(runId, 2);
+    expect(goals.result).toMatchObject({ name: sprintName, status: "planned", goals: [{ number: "G1", text: "Prove run-scoped goals" }] });
+    expect(suggestion.result).toEqual({ ok: false, detail: "The suggestion run is no longer current.", code: "run_not_current" });
+
+    await expect(rowBadge(page, names.parent).getByLabel(lifecycleChip.working, { exact: true })).toBeVisible();
     await releaseConversation(runId);
     await waitForAgentExit(request, fixture.parent.id, runId);
   });
@@ -742,5 +769,57 @@ featureSuite("mcp-server-and-tools", { isolation: "case" }, () => {
       .toMatchObject({ task_id: fixture.moving.id, blocked_by_ids: [] });
     await page.reload();
     await expect(page.getByTestId("blocked-by-row").getByTestId("blocker-chip")).toHaveCount(0);
+  });
+  test("launches the default coding agent through MCP into one live run on the Story", { tag: "@case-mcp-default-agent-launch" }, async ({ page, request }) => {
+    test.setTimeout(120_000);
+    await writeFixtureControl({ mode: "success" });
+    const story = await createWorkItem(request, fixture.project.id, {
+      name: "MCP default-agent launch", parent_id: fixture.module.id, issue_type_id: fixture.storyType.id,
+    });
+    await openModule(page, names.module);
+    await openWorkItem(page, story.name);
+    const launched = await callMcpTool<{ target_id: string; agent: string; agent_run_id: string }>("launch_default_coding_agent", { id_or_key: story.id });
+    expect(compactId(launched.target_id)).toBe(compactId(story.id));
+    expect(launched.agent).toBe("codex");
+    const runId = launched.agent_run_id;
+    expect((await fixtureLaunchEvidence(runId)).runId).toBe(runId);
+    await expect(rowBadge(page, story.name).getByLabel(lifecycleChip.working, { exact: true })).toBeVisible();
+    await expect.poll(async () => (await runHolding(request, fixture.project.id, runId))?.state).toBe("working");
+    // The launch does not move the Story, and nothing launches it a second time.
+    await expect(page.getByTestId("status-row")).toContainText("Ideas");
+    await page.reload();
+    await expect(rowBadge(page, story.name).getByLabel(lifecycleChip.working, { exact: true })).toBeVisible();
+    const sessions = async () => (await graphql(request, TaskTerminalSessionsDocument, { taskId: story.id, limit: 25 })).terminal_sessions.sessions.map(row => row.agent_run_id);
+    expect(await sessions()).toEqual([runId]);
+
+    await releaseConversation(runId);
+    await waitForAgentExit(request, story.id, runId);
+    await expect(rowBadge(page, story.name)).toHaveCount(0);
+    const ended = await graphql(request, TaskResumableTerminalSessionsDocument, { taskId: story.id });
+    expect(ended.resumable_sessions.map(row => row.agent_run_id)).toEqual([runId]);
+  });
+
+  test("converts an eligible Story and launches it through MCP Run Now", { tag: "@case-mcp-run-now" }, async ({ page, request }) => {
+    test.setTimeout(120_000);
+    await writeFixtureControl({ mode: "success" });
+    const story = await createWorkItem(request, fixture.project.id, {
+      name: "MCP Run Now Story", parent_id: fixture.module.id, issue_type_id: fixture.storyType.id,
+    });
+    await openModule(page, names.module);
+    await openWorkItem(page, story.name);
+    const converted = await callMcpTool<{ committed_state: { name: string } | null; committed_issue_type: { name: string } | null }>("run_now", { id_or_key: story.id });
+    expect(converted).toMatchObject({ committed_state: { name: "Implement" }, committed_issue_type: { name: "Implementation" } });
+    await expect(page.getByTestId("status-row")).toContainText("Implement");
+    expect((await getWorkItem(request, story.id)).id).toBe(story.id);
+    const sessions = async () => (await graphql(request, TaskTerminalSessionsDocument, { taskId: story.id, limit: 25 })).terminal_sessions.sessions;
+    await expect.poll(async () => (await sessions()).length).toBe(1);
+    const [{ agent_run_id: runId }] = await sessions();
+    await expect(rowBadge(page, story.name).getByLabel(lifecycleChip.working, { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId("status-row")).toContainText("Implement");
+    await expect(rowBadge(page, story.name).getByLabel(lifecycleChip.working, { exact: true })).toBeVisible();
+
+    await releaseConversation(runId);
+    await waitForAgentExit(request, story.id, runId);
   });
 });

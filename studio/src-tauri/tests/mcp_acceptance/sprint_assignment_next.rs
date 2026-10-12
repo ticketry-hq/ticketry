@@ -7,6 +7,9 @@ use super::fixture::{assert_sprint, create_arguments, task_id, Fixture, ACTIVE, 
 
 #[tokio::test]
 async fn next_write_tools_assign_first_planned_with_or_without_an_active_sprint() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     for active in [true, false] {
         let mut fixture = Fixture::new(active).await;
         let mut arguments = create_arguments("Queue for the next sprint");
@@ -50,6 +53,9 @@ async fn next_write_tools_assign_first_planned_with_or_without_an_active_sprint(
 
 #[tokio::test]
 async fn reordering_planned_sprints_changes_discovery_and_every_next_write_tool() {
+    if !crate::sprint_planning_edition() {
+        return;
+    }
     for active in [true, false] {
         let mut fixture = Fixture::new(active).await;
         let mut arguments = create_arguments("Originally next");

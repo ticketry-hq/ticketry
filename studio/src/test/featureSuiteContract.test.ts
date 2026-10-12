@@ -95,4 +95,48 @@ describe("feature suite drift contract", () => {
     expect(check({ "docs/feature-map/startup.md": suiteEntry.replace("Suite: studio/e2e/features/startup.spec.ts", "") }))
       .toEqual(expect.arrayContaining([expect.objectContaining({ rule: 1, path: "docs/feature-map/startup.md", message: expect.stringContaining("missing Suite:") })]));
   });
+  describe("editions", () => {
+    const coreSource = suiteSource.replace("test('ready @case-ready', async () => {});", "test('ready @case-ready', async () => {});\n  test('sprint @case-sprint', { tag: '@edition-core' }, async () => {});");
+    const coreRow = "| startup-sprint | @case-sprint | n/a: No cancellation | n/a: No failure | n/a: No empty state | @case-sprint | @case-sprint |";
+    const coreEntry = (marker = " (core)", editions = "pocock, core") => suiteEntry
+      .replace("Editions: pocock, core", `Editions: ${editions}`)
+      .replace("- startup-ready: Startup becomes ready.", `- startup-ready: Startup becomes ready.\n- startup-sprint${marker}: Sprint startup.`)
+      .replace(/(\| startup-ready \|[^\n]*)/, `$1\n${coreRow}`);
+    const editionViolations = (files: Record<string, string>) => check(files).filter((violation) => violation.rule === 10);
+    it("accepts a core-marked sub-feature whose cases carry @edition-core", () => {
+      expect(check({ "docs/feature-map/startup.md": coreEntry(), "studio/e2e/features/startup.spec.ts": coreSource })).toEqual([]);
+    });
+    it("accepts a describe-level @edition-core tag", () => {
+      const source = suiteSource.replace("test('ready @case-ready', async () => {});", "test('ready @case-ready', async () => {});\n  test.describe('sprints', { tag: '@edition-core' }, () => { test('sprint @case-sprint', async () => {}); });");
+      expect(check({ "docs/feature-map/startup.md": coreEntry(), "studio/e2e/features/startup.spec.ts": source })).toEqual([]);
+    });
+    it("reports a missing Editions: line", () => {
+      expect(editionViolations({ "docs/feature-map/startup.md": suiteEntry.replace("Editions: pocock, core\n", "") }))
+        .toEqual([expect.objectContaining({ path: "docs/feature-map/startup.md", message: expect.stringContaining("missing Editions: line") })]);
+    });
+    it("reports an illegal edition", () => {
+      expect(editionViolations({ "docs/feature-map/startup.md": suiteEntry.replace("Editions: pocock, core", "Editions: enterprise") }))
+        .toEqual([expect.objectContaining({ message: expect.stringContaining('illegal edition "enterprise"') })]);
+    });
+    it("reports @edition-core on a case of a Pocock-only feature", () => {
+      expect(editionViolations({ "docs/feature-map/startup.md": coreEntry(" (core)", "pocock"), "studio/e2e/features/startup.spec.ts": coreSource }))
+        .toEqual(expect.arrayContaining([expect.objectContaining({ path: "studio/e2e/features/startup.spec.ts", message: expect.stringContaining("@edition-core case @case-sprint in a feature without core") })]));
+    });
+    it("reports a core-marked sub-feature in a feature without core", () => {
+      expect(editionViolations({ "docs/feature-map/startup.md": coreEntry(" (core)", "pocock"), "studio/e2e/features/startup.spec.ts": coreSource }))
+        .toEqual(expect.arrayContaining([expect.objectContaining({ path: "docs/feature-map/startup.md", message: expect.stringContaining("core-only sub-feature startup-sprint in a feature without core") })]));
+    });
+    it("reports an @edition-core case cited by an unmarked sub-feature", () => {
+      expect(editionViolations({ "docs/feature-map/startup.md": coreEntry(""), "studio/e2e/features/startup.spec.ts": coreSource }))
+        .toEqual([expect.objectContaining({ message: expect.stringContaining("@edition-core case @case-sprint is cited by unmarked sub-feature startup-sprint") })]);
+    });
+    it("reports an untagged case cited only by core-only sub-features of a Pocock feature", () => {
+      expect(editionViolations({ "docs/feature-map/startup.md": coreEntry(), "studio/e2e/features/startup.spec.ts": coreSource.replace(", { tag: '@edition-core' }", "") }))
+        .toEqual([expect.objectContaining({ message: expect.stringContaining("case @case-sprint covers only core-only sub-features and needs @edition-core") })]);
+    });
+    it("reports an unknown edition tag", () => {
+      expect(editionViolations({ "docs/feature-map/startup.md": coreEntry(), "studio/e2e/features/startup.spec.ts": coreSource.replace("@edition-core", "@edition-pocock") }))
+        .toEqual(expect.arrayContaining([expect.objectContaining({ message: expect.stringContaining("unknown edition tag @edition-pocock") })]));
+    });
+  });
 });

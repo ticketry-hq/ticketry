@@ -3,6 +3,7 @@
 Move eligible Stories between Backlog and a sprint through buttons, keyboard or drag, with persisted membership and recoverable feedback.
 
 Surfaces: browser, desktop
+Editions: core
 
 ## Sub-features
 
@@ -16,7 +17,7 @@ Open the project Plan tab (`workspace-tab-plan`), choose a sprint card's Plan bu
 
 ## Prerequisites
 
-`TICKETRY_ROADMAP_ENABLED` must enable the compiled `__TICKETRY_ROADMAP_ENABLED__` build constant. Roadmap-off builds omit the Plan tab, Sprints workspace, move rows and their feedback; runtime settings cannot expose them. Select a sprint and epic with an eligible top-level backlog Story. Incoming moves require an uncompleted sprint and the active epic's eligible Backlog workflow state; outgoing moves require membership in that sprint. See `studio/src/features/sprints/planning/planMovePolicy.ts` and the [planner service reference](../planner-service.md) for the separate discovery contract.
+`TICKETRY_EDITION=core` must select the core edition (`__TICKETRY_EDITION__`; the default is `pocock`). Pocock-edition builds omit the Plan tab, Sprints workspace, move rows and their feedback; runtime settings cannot expose them. Select a sprint and epic with an eligible top-level backlog Story. Incoming moves require an uncompleted sprint and the active epic's eligible Backlog workflow state; outgoing moves require membership in that sprint. See `studio/src/features/sprints/planning/planMovePolicy.ts` and the [planner service reference](../planner-service.md) for the separate discovery contract.
 
 ## Expected behavior
 
@@ -32,7 +33,7 @@ Browser cases: `studio/e2e/features/story-moves.spec.ts`.
 
 Run `bun run --cwd studio test:e2e:feature story-moves`. Observe `plan-item-<key>`, `plan-move-<key>`, `[data-plan-story]`, pane headings, `plan-feedback` and `plan-undo`; assert pending state, dragging eligibility, focus and recoverable alerts. Poll public GraphQL membership and reload retained Plan.
 
-Supplementary legacy inventory stays in `studio/e2e/planning-module-manual.spec.ts` and `studio/e2e/planning-module-lifecycle.spec.ts` until the final title audit. `studio/src/test/overhaulRoadmapOffAcceptance.test.tsx` and `studio/vitest.roadmap-off.config.ts` (`bun run --cwd studio test:roadmap-off`) supplement compiled-gate coverage. Browser screenshots do not prove native rendering. `studio/src/test/overhaulPlanMoveFocusRecoveryAcceptance.test.tsx` (`overhaul-814`) supplements browser coverage with deterministic disabled-target recovery, later refetch disabling, deliberate-focus preservation and final-row heading fallback; run `bun run --cwd studio test -- src/test/overhaulPlanMoveFocusRecoveryAcceptance.test.tsx`.
+Supplementary legacy inventory stays in `studio/e2e/planning-module-manual.spec.ts` and `studio/e2e/planning-module-lifecycle.spec.ts` until the final title audit. `studio/src/test/overhaulPocockEditionAcceptance.test.tsx` and `studio/vitest.pocock.config.ts` (`bun run --cwd studio test:pocock`) supplement compiled-edition coverage. Browser screenshots do not prove native rendering. `studio/src/test/overhaulPlanMoveFocusRecoveryAcceptance.test.tsx` (`overhaul-814`) supplements browser coverage with deterministic disabled-target recovery, later refetch disabling, deliberate-focus preservation and final-row heading fallback; run `bun run --cwd studio test -- src/test/overhaulPlanMoveFocusRecoveryAcceptance.test.tsx`.
 
 ## End-to-end suite
 
@@ -48,7 +49,7 @@ Suite: studio/e2e/features/story-moves.spec.ts
 
 - [Move rows and drag panes](../../studio/src/features/sprints/planning/PlanPane.tsx) (`studio/src/features/sprints/planning/PlanPane.tsx`) and [pane grouping](../../studio/src/features/sprints/planning/PlanStoryPanes.tsx) (`studio/src/features/sprints/planning/PlanStoryPanes.tsx`).
 - [Eligibility policy](../../studio/src/features/sprints/planning/planMovePolicy.ts) (`studio/src/features/sprints/planning/planMovePolicy.ts`), [move coordination](../../studio/src/features/sprints/planning/usePlanMoves.ts) (`studio/src/features/sprints/planning/usePlanMoves.ts`) and [feedback](../../studio/src/features/sprints/planning/PlanFeedback.tsx) (`studio/src/features/sprints/planning/PlanFeedback.tsx`).
-- [Build policy](../../studio/scripts/roadmap-build-policy.mjs) (`studio/scripts/roadmap-build-policy.mjs`) and [compiled gate](../../studio/src/shared/config/roadmapAvailability.ts) (`studio/src/shared/config/roadmapAvailability.ts`).
+- [Build policy](../../studio/scripts/edition-build-policy.mjs) (`studio/scripts/edition-build-policy.mjs`) and [edition seam](../../studio/src/shared/config/edition.ts) (`studio/src/shared/config/edition.ts`).
 - [Planner service](../planner-service.md) owns discovery architecture rather than manual move behavior.
 
 ## Gotchas

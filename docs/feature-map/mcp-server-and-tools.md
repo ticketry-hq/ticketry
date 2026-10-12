@@ -3,6 +3,7 @@
 Ticketry exposes local work-management tools to providers through a packaged stdio bridge and an owned data-directory socket.
 
 Surfaces: browser, desktop, manual
+Editions: pocock, core
 
 ## Sub-features
 
@@ -12,7 +13,7 @@ Surfaces: browser, desktop, manual
 - `mcp-map-run-authority`: Keep Ticketry-launched agents inside persistent run grants and project scope.
 - `mcp-map-work-item-tools`: Read and edit work items, hierarchy, blockers, tags and attachments.
 - `mcp-map-workflow-tools`: Discover workflow policy and perform revision-guarded policy edits and agent-origin state moves.
-- `mcp-map-sprint-tools`: Discover open sprints and goals, assign work and publish scoped suggestions.
+- `mcp-map-sprint-tools` (core): Discover open sprints and goals, assign work and publish scoped suggestions.
 - `mcp-map-launch-tools`: Launch eligible work through the default-agent and Run Now tools with structured refusal.
 - `mcp-map-run-termination`: Stop only the caller's authorized run without changing its ticket.
 - `mcp-map-state-readback`: Prove a move from its structured result and authoritative task readback.
@@ -60,13 +61,29 @@ policy, provider and folder/trust prerequisites; see [Agent launch](agent-launch
   factual reads. Create/update, description, tag, hierarchy, blocker, finding
   and attachment tools delegate to Work Management operations; the
   [live tool catalog](../../studio/src-tauri/crates/surfaces/ticketry-mcp/src/registry.rs)
-  owns their names and input shapes.
+  owns their names and input shapes. Description appends publish a
+  `work_item.changed` fact as ordinary edits do, so an open ticket converges
+  without a reload.
 - `get_issue_type_workflow_settings` returns the start state, transition
   permissions, launch bindings, auto-start and revision. Workflow edits require
   that revision. `update_task_status` identifies every move as agent-origin and
   returns `ok: false` plus the gate's structured reason when refused, including
   `human_only_transition`; global authority obeys the same permissions.
-- `list_sprints` returns planned/active sprints in sequence order;
+- The tool list depends on the compiled edition. The registry in
+  `ticketry-mcp/src/registry.rs` tags each edition-gated tool with its
+  `EditionCapability` (`.requires(...)`). `tools()` and
+  `allowed_provider_operations()` filter that list through `ticketry-edition`,
+  so global connections and run grants list exactly the same tools, in order.
+  Pocock publishes 33 tools. Core publishes 36: Pocock's tools plus
+  `get_sprint_goals`, `list_sprints` and `suggest_sprint_story`. In Pocock,
+  calling a withheld tool fails as an unknown tool. `create_task`,
+  `create_sub_task` and `update_task` publish the `sprint` argument and its
+  wording only in core. Pocock refuses a supplied `sprint` with `ok: false`,
+  code `edition_capability_unavailable` and field `sprint`, and writes nothing.
+  `execute_dependency_graph` describes and arms a serial campaign in Pocock. In
+  core it keeps the parallel campaign (`ParallelSubtreeRuns`). Callers never
+  choose the mode.
+- In core, `list_sprints` returns planned/active sprints in sequence order;
   `get_sprint_goals` supplies goal identities. Create/update sprint selection
   distinguishes omitted, null and a selector; a sprint update is an exclusive
   patch. `suggest_sprint_story` publishes suggestions for the bound suggestion
@@ -93,10 +110,12 @@ After reconnect/restart, read again before retrying an interrupted write.
 | Existing coverage | Narrow command | Proof limit |
 | --- | --- | --- |
 | `studio/src-tauri/crates/surfaces/ticketry-mcp/src/tests.rs`: owned/private socket, collisions, scoped reads, handshake, restart authority and readiness | `cargo test --manifest-path studio/src-tauri/Cargo.toml -p ticketry-mcp --lib` | Real socket/service fixtures; no installed provider. |
+| `studio/src-tauri/crates/surfaces/ticketry-mcp/src/edition_tests.rs`: exact ordered global and run tool lists, `sprint` argument withheld and refused | `cargo test --manifest-path studio/src-tauri/Cargo.toml -p ticketry-mcp --lib edition_tests` and the same with `--features ticketry-edition/edition-core` | Real socket/service fixture; each run proves only the compiled edition. |
+| `studio/src-tauri/tests/mcp_graph_run_mode.rs`: `execute_dependency_graph` arms a serial Graph Run in Pocock and a parallel one in core | `cargo test --manifest-path studio/src-tauri/Cargo.toml --test mcp_graph_run_mode` and the same with `--features edition-core` | Execution harness with an injected terminal runtime. |
 | `studio/src-tauri/crates/app/ticketry-hook/tests/cli.rs`: incompatible modes and no run-to-global fallback | `cargo test --manifest-path studio/src-tauri/Cargo.toml -p ticketry-hook --test cli` | Helper process/CLI seam. |
 | `studio/src-tauri/crates/app/ticketry-hook/tests/mcp_global_runtime.rs`: cross-project reads, human-only refusal with state readback, run-termination refusal and offline recovery | `cargo test --manifest-path studio/src-tauri/Cargo.toml -p ticketry-hook --test mcp_global_runtime` | Real bridge/listener plus temporary database; no provider configuration discovery. |
 | `studio/src-tauri/tests/mcp_acceptance.rs`: CRUD, hierarchy, workflow, blockers and ordered stage skills | `cargo test --manifest-path studio/src-tauri/Cargo.toml --test mcp_acceptance mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_commands` and `cargo test --manifest-path studio/src-tauri/Cargo.toml --test mcp_acceptance mcp_stage_skills_use_the_workflow_list_contract` | Rust command/socket fixture coverage. |
-| `studio/src-tauri/tests/mcp_acceptance/sprint_assignment.rs` and `studio/src-tauri/tests/mcp_acceptance/sprint_discovery.rs`: selector assignment, refusal and discovery | `cargo test --manifest-path studio/src-tauri/Cargo.toml --test mcp_acceptance sprint_assignment` and `cargo test --manifest-path studio/src-tauri/Cargo.toml --test mcp_acceptance sprint_discovery` | Temporary database and granted-run fixtures. |
+| `studio/src-tauri/tests/mcp_acceptance/sprint_assignment.rs` and `studio/src-tauri/tests/mcp_acceptance/sprint_discovery.rs`: selector assignment, refusal and discovery | `cargo test --manifest-path studio/src-tauri/Cargo.toml --test mcp_acceptance sprint_assignment` and `cargo test --manifest-path studio/src-tauri/Cargo.toml --test mcp_acceptance sprint_discovery` | Temporary database and granted-run fixtures. The sprint suites return early unless the build is core, so run them with `--features edition-core`. |
 | `studio/src-tauri/tests/mcp_acceptance/termination.rs`: reply-before-stop, restart, handoff and ticket preservation | `cargo test --manifest-path studio/src-tauri/Cargo.toml --test mcp_acceptance termination` | Injected terminal/process runtime; response is not independent installed-process termination proof. |
 | `studio/scripts/desktop-agent-acceptance.mjs` and `studio/scripts/desktop-acceptance-provider.mjs` | `bun run --cwd studio test:e2e:desktop` | Authored macOS desktop path with disposable Codex-compatible provider, packaged bridge, occupied former ports, visible `state-picker` moves Implement → Review → Done, reload and desktop application restart. Stale setup is described below; no paid provider. |
 
@@ -130,8 +149,8 @@ Suite: studio/e2e/features/mcp-server-and-tools.spec.ts
 | `mcp-map-run-authority` | @case-mcp-provider-run-scope | n/a: a run grant has no cancel step; stopping the run is `mcp-map-run-termination` | @case-mcp-provider-run-scope @case-mcp-socket-handshake-refusals @case-mcp-bridge-authority-modes | @case-mcp-provider-run-scope | @case-mcp-provider-run-scope | @case-mcp-provider-run-scope |
 | `mcp-map-work-item-tools` | @case-mcp-attachment-renders @case-mcp-task-edit-and-move @case-mcp-description-append @case-mcp-root-story-stream @case-mcp-subtask-reparent @case-mcp-blocker-edge @case-mcp-tags-and-dependencies @case-mcp-global-reads | n/a: each tool call commits or refuses atomically, with no cancel step | @case-mcp-attachment-missing @case-mcp-subtask-reparent @case-mcp-blocker-edge @case-mcp-tags-and-dependencies | @case-mcp-global-reads | @case-mcp-global-reads @case-mcp-task-edit-and-move @case-mcp-description-append @case-mcp-root-story-stream @case-mcp-subtask-reparent @case-mcp-blocker-edge @case-mcp-tags-and-dependencies @case-mcp-attachment-renders | @case-mcp-attachment-renders @case-mcp-task-edit-and-move @case-mcp-description-append @case-mcp-root-story-stream @case-mcp-subtask-reparent @case-mcp-blocker-edge @case-mcp-tags-and-dependencies |
 | `mcp-map-workflow-tools` | @case-mcp-workflow-policy @case-mcp-task-edit-and-move | n/a: a policy edit or move commits or refuses atomically | @case-mcp-workflow-policy @case-mcp-human-only-edge | @case-mcp-workflow-policy | @case-mcp-workflow-policy @case-mcp-task-edit-and-move | @case-mcp-workflow-policy @case-mcp-human-only-edge |
-| `mcp-map-sprint-tools` | @case-mcp-sprint-assignment @case-mcp-provider-run-scope | n/a: sprint reads and selector writes have no cancel step | @case-mcp-sprint-assignment @case-mcp-provider-run-scope | @case-mcp-sprint-assignment | @case-mcp-sprint-assignment @case-mcp-provider-run-scope | @case-mcp-sprint-assignment |
-| `mcp-map-launch-tools` | desktop-only: the browser GraphQL adapter's MCP service has no terminal launcher, so `launch_default_coding_agent` returns `terminal_launch_unavailable` and `run_now` returns `run_now_unavailable` | n/a: a launch request has no cancel step; stopping the run is `mcp-map-run-termination` | @case-mcp-launch-refusals | n/a: every launch names exactly one target | desktop-only: both launch tools refuse in the browser adapter, as recorded under Success | desktop-only: no browser launch through MCP commits, so there is no launch identity to read back |
+| `mcp-map-sprint-tools` | @case-mcp-sprint-assignment @case-mcp-provider-sprint-scope | n/a: sprint reads and selector writes have no cancel step | @case-mcp-sprint-assignment @case-mcp-provider-sprint-scope | @case-mcp-sprint-assignment | @case-mcp-sprint-assignment @case-mcp-provider-sprint-scope | @case-mcp-sprint-assignment |
+| `mcp-map-launch-tools` | @case-mcp-default-agent-launch @case-mcp-run-now | n/a: a launch request has no cancel step; stopping the run is `mcp-map-run-termination` | @case-mcp-launch-refusals | n/a: every launch names exactly one target | @case-mcp-default-agent-launch @case-mcp-run-now | @case-mcp-default-agent-launch @case-mcp-run-now |
 | `mcp-map-run-termination` | @case-mcp-provider-terminates-own-run | n/a: a termination request has no cancel step | @case-mcp-launch-refusals | n/a: termination always targets the caller's bound run | @case-mcp-provider-terminates-own-run | @case-mcp-provider-terminates-own-run |
 | `mcp-map-state-readback` | @case-mcp-state-readback | n/a: a move commits or refuses atomically | @case-mcp-state-readback @case-mcp-human-only-edge | @case-mcp-state-readback | @case-mcp-state-readback | @case-mcp-state-readback |
 
@@ -141,17 +160,52 @@ drives the packaged `ticketry-hook mcp` bridge. Run-authority cases launch the
 disposable Codex-compatible provider through **Run item**. Its `startCalls`
 control makes run-scoped calls while the provider is still live, then closes the
 bridge. No case uses the developer's socket or data directory. The eight
-convergence cases from `web-app.spec.ts` keep their exact titles. The
+convergence cases from `studio/e2e/web-app.spec.ts` keep their exact titles and assertions. Case isolation
+exposed order dependencies in three of them, so each now sets up its own
+preconditions. The missing-attachment case first attaches the real file whose
+single row it guards. The append case waits until the human save is readable
+through MCP before appending. Its live-convergence assertion exposed
+CODING-2912: `append_task_description` committed without publishing a
+work-item fact, so an open ticket never refetched. The append now records an
+`updated` fact with the revision it wrote, like every other WorkItem edit. The
+regression test is `tests/work_management_status_facts.rs`,
+**appending_to_a_description_publishes_the_version_it_wrote** (`cargo test
+--manifest-path studio/src-tauri/Cargo.toml --test work_management_status_facts`). The human-only case waits for each manual move to
+show in `status-row` before reopening the state picker. The
 review-finding tools are proven by the [Review findings](review-findings.md) suite,
 and `execute_dependency_graph` by [Dependency-graph runs](dependency-graph-runs.md).
 
+Sprint planning UI, including the Stories-list Sprint scope filter, ships only
+in the Core edition (`config/editions.json`, `sprintPlanning`), so
+`mcp-map-sprint-tools` is a `(core)` sub-feature and `@case-mcp-sprint-assignment`
+carries `@edition-core`: a Pocock feature run skips it and a
+`TICKETRY_EDITION=core` run includes it. The case proves membership through
+public GraphQL `sprint_id` read-back around reloads rather than through that
+filter. Since CODING-2859, Pocock also withholds the MCP sprint tools and the
+`sprint` argument. The run-scoped sprint goal and suggestion calls therefore
+live in `@case-mcp-provider-sprint-scope`, which carries `@edition-core`.
+`@case-mcp-provider-run-scope` makes no sprint calls and runs in both editions.
 `suggest_sprint_story` succeeds only for the sprint's current suggestion run.
 Typed suggestion execution carries no interactive MCP credentials, so the
 browser suite proves its `run_not_current` refusal and leaves published
-suggestions to [Suggestion review](suggestion-review.md). The browser adapter
-refuses MCP launches (see the launch row). A refused launch still started a
-run about seven seconds later in exploration; that defect is tracked as
-CODING-LAUNCH-DEFECT. `continued_by_handoff` and restart behavior remain proven
+suggestions to [Suggestion review](suggestion-review.md).
+
+CODING-2869 is fixed. The GraphQL adapter used to start MCP without a
+terminal launcher, so `launch_default_coding_agent` returned
+`terminal_launch_unavailable` and `run_now` returned `run_now_unavailable`.
+The refused launch had already recorded its policy decision, which execution
+reconciliation delivered about seven seconds later. The adapter now gives MCP
+the same `TerminalLaunchService` its GraphQL launches use. Any runtime without a
+launcher refuses before policy resolution, so a refusal records nothing. The
+regression test is `studio/src-tauri/crates/surfaces/ticketry-mcp/src/tests.rs`,
+**a_launch_without_a_terminal_launcher_refuses_before_any_launch_policy_work**
+(`cargo test --manifest-path studio/src-tauri/Cargo.toml -p ticketry-mcp --lib`).
+`@case-mcp-launch-refusals` checks that a policy-refused launch still has no
+run after the reconciliation window. Wiring the launcher exposed a second defect:
+MCP `run_now` overflowed a Tokio worker stack and aborted the adapter, because
+the Run Now future was inlined into tool dispatch. `launch_tools.rs` now boxes
+the Run Now and dependency-graph launch futures, as `service.rs` already does
+for dispatch. `@case-mcp-run-now` is its regression proof. `continued_by_handoff` and restart behavior remain proven
 by the `mcp_acceptance` termination tests listed above.
 
 ## Relevant code
@@ -162,6 +216,7 @@ by the `mcp_acceptance` termination tests listed above.
 - `studio/src-tauri/crates/foundation/ticketry-provider/src/global_mcp.rs` and `studio/src-tauri/crates/foundation/ticketry-provider/src/codex_global_mcp.rs`: provider registration.
 - `studio/src-tauri/crates/app/ticketry-desktop/src/desktop/mcp_runtime.rs`, `studio/src-tauri/crates/app/ticketry-desktop/src/desktop/global_mcp_registration.rs` and `studio/src-tauri/crates/app/ticketry-desktop/src/desktop/rust_runtime_launch.rs`: owned desktop listener, registration gates and launch wiring.
 - `studio/src-tauri/crates/execution/ticketry-launch/src/planning/mcp_profile.rs`: run-specific provider configuration.
+- `studio/src-tauri/crates/app/ticketry-dev-tools/src/bin/ticketry_graphql_adapter/mcp.rs`: browser-development MCP listener with the adapter's terminal launcher.
 
 ## Gotchas
 

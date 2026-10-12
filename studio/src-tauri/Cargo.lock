@@ -7448,6 +7448,7 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
+ "serde_path_to_error",
  "tempfile",
  "ticketry-agent-execution",
  "ticketry-data-directory",
@@ -7534,6 +7535,7 @@ dependencies = [
  "ticketry-data-directory",
  "ticketry-entities",
  "ticketry-provider",
+ "tokio",
  "uuid",
 ]
 

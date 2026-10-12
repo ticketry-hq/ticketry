@@ -11,24 +11,28 @@
 //! call into a [`RunPrincipal`]: which run is calling, for which work item,
 //! and how far its scope reaches.
 //!
-//! What the listener exposes is composition, not model code. The registry
-//! names the tools, dispatch turns one call into work-management commands,
-//! graph runs, terminal launches or run termination, and projection renders
-//! the answer back as the agent's own vocabulary. Nothing here owns a table;
-//! it sits above the slices it dispatches into, which is why the schema is
-//! assembled out of this crate rather than underneath it.
+//! What the listener exposes is composition, not model code. Each capability
+//! module declares its tools once — typed parameters, a handler and a
+//! description — and the tool surface composes them into the one published
+//! list that discovery, run grants and the provider-mutation registry all
+//! read. Handlers turn one call into
+//! work-management commands, graph runs, terminal launches or run
+//! termination, and projection renders the answer back as the agent's own
+//! vocabulary. Nothing here owns a table; it sits above the slices it
+//! dispatches into, which is why the schema is assembled out of this crate
+//! rather than underneath it.
 
 mod attachment_tools;
 mod codex_thread_rename;
 mod connection_handshake;
+mod connection_serving;
+mod connectivity_tools;
 mod dependency_tools;
-mod dispatch;
 mod launch_tools;
 mod operation_registry;
 mod projection;
 mod public_id;
 mod read_tools;
-mod registry;
 mod run_termination;
 mod scope;
 mod service;
@@ -37,24 +41,23 @@ mod sprint_tools;
 mod termination_eligibility;
 #[cfg(any(test, feature = "test-support"))]
 mod test_support;
+mod tool_surface;
 mod work_facts;
 mod work_item_tools;
-mod workflow_tools;
+mod workflow_policy_tools;
 
 use std::path::PathBuf;
 
-use rmcp::ServiceExt;
-use tokio::net::UnixListener;
-use tokio::task::{JoinHandle, JoinSet};
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use ticketry_data_directory::DataDirectoryGuard;
 use ticketry_work_management::{commands::attachments::AttachmentStorage, open_for_commands};
 
-pub use registry::allowed_provider_operations;
 use service::WorktrackerMcpService;
 pub use socket_path::{mcp_socket_path, MCP_SOCKET_FILE_NAME};
 pub use ticketry_runs::{RunAuthority, RunPrincipal};
+pub use tool_surface::allowed_provider_operations;
 
 // `test_support` is intentionally not a public module. Its fixture helpers
 // are part of the explicit test-support facade so integration consumers can
@@ -192,7 +195,7 @@ impl McpRuntime {
     }
 
     /// Starts the listener against a scripted Codex thread capability, so the
-    /// rename acceptance test exercises the real registry, handshake,
+    /// rename acceptance test exercises the real tool surface, handshake,
     /// authorization, and dispatch without a live Codex.
     #[cfg(any(test, feature = "test-support"))]
     pub async fn start_for_test_with_codex_titles(
@@ -236,7 +239,7 @@ impl McpRuntime {
                 "MCP startup requires ownership of the selected data directory",
             ));
         }
-        verify_registry().map_err(McpStartupError::other)?;
+        let surface = verify_surface().map_err(McpStartupError::other)?;
         let database = open_for_commands(&configuration.database_path)
             .await
             .map_err(|error| {
@@ -267,9 +270,10 @@ impl McpRuntime {
             terminal_launch,
             codex_titles,
             data_directory,
+            surface,
         );
         let cancellation = CancellationToken::new();
-        let task = tokio::spawn(serve(
+        let task = tokio::spawn(connection_serving::serve(
             listener,
             socket_path.clone(),
             bound,
@@ -322,83 +326,12 @@ impl McpRuntime {
     }
 }
 
-/// Accept connections until cancelled; then wait for every connection task
-/// and remove the socket if it is still ours.
-async fn serve(
-    listener: UnixListener,
-    socket_path: PathBuf,
-    bound: socket_path::BoundSocket,
-    service: WorktrackerMcpService,
-    authority: RunAuthority,
-    cancellation: CancellationToken,
-) {
-    let mut connections = JoinSet::new();
-    loop {
-        let accepted = tokio::select! {
-            _ = cancellation.cancelled() => break,
-            accepted = listener.accept() => accepted,
-        };
-        let stream = match accepted {
-            Ok((stream, _)) => stream,
-            Err(error) => {
-                eprintln!("Ticketry WorkTracker MCP socket accept failed: {error}");
-                continue;
-            }
-        };
-        connections.spawn(serve_connection(
-            stream,
-            service.clone(),
-            authority.clone(),
-            cancellation.child_token(),
-        ));
-        // Reap finished connections so the set does not grow with history.
-        while connections.try_join_next().is_some() {}
-    }
-    drop(listener);
-    while connections.join_next().await.is_some() {}
-    socket_path::remove_own(&socket_path, bound);
-}
-
-async fn serve_connection(
-    stream: tokio::net::UnixStream,
-    service: WorktrackerMcpService,
-    authority: RunAuthority,
-    cancellation: CancellationToken,
-) {
-    let (read, mut write) = stream.into_split();
-    let mut read = tokio::io::BufReader::new(read);
-    let connection = tokio::select! {
-        _ = cancellation.cancelled() => return,
-        connection = connection_handshake::authenticate(&mut read, &mut write, &authority) => {
-            let Ok(connection) = connection else { return };
-            connection
-        }
-    };
-    let running = match service
-        .for_connection(connection)
-        .serve_with_ct((read, write), cancellation)
-        .await
-    {
-        Ok(running) => running,
-        Err(rmcp::service::ServerInitializeError::Cancelled) => return,
-        Err(error) => {
-            eprintln!("Ticketry WorkTracker MCP connection did not initialize: {error}");
-            return;
-        }
-    };
-    let _ = running.waiting().await;
-}
-
-fn verify_registry() -> Result<(), String> {
-    let tools = registry::tools();
-    let unique = tools
-        .iter()
-        .map(|tool| tool.name.as_ref())
-        .collect::<std::collections::BTreeSet<_>>();
-    if unique.len() != tools.len() {
-        return Err("WorkTracker MCP registry contains duplicate tool names.".to_owned());
-    }
-    operation_registry::assert_complete(&tools)
+/// Compose the one tool surface; duplicate names or an unrecorded provider
+/// mutation fail startup before the socket binds.
+fn verify_surface() -> Result<tool_surface::ToolSurface, String> {
+    let surface = tool_surface::ToolSurface::build()?;
+    operation_registry::assert_complete(surface.tools())?;
+    Ok(surface)
 }
 
 impl Drop for McpRuntime {

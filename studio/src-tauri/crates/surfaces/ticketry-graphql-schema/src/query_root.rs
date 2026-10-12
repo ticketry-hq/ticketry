@@ -232,7 +232,13 @@ fn build_schema(
     let builder = ticketry_terminal::register_launch_graphql(builder);
     let builder = ticketry_terminal::register_cleanup_graphql(builder);
     let builder = ticketry_terminal::register_session_graphql(builder);
-    let builder = ticketry_agent_execution::register_sprint_execution_graphql(builder);
+    // Sprint execution views name the `agent_executions` entity, which is
+    // registered only alongside the product's execution entities.
+    let builder = if contract.product_generated_mutations {
+        ticketry_agent_execution::register_sprint_execution_graphql(builder)
+    } else {
+        builder
+    };
     let builder = ticketry_agent_execution::run_now::register_graphql(builder);
     let builder = if contract.product_generated_mutations {
         ticketry_agent_execution::graph_run::register_graphql(builder)

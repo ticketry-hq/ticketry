@@ -94,26 +94,9 @@ export async function loadOnboardingState(): Promise<void> {
   }
 }
 
+/** The declared acknowledgement converges the onboarding read it makes stale. */
 export async function acknowledgeOnboarding(projectId: string): Promise<void> {
-  const project = await writeOnboardingAcknowledgement(projectId);
-  const acknowledged = {
-    id: compactWorktrackerId(project.id),
-    slug: project.slug,
-    name: project.name,
-    onboarding_required: project.onboarding_required,
-  };
-  const nodes = cached() ?? [];
-  const sameProject = (node: CachedProject) =>
-    compactWorktrackerId(node.id) === acknowledged.id;
-  const known = nodes.some(sameProject);
-  studioApolloClient().writeQuery({
-    query: WorkTrackerOnboardingDocument,
-    data: onboardingQueryData(
-      known
-        ? nodes.map((node) => (sameProject(node) ? acknowledged : node))
-        : [...nodes, acknowledged],
-    ),
-  });
+  await writeOnboardingAcknowledgement(projectId);
 }
 
 export function getOnboardingRequiredSnapshot(): boolean {

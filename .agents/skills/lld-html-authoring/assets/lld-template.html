@@ -120,6 +120,11 @@
     .plain-list { margin: 0; padding-left: 18px; }
     .plain-list li + li { margin-top: 8px; }
     .boundary { border-left: 4px solid var(--orange); }
+    .reuse-table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); background: var(--sheet); font-size: 13px; }
+    .reuse-table th, .reuse-table td { padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    .reuse-table thead th { color: var(--muted); background: var(--group); font: 700 10px/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+    .reuse-table tbody th { width: 14%; font: 700 11px/1.4 var(--mono); text-transform: uppercase; }
+    .reuse-table code { color: var(--navy); font: 600 12px/1.4 var(--mono); }
 
     .change-view { border: 1px solid var(--line-strong); background: var(--sheet); box-shadow: var(--shadow); }
     .change-toolbar {
@@ -236,6 +241,9 @@
       .file-inspector { padding: 14px; }
       .step { grid-template-columns: 42px 1fr; }
       .step code { grid-column: 2; }
+      .reuse-table thead { display: none; }
+      .reuse-table tr, .reuse-table th, .reuse-table td { display: block; width: auto; }
+      .reuse-table tbody th { width: auto; border-bottom: 0; padding-bottom: 0; }
     }
 
     @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
@@ -257,6 +265,7 @@
 
     <nav class="sticky-nav" aria-label="Document sections">
       <a href="#file-changes">File changes</a>
+      <a href="#reuse-record">Reuse</a>
       <a href="#context">Context</a>
       <a href="#execution">Build order</a>
       <a href="#acceptance">Acceptance</a>
@@ -284,6 +293,20 @@
             <article class="file-inspector" id="file-inspector" aria-live="polite"></article>
           </div>
         </div>
+      </section>
+
+      <section id="reuse-record" aria-labelledby="reuse-title">
+        <p class="section-kicker">Reuse before writing code</p>
+        <h2 id="reuse-title">Reuse record</h2>
+        <p class="lede">Each behaviour is reused, generated or configured, or genuinely new. Cite the closest repository example by repository-relative path. A category with no behaviour states <code>none — reason</code>.</p>
+        <table class="reuse-table">
+          <thead><tr><th scope="col">Category</th><th scope="col">Behaviour</th><th scope="col">Closest example</th><th scope="col">Justification</th></tr></thead>
+          <tbody>
+            <tr data-reuse="reused"><th scope="row">Reused</th><td>Replace this reuse row with behaviour an existing module or framework already owns.</td><td><code>src/example/existing-module.ts</code></td><td>Replace this reuse row with why the existing owner fits unchanged.</td></tr>
+            <tr data-reuse="generated"><th scope="row">Generated or configured</th><td>Replace this reuse row with behaviour produced by a generator, declaration or configuration entry.</td><td><code>src/example/registry.ts</code></td><td>Replace this reuse row with the generator or declaration that owns it.</td></tr>
+            <tr data-reuse="new"><th scope="row">New</th><td>Replace this reuse row with behaviour no existing module, generator or configuration provides.</td><td><code>src/example/closest-precedent.ts</code></td><td>Replace this reuse row with why custom code is justified and how the next similar feature becomes cheaper.</td></tr>
+          </tbody>
+        </table>
       </section>
 
       <section id="context" aria-labelledby="scope-title">

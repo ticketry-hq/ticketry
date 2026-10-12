@@ -4,6 +4,7 @@ import type { CreateGraphQlTransportProxy } from "../../runtime/graphQlTransport
 import { studioRuntime } from "../../runtime";
 import { createFoundationErrorLink } from "./errorLink";
 import { createIssueRevisionGuardLink } from "./issueRevisionGuardLink";
+import { createSupersededReadLink } from "./supersededReadLink";
 import { createTaurpcLink } from "./taurpcLink";
 import { typePolicies } from "./typePolicies";
 
@@ -13,6 +14,7 @@ export function createStudioApolloClient(createProxy: CreateGraphQlTransportProx
     cache,
     link: ApolloLink.from([
       createFoundationErrorLink(),
+      createSupersededReadLink(cache),
       createIssueRevisionGuardLink(cache),
       createTaurpcLink(createProxy),
     ]),

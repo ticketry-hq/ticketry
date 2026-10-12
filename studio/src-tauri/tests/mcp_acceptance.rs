@@ -19,6 +19,10 @@ mod sprint_suggestions;
 mod tags;
 #[path = "mcp_acceptance/termination.rs"]
 mod termination;
+#[path = "mcp_acceptance/work_item_contracts.rs"]
+mod work_item_contracts;
+#[path = "mcp_acceptance/workflow_policy_contracts.rs"]
+mod workflow_policy_contracts;
 
 use ticketry_data_directory::DataDirectoryGuard;
 use ticketry_entities::session;
@@ -410,6 +414,21 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
         )
         .await;
     assert_eq!(reparented["reparented"][0]["task_id"], second);
+
+    // The reversed edge: `dependent_task_id` becomes blocked by `task_id`, and
+    // the answer describes the dependent.
+    let dependent = run
+        .structured(
+            60,
+            "add_task_dependent",
+            json!({"task_id": first, "dependent_task_id": parent}),
+        )
+        .await;
+    assert_eq!(
+        dependent,
+        json!({"task_id": parent, "blocked_by_ids": [first], "blocks_ids": []}),
+        "{dependent:#}"
+    );
 
     let workflow = run
         .structured(

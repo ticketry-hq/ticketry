@@ -1,174 +1,92 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback } from "react";
 import { apiErrorMessage } from "../../shared/api/errors";
-import { compactWorktrackerId, publicWorktrackerId } from "../../shared/api/generatedWorktracker";
-import { studioApolloClient } from "../../shared/apollo/client";
+import { publicWorktrackerId } from "../../shared/api/generatedWorktracker";
+import type { ModulePresentation } from "../../shared/api/types";
+import {
+  executeDeclaredMutation,
+  mutationFailurePhase,
+  useMutationState,
+} from "../../shared/apollo/declaredMutation";
 import { toast } from "../../state/clientStore";
-import { reorderModulePresentation } from "./modulePresentationTransport";
-import { WorkTrackerProjectOpenDocument } from "./generated/projects.documents";
 import { planModuleReorder } from "./internal/moduleReorder";
-import { getModulesSnapshot, loadModules, seedModules } from "./queries";
+import {
+  moduleReorderMutation,
+  type ModuleReorderArgs,
+} from "./internal/moduleReorderMutation";
+import { getModulesSnapshot, loadModules } from "./queries";
 
 export interface ModuleReorderControls {
   reorder: (moduleId: string, targetId: string, intent: "near" | "far") => void;
   isPending: boolean;
 }
 
-let pendingCount = 0;
-let optimisticSequence = 0;
-const pendingListeners = new Set<() => void>();
-
-function setPending(delta: number): void {
-  pendingCount = Math.max(0, pendingCount + delta);
-  pendingListeners.forEach((listener) => listener());
+interface ModuleReorderGesture extends ModuleReorderArgs {
+  readonly targetId: string;
+  readonly intent: "near" | "far";
 }
 
-function subscribePending(listener: () => void): () => void {
-  pendingListeners.add(listener);
-  return () => pendingListeners.delete(listener);
-}
+const NOT_NEIGHBORS = "before/after are not ordered neighbors";
 
-function optimisticModuleOrder(projectId: string, order: readonly string[], layerId: string): void {
-  const client = studioApolloClient();
-  const variables = { projectId: compactWorktrackerId(projectId) };
-  client.cache.batch({
-    optimistic: layerId,
-    update(cache) {
-      cache.updateQuery({ query: WorkTrackerProjectOpenDocument, variables }, (current) => {
-        if (!current) return current;
-        const positions = new Map(order.map((id, index) => [compactWorktrackerId(id), index]));
-        const existing = new Map(
-          current.module_presentations.nodes.map((presentation) => [
-            presentation.module_id,
-            presentation,
-          ]),
-        );
-        const orderedPresentations = order.map((id, index) => {
-          const moduleId = compactWorktrackerId(id);
-          const presentation = existing.get(moduleId);
-          return {
-            __typename: "WorktrackerModulepresentation" as const,
-            module_id: moduleId,
-            rank: String(index).padStart(8, "0"),
-            tab_hidden: presentation?.tab_hidden ?? false,
-            module: presentation?.module ?? {
-              __typename: "WorktrackerIssue" as const,
-              id: moduleId,
-              project_id: variables.projectId,
-            },
-          };
-        });
-        const orderedIds = new Set(orderedPresentations.map((row) => row.module_id));
-        return {
-          ...current,
-          modules: {
-            ...current.modules,
-            nodes: [...current.modules.nodes].sort((left, right) =>
-              (positions.get(left.id) ?? Number.MAX_SAFE_INTEGER)
-              - (positions.get(right.id) ?? Number.MAX_SAFE_INTEGER)
-            ),
-          },
-          module_presentations: {
-            ...current.module_presentations,
-            nodes: [
-              ...current.module_presentations.nodes.filter(
-                (presentation) => !orderedIds.has(presentation.module_id),
-              ),
-              ...orderedPresentations,
-            ],
-          },
-        };
-      });
-    },
-  });
-}
-
+/**
+ * Persist one Module drop. When the server says the planned neighbours are no
+ * longer adjacent, the visible order was stale: re-plan the same gesture from
+ * an authoritative read and send one new reorder with the new plan. The
+ * committed-write path never re-sends.
+ */
 async function persistModuleReorder(
-  projectId: string,
-  moduleId: string,
-  targetId: string,
-  intent: "near" | "far",
-  plan: NonNullable<ReturnType<typeof planModuleReorder>>,
-): Promise<void> {
-  const client = studioApolloClient();
-  const layerId = `module-reorder:${++optimisticSequence}`;
-  optimisticModuleOrder(projectId, plan.order.map((module) => module.id), layerId);
-  setPending(1);
-  let settledPlan = plan;
+  gesture: ModuleReorderGesture,
+): Promise<ModulePresentation | null> {
   try {
-    try {
-      await reorderModulePresentation(moduleId, {
-        before_id: plan.beforeId,
-        after_id: plan.afterId,
-        initial_order_ids: plan.initialOrderIds,
-      });
-    } catch (error) {
-      const message = apiErrorMessage(error);
-      if (!message.includes("before/after are not ordered neighbors")) {
-        toast.error(`Modules could not be reordered: ${message}`);
-        return;
-      }
-
-      try {
-        const authoritative = await loadModules(projectId, {
-          queryDeduplication: false,
-        });
-        const retryPlan = planModuleReorder(
-          authoritative,
-          publicWorktrackerId(moduleId),
-          publicWorktrackerId(targetId),
-          intent,
-        );
-        if (!retryPlan) return;
-        settledPlan = retryPlan;
-        client.cache.removeOptimistic(layerId);
-        optimisticModuleOrder(
-          projectId,
-          retryPlan.order.map((module) => module.id),
-          layerId,
-        );
-        await reorderModulePresentation(moduleId, {
-          before_id: retryPlan.beforeId,
-          after_id: retryPlan.afterId,
-          initial_order_ids: retryPlan.initialOrderIds,
-        });
-      } catch (retryError) {
-        toast.error(
-          `Modules could not be reordered: ${apiErrorMessage(retryError)}`,
-        );
-        return;
-      }
+    return await executeDeclaredMutation(moduleReorderMutation, gesture);
+  } catch (error) {
+    if (
+      mutationFailurePhase(error) !== "write"
+      || !apiErrorMessage(error).includes(NOT_NEIGHBORS)
+    ) {
+      throw error;
     }
-    try {
-      await loadModules(projectId, { queryDeduplication: false });
-    } catch {
-      seedModules(projectId, settledPlan.order);
-    }
-  } finally {
-    client.cache.removeOptimistic(layerId);
-    setPending(-1);
   }
+  const authoritative = await loadModules(gesture.projectId, {
+    queryDeduplication: false,
+  });
+  const plan = planModuleReorder(
+    authoritative,
+    publicWorktrackerId(gesture.moduleId),
+    publicWorktrackerId(gesture.targetId),
+    gesture.intent,
+  );
+  return plan
+    ? executeDeclaredMutation(moduleReorderMutation, { ...gesture, plan })
+    : null;
 }
 
 export function useReorderModule(projectId: string | null): ModuleReorderControls {
-  const isPending = useSyncExternalStore(
-    subscribePending,
-    () => pendingCount > 0,
-    () => false,
+  // Every reorder surface shares one pending scope: a reorder in flight
+  // disables dragging everywhere, not only where it started.
+  const { mutateAsync, isPending } = useMutationState(
+    persistModuleReorder,
+    undefined,
+    { pendingScope: "module-reorder" },
   );
   const reorder = useCallback(
     (moduleId: string, targetId: string, intent: "near" | "far") => {
-      if (projectId === null || pendingCount > 0) return;
+      if (projectId === null || isPending) return;
       const plan = planModuleReorder(
         getModulesSnapshot(projectId),
         publicWorktrackerId(moduleId),
         publicWorktrackerId(targetId),
         intent,
       );
-      if (plan) {
-        void persistModuleReorder(projectId, moduleId, targetId, intent, plan);
-      }
+      if (!plan) return;
+      void mutateAsync({ projectId, moduleId, targetId, intent, plan }).catch(
+        (error: unknown) => {
+          // A committed reorder whose project read failed keeps its order.
+          if (mutationFailurePhase(error) === "refresh") return;
+          toast.error(`Modules could not be reordered: ${apiErrorMessage(error)}`);
+        },
+      );
     },
-    [projectId],
+    [isPending, mutateAsync, projectId],
   );
   return { reorder, isPending };
 }

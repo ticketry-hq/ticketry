@@ -20,6 +20,12 @@
     "web:dev": "node scripts/web-dev.mjs --development-profile",
     "boundary:check": "node scripts/check-boundary.mjs",
     "caller:check": "node scripts/shipping-caller-gate.mjs",
+    "caller:check:test": "node --test scripts/shipping-caller-gate.test.mjs",
+    "reuse:check": "node scripts/reuse-check.mjs",
+    "reuse:baseline": "node scripts/reuse-baseline.mjs",
+    "reuse:test": "node --test scripts/reuse-gate/findings.test.mjs scripts/reuse-gate/duplication-findings.test.mjs scripts/reuse-check.test.mjs",
+    "test:catalog-append": "node scripts/test-appended-catalog.mjs",
+    "lld:check:test": "node --test .agents/skills/lld-html-authoring/scripts/check_html_lld.test.mjs",
     "desktop:build": "npm run desktop:build --workspace @worktracker/studio",
     "desktop:deploy": "npm run desktop:deploy --workspace @worktracker/studio",
     "deploy": "npm run desktop:deploy --workspace @worktracker/studio",
@@ -50,5 +56,8 @@
     "perf:verify": "npm run perf:verify --workspace @worktracker/studio",
     "perf:test": "npm run perf:test --workspace @worktracker/studio",
     "perf:typecheck": "npm run perf:typecheck --workspace @worktracker/studio"
+  },
+  "devDependencies": {
+    "jscpd": "^5.4.1"
   }
 }

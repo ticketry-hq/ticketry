@@ -19,11 +19,6 @@ import {
   stateCatalogChangedSince,
   stateCatalogRevision,
 } from "../../shared/stateCatalogRevision";
-import {
-  removeState as removeStateFromCatalog,
-  setStatesSorted,
-  upsertState,
-} from "../../features/projects";
 import { synchronizeSubtreeRunCapabilities } from "../settings";
 import {
   loadAllWorkflowSettings,
@@ -33,9 +28,9 @@ import {
   getWorkflowStateCountsSnapshot,
   getWorkflowStatesSnapshot,
   getProjectWorkflowSettingsSnapshot,
-  loadWorkflowProjectItems,
+  getWorkflowProjectItemsSnapshot,
+  getWorkflowSettingsSnapshot,
   loadWorkflowSettings,
-  loadWorkflowStates,
   setWorkflowIssueTypes,
   setWorkflowProviderCapabilities,
   setWorkflowStateCounts,
@@ -48,7 +43,9 @@ interface RemoveStateCommand {
   stateName: string;
 }
 
+/** A per-type workflow write; its declared refresh re-reads the workflow catalog. */
 type ScopedOperation = (
+  projectId: string,
   workflowRevision: number,
 ) => Promise<unknown>;
 
@@ -157,6 +154,10 @@ const countWorkItemsByState = (items: WorkItem[]): Record<string, number> =>
     if (stateId) counts[stateId] = (counts[stateId] ?? 0) + 1;
     return counts;
   }, {});
+
+/** The optimistic order: the catalog reads states by rank, so re-rank them as listed. */
+const rankedInOrder = (states: State[]): State[] =>
+  states.map((state, index) => ({ ...state, sort_order: index }));
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError && error.body && typeof error.body === "object") {
@@ -303,9 +304,9 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
       controlErrors: { ...state.controlErrors, [control]: "" },
     }));
     try {
-      await operation(workflow.workflow_revision);
+      await operation(projectId, workflow.workflow_revision);
       if (get().projectId !== projectId) return null;
-      const next = await loadWorkflowSettings(projectId, typeId, "network-only");
+      const next = getWorkflowSettingsSnapshot(projectId, typeId);
       synchronizeSubtreeRunCapabilities(
         projectId,
         next.issue_type_id,
@@ -376,13 +377,13 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
   },
 
   async setStartState(typeId, stateId, control) {
-    await get().applyScoped(control, typeId, (revision) =>
-      api.setIssueTypeWorkflowStartState(typeId, stateId, revision));
+    await get().applyScoped(control, typeId, (projectId, revision) =>
+      api.setIssueTypeWorkflowStartState(projectId, typeId, stateId, revision));
   },
 
   async addTransition(typeId, fromStateId, toStateId, control) {
-    const next = await get().applyScoped(control, typeId, (revision) =>
-      api.addIssueTypeWorkflowTransition(typeId, {
+    const next = await get().applyScoped(control, typeId, (projectId, revision) =>
+      api.addIssueTypeWorkflowTransition(projectId, typeId, {
         from_state_id: fromStateId,
         to_state_id: toStateId,
         agent_allowed: true,
@@ -399,8 +400,9 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
   },
 
   async removeTransition(typeId, fromStateId, toStateId, control) {
-    await get().applyScoped(control, typeId, (revision) =>
+    await get().applyScoped(control, typeId, (projectId, revision) =>
       api.removeIssueTypeWorkflowTransition(
+        projectId,
         typeId,
         fromStateId,
         toStateId,
@@ -409,8 +411,8 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
   },
 
   async removeWorkflowState(typeId, stateId, control) {
-    await get().applyScoped(control, typeId, (revision) =>
-      api.removeIssueTypeWorkflowState(typeId, stateId, revision));
+    await get().applyScoped(control, typeId, (projectId, revision) =>
+      api.removeIssueTypeWorkflowState(projectId, typeId, stateId, revision));
   },
 
   async setTransitionPermission(
@@ -424,8 +426,9 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
       candidate.from_state_id === fromStateId
       && candidate.to_state_id === toStateId);
     if (!edge) return;
-    await get().applyScoped(control, typeId, (revision) =>
+    await get().applyScoped(control, typeId, (projectId, revision) =>
       api.updateIssueTypeWorkflowTransition(
+        projectId,
         typeId,
         fromStateId,
         toStateId,
@@ -446,8 +449,9 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
       candidate.from_state_id === fromStateId
       && candidate.to_state_id === toStateId);
     if (!edge) return;
-    await get().applyScoped(control, typeId, (revision) =>
+    await get().applyScoped(control, typeId, (projectId, revision) =>
       api.updateIssueTypeWorkflowTransition(
+        projectId,
         typeId,
         fromStateId,
         toStateId,
@@ -458,12 +462,10 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
   },
 
   async upsertLaunchBinding(typeId, stateId, binding, control) {
-    const projectId = get().projectId;
     const current = get().workflows[typeId]?.launch_bindings.find(
       (candidate) => candidate.state_id === stateId,
     );
-    if (!projectId) return null;
-    return get().applyScoped(control, typeId, (revision) =>
+    return get().applyScoped(control, typeId, (projectId, revision) =>
       api.upsertIssueTypeWorkflowLaunchBinding(
         projectId,
         typeId,
@@ -482,8 +484,9 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
   },
 
   async setAutoStart(typeId, stateId, autoStart, control) {
-    await get().applyScoped(control, typeId, (revision) =>
+    await get().applyScoped(control, typeId, (projectId, revision) =>
       api.setIssueTypeWorkflowAutoStart(
+        projectId,
         typeId,
         stateId,
         autoStart,
@@ -492,8 +495,9 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
   },
 
   async setSubtreeRun(typeId, stateId, enabled, control) {
-    await get().applyScoped(control, typeId, (revision) =>
+    await get().applyScoped(control, typeId, (projectId, revision) =>
       api.setIssueTypeWorkflowSubtreeRun(
+        projectId,
         typeId,
         stateId,
         enabled,
@@ -510,7 +514,6 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
       if (get().projectId !== projectId) return;
       advanceStateCatalogRevision(projectId, created);
       set({
-        states: upsertState(projectId, created),
         action: null,
         notice: `State ${created.name} created.`,
       });
@@ -530,7 +533,6 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
       if (get().projectId !== projectId) return;
       advanceStateCatalogRevision(projectId, updated);
       set({
-        states: upsertState(projectId, updated),
         action: null,
         notice: `State ${updated.name} updated.`,
       });
@@ -542,25 +544,17 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
   },
 
   async removeState(command) {
-    const { projectId, issueTypes } = get();
+    const { projectId } = get();
     if (!projectId) return;
     set({ action: "remove-state", notice: null, error: null });
     try {
-      await api.deleteState(command.stateId);
+      // The declared delete evicts the state and re-reads the catalog (states
+      // and every type's workflow settings) and the items behind the counts.
+      await api.deleteState(projectId, command.stateId);
       if (get().projectId !== projectId) return;
-      removeStateFromCatalog(projectId, command.stateId);
-      set({ states: getWorkflowStatesSnapshot(projectId) });
-      const [states, , workItems] = await Promise.all([
-        loadWorkflowStates(projectId),
-        loadAllWorkflowSettings(projectId, issueTypes.map((type) => type.id)),
-        loadWorkflowProjectItems(projectId),
-      ]);
-      if (get().projectId !== projectId) return;
-      advanceStateCatalogRevision(projectId, states);
-      setStatesSorted(projectId, states);
+      advanceStateCatalogRevision(projectId, getWorkflowStatesSnapshot(projectId));
       set({
-        states: getWorkflowStatesSnapshot(projectId),
-        stateWorkItemCounts: countWorkItemsByState(workItems),
+        stateWorkItemCounts: countWorkItemsByState(getWorkflowProjectItemsSnapshot(projectId)),
         action: null,
         notice: `State ${command.stateName} deleted.`,
       });
@@ -579,16 +573,12 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
     const next = [...states];
     [next[index], next[target]] = [next[target], next[index]];
     const orderedIds = next.flatMap((state) => state.id ? [state.id] : []);
-    set({ states: next, action: "reorder", notice: null, error: null });
+    set({ states: rankedInOrder(next), action: "reorder", notice: null, error: null });
     try {
       const reordered = await api.reorderStates(projectId, orderedIds);
       if (get().projectId !== projectId) return;
       advanceStateCatalogRevision(projectId, reordered);
-      setStatesSorted(projectId, reordered);
-      set({
-        states: getWorkflowStatesSnapshot(projectId),
-        action: null,
-      });
+      set({ action: null });
     } catch (error) {
       if (get().projectId !== projectId) return;
       set({ states, action: null, error: errorMessage(error) });
@@ -605,16 +595,12 @@ export const useWorkflowEditorStore = createApolloStore<WorkflowEditorState>("wo
     const [moved] = next.splice(sourceIndex, 1);
     next.splice(targetIndex, 0, moved);
     const orderedIds = next.flatMap((state) => state.id ? [state.id] : []);
-    set({ states: next, action: "reorder", notice: null, error: null });
+    set({ states: rankedInOrder(next), action: "reorder", notice: null, error: null });
     try {
       const reordered = await api.reorderStates(projectId, orderedIds);
       if (get().projectId !== projectId) return;
       advanceStateCatalogRevision(projectId, reordered);
-      setStatesSorted(projectId, reordered);
-      set({
-        states: getWorkflowStatesSnapshot(projectId),
-        action: null,
-      });
+      set({ action: null });
     } catch (error) {
       if (get().projectId !== projectId) return;
       set({ states, action: null, error: errorMessage(error) });

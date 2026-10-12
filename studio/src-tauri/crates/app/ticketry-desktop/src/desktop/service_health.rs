@@ -87,14 +87,15 @@ mod tests {
             "the failure pointer is the real filesystem path"
         );
         assert!(log_path.is_absolute());
-        assert_eq!(
-            value
-                .as_object()
-                .expect("service health object")
-                .keys()
-                .collect::<Vec<_>>(),
-            vec!["logPointer", "message", "service", "state"]
-        );
+        // serde_json keeps insertion order when any crate in the build enables
+        // `preserve_order`, so compare the field set, not the map's order.
+        let mut fields = value
+            .as_object()
+            .expect("service health object")
+            .keys()
+            .collect::<Vec<_>>();
+        fields.sort_unstable();
+        assert_eq!(fields, vec!["logPointer", "message", "service", "state"]);
         assert!(value.get("port").is_none());
         assert!(value.get("exitCode").is_none());
         assert!(value.get("processName").is_none());

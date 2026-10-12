@@ -34,10 +34,7 @@ export {
 } from "./stateCatalog";
 export { useReorderModule } from "./mutations";
 export type { ModuleReorderControls } from "./mutations";
-export {
-  reorderModulePresentation,
-  setModuleTabHidden,
-} from "./modulePresentationTransport";
+export { setModuleTabHidden } from "./modulePresentationTransport";
 export {
   getModulePresentationsSnapshot,
   getVisibleModulesSnapshot,

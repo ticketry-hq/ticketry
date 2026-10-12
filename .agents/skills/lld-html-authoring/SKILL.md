@@ -25,7 +25,17 @@ The LLD must name exact files, symbols, contracts, data and state changes, failu
 
 Make the file-change workspace the first substantive section and the dominant page area. Put implementation and verification detail inside each file record. Treat scope, build order, diagrams, and acceptance as supporting views that clarify or summarize the file plan.
 
+**Reuse record.** Before planning new code, fill the template's `id="reuse-record"` table. Answer the repository's three reuse questions with a cited example for each: which existing module or framework can do this (Reused), what can be configuration or generated code (Generated or configured), and what genuinely new behaviour must be implemented (New). Each row gives the behaviour, the closest example as a repository-relative path in `<code>`, and the justification. Every Reused and Generated row cites a path. A category with no behaviour keeps one row stating `none — <reason>`. Start from the [capability guide](../../../docs/feature-map/how-to-add-a-capability.md).
+
 ## Verify
+
+**Reuse record.** Review the reuse record against the file plan and answer the three review questions for each New row and each custom file:
+
+- Is this responsibility already owned by a framework or shared module?
+- Is the custom code justified?
+- Does the next similar feature become cheaper to author?
+
+Move a behaviour to Reused or Generated when the answer to the first question is yes. A second similar implementation starts a reuse discussion, not a mandatory abstraction.
 
 Set `data-template="false"` only after all sample content is gone. Run `scripts/check_html_lld.py <LLD.html>`, then open or render the document. Correct overflow, unreadable diagrams, broken filters, keyboard-navigation problems, and inconsistent content before finishing.
 

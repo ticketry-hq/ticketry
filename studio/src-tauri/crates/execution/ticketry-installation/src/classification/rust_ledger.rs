@@ -14,7 +14,7 @@ use super::outcome::{ClassificationError, Refusal, RustOwnership};
 /// The versions come from the capabilities themselves, so a capability that
 /// bumps its ownership version cannot leave classification behind.
 pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
-    vec![
+    let mut ledgers = vec![
         // The installation ledger comes first because it is the one that says
         // Rust owns the installation as a whole. A crash between its commit and
         // the capability handoffs must still reopen as Rust-owned, which is
@@ -26,10 +26,6 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
         (
             "ticketry_worktracker_adoption",
             ticketry_work_management::work_management_ownership_manifest::VERSION,
-        ),
-        (
-            ticketry_settings::CODEX_5_6_LEDGER,
-            ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
         ),
         (
             ticketry_work_management::project_onboarding_migration::LEDGER_TABLE,
@@ -68,30 +64,6 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
             ticketry_work_management::module_presentation_migration::VERSION,
         ),
         (
-            ticketry_settings::CODEX_SPARK_LEDGER,
-            ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
-        ),
-        (
-            ticketry_settings::CODEX_ASTRA_LEDGER,
-            ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
-        ),
-        (
-            ticketry_settings::CODEX_6_ASTRA_LEDGER,
-            ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
-        ),
-        (
-            ticketry_settings::CODEX_GLM_5_3_FLASH_LEDGER,
-            ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
-        ),
-        (
-            ticketry_settings::CODEX_6_1_SOL_LEDGER,
-            ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
-        ),
-        (
-            ticketry_settings::CODEX_6_SOL_LUNA_LEDGER,
-            ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
-        ),
-        (
             "ticketry_settings_adoption",
             ticketry_settings::OWNERSHIP_MANIFEST_VERSION,
         ),
@@ -112,7 +84,22 @@ pub fn owned_ledgers() -> Vec<(&'static str, i32)> {
             ticketry_workspace_runtime::persistence::LEDGER_TABLE,
             ticketry_workspace_runtime::persistence::VERSION,
         ),
-    ]
+    ];
+    // Catalog ledger order is not an adoption sequence: classification only
+    // checks membership and supported versions. Keep non-catalog order stable
+    // and discover every catalog ledger from the same registry startup uses.
+    ledgers.extend(
+        ticketry_settings::provider_catalog_migrations()
+            .expect("the built-in provider catalog migration registry must validate")
+            .iter()
+            .map(|migration| {
+                (
+                    migration.ledger_table(),
+                    ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
+                )
+            }),
+    );
+    ledgers
 }
 
 /// Report Rust ownership when any capability ledger is present.

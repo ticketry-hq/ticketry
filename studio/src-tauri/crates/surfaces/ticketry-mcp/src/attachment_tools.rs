@@ -1,24 +1,41 @@
-use super::{
-    dispatch::DispatchOutput, public_id::hyphenate, scope, workflow_tools::string, RunPrincipal,
-};
-use sea_orm::DatabaseConnection;
-use serde_json::{json, Map, Value};
+//! Attaching a local file to a work item through the attachments command.
+
 use std::path::Path;
+
+use rmcp::schemars::JsonSchema;
+use serde::Deserialize;
+use serde_json::{json, Value};
 use ticketry_work_management::commands::{attachments, CommandError};
 
-pub(super) async fn attach_file(
-    database: &DatabaseConnection,
-    storage: &attachments::AttachmentStorage,
-    principal: &RunPrincipal,
-    arguments: &Map<String, Value>,
-) -> Result<DispatchOutput, CommandError> {
-    scope::project(database, principal, string(arguments, "project_id")?).await?;
-    let task = scope::task(database, principal, string(arguments, "task_id")?).await?;
-    let path = Path::new(string(arguments, "file_path")?);
+use super::{
+    public_id::hyphenate,
+    scope,
+    tool_surface::{ToolCall, TypedTool, TypedTools},
+};
+
+pub(super) fn typed_tools() -> TypedTools {
+    TypedTools::default().with(TypedTool::new(
+        "attach_file",
+        "Attach a local file to a task.",
+        attach_file,
+    ))
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+struct Attachment {
+    project_id: String,
+    task_id: String,
+    file_path: String,
+}
+
+async fn attach_file(call: ToolCall, request: Attachment) -> Result<Value, CommandError> {
+    let database = &call.database;
+    scope::project(database, &call.principal, &request.project_id).await?;
+    let task = scope::task(database, &call.principal, &request.task_id).await?;
+    let path = Path::new(&request.file_path);
     if !path.is_file() {
-        return Ok(DispatchOutput::direct(
-            json!({"success": false, "message": "File not found", "data": null}),
-        ));
+        return Ok(json!({"success": false, "message": "File not found", "data": null}));
     }
     let filename = path
         .file_name()
@@ -29,7 +46,7 @@ pub(super) async fn attach_file(
         .map_err(|_| CommandError::Storage("Could not read attachment file.".to_owned()))?;
     let row = attachments::create(
         database,
-        storage,
+        &call.storage,
         attachments::CreateAttachment {
             issue_id: task.id,
             filename,
@@ -38,7 +55,5 @@ pub(super) async fn attach_file(
         },
     )
     .await?;
-    Ok(DispatchOutput::direct(
-        json!({"success": true, "message": "Attached", "data": {"asset_id": hyphenate(&row.id)}}),
-    ))
+    Ok(json!({"success": true, "message": "Attached", "data": {"asset_id": hyphenate(&row.id)}}))
 }

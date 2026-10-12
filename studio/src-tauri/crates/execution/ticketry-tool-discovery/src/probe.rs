@@ -12,7 +12,9 @@ use std::time::Duration;
 use super::diagnostics::{display_path, ToolDiagnostic, ToolHealth};
 use super::supported_tools::SupportedTool;
 
-const VERSION_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+// Bounds a hung tool. A healthy launcher (Node-based CLIs especially) can take
+// seconds to answer on a heavily loaded machine, so the bound leaves headroom.
+const VERSION_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(super) fn inspect_candidate<F>(
     candidate: &Path,

@@ -188,9 +188,12 @@ async fn editing_an_upgraded_selection_survives_restart_without_legacy_rebackfil
 #[tokio::test]
 async fn partial_prior_completion_resumes_without_replaying_completed_steps() {
     let (_directory, database) = fixture().await;
-    provider_catalog_migrations::install_codex_5_6(&database)
-        .await
-        .unwrap();
+    provider_catalog_migrations::install_provider_catalog_migration(
+        &database,
+        support::catalog_step(44),
+    )
+    .await
+    .unwrap();
     project_onboarding_migration::install(&database)
         .await
         .unwrap();
@@ -298,29 +301,24 @@ async fn fresh_production_entry_reaches_the_final_leaf() {
     install_final_schema_migrations(database)
         .await
         .expect("repeat the production chain");
-    assert_eq!(
-        ticketry_installation::ORDERED_MIGRATION_IDS.last(),
-        Some(&"0063_sprints")
+    support::sprint_acceptance::assert_sprint_history(
+        &ticketry_installation::ORDERED_MIGRATION_IDS,
     );
-    for table in [
-        "worktracker_sprint",
-        "worktracker_sprint_goal",
-        "worktracker_sprint_suggestion",
-    ] {
-        assert!(table_exists(database, table).await, "missing {table}");
+    support::sprint_acceptance::assert_sprint_schema_and_ledger(database).await;
+    for migration in provider_catalog_migrations::provider_catalog_migrations().unwrap() {
+        let ledger = database
+            .query_one_raw(Statement::from_string(
+                DbBackend::Sqlite,
+                format!("SELECT migration_id FROM {}", migration.ledger_table()),
+            ))
+            .await
+            .unwrap()
+            .expect("catalog step reached its ledger");
+        assert_eq!(
+            ledger.try_get::<String>("", "migration_id").unwrap(),
+            migration.migration_id()
+        );
     }
-    let leaf = database
-        .query_one_raw(Statement::from_string(
-            DbBackend::Sqlite,
-            "SELECT migration_id FROM ticketry_sprint_migration".to_owned(),
-        ))
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(
-        leaf.try_get::<String>("", "migration_id").unwrap(),
-        "0063_sprints"
-    );
     assert!(!table_exists(database, "worktracker_workspace").await);
     assert!(table_exists(database, "worktracker_modulepresentation").await);
     assert!(table_exists(database, "module_links").await);
@@ -336,13 +334,25 @@ async fn fresh_production_entry_reaches_the_final_leaf() {
 
 async fn run_step(database: &DatabaseConnection, step: usize) -> sea_orm::DbErr {
     let result = match step {
-        0 => provider_catalog_migrations::install_codex_5_6(database).await,
+        0 => {
+            provider_catalog_migrations::install_provider_catalog_migration(
+                database,
+                support::catalog_step(44),
+            )
+            .await
+        }
         1 => project_onboarding_migration::install(database).await,
         2 => launch_binding_entry_skill_migration::install(database).await,
         3 => workflow_color_migration::install(database).await,
         4 => workspace_tab_order_migration::install(database).await,
         5 => module_presentation_migration::install(database).await,
-        6 => provider_catalog_migrations::install_codex_spark(database).await,
+        6 => {
+            provider_catalog_migrations::install_provider_catalog_migration(
+                database,
+                support::catalog_step(51),
+            )
+            .await
+        }
         _ => unreachable!(),
     };
     result.expect_err("the injected step fault must stop the migration")
@@ -350,9 +360,12 @@ async fn run_step(database: &DatabaseConnection, step: usize) -> sea_orm::DbErr 
 
 async fn complete_before(database: &DatabaseConnection, stop: usize) {
     if stop > 0 {
-        provider_catalog_migrations::install_codex_5_6(database)
-            .await
-            .unwrap();
+        provider_catalog_migrations::install_provider_catalog_migration(
+            database,
+            support::catalog_step(44),
+        )
+        .await
+        .unwrap();
     }
     if stop > 1 {
         project_onboarding_migration::install(database)
@@ -385,7 +398,7 @@ async fn every_step_rolls_back_an_injected_failure_and_then_resumes() {
         (
             "CREATE TRIGGER fail_step BEFORE INSERT ON worktracker_agentmodel WHEN NEW.name LIKE 'gpt-5.6-%' BEGIN SELECT RAISE(ABORT,'0044'); END",
             "DROP TRIGGER fail_step",
-            provider_catalog_migrations::CODEX_5_6_LEDGER,
+            support::catalog_step(44).ledger_table(),
         ),
         (
             "CREATE TRIGGER fail_step BEFORE UPDATE ON worktracker_project BEGIN SELECT RAISE(ABORT,'0045'); END",
@@ -415,7 +428,7 @@ async fn every_step_rolls_back_an_injected_failure_and_then_resumes() {
         (
             "CREATE TRIGGER fail_step BEFORE INSERT ON worktracker_agentmodel WHEN NEW.name='gpt-5.3-codex-spark' BEGIN SELECT RAISE(ABORT,'0051'); END",
             "DROP TRIGGER fail_step",
-            provider_catalog_migrations::CODEX_SPARK_LEDGER,
+            support::catalog_step(51).ledger_table(),
         ),
     ];
 

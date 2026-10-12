@@ -6,19 +6,44 @@
 //! `codex app-server` Ticketry already reads titles through. It never starts,
 //! resumes, or forks a thread, and it writes no Ticketry row.
 
-use serde_json::{json, Map, Value};
+use rmcp::schemars::JsonSchema;
+use serde::Deserialize;
+use serde_json::{json, Value};
 
 use ticketry_terminal::InstantRunTicketTitleService;
 
-pub(super) async fn rename(
-    titles: Option<&InstantRunTicketTitleService>,
-    arguments: &Map<String, Value>,
-) -> Value {
-    let thread_id = match trimmed(arguments, "thread_id") {
+use super::tool_surface::{ArgumentError, ToolCall, TypedTool, TypedTools};
+
+const TOOL: &str = "rename_codex_thread";
+
+pub(super) fn typed_tools() -> TypedTools {
+    // Codex owns thread names outside every Ticketry table, so this write has
+    // no database scope to resolve; the authenticated tool grant is the whole
+    // authorization boundary.
+    TypedTools::default().with(TypedTool::with_own_results(
+        TOOL,
+        "Rename a Codex conversation by its Codex thread id.\n\nCodex owns thread names in its own on-disk state, so this writes through\nthe one resident ``codex app-server`` Ticketry already reads titles from.\nBoth arguments are trimmed and must be non-blank; whitespace inside the\nname is preserved and no Ticketry id or length rule applies.\n\nReturns ``{\"ok\": true, \"thread_id\", \"name\"}``. Failures return a\nstructured ``{\"ok\": false, \"error\": ..., \"detail\": ...}`` result:\n``invalid_input``, ``codex_thread_not_found``,\n``codex_app_server_unavailable``, or ``codex_app_server_error``.\n\nIt never starts, resumes, or forks a thread, and touches no Ticketry row.",
+        malformed,
+        |call: ToolCall, request: ThreadRename| async move {
+            rename(call.codex_titles.as_ref(), &request).await
+        },
+    ))
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+#[serde(deny_unknown_fields)]
+struct ThreadRename {
+    thread_id: String,
+    name: String,
+}
+
+async fn rename(titles: Option<&InstantRunTicketTitleService>, request: &ThreadRename) -> Value {
+    let thread_id = match trimmed("thread_id", &request.thread_id) {
         Ok(value) => value,
         Err(refusal) => return refusal,
     };
-    let name = match trimmed(arguments, "name") {
+    let name = match trimmed("name", &request.name) {
         Ok(value) => value,
         Err(refusal) => return refusal,
     };
@@ -51,15 +76,27 @@ pub(super) async fn rename(
 /// Trim a required string argument. Surrounding whitespace is removed and
 /// whitespace inside the value is preserved; Codex owns both formats, so no
 /// Ticketry identifier or length rule applies.
-fn trimmed<'a>(arguments: &'a Map<String, Value>, field: &str) -> Result<&'a str, Value> {
-    match arguments.get(field).and_then(Value::as_str).map(str::trim) {
-        Some(value) if !value.is_empty() => Ok(value),
-        _ => Err(json!({
-            "ok": false,
-            "error": "invalid_input",
-            "detail": format!("{field} must be a non-blank string."),
-        })),
+fn trimmed<'a>(field: &str, value: &'a str) -> Result<&'a str, Value> {
+    match value.trim() {
+        "" => Err(invalid_input(format!(
+            "{field} must be a non-blank string."
+        ))),
+        value => Ok(value),
     }
+}
+
+/// Malformed arguments keep the tool's own `invalid_input` refusal rather
+/// than the shared field rejection.
+fn malformed(error: ArgumentError) -> Value {
+    invalid_input(if error.unknown {
+        format!("{} is not a {TOOL} argument.", error.field)
+    } else {
+        format!("{} must be a non-blank string.", error.field)
+    })
+}
+
+fn invalid_input(detail: String) -> Value {
+    json!({"ok": false, "error": "invalid_input", "detail": detail})
 }
 
 fn failure(error: &str, detail: &str) -> Value {

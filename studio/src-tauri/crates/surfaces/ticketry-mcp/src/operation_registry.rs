@@ -6,7 +6,7 @@
 //! each one carries the gap it fills and the tests that keep it honest.
 
 pub(super) struct ProviderMutationRegistration {
-    /// The MCP tool name, exactly as `registry::tools()` publishes it.
+    /// The MCP tool name, exactly as the tool surface publishes it.
     pub field: &'static str,
     pub generated_gap: &'static str,
     pub implementation: &'static str,
@@ -66,6 +66,6 @@ mod tests {
 
     #[test]
     fn every_provider_owned_mutation_is_a_registered_tool_with_evidence() {
-        assert_complete(&super::super::registry::tools()).unwrap();
+        assert_complete(&super::super::tool_surface::published_tools()).unwrap();
     }
 }

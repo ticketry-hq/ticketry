@@ -11,7 +11,7 @@ const TIERS: [(&str, u8); 6] = [
     ("app", 5),
 ];
 
-const EXPECTED_CRATES: [&str; 21] = [
+const EXPECTED_CRATES: [&str; 22] = [
     "tauri-graphql",
     "ticketry-agent-execution",
     "ticketry-codex-app-server",
@@ -26,6 +26,7 @@ const EXPECTED_CRATES: [&str; 21] = [
     "ticketry-installation",
     "ticketry-launch",
     "ticketry-mcp",
+    "ticketry-planner",
     "ticketry-provider",
     "ticketry-runs",
     "ticketry-settings",

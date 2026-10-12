@@ -8,17 +8,8 @@ mod support;
 async fn installation_chain_reaches_sprints_and_preserves_backlog() {
     let (_directory, database) = support::fixture().await;
     install_final_schema_migrations(&database).await.unwrap();
-    assert_eq!(ORDERED_MIGRATION_IDS.last(), Some(&"0063_sprints"));
-    for table in [
-        "worktracker_sprint",
-        "worktracker_sprint_goal",
-        "worktracker_sprint_suggestion",
-    ] {
-        assert!(
-            support::table_exists(&database, table).await,
-            "missing {table}"
-        );
-    }
+    support::sprint_acceptance::assert_sprint_history(&ORDERED_MIGRATION_IDS);
+    support::sprint_acceptance::assert_sprint_schema_and_ledger(&database).await;
     let assigned = database
         .query_one_raw(Statement::from_string(
             DbBackend::Sqlite,
@@ -31,4 +22,31 @@ async fn installation_chain_reaches_sprints_and_preserves_backlog() {
     assert_eq!(assigned.try_get::<i64>("", "count").unwrap(), 0);
     install_final_schema_migrations(&database).await.unwrap();
     support::assert_final(&database).await;
+}
+
+#[test]
+fn sprint_history_tolerates_an_appended_catalog_migration() {
+    let mut appended = ORDERED_MIGRATION_IDS.clone();
+    appended.push("0065_acceptance_appended_catalog");
+    support::sprint_acceptance::assert_sprint_history(&appended);
+}
+
+#[test]
+#[should_panic(expected = "0063_sprints")]
+fn sprint_history_rejects_a_chain_without_sprints() {
+    let missing: Vec<_> = ORDERED_MIGRATION_IDS
+        .iter()
+        .copied()
+        .filter(|id| *id != "0063_sprints")
+        .collect();
+    support::sprint_acceptance::assert_sprint_history(&missing);
+}
+
+#[test]
+#[should_panic(expected = "0063_sprints")]
+fn sprint_history_rejects_sprints_out_of_historical_order() {
+    let mut reordered = ORDERED_MIGRATION_IDS.clone();
+    let sprints = reordered.iter().position(|id| *id == "0063_sprints").unwrap();
+    reordered.swap(sprints - 1, sprints);
+    support::sprint_acceptance::assert_sprint_history(&reordered);
 }

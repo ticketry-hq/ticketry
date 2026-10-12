@@ -8,7 +8,7 @@ use portable_pty::CommandBuilder;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
-use ticketry_tool_discovery::{preflight_report, SupportedTool, ToolHealth};
+use ticketry_tool_discovery::{discover_tool, SupportedTool, ToolHealth};
 
 mod hosted_command;
 mod inventory;
@@ -395,20 +395,11 @@ pub enum ScrollDirection {
 
 pub fn approved_tool_path(tool: SupportedTool) -> Result<PathBuf, TmuxAdapterError> {
     let started = std::time::Instant::now();
-    let report = preflight_report();
+    // Resolve only the requested tool. A full preflight report version-probes
+    // every supported tool, and this runs on every tmux adapter and provider
+    // command a launch builds.
+    let item = discover_tool(tool);
     let discovery = launch_trace_discovery_facts(tool, started.elapsed().as_millis());
-    let item = report
-        .tools
-        .into_iter()
-        .find(|item| item.tool == tool)
-        .ok_or_else(|| TmuxAdapterError::Unavailable("tool discovery returned no result".into()));
-    let item = match item {
-        Ok(item) => item,
-        Err(error) => {
-            discovery.record(Some("no_discovery_result"), None, None);
-            return Err(error);
-        }
-    };
     if item.health != ToolHealth::Ready {
         discovery.record(
             Some("executable_not_ready"),

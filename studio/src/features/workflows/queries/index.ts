@@ -31,7 +31,7 @@ import {
   readWorkflowStates,
 } from "./readTransport";
 import { getWorkflowCatalogSnapshot } from "./projectCatalog";
-import { readProjectWorkItems } from "../../work-items";
+import { getProjectWorkItemsSnapshot, readProjectWorkItems } from "../../work-items";
 
 const EMPTY_ISSUE_TYPES: IssueType[] = [];
 const EMPTY_CAPABILITIES: WorkflowEditorResources["providerCapabilities"] = [];
@@ -55,6 +55,7 @@ export async function loadWorkflowSettings(
 
 export {
   getProjectWorkflowSettingsSnapshot,
+  getWorkflowSettingsSnapshot,
   useProjectWorkflowSettings,
 } from "./workflowSnapshots";
 export { setIssueTypeMetadata as setWorkflowIssueTypes } from "./issueTypeMetadata";
@@ -110,10 +111,15 @@ export function getWorkflowProviderCapabilitiesSnapshot(): WorkflowEditorResourc
   return getProviderCapabilitiesSnapshot() ?? EMPTY_CAPABILITIES;
 }
 
-export async function loadWorkflowProjectItems(
+async function loadWorkflowProjectItems(
   projectId: string,
 ): Promise<WorkItem[]> {
   return readProjectWorkItems(projectId);
+}
+
+/** The project's items as the last read left them in the cache. */
+export function getWorkflowProjectItemsSnapshot(projectId: string): WorkItem[] {
+  return getProjectWorkItemsSnapshot(projectId);
 }
 
 export async function loadWorkflowEditorResources(
@@ -126,10 +132,6 @@ export async function loadWorkflowEditorResources(
     loadWorkflowProjectItems(projectId),
   ]);
   return { issueTypes, states, providerCapabilities, workItems };
-}
-
-export function loadWorkflowStates(projectId: string): Promise<State[]> {
-  return readWorkflowStates(projectId);
 }
 
 export {

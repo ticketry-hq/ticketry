@@ -59,6 +59,15 @@ export async function readProjectWorkItems(projectId: string): Promise<WorkItem[
   return orderedWorkItems(data!.work_items.nodes);
 }
 
+/** The project's items as last read into the cache, without a network read. */
+export function getProjectWorkItemsSnapshot(projectId: string): WorkItem[] {
+  const data = studioApolloClient().readQuery({
+    query: WorkTrackerWorkItemsDocument,
+    variables: { projectId: compactWorktrackerId(projectId) },
+  });
+  return data ? orderedWorkItems(data.work_items.nodes) : [];
+}
+
 export function moduleTreeFromWorkItems(
   moduleId: string,
   tasks: readonly WorkItem[],

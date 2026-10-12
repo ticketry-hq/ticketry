@@ -20,6 +20,16 @@ export function getProjectWorkflowSettingsSnapshot(projectId: string): Workflows
   return projectWorkflows(data);
 }
 
+/** One type's workflow settings as the last catalog read left them in the cache. */
+export function getWorkflowSettingsSnapshot(
+  projectId: string,
+  issueTypeId: string,
+): ScopedWorkflowSettings {
+  const settings = getProjectWorkflowSettingsSnapshot(projectId)[issueTypeId];
+  if (!settings) throw new Error("Work-item type not found.");
+  return settings;
+}
+
 function projectWorkflows(data: WorkTrackerProjectOpenQuery | null | undefined): Workflows {
   if (!data) return EMPTY_WORKFLOWS;
   const existing = projections.get(data);

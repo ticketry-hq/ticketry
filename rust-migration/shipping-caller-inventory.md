@@ -16,7 +16,7 @@ CODING-993 checks callers before CODING-994 deletes the retired implementations.
 | Browser development | Owned GraphQL documents through `/graphql` adapter | numbered acceptance 158; `studio/vite.proxy.ts` |
 | Browser command | Rust GraphQL adapter plus Vite; no Django or FastMCP launch | root `web` script |
 | Generated REST SDK | No import reachable from `studio/src/main.tsx` | shipping caller gate |
-| Status and terminal WebSockets | No reachable constructor or retired URL | shipping caller gate |
+| Status and terminal WebSockets | No status socket; only the browser terminal client opens the `/ws/terminal` attach socket, and the development proxy upgrades only that route | shipping caller gate |
 | Tests | Desktop and browser GraphQL acceptance paths | overhaul gate |
 | Copied-data adoption | Rust-owned in-place adoption on a disposable production snapshot copy | CODING-993 implementation evidence |
 

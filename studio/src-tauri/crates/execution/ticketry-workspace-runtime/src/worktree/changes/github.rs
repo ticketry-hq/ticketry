@@ -465,7 +465,7 @@ mod tests {
             .unwrap();
         assert!(!claude.with_extension("probed").exists());
 
-        write_executable(&gh, "#!/bin/sh\nsleep 5\nprintf 'gh version 2.96.0\\n'\n");
+        write_executable(&gh, "#!/bin/sh\nsleep 10\nprintf 'gh version 2.96.0\\n'\n");
         let started = Instant::now();
         let github = GithubPort::new();
         let request = github.pull_request(root.path(), "https://github.com/a/b/pull/1");
@@ -475,7 +475,7 @@ mod tests {
             _ = &mut request => panic!("stalled discovery blocked the async executor"),
         }
         assert!(started.elapsed() < Duration::from_secs(1));
-        let error = tokio::time::timeout(Duration::from_secs(3), request)
+        let error = tokio::time::timeout(Duration::from_secs(8), request)
             .await
             .expect("the gh version probe is bounded")
             .unwrap_err();

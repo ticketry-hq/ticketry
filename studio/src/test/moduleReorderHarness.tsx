@@ -9,6 +9,7 @@ import {
 } from "../features/projects";
 import { useStudioStore } from "../features/projects/store";
 import * as api from "./legacyApiFixture";
+import { installModuleReorderTransport } from "./moduleReorderTransport";
 import { resetStudioApolloClient } from "../shared/apollo/client";
 import type { Module, Project, WorkItem } from "../shared/api/types";
 import { useClientStore } from "../state/clientStore";
@@ -16,7 +17,9 @@ import { useClientStore } from "../state/clientStore";
 /**
  * Shared fixtures and surface readers for the module reorder acceptance
  * suites. Each suite still declares its own `vi.mock("./legacyApiFixture")`
- * so the mock factory hoists; these accessors read the mocked functions.
+ * so the mock factory hoists; these accessors read the mocked functions, and
+ * the installed GraphQL transport answers Studio's real project-open reads and
+ * module-presentation reorders from them.
  */
 
 export const listModules = api.listModules as ReturnType<typeof vi.fn>;
@@ -109,6 +112,7 @@ export function deferred<T>() {
 
 export async function resetModuleReorderHarness(): Promise<void> {
   await resetStudioApolloClient();
+  installModuleReorderTransport();
   listModules.mockReset();
   listProjects.mockReset();
   reorderWorkItem.mockReset().mockResolvedValue(moved("module-c"));

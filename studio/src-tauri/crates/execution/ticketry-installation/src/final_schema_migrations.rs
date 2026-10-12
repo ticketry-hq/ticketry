@@ -1,108 +1,97 @@
-//! The post-adoption final-schema chain, in source order.
+//! Compose numbered non-catalog steps with settings' catalog registry.
 //!
-//! The chain spans work management, settings, and worktree schemas, so it is
-//! installation's to compose rather than any one of theirs to own.
+//! New steps in either source take the next unused chain step number.
+
+use std::sync::LazyLock;
 
 use sea_orm::{DatabaseConnection, DbErr};
-
 use ticketry_settings::{
-    install_codex_5_6, install_codex_6_1_sol, install_codex_6_astra, install_codex_6_sol_luna,
-    install_codex_astra, install_codex_glm_5_3_flash, install_codex_spark, CODEX_5_6_MIGRATION_ID,
-    CODEX_6_1_SOL_MIGRATION_ID, CODEX_6_ASTRA_MIGRATION_ID, CODEX_6_SOL_LUNA_MIGRATION_ID,
-    CODEX_ASTRA_MIGRATION_ID, CODEX_GLM_5_3_FLASH_MIGRATION_ID, CODEX_SPARK_MIGRATION_ID,
-};
-use ticketry_work_management::{
-    launch_binding_entry_skill_migration, launch_binding_profile_migration,
-    launch_binding_stage_skills_migration, module_presentation_migration,
-    project_onboarding_migration, sprint_migration, tag_migration, workflow_color_migration,
-    workflow_handoff_migration, workspace_tab_order_migration,
+    install_provider_catalog_migration, provider_catalog_migrations, ProviderCatalogMigration,
 };
 
-pub const ORDERED_MIGRATION_IDS: &[&str] = &[
-    CODEX_5_6_MIGRATION_ID,
-    project_onboarding_migration::MIGRATION_ID,
-    launch_binding_entry_skill_migration::MIGRATION_ID,
-    workflow_color_migration::MIGRATION_ID,
-    workspace_tab_order_migration::MIGRATION_ID,
-    module_presentation_migration::MIGRATION_ID,
-    CODEX_SPARK_MIGRATION_ID,
-    ticketry_workspace_runtime::persistence::pull_request_url_migration::MIGRATION_ID,
-    workflow_handoff_migration::MIGRATION_ID,
-    CODEX_ASTRA_MIGRATION_ID,
-    CODEX_6_ASTRA_MIGRATION_ID,
-    launch_binding_profile_migration::MIGRATION_ID,
-    CODEX_GLM_5_3_FLASH_MIGRATION_ID,
-    ticketry_workspace_runtime::persistence::ship_record_migration::MIGRATION_ID,
-    launch_binding_stage_skills_migration::MIGRATION_ID,
-    tag_migration::MIGRATION_ID,
-    CODEX_6_SOL_LUNA_MIGRATION_ID,
-    CODEX_6_1_SOL_MIGRATION_ID,
-    sprint_migration::MIGRATION_ID,
-];
+mod non_catalog;
+use non_catalog::{NonCatalogMigration, NonCatalogStep, NON_CATALOG_STEPS};
+
+/// Historical migration identities, in the same order as the startup chain.
+/// The execution-schema step has no migration identity and is omitted.
+pub static ORDERED_MIGRATION_IDS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+    chain()
+        .expect("final-schema chain must have valid, unique step numbers")
+        .iter()
+        .filter_map(|step| step.migration_id)
+        .collect()
+});
 
 pub async fn install(database: &DatabaseConnection) -> Result<(), DbErr> {
-    install_codex_5_6(database)
-        .await
-        .map_err(|error| step_error("0044", error))?;
-    project_onboarding_migration::install(database)
-        .await
-        .map_err(|error| step_error("0045-0046", error))?;
-    launch_binding_entry_skill_migration::install(database)
-        .await
-        .map_err(|error| step_error("0047", error))?;
-    workflow_color_migration::install(database)
-        .await
-        .map_err(|error| step_error("0048", error))?;
-    workspace_tab_order_migration::install(database)
-        .await
-        .map_err(|error| step_error("0049", error))?;
-    module_presentation_migration::install(database)
-        .await
-        .map_err(|error| step_error("0050", error))?;
-    install_codex_spark(database)
-        .await
-        .map_err(|error| step_error("0051", error))?;
-    ticketry_workspace_runtime::persistence::pull_request_url_migration::install(database)
-        .await
-        .map_err(|error| step_error("0052", error))?;
-    workflow_handoff_migration::install(database)
-        .await
-        .map_err(|error| step_error("0053", error))?;
-    install_codex_astra(database)
-        .await
-        .map_err(|error| step_error("0054", error))?;
-    install_codex_6_astra(database)
-        .await
-        .map_err(|error| step_error("0055", error))?;
-    launch_binding_profile_migration::install(database)
-        .await
-        .map_err(|error| step_error("0056", error))?;
-    install_codex_glm_5_3_flash(database)
-        .await
-        .map_err(|error| step_error("0057", error))?;
-    ticketry_workspace_runtime::persistence::ship_record_migration::install(database)
-        .await
-        .map_err(|error| step_error("0058", error))?;
-    launch_binding_stage_skills_migration::install(database)
-        .await
-        .map_err(|error| step_error("0059", error))?;
-    tag_migration::install(database)
-        .await
-        .map_err(|error| step_error("0060", error))?;
-    install_codex_6_sol_luna(database)
-        .await
-        .map_err(|error| step_error("0061", error))?;
-    install_codex_6_1_sol(database)
-        .await
-        .map_err(|error| step_error("0062", error))?;
-    sprint_migration::install(database)
-        .await
-        .map_err(|error| step_error("0063", error))?;
-    ticketry_work_management::install_sprint_execution_schema(database)
-        .await
-        .map_err(|error| step_error("0064-exec", error))
+    // Validate the complete composition before any step writes to the database.
+    for step in chain()? {
+        step.install(database).await?;
+    }
+    Ok(())
+}
+
+struct ChainStep {
+    step: u32,
+    label: String,
+    migration_id: Option<&'static str>,
+    runner: Migration,
+}
+
+enum Migration {
+    Catalog(ProviderCatalogMigration),
+    NonCatalog(NonCatalogMigration),
+}
+
+impl ChainStep {
+    async fn install(&self, database: &DatabaseConnection) -> Result<(), DbErr> {
+        let result = match &self.runner {
+            Migration::Catalog(migration) => {
+                install_provider_catalog_migration(database, migration).await
+            }
+            Migration::NonCatalog(migration) => migration.install(database).await,
+        };
+        result.map_err(|error| step_error(&self.label, error))
+    }
+}
+
+fn chain() -> Result<Vec<ChainStep>, DbErr> {
+    merge_chain(NON_CATALOG_STEPS, provider_catalog_migrations()?)
+}
+
+fn merge_chain(
+    non_catalog: &[NonCatalogStep],
+    catalog: &[ProviderCatalogMigration],
+) -> Result<Vec<ChainStep>, DbErr> {
+    let mut steps: Vec<_> = non_catalog
+        .iter()
+        .map(|migration| ChainStep {
+            step: migration.step,
+            label: migration.label.to_owned(),
+            migration_id: migration.migration_id,
+            runner: Migration::NonCatalog(migration.runner),
+        })
+        .chain(catalog.iter().map(|migration| ChainStep {
+            step: migration.step(),
+            label: format!("{:04}", migration.step()),
+            migration_id: Some(migration.migration_id()),
+            runner: Migration::Catalog(*migration),
+        }))
+        .collect();
+    steps.sort_unstable_by_key(|migration| migration.step);
+    for pair in steps.windows(2) {
+        if pair[0].step == pair[1].step {
+            return Err(DbErr::Custom(format!(
+                "duplicate final-schema chain step {}",
+                pair[0].step
+            )));
+        }
+    }
+    Ok(steps)
 }
 
 fn step_error(step: &str, error: DbErr) -> DbErr {
     DbErr::Custom(format!("final-schema migration {step} failed: {error}"))
 }
+
+#[cfg(test)]
+mod tests;

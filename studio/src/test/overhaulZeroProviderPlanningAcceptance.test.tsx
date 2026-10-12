@@ -9,7 +9,6 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const projectApi = vi.hoisted(() => ({
-  acknowledgeOnboarding: vi.fn(),
   readOnboardingProjects: vi.fn(),
 }));
 const catalogApi = vi.hoisted(() => ({
@@ -91,6 +90,7 @@ import { compactWorktrackerId } from "../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../shared/apollo/client";
 import { FoundationGraphQlError } from "../shared/apollo/errorLink";
 import { useClientStore } from "../state/clientStore";
+import { initializeStudioRuntime, studioRuntime } from "../runtime";
 import { installGraphQlViewerLeases } from "./desktopGraphQlRuntime";
 import { fixture, mountStudio, workItem } from "./seam";
 import type { ReactNode } from "react";
@@ -101,6 +101,45 @@ const onboardingProject = (required: boolean) => ({
   name: "Coding",
   onboarding_required: required,
 });
+
+/**
+ * Answer the onboarding acknowledgement on the installed runtime's GraphQL
+ * transport and record the acknowledged project ids. Install it before the
+ * onboarding read is loaded: a new transport replaces the Apollo client.
+ */
+function answerOnboardingAcknowledgement(): string[] {
+  const runtime = studioRuntime();
+  const createProxy = runtime.graphQlTransport;
+  const acknowledged: string[] = [];
+  initializeStudioRuntime({
+    ...runtime,
+    graphQlTransport: () => {
+      const proxy = createProxy();
+      return {
+        ...proxy,
+        graphql_execute: async (requestJson: string) => {
+          const request = JSON.parse(requestJson) as {
+            operationName: string;
+            variables: { projectId: string };
+          };
+          if (request.operationName !== "AcknowledgeWorkTrackerOnboarding") {
+            return proxy.graphql_execute(requestJson);
+          }
+          acknowledged.push(request.variables.projectId);
+          return JSON.stringify({
+            data: {
+              acknowledge_onboarding: {
+                __typename: "WorktrackerProject",
+                ...onboardingProject(false),
+              },
+            },
+          });
+        },
+      };
+    },
+  });
+  return acknowledged;
+}
 
 function Application({ children }: { children?: ReactNode }) {
   return (
@@ -113,7 +152,10 @@ function Application({ children }: { children?: ReactNode }) {
 }
 
 describe("zero-provider planning acceptance", () => {
+  let acknowledged: string[] = [];
+
   beforeEach(() => {
+    acknowledged = answerOnboardingAcknowledgement();
     studioApolloClient().cache.reset();
     useOnboardingTourStore.getState().reset();
     useStudioStore.setState({
@@ -131,9 +173,6 @@ describe("zero-provider planning acceptance", () => {
       providerState.catalog = value;
       return value;
     });
-    projectApi.acknowledgeOnboarding.mockReset().mockResolvedValue(
-      onboardingProject(false),
-    );
     projectApi.readOnboardingProjects.mockReset().mockResolvedValue([
       onboardingProject(true),
     ]);
@@ -153,6 +192,7 @@ describe("zero-provider planning acceptance", () => {
       }
       return { terminal_session: { agent_run_id: "explicit-retry-run" } } as never;
     });
+    acknowledged = answerOnboardingAcknowledgement();
     useModalStore.setState({ modalStack: [], presentedNoticeIds: new Set() });
     useClientStore.setState({ toasts: [], workspaces: {}, activeByTask: {} });
     await loadOnboardingState();
@@ -254,9 +294,7 @@ describe("zero-provider planning acceptance", () => {
     act(() => useOnboardingTourStore.getState().moduleCreated("module-1"));
     fireEvent.click(screen.getByRole("button", { name: "Skip tour" }));
     await waitFor(() => {
-      expect(projectApi.acknowledgeOnboarding).toHaveBeenCalledWith(
-        "installation-project",
-      );
+      expect(acknowledged).toEqual(["installation-project"]);
       expect(useOnboardingTourStore.getState().step).toBe("inactive");
     });
     expect(screen.getByText("Planning workspace")).toBeVisible();
@@ -294,9 +332,7 @@ describe("zero-provider planning acceptance", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finish tour" }));
 
     await waitFor(() => {
-      expect(projectApi.acknowledgeOnboarding).toHaveBeenCalledWith(
-        "installation-project",
-      );
+      expect(acknowledged).toEqual(["installation-project"]);
       expect(useOnboardingTourStore.getState().step).toBe("inactive");
     });
     expect(screen.getByText("Planning workspace")).toBeVisible();

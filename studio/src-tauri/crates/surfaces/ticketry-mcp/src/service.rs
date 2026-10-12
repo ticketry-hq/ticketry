@@ -9,14 +9,15 @@ use rmcp::{
     ErrorData, ServerHandler,
 };
 use sea_orm::DatabaseConnection;
-use serde_json::{json, Map, Value};
+use serde_json::json;
 
 use ticketry_terminal::TerminalCleanupService;
 use ticketry_work_management::commands::attachments::AttachmentStorage;
 use ticketry_work_management::launch_policy::LaunchPolicyResolver;
 
 use super::connection_handshake::ConnectionAuthorization;
-use super::{dispatch, registry, RunAuthority};
+use super::tool_surface::{ToolCall, ToolSurface};
+use super::RunAuthority;
 
 #[derive(Clone)]
 pub struct WorktrackerMcpService {
@@ -36,7 +37,7 @@ pub struct WorktrackerMcpService {
     /// an app-server of its own.
     codex_titles: Option<ticketry_terminal::InstantRunTicketTitleService>,
     readiness_data_directory: PathBuf,
-    tools: Arc<Vec<Tool>>,
+    surface: Arc<ToolSurface>,
 }
 
 impl WorktrackerMcpService {
@@ -50,6 +51,7 @@ impl WorktrackerMcpService {
         terminal_launch: Option<ticketry_terminal::TerminalLaunchService>,
         codex_titles: Option<ticketry_terminal::InstantRunTicketTitleService>,
         readiness_data_directory: PathBuf,
+        surface: ToolSurface,
     ) -> Self {
         Self {
             connection: None,
@@ -62,7 +64,7 @@ impl WorktrackerMcpService {
             terminal_launch,
             codex_titles,
             readiness_data_directory,
-            tools: Arc::new(registry::tools()),
+            surface: Arc::new(surface),
         }
     }
 
@@ -72,15 +74,6 @@ impl WorktrackerMcpService {
             connection: Some(connection),
             ..self.clone()
         }
-    }
-
-    fn result(output: dispatch::DispatchOutput) -> CallToolResponse {
-        let structured = if output.wrap_result {
-            json!({"result": output.value})
-        } else {
-            output.value
-        };
-        CallToolResult::structured(structured).into()
     }
 }
 
@@ -120,7 +113,7 @@ impl ServerHandler for WorktrackerMcpService {
             .as_ref()
             .and_then(ConnectionAuthorization::bearer)
         {
-            None => self.tools.as_ref().clone(),
+            None => self.surface.tools().to_vec(),
             Some(authorization) => {
                 let allowed = self
                     .authority
@@ -129,7 +122,8 @@ impl ServerHandler for WorktrackerMcpService {
                     .map_err(|_| {
                         ErrorData::internal_error("Run authorization is unavailable.", None)
                     })?;
-                self.tools
+                self.surface
+                    .tools()
                     .iter()
                     .filter(|tool| allowed.contains(tool.name.as_ref()))
                     .cloned()
@@ -142,13 +136,13 @@ impl ServerHandler for WorktrackerMcpService {
     }
 
     fn get_tool(&self, name: &str) -> Option<Tool> {
-        self.tools.iter().find(|tool| tool.name == name).cloned()
+        self.surface.get(name).cloned()
     }
 
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
-        _context: RequestContext<rmcp::RoleServer>,
+        context: RequestContext<rmcp::RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
         if self.get_tool(request.name.as_ref()).is_none() {
             return Err(ErrorData::invalid_params("Unknown WorkTracker tool.", None));
@@ -157,7 +151,7 @@ impl ServerHandler for WorktrackerMcpService {
             .connection
             .as_ref()
             .and_then(ConnectionAuthorization::bearer);
-        let principal = if authorization.is_none() && request.name != "terminate_current_run" {
+        let principal = if authorization.is_none() && !self.surface.is_run_only(&request.name) {
             super::RunPrincipal::global()
         } else {
             match self
@@ -171,12 +165,18 @@ impl ServerHandler for WorktrackerMcpService {
                 }
             }
         };
-        let arguments: Map<String, Value> = request.arguments.unwrap_or_default();
-        if request.name == "mcp_ping" {
-            return Ok(Self::result(dispatch::DispatchOutput {
-                value: json!({"status": "ok", "server": "ticketry"}),
-                wrap_result: false,
-            }));
+        let call = ToolCall {
+            database: self.database.clone(),
+            principal,
+            storage: self.storage.clone(),
+            launch_policy: self.launch_policy.clone(),
+            graph_runs: self.graph_runs.clone(),
+            terminal_cleanup: self.terminal_cleanup.clone(),
+            terminal_launch: self.terminal_launch.clone(),
+            codex_titles: self.codex_titles.clone(),
+        };
+        if self.surface.is_readiness_exempt(&request.name) {
+            return self.surface.call_typed(call, request, context).await;
         }
         let readiness_file = self.readiness_data_directory.join("slice2-readiness.json");
         if readiness_file.exists()
@@ -191,22 +191,6 @@ impl ServerHandler for WorktrackerMcpService {
             }))
             .into());
         }
-        // Dispatch is one very wide future (every tool's arm is inlined into
-        // it). Boxing it keeps the per-request poll off the connection task's
-        // stack frame chain.
-        let output = Box::pin(dispatch::dispatch(
-            &self.database,
-            &self.storage,
-            &self.launch_policy,
-            self.graph_runs.as_ref(),
-            &self.terminal_cleanup,
-            self.terminal_launch.as_ref(),
-            self.codex_titles.as_ref(),
-            &principal,
-            request.name.as_ref(),
-            &arguments,
-        ))
-        .await;
-        Ok(Self::result(output))
+        self.surface.call_typed(call, request, context).await
     }
 }

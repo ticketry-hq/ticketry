@@ -7,7 +7,6 @@ vi.mock("../features/projects", async () => {
   return {
     ...actual,
     readOnboardingProjects: vi.fn(),
-    acknowledgeOnboarding: vi.fn(),
   };
 });
 
@@ -19,9 +18,9 @@ import {
 } from "../app/onboarding/onboardingStore";
 import { WorkTrackerOnboardingDocument } from "../features/projects/generated/projects.documents";
 import { studioApolloClient } from "../shared/apollo/client";
+import { installScriptedGraphQlTransport } from "./scriptedGraphQlTransport";
 
 const getOnboardingProjects = api.readOnboardingProjects as ReturnType<typeof vi.fn>;
-const acknowledgeOnboarding = api.acknowledgeOnboarding as ReturnType<typeof vi.fn>;
 
 const project = (
   id: string,
@@ -44,7 +43,6 @@ function seed(nodes: ReturnType<typeof project>[]): void {
 
 beforeEach(() => {
   getOnboardingProjects.mockReset();
-  acknowledgeOnboarding.mockReset();
   studioApolloClient().cache.reset();
   seed([project("p1", "CDN", false)]);
 });
@@ -102,21 +100,30 @@ describe("onboardingStore", () => {
   });
 
   it("acknowledgement names the project it clears", async () => {
+    const transport = installScriptedGraphQlTransport();
     seed([project("p1", "CDN", true)]);
-    acknowledgeOnboarding.mockResolvedValue(project("p1", "CDN", false));
+    transport.answerNext("AcknowledgeWorkTrackerOnboarding", {
+      acknowledge_onboarding: { __typename: "WorktrackerProject", ...project("p1", "CDN", false) },
+    });
 
     await acknowledgeOnboardingAction("p1");
 
     expect(getOnboardingRequiredSnapshot()).toBe(false);
-    expect(acknowledgeOnboarding).toHaveBeenCalledWith("p1");
+    expect(transport.requests).toEqual([
+      { operationName: "AcknowledgeWorkTrackerOnboarding", variables: { projectId: "p1" } },
+    ]);
   });
 
   it("acknowledging a project the cache has not seen adds it", async () => {
-    studioApolloClient().cache.reset();
-    acknowledgeOnboarding.mockResolvedValue(project("p9", "CDN", false));
+    const transport = installScriptedGraphQlTransport();
+    transport.answerNext("AcknowledgeWorkTrackerOnboarding", {
+      acknowledge_onboarding: { __typename: "WorktrackerProject", ...project("p9", "CDN", false) },
+    });
 
     await acknowledgeOnboardingAction("p9");
 
+    expect(studioApolloClient().readQuery({ query: WorkTrackerOnboardingDocument })
+      ?.projects.nodes.map((node) => node.id)).toEqual(["p9"]);
     expect(getOnboardingRequiredSnapshot()).toBe(false);
   });
 });

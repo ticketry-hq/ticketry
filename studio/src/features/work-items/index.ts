@@ -28,6 +28,7 @@ export type {
 export {
   EMPTY_MODULE_TREE,
   getModuleTreeSnapshot,
+  getProjectWorkItemsSnapshot,
   getWorkItemSnapshot,
   loadModuleTree,
   readWorkItem,

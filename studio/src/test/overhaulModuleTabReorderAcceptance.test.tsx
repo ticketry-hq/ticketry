@@ -12,30 +12,6 @@ vi.mock("./legacyApiFixture", async () => {
     reorderWorkItem: vi.fn(),
   };
 });
-vi.mock("../features/projects/queries/readTransport", async () => {
-  const actual = await vi.importActual<typeof import("../features/projects/queries/readTransport")>(
-    "../features/projects/queries/readTransport",
-  );
-  const api = await import("./legacyApiFixture");
-  const { projectOpenFixture } = await import("./projectOpenFixture");
-  return {
-    ...actual,
-    readProjectOpen: async (projectId: string) => {
-      const [projects, modules] = await Promise.all([api.listProjects(), api.listModules(projectId)]);
-      const project = projects.find((candidate: { id: string }) => candidate.id === projectId) ?? projects[0];
-      if (!project) throw new Error(`Project ${projectId} was not found.`);
-      return projectOpenFixture(project, modules);
-    },
-    readOnboardingProjects: vi.fn(),
-  };
-});
-vi.mock("../features/projects/modulePresentationTransport", async () => {
-  const actual = await vi.importActual<typeof import("../features/projects/modulePresentationTransport")>(
-    "../features/projects/modulePresentationTransport",
-  );
-  const api = await import("./legacyApiFixture");
-  return { ...actual, reorderModulePresentation: api.reorderWorkItem };
-});
 
 import { useAgentStatusStore } from "../features/agents/status/testStore";
 import type { WorkItem } from "../shared/api/types";

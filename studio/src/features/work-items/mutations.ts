@@ -1,7 +1,7 @@
-import { useCallback, useState } from "react";
 import type { IssueType, State, WorkItem, WorkItemCreate } from "../../shared/api/types";
 import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
 import { studioApolloClient } from "../../shared/apollo/client";
+import { useMutationState } from "../../shared/apollo/declaredMutation";
 import {
   GeneratedWorkTrackerWorkItemFieldsFragmentDoc,
   WorkTrackerModuleOpenDocument,
@@ -26,12 +26,6 @@ import { optimisticTransitionedIssue } from "./internal/optimisticTransition";
 export interface ModuleMembership {
   projectId: string;
   moduleId: string;
-}
-
-interface MutationCallbacks<TResult> {
-  onSuccess?: (data: TResult) => void;
-  onError?: (error: Error) => void;
-  onSettled?: (data: TResult | undefined, error: Error | null) => void;
 }
 
 type OptimisticIssue<TVariables> = (
@@ -62,55 +56,13 @@ function useApolloWorkItemMutation<TVariables>(
   update?: OptimisticIssue<TVariables>,
   readCurrent?: (variables: TVariables) => GeneratedWorkTrackerWorkItemFieldsFragment | undefined,
 ) {
-  const [pendingCount, setPendingCount] = useState(0);
-  const [variables, setVariables] = useState<TVariables>();
-  const [error, setError] = useState<Error | null>(null);
-  const [isSuccess, setIsSuccess] = useState(false);
-
-  const mutateAsync = useCallback(async (
-    next: TVariables,
-    callbacks: MutationCallbacks<WorkItem> = {},
-  ): Promise<WorkItem> => {
-    setPendingCount((count) => count + 1);
-    setVariables(next);
-    setError(null);
-    setIsSuccess(false);
-    const id = identity(next);
-    const current = readCurrent?.(next) ?? (id ? cachedIssue(id) : undefined);
-    const optimistic = current && update ? update(current, next) : undefined;
-    try {
-      const result = await execute(next, optimistic);
-      setIsSuccess(true);
-      callbacks.onSuccess?.(result);
-      callbacks.onSettled?.(result, null);
-      return result;
-    } catch (cause) {
-      const failure = cause instanceof Error ? cause : new Error(String(cause));
-      setError(failure);
-      callbacks.onError?.(failure);
-      callbacks.onSettled?.(undefined, failure);
-      throw failure;
-    } finally {
-      setPendingCount((count) => Math.max(0, count - 1));
-    }
-  }, [execute, identity, readCurrent, update]);
-
-  const mutate = useCallback((
-    next: TVariables,
-    callbacks: MutationCallbacks<WorkItem> = {},
-  ) => {
-    void mutateAsync(next, callbacks).catch(() => undefined);
-  }, [mutateAsync]);
-
-  return {
-    mutate,
-    mutateAsync,
-    isPending: pendingCount > 0,
-    variables,
-    error,
-    isError: error !== null,
-    isSuccess,
-  };
+  return useMutationState(execute, {
+    current: (variables) => {
+      const id = identity(variables);
+      return readCurrent?.(variables) ?? (id ? cachedIssue(id) : undefined);
+    },
+    apply: update,
+  });
 }
 
 export interface RenameWorkItemArgs { id: string; name: string }

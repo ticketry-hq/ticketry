@@ -2,8 +2,8 @@ use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use ticketry_entities::agent_model;
 use ticketry_installation::install_final_schema_migrations;
 use ticketry_settings::{
-    install_codex_6_1_sol, GlobalLaunchDefault, ProviderCatalogService, ProviderCatalogUpdate,
-    CODEX_6_1_SOL_LEDGER,
+    install_provider_catalog_migration, GlobalLaunchDefault, ProviderCatalogService,
+    ProviderCatalogUpdate,
 };
 
 #[path = "final_schema_migration_chain/support.rs"]
@@ -64,8 +64,12 @@ async fn codex_6_1_failure_rolls_back_and_can_retry() {
         )
         .await
         .unwrap();
-    assert!(install_codex_6_1_sol(&database).await.is_err());
-    assert!(!support::table_exists(&database, CODEX_6_1_SOL_LEDGER).await);
+    assert!(
+        install_provider_catalog_migration(&database, support::catalog_step(62))
+            .await
+            .is_err()
+    );
+    assert!(!support::table_exists(&database, support::catalog_step(62).ledger_table()).await);
     assert!(agent_model::Entity::find()
         .filter(agent_model::Column::Name.eq("gpt-6.1-sol"))
         .one(&database)
@@ -77,6 +81,8 @@ async fn codex_6_1_failure_rolls_back_and_can_retry() {
         .execute_unprepared("DROP TRIGGER refuse_reasoning")
         .await
         .unwrap();
-    install_codex_6_1_sol(&database).await.unwrap();
-    assert!(support::table_exists(&database, CODEX_6_1_SOL_LEDGER).await);
+    install_provider_catalog_migration(&database, support::catalog_step(62))
+        .await
+        .unwrap();
+    assert!(support::table_exists(&database, support::catalog_step(62).ledger_table()).await);
 }

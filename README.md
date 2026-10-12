@@ -131,8 +131,17 @@ module refresh.
 For Codex Cloud setup, see [the checked-in installer, start skill, and Linux
 reproduction instructions](scripts/codex-cloud/README.md).
 
+CI runs the [reuse and boundary gates](docs/feature-map/README.md#in-ci)
+before the Studio tests.
+
 ```bash
+npm run reuse:check
+npm run reuse:test
+npm run lld:check:test
+npm run boundary:check
 npm run caller:check
+npm run caller:check:test
+npm run graphql:drift --workspace @worktracker/studio
 npm run typecheck
 npm run test:overhaul --workspace @worktracker/studio
 npm run test --workspace @worktracker/studio

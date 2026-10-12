@@ -10,6 +10,7 @@ import {
   createIssueType, createState, reorderIssueTypes, reorderStates,
   setIssueTypeWorkflowStartState, updateIssueType, updateState,
 } from "../features/workflows/mutationTransport";
+import { projectOpenFixture } from "./projectOpenFixture";
 
 const startup = {
   serviceHealth: { state: "ready", service: "backend", message: null, logPointer: null },
@@ -25,14 +26,32 @@ const issue = {
   children: { nodes: [] }, blocked_by_edges: { nodes: [] }, blocks_edges: { nodes: [] },
 };
 const state = { id: "state-1", project: "project-1", name: "Todo", group: "unstarted", color: "#fff", sort_order: 0, is_protected: false, created_at: "", updated_at: "" };
+const projectOpen = projectOpenFixture({ id: "project-1", name: "Project", slug: "PRJ", description: "" }, []).data;
 const issueType = { id: "type-1", project: "project-1", name: "Story", level: "task", color: "", sort_order: 0, start_state: "state-1", workflow_revision: 1, is_pathfind: false, created_at: "", updated_at: "" };
 
 describe("WorkTracker write runtime acceptance", () => {
   it("[overhaul-74] sends user-visible WorkTracker mutations through the desktop GraphQL contract", async () => {
     const operations: string[] = [];
+    const reads: string[] = [];
     const graphqlExecute = vi.fn(async (encoded: string) => {
       const { operationName, query } = JSON.parse(encoded) as { operationName: string; query: string };
-      operations.push(operationName);
+      if (/^\s*query\b/.test(query)) {
+        // Declared post-write refreshes ride the same transport after their write.
+        reads.push(`${operations.at(-1)} -> ${operationName}`);
+        if (operationName === "WorkTrackerProjects") {
+          return JSON.stringify({ data: { projects: { nodes: [
+            { id: "project-1", name: "Project", slug: "PRJ", description: "", created_at: "" },
+          ] } } });
+        }
+        if (operationName === "WorkTrackerProjectOpen") {
+          return JSON.stringify({ data: {
+            ...projectOpen,
+            provider_catalog: { ...projectOpen.provider_catalog, codex_profiles: [] },
+          } });
+        }
+      } else {
+        operations.push(operationName);
+      }
       if (operationName === "CreateWorkTrackerIssueType") {
         expect(query).toContain("worktrackerIssuetypeCreateOne");
         expect(query).not.toContain("create_issue_type(project_id:");
@@ -69,7 +88,7 @@ describe("WorkTracker write runtime acceptance", () => {
     await createIssueType("project-1", { name: "Story", level: "task" });
     await updateIssueType("type-1", { color: "#fff" });
     await reorderIssueTypes("project-1", ["type-1"]);
-    await setIssueTypeWorkflowStartState("type-1", "state-1", 1);
+    await setIssueTypeWorkflowStartState("project-1", "type-1", "state-1", 1);
 
     expect(operations).toEqual([
       "CreateWorkTrackerProject", "CreateWorkTrackerWorkItem", "UpdateWorkTrackerWorkItemDetails",
@@ -77,6 +96,17 @@ describe("WorkTracker write runtime acceptance", () => {
       "ReorderWorkTrackerWorkItem", "DeleteWorkTrackerWorkItem", "CreateWorkTrackerState",
       "UpdateWorkTrackerState", "ReorderWorkTrackerStates", "CreateWorkTrackerIssueType",
       "UpdateWorkTrackerIssueType", "ReorderWorkTrackerIssueTypes", "SetWorkTrackerStartState",
+    ]);
+    expect(reads).toEqual([
+      "CreateWorkTrackerProject -> WorkTrackerProjects",
+      // Workflow catalog writes re-read the project's workflow catalog.
+      "CreateWorkTrackerState -> WorkTrackerProjectOpen",
+      "UpdateWorkTrackerState -> WorkTrackerProjectOpen",
+      "ReorderWorkTrackerStates -> WorkTrackerProjectOpen",
+      "CreateWorkTrackerIssueType -> WorkTrackerProjectOpen",
+      "UpdateWorkTrackerIssueType -> WorkTrackerProjectOpen",
+      "ReorderWorkTrackerIssueTypes -> WorkTrackerProjectOpen",
+      "SetWorkTrackerStartState -> WorkTrackerProjectOpen",
     ]);
   });
 });

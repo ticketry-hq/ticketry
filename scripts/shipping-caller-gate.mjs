@@ -1,16 +1,25 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
+import { parseArgs } from "node:util";
 
-const root = resolve(import.meta.dirname, "..");
+// `--root` points the gate at another checkout; its tests use fixture trees.
+const { values: options } = parseArgs({ options: { root: { type: "string" } } });
+const root = resolve(options.root ?? join(import.meta.dirname, ".."));
 const sourceRoot = join(root, "studio", "src");
 const entry = join(sourceRoot, "main.tsx");
 const extensions = [".ts", ".tsx"];
+// Browser development attaches terminals over the Rust adapter's `/ws/terminal`
+// socket, and only the browser attach client may open it.
+const terminalSocketRoute = /["']\/ws\/terminal["']\s*:\s*\{[^}]*\}/;
+const terminalSocketClient = join(sourceRoot, "features", "agents", "terminal", "internal", "browserTerminalClient.ts");
 const forbidden = [
   ["generated OpenAPI SDK", /@worktracker\/typescript-sdk/],
   ["retired REST client", /shared\/api\/client/],
   ["retired authenticated HTTP helper", /authenticatedHostFetch/],
   ["REST runtime fallback", /\brest\s*:/],
-  ["retired status or terminal socket", /(?:\/ws\/(?:status|terminal)|new\s+WebSocket\s*\()/],
+  // Exactly `/ws/terminal`: `\b` would accept `/ws/terminal-status` and `/ws/terminal/status`.
+  ["retired status socket", /\/ws\/(?!terminal(?![\w/-]))[\w-]+/],
+  ["WebSocket outside the browser terminal client", /new\s+WebSocket\s*\(/, terminalSocketClient],
   ["retired backend URL", /(?:\/api\/work-tracker|VITE_(?:WT|AGENT)_API)/],
 ];
 
@@ -60,7 +69,8 @@ while (pending.length) {
   if (!file || visited.has(file)) continue;
   visited.add(file);
   const source = readFileSync(file, "utf8");
-  for (const [label, pattern] of forbidden) {
+  for (const [label, pattern, allowedIn] of forbidden) {
+    if (file === allowedIn) continue;
     source.split("\n").forEach((line, index) => {
       const trimmed = line.trim();
       if (!trimmed.startsWith("//") && !trimmed.startsWith("*") && pattern.test(line)) {
@@ -82,8 +92,8 @@ const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"))
 if (/backend|python|uvicorn/i.test(packageJson.scripts.web ?? "")) {
   findings.push("package.json: browser development starts a retired product backend");
 }
-const proxy = readFileSync(join(root, "studio", "vite.proxy.ts"), "utf8");
-if (/^[^/\n]*["']\/api/m.test(proxy) || /\bws\s*:/m.test(proxy)) {
+const proxy = readFileSync(join(root, "studio", "vite.proxy.ts"), "utf8").replace(terminalSocketRoute, "");
+if (/^[^/\n]*["']\/api/m.test(proxy) || /\bws\s*:/m.test(proxy) || /^[^/\n]*["']\/ws\//m.test(proxy)) {
   findings.push("studio/vite.proxy.ts: development proxy exposes retired REST or WebSocket routing");
 }
 const mcpRuntime = readFileSync(

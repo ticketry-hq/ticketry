@@ -7,13 +7,27 @@ use ticketry_terminal::{
 };
 
 use super::termination_eligibility;
+use super::tool_surface::{TypedTool, TypedTools};
 use super::RunPrincipal;
 
 const RESPONSE_GRACE: std::time::Duration = std::time::Duration::from_millis(250);
 
+pub(super) fn typed_tools() -> TypedTools {
+    TypedTools::default().with(
+        TypedTool::without_parameters(
+            "terminate_current_run",
+            "Terminate only the Studio run bound to this MCP request. This stops the run without changing or archiving its ticket. A committed handoff keeps the run alive and returns \"continued_by_handoff\" so its queued destination prompt can run.",
+            |call| async move {
+                Ok(terminate_current_run(&call.terminal_cleanup, &call.principal).await)
+            },
+        )
+        .run_only(),
+    )
+}
+
 /// Terminate only the run named by the authenticated MCP principal. The tool
 /// accepts no target argument, so no caller can widen the blast radius.
-pub async fn terminate_current_run(
+async fn terminate_current_run(
     service: &TerminalCleanupService,
     principal: &RunPrincipal,
 ) -> Value {

@@ -117,6 +117,7 @@ seaography = { version = "=2.0.0-rc.9", default-features = false, features = ["f
 seaolim = { git = "https://github.com/charleeagni/seaolim", rev = "29f24172be1ab423e9b8b14b11ba1fa73452f1cd" }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
+serde_path_to_error = "=0.1.20"
 sha2 = "0.10"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 tauri = "=2.11.5"

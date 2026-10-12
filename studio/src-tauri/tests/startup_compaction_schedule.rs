@@ -156,10 +156,12 @@ async fn the_periodic_driver_runs_the_pass_again() {
 
     let driver = tokio::spawn(schedule.clone().drive());
     insert_aged_events(&database, PROJECT, 16, 2).await;
+    // A pass commits the watermark before it deletes, so wait for the whole
+    // pass: aborting the driver between the two would cut the deletes short.
     let advanced = tokio::time::timeout(Duration::from_secs(20), async {
         loop {
             let current = watermark(&database, PROJECT).await;
-            if current > after_startup {
+            if current > after_startup && event_count(&database, PROJECT).await <= 8 {
                 return current;
             }
             tokio::time::sleep(Duration::from_millis(25)).await;

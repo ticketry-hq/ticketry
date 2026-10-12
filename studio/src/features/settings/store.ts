@@ -142,7 +142,7 @@ export const useSettingsStore = createApolloStore<SettingsState>("settings", (se
     setIssueTypes(projectId, snapshot.filter((t) => t.id !== id));
     set({ error: null });
     try {
-      await api.deleteIssueType(id, reassignTo);
+      await api.deleteIssueType(projectId, id, reassignTo);
       toast.success("Type deleted");
     } catch (e) {
       setIssueTypes(projectId, snapshot);
@@ -214,7 +214,7 @@ export const useSettingsStore = createApolloStore<SettingsState>("settings", (se
     removeState(projectId, id);
     set({ error: null });
     try {
-      await api.deleteState(id, reassignTo);
+      await api.deleteState(projectId, id, reassignTo);
       toast.success("State deleted");
     } catch (e) {
       setStates(projectId, snapshot);

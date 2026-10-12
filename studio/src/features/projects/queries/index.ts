@@ -142,36 +142,19 @@ export function useModulesQuery(projectId: string | null) {
   };
 }
 
-export async function createProjectRecord(body: ProjectCreate): Promise<Project> {
-  const created = await writeProject(body);
-  const projects = getProjectsSnapshot();
-  seedProjects(projects.some((project) => project.id === created.id)
-    ? projects
-    : [...projects, created]);
-  return created;
+export function createProjectRecord(body: ProjectCreate): Promise<Project> {
+  return writeProject(body);
 }
 
-export async function updateProjectRecord(
+export function updateProjectRecord(
   id: string,
   patch: ProjectPatch,
 ): Promise<Project> {
-  const updated = await writeProjectUpdate(id, patch);
-  seedProjects(getProjectsSnapshot().map((project) =>
-    project.id === id ? updated : project
-  ));
-  return updated;
+  return writeProjectUpdate(id, patch);
 }
 
-export async function deleteProjectRecord(id: string): Promise<void> {
-  await removeProject(id);
-  studioApolloClient().cache.evict({
-    id: studioApolloClient().cache.identify({
-      __typename: "WorktrackerProject",
-      id: compactWorktrackerId(id),
-    }),
-  });
-  studioApolloClient().cache.gc();
-  seedProjects(getProjectsSnapshot().filter((project) => project.id !== id));
+export function deleteProjectRecord(id: string): Promise<void> {
+  return removeProject(id);
 }
 
 export function seedProjects(projects: Project[]): void {

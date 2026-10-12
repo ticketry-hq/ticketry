@@ -21,6 +21,8 @@ import { WorktreeStatusDocument } from "../../worktrees/generated/worktreeStatus
 import { CurrentWorktreesDocument } from "../../worktrees/generated/currentWorktrees.documents";
 import { WorkTrackerProjectOpenDocument } from "../../../projects/generated/projects.documents";
 import { recordLocalWorkItemConvergence } from "../../../work-items/workItemConvergence";
+import { WorkTrackerModuleOpenDocument } from "../../../work-items";
+import { PlanningGraphDocument } from "../../../planning-graph";
 
 const PROJECT = "11111111-1111-1111-1111-111111111111";
 const OTHER_PROJECT = "22222222-2222-2222-2222-222222222222";
@@ -376,7 +378,10 @@ describe("WorkItem convergence", () => {
       variables: { projectId: compactWorktrackerId(PROJECT) },
       context: { queryDeduplication: false },
     }));
-    expect(refreshTaskCollection).not.toHaveBeenCalled();
+    expect(refreshTaskCollection).toHaveBeenCalledTimes(1);
+    expect(refreshTaskCollection).toHaveBeenCalledWith(
+      expect.objectContaining({ include: [PlanningGraphDocument] }),
+    );
   });
 
   it("batches the canonical entity and refreshes the collection only on membership changes", async () => {
@@ -418,10 +423,16 @@ describe("WorkItem convergence", () => {
     expect(refresh.mock.calls.map(([options]) => options?.variables)).toEqual([
       { id: "item-2" },
     ]);
-    expect(refreshCollection).toHaveBeenCalledTimes(1);
+    expect(refreshCollection).toHaveBeenCalledTimes(2);
+    expect(refreshCollection).toHaveBeenCalledWith(
+      expect.objectContaining({ include: [PlanningGraphDocument] }),
+    );
+    expect(refreshCollection).toHaveBeenCalledWith({
+      include: [WorkTrackerModuleOpenDocument],
+    });
   });
 
-  it("refreshes only the module named by a membership fact", async () => {
+  it("refreshes the named module and planning collections for a membership fact", async () => {
     const transport = harness();
     const client = studioApolloClient();
     const refresh = vi.spyOn(client, "query").mockResolvedValue({} as never);
@@ -443,10 +454,13 @@ describe("WorkItem convergence", () => {
       { id: "item-1" },
       { moduleId: "module-1" },
     ]);
-    expect(broadRefresh).not.toHaveBeenCalled();
+    expect(broadRefresh).toHaveBeenCalledTimes(1);
+    expect(broadRefresh).toHaveBeenCalledWith(
+      expect.objectContaining({ include: [PlanningGraphDocument] }),
+    );
   });
 
-  it("does not repeat a refresh for the exact server version a mutation adopted", async () => {
+  it("skips adopted rows while refreshing planning collections for a membership change", async () => {
     const transport = harness();
     const client = studioApolloClient();
     const refresh = vi.spyOn(client, "query").mockResolvedValue({} as never);
@@ -467,7 +481,10 @@ describe("WorkItem convergence", () => {
     await vi.advanceTimersByTimeAsync(60);
 
     expect(refresh).not.toHaveBeenCalled();
-    expect(broadRefresh).not.toHaveBeenCalled();
+    expect(broadRefresh).toHaveBeenCalledTimes(1);
+    expect(broadRefresh).toHaveBeenCalledWith(
+      expect.objectContaining({ include: [PlanningGraphDocument] }),
+    );
 
     transport.send(
       event(12, "work_item.changed", {
@@ -521,7 +538,13 @@ describe("WorkItem convergence", () => {
     expect(evict).toHaveBeenCalledWith({
       id: client.cache.identify({ __typename: "WorktrackerIssue", id: "item-9" }),
     });
-    expect(refreshCollection).toHaveBeenCalledTimes(1);
+    expect(refreshCollection).toHaveBeenCalledTimes(2);
+    expect(refreshCollection).toHaveBeenCalledWith(
+      expect.objectContaining({ include: [PlanningGraphDocument] }),
+    );
+    expect(refreshCollection).toHaveBeenCalledWith({
+      include: [WorkTrackerModuleOpenDocument],
+    });
   });
 });
 

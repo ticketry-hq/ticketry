@@ -10,6 +10,73 @@ use ticketry_installation::{
     self as classification, manifest, ClassificationRefusal as Refusal, Installation,
 };
 
+#[test]
+fn all_registered_catalog_ledgers_are_owned_at_the_catalog_version() {
+    let ledgers = classification::owned_ledgers();
+    assert_eq!(ledgers.first().unwrap().0, "ticketry_installation_adoption");
+    for migration in ticketry_settings::provider_catalog_migrations().unwrap() {
+        let matches = ledgers
+            .iter()
+            .filter(|(table, _)| *table == migration.ledger_table())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            matches.len(),
+            1,
+            "{} must appear once",
+            migration.ledger_table()
+        );
+        assert_eq!(
+            matches[0].1,
+            ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION,
+            "{} must use the catalog ownership version",
+            migration.ledger_table()
+        );
+    }
+}
+
+#[tokio::test]
+async fn every_catalog_ledger_alone_is_owned_and_a_newer_version_is_refused() {
+    use sea_orm::{ConnectionTrait, Database};
+
+    for migration in ticketry_settings::provider_catalog_migrations().unwrap() {
+        let installation = tempfile::tempdir().unwrap();
+        let table = migration.ledger_table();
+        let version = ticketry_settings::PROVIDER_CATALOG_MIGRATIONS_VERSION;
+        let database = Database::connect(format!(
+            "sqlite:{}?mode=rwc",
+            installation.path().join("state.db").display()
+        ))
+        .await
+        .unwrap();
+        database
+            .execute_unprepared(&format!(
+                "CREATE TABLE {table} (singleton INTEGER PRIMARY KEY, version INTEGER NOT NULL); \
+                 INSERT INTO {table} (singleton, version) VALUES (1, {version});"
+            ))
+            .await
+            .unwrap();
+        database.close().await.unwrap();
+
+        let classified = classification::classify(installation.path()).await.unwrap();
+        let Installation::RustOwned(ownership) = classified else {
+            panic!("{table} alone must establish Rust ownership, got {classified:?}");
+        };
+        assert_eq!(ownership.adopted, vec![table]);
+        assert!(!ownership.pending.iter().any(|pending| pending == table));
+
+        corpus::execute(
+            installation.path(),
+            &format!("UPDATE {table} SET version = version + 1 WHERE singleton = 1"),
+        )
+        .await;
+        let refusal = classification::classify(installation.path())
+            .await
+            .expect_err("a newer catalog ownership version must be refused");
+        assert_eq!(refusal.reason(), Refusal::FutureGeneration);
+        assert!(refusal.detail().contains(table));
+    }
+}
+
 #[tokio::test]
 async fn the_current_django_leaf_is_directly_adoptable() {
     let installation = corpus::install("django-current");

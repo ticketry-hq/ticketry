@@ -214,7 +214,8 @@ async fn fixture() -> Fixture {
             ended_at TEXT, exit_code INTEGER, error TEXT, cwd TEXT, provider_session_id TEXT,
             lifecycle_state TEXT, lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
             scope TEXT NOT NULL, launch_state TEXT, launch_model TEXT, initial_prompt TEXT,
-            launch_reasoning TEXT, launch_unattended BOOLEAN NOT NULL DEFAULT 0
+            launch_reasoning TEXT, launch_unattended BOOLEAN NOT NULL DEFAULT 0,
+            attention_reason TEXT
         );
         CREATE TABLE runs_status_events (
             cursor integer PRIMARY KEY AUTOINCREMENT,

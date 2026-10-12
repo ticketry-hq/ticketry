@@ -74,7 +74,7 @@ pub(super) async fn verify(
     let source_commit = row.try_get::<String>("", "source_commit")?;
     if version != VERSION || migration_id != expected_id || source_commit != expected_source {
         return Err(DbErr::Custom(format!(
-            "unsupported catalog migration {migration_id} at version {version}"
+            "unsupported catalog migration {migration_id} at version {version} (expected {expected_id} at version {VERSION})"
         )));
     }
     Ok(())

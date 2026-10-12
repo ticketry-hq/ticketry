@@ -223,7 +223,9 @@ describe("overhaul acceptance — Story workflow guide", () => {
     expect(trigger).toHaveTextContent("Story workflow guide");
     trigger.focus();
     fireEvent.click(trigger);
-    const dialog = await screen.findByRole("dialog", { name: "Story workflow guide" });
+    // This first open loads the real lazy modal chunk; the cold import can
+    // exceed Testing Library's one-second default during the full suite.
+    const dialog = await screen.findByRole("dialog", { name: "Story workflow guide" }, { timeout: 4000 });
     expect(dialog).toBeVisible();
     expect(screen.getAllByText("Search saved notes").length).toBeGreaterThan(0);
     fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));

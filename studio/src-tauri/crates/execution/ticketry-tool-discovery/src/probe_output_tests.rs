@@ -17,13 +17,13 @@ fn probe_script(root: &std::path::Path, script: &str) -> std::path::PathBuf {
 fn times_out_inherited_pipes_and_kills_the_helper() {
     let root = tempfile::tempdir().unwrap();
     let path = probe_script(root.path(),
-        "#!/bin/sh\n(/bin/sleep 3; printf leaked > \"$0.leaked\") &\nprintf 'gh version 2.96.0\n'\nexit 0\n");
+        "#!/bin/sh\n(/bin/sleep 6; printf leaked > \"$0.leaked\") &\nprintf 'gh version 2.96.0\n'\nexit 0\n");
     let start = Instant::now();
     assert_eq!(
         version_probe(&path, "--version").unwrap_err(),
         "version probe timed out"
     );
-    assert!(start.elapsed() < Duration::from_secs(3));
+    assert!(start.elapsed() < Duration::from_secs(6));
     std::thread::sleep(Duration::from_millis(1500));
     assert!(
         !path.with_extension("leaked").exists(),
@@ -50,5 +50,5 @@ fn bounds_a_directly_stalled_probe() {
         version_probe(&path, "--version").unwrap_err(),
         "version probe timed out"
     );
-    assert!(start.elapsed() < Duration::from_secs(3));
+    assert!(start.elapsed() < Duration::from_secs(6));
 }

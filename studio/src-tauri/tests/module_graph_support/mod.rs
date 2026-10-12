@@ -161,7 +161,7 @@ pub fn extracted_crates() -> Vec<(String, PathBuf)> {
     crates.sort();
     assert_eq!(
         crates.len(),
-        20,
+        21,
         "module graph must scan all ticketry-* crates"
     );
     crates

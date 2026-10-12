@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const projectApi = vi.hoisted(() => ({
   readOnboardingProjects: vi.fn(),
-  acknowledgeOnboarding: vi.fn(),
 }));
 
 vi.mock("../features/projects", async (importOriginal) => ({
@@ -18,6 +17,7 @@ import {
 } from "../app/onboarding/onboardingStore";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
 import { studioApolloClient } from "../shared/apollo/client";
+import { installScriptedGraphQlTransport } from "./scriptedGraphQlTransport";
 
 const project = (id: string, slug: string, onboarding_required: boolean) => ({
   id,
@@ -42,12 +42,12 @@ function shell() {
 describe("project-owned onboarding acceptance", () => {
   beforeEach(() => {
     projectApi.readOnboardingProjects.mockReset();
-    projectApi.acknowledgeOnboarding.mockReset();
     studioApolloClient().cache.reset();
     useOnboardingTourStore.getState().reset();
   });
 
   it("[overhaul-170] resolves the welcome, its acknowledgement, and a restart through the installation project", async () => {
+    const transport = installScriptedGraphQlTransport();
     // A first run has no project at all, which is the only state that can mean
     // onboarding has never happened.
     projectApi.readOnboardingProjects.mockResolvedValue([]);
@@ -69,13 +69,18 @@ describe("project-owned onboarding acceptance", () => {
     pending.unmount();
 
     // The acknowledgement names the project the tour ran for.
-    projectApi.acknowledgeOnboarding.mockResolvedValue(
-      project("installation-project", "CDN", false),
-    );
+    transport.answerNext("AcknowledgeWorkTrackerOnboarding", {
+      acknowledge_onboarding: {
+        __typename: "WorktrackerProject",
+        ...project("installation-project", "CDN", false),
+      },
+    });
     await acknowledgeOnboarding("installation-project");
-    expect(projectApi.acknowledgeOnboarding).toHaveBeenCalledWith(
-      "installation-project",
-    );
+    expect(transport.requests.filter(({ operationName }) =>
+      operationName === "AcknowledgeWorkTrackerOnboarding")).toEqual([{
+      operationName: "AcknowledgeWorkTrackerOnboarding",
+      variables: { projectId: "installation-project" },
+    }]);
     const acknowledged = shell();
     expect(screen.getByText("App shell")).toBeInTheDocument();
     expect(screen.queryByTestId("onboarding-welcome")).not.toBeInTheDocument();

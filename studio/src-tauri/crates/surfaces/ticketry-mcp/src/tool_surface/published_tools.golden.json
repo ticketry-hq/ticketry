@@ -1,0 +1,899 @@
+[
+  {
+    "description": "Verify MCP transport and tool execution without touching a backend.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "mcp_ping"
+  },
+  {
+    "description": "Terminate only the Studio run bound to this MCP request. This stops the run without changing or archiving its ticket. A committed handoff keeps the run alive and returns \"continued_by_handoff\" so its queued destination prompt can run.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "terminate_current_run"
+  },
+  {
+    "description": "Add one transition to a type's workflow at the supplied revision.",
+    "inputSchema": {
+      "properties": {
+        "agent_allowed": {
+          "default": true,
+          "type": "boolean"
+        },
+        "from_state_id": {
+          "type": "string"
+        },
+        "handoff": {
+          "default": false,
+          "type": "boolean"
+        },
+        "to_state_id": {
+          "type": "string"
+        },
+        "type_id": {
+          "type": "string"
+        },
+        "workflow_revision": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type_id",
+        "from_state_id",
+        "to_state_id",
+        "workflow_revision"
+      ],
+      "type": "object"
+    },
+    "name": "add_issue_type_workflow_transition"
+  },
+  {
+    "description": "Add a dependency edge: task_id is blocked by blocker_task_id.",
+    "inputSchema": {
+      "properties": {
+        "blocker_task_id": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "blocker_task_id"
+      ],
+      "type": "object"
+    },
+    "name": "add_task_blocker"
+  },
+  {
+    "description": "Add a reverse dependency edge: dependent_task_id depends on task_id.",
+    "inputSchema": {
+      "properties": {
+        "dependent_task_id": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "dependent_task_id"
+      ],
+      "type": "object"
+    },
+    "name": "add_task_dependent"
+  },
+  {
+    "description": "Add tags to a task. Existing tags are preserved and duplicate tags are returned once.",
+    "inputSchema": {
+      "properties": {
+        "id_or_key": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id_or_key",
+        "tags"
+      ],
+      "type": "object"
+    },
+    "name": "add_task_tags"
+  },
+  {
+    "description": "Append text to the existing description of a task.",
+    "inputSchema": {
+      "properties": {
+        "new_content": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "new_content"
+      ],
+      "type": "object"
+    },
+    "name": "append_task_description"
+  },
+  {
+    "description": "Attach a local file to a task.",
+    "inputSchema": {
+      "properties": {
+        "file_path": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "file_path"
+      ],
+      "type": "object"
+    },
+    "name": "attach_file"
+  },
+  {
+    "description": "Delete one state's launch binding and its auto-start setting.",
+    "inputSchema": {
+      "properties": {
+        "state_id": {
+          "type": "string"
+        },
+        "type_id": {
+          "type": "string"
+        },
+        "workflow_revision": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type_id",
+        "state_id",
+        "workflow_revision"
+      ],
+      "type": "object"
+    },
+    "name": "clear_issue_type_workflow_launch_binding"
+  },
+  {
+    "description": "Create an Implementation finding under a Story in Review (#905).\n\nThe dedicated review-finding surface: one call creates a direct\nImplementation child, parented to a Story currently in ``Review``, born\ndirectly in the Implementation workflow's start stage, with a fixed\nevidence-block description — ``Path`` (repo-relative), inclusive\n``Lines`` (``line_start``..``line_end``), and an optional ``Note``. Findings\nunder one Story form a serial chain: each new finding is blocked by the\nlatest preceding Implementation child when one exists.\n\nReturns ``{\"ok\": True, \"task_id\", \"key\"}`` on success. On rejection it\nreturns ``{\"ok\": False, ...}`` with a machine-readable reason instead of\nraising: malformed evidence locally (implausible path, or a\nnon-inclusive / non-positive line range), and — from the backend gate — a\nparent that is not a Story, a parent not in ``Review``, or a\nforeign-project parent (``detail``/``code``/``from``/``to``).\n\nIt never launches an agent, moves the parent's state, or touches the scheduler.",
+    "inputSchema": {
+      "properties": {
+        "line_end": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "line_start": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "note": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "parent_id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "parent_id",
+        "name",
+        "path",
+        "line_start",
+        "line_end"
+      ],
+      "type": "object"
+    },
+    "name": "create_review_finding"
+  },
+  {
+    "description": "Create a sub-task with an explicit type, optionally in a named state.",
+    "inputSchema": {
+      "properties": {
+        "description": {
+          "default": "",
+          "type": "string"
+        },
+        "issue_type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parent_id": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "state_name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "project_id",
+        "parent_id",
+        "name",
+        "issue_type"
+      ],
+      "type": "object"
+    },
+    "name": "create_sub_task"
+  },
+  {
+    "description": "Create a task with an explicit type, optionally in a named state.",
+    "inputSchema": {
+      "properties": {
+        "description": {
+          "default": "",
+          "type": "string"
+        },
+        "issue_type": {
+          "type": "string"
+        },
+        "module_id": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "state_name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "project_id",
+        "name",
+        "issue_type"
+      ],
+      "type": "object"
+    },
+    "name": "create_task"
+  },
+  {
+    "description": "Launch eligible direct children of a root task.\n\nOnly direct children participate. Each child launches once after every\nblocker reaches a satisfying workflow state; a durable ledger prevents\nlater re-launches.\n\nPassing ``reset=True`` clears that root's ledger first, then executes\nnewly launchable direct children. The default leaves the ledger intact.\n\nReturns ``root_id`` and task ids launched by this call.",
+    "inputSchema": {
+      "properties": {
+        "agent": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reset": {
+          "default": false,
+          "type": "boolean"
+        },
+        "root_task_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "root_task_id"
+      ],
+      "type": "object"
+    },
+    "name": "execute_dependency_graph"
+  },
+  {
+    "description": "Read a task subtree's workflow states and dependency edges.\n\nReturns the root plus factual nodes carrying ``id``, workflow-state\n``state``, ``parent_id``, and ``blocked_by`` ids. This read never\nlaunches agents and does not depend on an execution run.",
+    "inputSchema": {
+      "properties": {
+        "root_task_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "root_task_id"
+      ],
+      "type": "object"
+    },
+    "name": "get_dependency_graph"
+  },
+  {
+    "description": "Read one issue type's live workflow policy.\n\nReturns its start state, revision-guarded transition map with agent\npermissions, launch bindings with auto-start, and standing warnings.",
+    "inputSchema": {
+      "properties": {
+        "type_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type_id"
+      ],
+      "type": "object"
+    },
+    "name": "get_issue_type_workflow_settings"
+  },
+  {
+    "description": "Read the goals with G-numbers for an open sprint in your project.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "sprint_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sprint_id"
+      ],
+      "type": "object"
+    },
+    "name": "get_sprint_goals"
+  },
+  {
+    "description": "Get detailed information about a specific task using its ID or Key (e.g. PROJ-123).",
+    "inputSchema": {
+      "properties": {
+        "id_or_key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id_or_key"
+      ],
+      "type": "object"
+    },
+    "name": "get_task_details"
+  },
+  {
+    "description": "Read a task's dependency slice: which tasks it depends on, which\ndepend on it, which are owned elsewhere, plus an advisory summary.\nID may be a UUID or a key (e.g. PROJ-123). Read-only.",
+    "inputSchema": {
+      "properties": {
+        "id_or_key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id_or_key"
+      ],
+      "type": "object"
+    },
+    "name": "get_task_scope_context"
+  },
+  {
+    "description": "Launch the default coding agent for one work item (#924).\n\nStarts a normal, task-scoped coding session for the target ticket: the\nprompt is built from that ticket's own context (you cannot pass prompt\ntext), and the current-state binding selects the provider. ``id_or_key`` is the\ntarget's UUID or key (e.g. ``PROJ-123``).\n\nReturns ``{\"target_id\", \"agent\", \"agent_run_id\"}`` once the run\nis durably launched — the agent then continues on its own in a detached\nterminal. On a backend rejection it returns ``{\"target_id\", \"error\"}``\ninstead of raising (unknown target, no module ancestry, no selected\nprofile). This is a single interactive launch: it starts no orchestration\nrun, dependency graph, or planning phase, and never moves the target's\nworkflow state. Repeated calls each start a fresh run.",
+    "inputSchema": {
+      "properties": {
+        "id_or_key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id_or_key"
+      ],
+      "type": "object"
+    },
+    "name": "launch_default_coding_agent"
+  },
+  {
+    "description": "List a project's configurable issue types.\n\nEach row carries its ``level`` bucket (``module`` vs ``task``). Use it\nto map a selected type name to the id the create tools require.",
+    "inputSchema": {
+      "properties": {
+        "project_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "type": "object"
+    },
+    "name": "list_issue_types"
+  },
+  {
+    "description": "List a project's modules (issues of level ``module``, e.g. Epics).",
+    "inputSchema": {
+      "properties": {
+        "project_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "type": "object"
+    },
+    "name": "list_modules"
+  },
+  {
+    "description": "List all projects in the worktracker.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_projects"
+  },
+  {
+    "description": "List tasks (work items) in a project, optionally filtered by module or state.",
+    "inputSchema": {
+      "properties": {
+        "include_description": {
+          "default": false,
+          "type": "boolean"
+        },
+        "module_id": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "state_name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "project_id"
+      ],
+      "type": "object"
+    },
+    "name": "list_tasks"
+  },
+  {
+    "description": "Remove one transition from a type's workflow at the supplied revision.",
+    "inputSchema": {
+      "properties": {
+        "from_state_id": {
+          "type": "string"
+        },
+        "to_state_id": {
+          "type": "string"
+        },
+        "type_id": {
+          "type": "string"
+        },
+        "workflow_revision": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type_id",
+        "from_state_id",
+        "to_state_id",
+        "workflow_revision"
+      ],
+      "type": "object"
+    },
+    "name": "remove_issue_type_workflow_transition"
+  },
+  {
+    "description": "Rename a Codex conversation by its Codex thread id.\n\nCodex owns thread names in its own on-disk state, so this writes through\nthe one resident ``codex app-server`` Ticketry already reads titles from.\nBoth arguments are trimmed and must be non-blank; whitespace inside the\nname is preserved and no Ticketry id or length rule applies.\n\nReturns ``{\"ok\": true, \"thread_id\", \"name\"}``. Failures return a\nstructured ``{\"ok\": false, \"error\": ..., \"detail\": ...}`` result:\n``invalid_input``, ``codex_thread_not_found``,\n``codex_app_server_unavailable``, or ``codex_app_server_error``.\n\nIt never starts, resumes, or forks a thread, and touches no Ticketry row.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "thread_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "thread_id",
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "rename_codex_thread"
+  },
+  {
+    "description": "Reparent existing work items under a parent work item.\n\nBoth parent_task_id and each entry in task_ids may be a UUID or a\nworktracker key (e.g. \"VEEVI-68\"). If module_id is omitted, the\nreparented tasks inherit the parent's module. Returns a dict with keys:\nparent_task_id, reparented, skipped, failed.",
+    "inputSchema": {
+      "properties": {
+        "module_id": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "parent_task_id": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "task_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_id",
+        "parent_task_id",
+        "task_ids"
+      ],
+      "type": "object"
+    },
+    "name": "reparent_tasks"
+  },
+  {
+    "description": "Convert an eligible childless Story to an Implementation task in Implement and launch its agent with the Implementation launch settings, as one action.\n\n``id_or_key`` accepts a work-item UUID or key. The work item keeps its identity, key, content, and relationships. Rust owns refusal, destination-policy preflight, the guarded conversion, and task-scoped launch ordering. Refusals are returned as structured results; ``committed_state`` and ``committed_issue_type`` are present only when the conversion committed.",
+    "inputSchema": {
+      "properties": {
+        "id_or_key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id_or_key"
+      ],
+      "type": "object"
+    },
+    "name": "run_now"
+  },
+  {
+    "description": "Toggle auto-start; enabling requires a valid launch binding.",
+    "inputSchema": {
+      "properties": {
+        "auto_start": {
+          "type": "boolean"
+        },
+        "state_id": {
+          "type": "string"
+        },
+        "type_id": {
+          "type": "string"
+        },
+        "workflow_revision": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type_id",
+        "state_id",
+        "auto_start",
+        "workflow_revision"
+      ],
+      "type": "object"
+    },
+    "name": "set_issue_type_workflow_auto_start"
+  },
+  {
+    "description": "Set the issue type's start state at the supplied revision.",
+    "inputSchema": {
+      "properties": {
+        "state_id": {
+          "type": "string"
+        },
+        "type_id": {
+          "type": "string"
+        },
+        "workflow_revision": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type_id",
+        "state_id",
+        "workflow_revision"
+      ],
+      "type": "object"
+    },
+    "name": "set_issue_type_workflow_start_state"
+  },
+  {
+    "description": "Update policy on one existing transition.",
+    "inputSchema": {
+      "properties": {
+        "agent_allowed": {
+          "type": "boolean"
+        },
+        "from_state_id": {
+          "type": "string"
+        },
+        "handoff": {
+          "type": "boolean"
+        },
+        "to_state_id": {
+          "type": "string"
+        },
+        "type_id": {
+          "type": "string"
+        },
+        "workflow_revision": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type_id",
+        "from_state_id",
+        "to_state_id",
+        "workflow_revision"
+      ],
+      "type": "object"
+    },
+    "name": "set_issue_type_workflow_transition_permission"
+  },
+  {
+    "description": "Replace the tasks that block a task. IDs may be UUIDs or keys.",
+    "inputSchema": {
+      "properties": {
+        "blocked_by_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "task_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "blocked_by_ids"
+      ],
+      "type": "object"
+    },
+    "name": "set_task_blockers"
+  },
+  {
+    "description": "Record a suggestion for the current sprint suggestion run. Supply issue_id alone, or proposed_name and proposed_epic_id. This never assigns a story to a sprint.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "goal_id": {
+          "type": "string"
+        },
+        "issue_id": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "proposed_epic_id": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "proposed_name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "sprint_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sprint_id",
+        "goal_id",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "name": "suggest_sprint_story"
+  },
+  {
+    "description": "Replace a task's supplied title and/or full description.",
+    "inputSchema": {
+      "properties": {
+        "description": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id_or_key": {
+          "type": "string"
+        },
+        "name": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id_or_key"
+      ],
+      "type": "object"
+    },
+    "name": "update_task"
+  },
+  {
+    "description": "Update the status/state of a task (e.g. 'Todo', 'Done').\n\nReturns ``{\"ok\": True, ...}`` on success, or ``{\"ok\": False, ...}`` with\nthe gate's structured reason (``detail``/``code``/``from``/``to``) when\nthe backend refuses an illegal workflow move (#872).\n\nThis tool always identifies the write as agent-origin, so the configured\ngraph and its agent permissions govern the move.",
+    "inputSchema": {
+      "properties": {
+        "project_id": {
+          "type": "string"
+        },
+        "status_name": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "task_id",
+        "status_name"
+      ],
+      "type": "object"
+    },
+    "name": "update_task_status"
+  },
+  {
+    "description": "Create or replace one state's launch binding at the supplied revision.",
+    "inputSchema": {
+      "properties": {
+        "agent": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reasoning": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "required_skills": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "stage_skills": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "state_id": {
+          "type": "string"
+        },
+        "type_id": {
+          "type": "string"
+        },
+        "workflow_revision": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type_id",
+        "state_id",
+        "workflow_revision"
+      ],
+      "type": "object"
+    },
+    "name": "upsert_issue_type_workflow_launch_binding"
+  }
+]

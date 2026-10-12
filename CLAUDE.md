@@ -55,6 +55,32 @@ opening any code. To keep that true:
 - **Refactor opportunistically.** When touching an oversized file, prefer extracting the piece
   you're changing into its own module over enlarging the file.
 
+<!-- reuse-rule:start -->
+## Reuse before writing code
+
+Start with the [capability guide](docs/feature-map/how-to-add-a-capability.md):
+it maps common tasks to the supported module, generator and closest example.
+
+**Before coding**, every feature plan answers these questions, linking an
+existing example for each answer:
+
+1. Which existing module or framework can do this?
+2. What can be configuration or generated code?
+3. What genuinely new behavior must we implement?
+
+**At review**, ask:
+
+1. Is this responsibility already owned by a framework or shared module?
+2. Is the custom code justified?
+3. Does the next similar feature become cheaper to author?
+
+A second similar implementation starts a reuse discussion, not a mandatory
+abstraction. The scanner finds repeated syntax, not repeated responsibility, so
+a clean `npm run reuse:check` does not answer the review questions. There are no
+lines-of-code quotas. A rule blocks only when the violation is objectively
+detectable and a Supported-now replacement exists.
+<!-- reuse-rule:end -->
+
 ## Database-backed GraphQL Models — governing rules
 
 Ticketry's Rust GraphQL surface is migration-first and generated-contract-first:

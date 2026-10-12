@@ -4,21 +4,19 @@
 
 use sea_orm::{ColumnTrait, DatabaseTransaction, DbErr, EntityTrait, QueryFilter, Set};
 
-use ticketry_entities::{agent_model, provider};
+use ticketry_entities::agent_model;
+
+pub(super) const REQUIRED_TABLES: &[&str] = &["worktracker_provider", "worktracker_agentmodel"];
 
 pub(super) const OLD_NAME: &str = "gpt-5.6-astra";
 pub(super) const NEW_NAME: &str = "gpt-6-astra";
 
-pub(super) async fn apply(transaction: &DatabaseTransaction) -> Result<(), DbErr> {
-    let Some(codex) = provider::Entity::find()
-        .filter(provider::Column::Slug.eq("codex"))
-        .one(transaction)
-        .await?
-    else {
-        return Ok(());
-    };
+pub(super) async fn apply(
+    transaction: &DatabaseTransaction,
+    provider_id: &str,
+) -> Result<(), DbErr> {
     let Some(stale) = agent_model::Entity::find()
-        .filter(agent_model::Column::ProviderId.eq(&codex.id))
+        .filter(agent_model::Column::ProviderId.eq(provider_id))
         .filter(agent_model::Column::Name.eq(OLD_NAME))
         .one(transaction)
         .await?
@@ -26,7 +24,7 @@ pub(super) async fn apply(transaction: &DatabaseTransaction) -> Result<(), DbErr
         return Ok(());
     };
     let already_renamed = agent_model::Entity::find()
-        .filter(agent_model::Column::ProviderId.eq(&codex.id))
+        .filter(agent_model::Column::ProviderId.eq(provider_id))
         .filter(agent_model::Column::Name.eq(NEW_NAME))
         .one(transaction)
         .await?

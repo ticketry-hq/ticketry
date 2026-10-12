@@ -141,5 +141,6 @@ export function getWorkItemSnapshot(id: string | null): WorkItem | undefined {
   return row ? workItemFromIssue(row) : undefined;
 }
 
+export { getProjectWorkItemsSnapshot } from "./readTransport";
 export { readProjectWorkItems, readWorkItem };
 export { useWorkItemAttachments } from "./useWorkItemAttachments";

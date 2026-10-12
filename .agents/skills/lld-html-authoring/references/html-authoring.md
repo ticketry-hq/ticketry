@@ -39,6 +39,7 @@ Keep the chrome dense. The header stays one compact band with inline counts, the
 
 - Every acceptance signal traces to planned files and verification.
 - Every file record states both responsibility and boundary.
+- The reuse record classifies every planned behaviour as Reused, Generated or configured, or New, cites a repository-relative example for each Reused and Generated row, and gives `none — <reason>` for an empty category.
 - Failure, migration, compatibility, and rollout behavior are covered when relevant.
 - No sample paths, example decisions, placeholder prose, or inactive controls remain.
 - The footer states that this HTML document is authoritative.

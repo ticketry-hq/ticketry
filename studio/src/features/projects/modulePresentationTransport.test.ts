@@ -2,11 +2,14 @@ import { waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createBrowserRuntime, initializeStudioRuntime } from "../../runtime";
+import { ApiError } from "../../shared/api/errors";
+import { publicWorktrackerId } from "../../shared/api/generatedWorktracker";
 import type { Module, Project } from "../../shared/api/types";
 import {
   resetStudioApolloClient,
   studioApolloClient,
 } from "../../shared/apollo/client";
+import { mutationFailurePhase } from "../../shared/apollo/declaredMutation";
 import { projectOpenFixture } from "../../test/projectOpenFixture";
 import { WorkTrackerProjectOpenDocument } from "./generated/projects.documents";
 import { setModuleTabHidden } from "./modulePresentationTransport";
@@ -83,7 +86,33 @@ describe("Apollo module presentation writes", () => {
     response.resolve(JSON.stringify({
       errors: [{ message: "visibility failed", extensions: { code: "validation" } }],
     }));
-    await expect(saving).rejects.toThrow("visibility failed");
+    const failure = await saving.catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ApiError);
+    expect(failure).toMatchObject({ status: 422, message: "visibility failed" });
+    expect(mutationFailurePhase(failure)).toBe("write");
     expect(cachedVisibility()).toEqual({ rank: "00000000", tabHidden: false });
+    expect(requests).toHaveLength(1);
+  });
+
+  it("settles the committed visibility in the project's open query without another read", async () => {
+    const operations: string[] = [];
+    installTransport(async (request) => {
+      operations.push((JSON.parse(request) as { operationName: string }).operationName);
+      return JSON.stringify({ data: { update_module_presentation: {
+        __typename: "WorktrackerModulepresentation",
+        module_id: MODULE_ID,
+        rank: "00000000",
+        tab_hidden: true,
+      } } });
+    });
+
+    await expect(setModuleTabHidden(PROJECT_ID, MODULE_ID, true)).resolves.toEqual({
+      module_id: publicWorktrackerId(MODULE_ID),
+      rank: "00000000",
+      tab_hidden: true,
+      __typename: "WorktrackerModulepresentation",
+    });
+    expect(cachedVisibility()).toEqual({ rank: "00000000", tabHidden: true });
+    expect(operations).toEqual(["UpdateWorkTrackerModulePresentation"]);
   });
 });

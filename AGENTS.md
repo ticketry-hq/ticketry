@@ -95,6 +95,32 @@ acceptance case in `studio/src/test/*Acceptance.test.tsx`. Keep the numbered
 overhaul gate current and run `npm run test:overhaul --workspace
 @worktracker/studio` before handing the change off.
 
+<!-- reuse-rule:start -->
+## Reuse before writing code
+
+Start with the [capability guide](docs/feature-map/how-to-add-a-capability.md):
+it maps common tasks to the supported module, generator and closest example.
+
+**Before coding**, every feature plan answers these questions, linking an
+existing example for each answer:
+
+1. Which existing module or framework can do this?
+2. What can be configuration or generated code?
+3. What genuinely new behavior must we implement?
+
+**At review**, ask:
+
+1. Is this responsibility already owned by a framework or shared module?
+2. Is the custom code justified?
+3. Does the next similar feature become cheaper to author?
+
+A second similar implementation starts a reuse discussion, not a mandatory
+abstraction. The scanner finds repeated syntax, not repeated responsibility, so
+a clean `npm run reuse:check` does not answer the review questions. There are no
+lines-of-code quotas. A rule blocks only when the violation is objectively
+detectable and a Supported-now replacement exists.
+<!-- reuse-rule:end -->
+
 ## LLD authoring
 
 Use the repository's [lld-html-authoring skill](.agents/skills/lld-html-authoring/SKILL.md)

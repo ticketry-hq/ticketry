@@ -1,5 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "support/sprint_acceptance.rs"]
+pub mod sprint_acceptance;
+
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use ticketry_settings as provider_catalog_migrations;
 use ticketry_work_management::{
@@ -274,10 +277,6 @@ pub async fn assert_final(database: &DatabaseConnection) {
 
     for (table, expected_id) in [
         (
-            provider_catalog_migrations::CODEX_5_6_LEDGER,
-            provider_catalog_migrations::CODEX_5_6_MIGRATION_ID,
-        ),
-        (
             project_onboarding_migration::LEDGER_TABLE,
             project_onboarding_migration::MIGRATION_ID,
         ),
@@ -298,10 +297,6 @@ pub async fn assert_final(database: &DatabaseConnection) {
             module_presentation_migration::MIGRATION_ID,
         ),
         (
-            provider_catalog_migrations::CODEX_SPARK_LEDGER,
-            provider_catalog_migrations::CODEX_SPARK_MIGRATION_ID,
-        ),
-        (
             pull_request_url_migration::LEDGER_TABLE,
             pull_request_url_migration::MIGRATION_ID,
         ),
@@ -310,28 +305,8 @@ pub async fn assert_final(database: &DatabaseConnection) {
             workflow_handoff_migration::MIGRATION_ID,
         ),
         (
-            provider_catalog_migrations::CODEX_ASTRA_LEDGER,
-            provider_catalog_migrations::CODEX_ASTRA_MIGRATION_ID,
-        ),
-        (
-            provider_catalog_migrations::CODEX_6_ASTRA_LEDGER,
-            provider_catalog_migrations::CODEX_6_ASTRA_MIGRATION_ID,
-        ),
-        (
             launch_binding_profile_migration::LEDGER_TABLE,
             launch_binding_profile_migration::MIGRATION_ID,
-        ),
-        (
-            provider_catalog_migrations::CODEX_GLM_5_3_FLASH_LEDGER,
-            provider_catalog_migrations::CODEX_GLM_5_3_FLASH_MIGRATION_ID,
-        ),
-        (
-            provider_catalog_migrations::CODEX_6_1_SOL_LEDGER,
-            provider_catalog_migrations::CODEX_6_1_SOL_MIGRATION_ID,
-        ),
-        (
-            provider_catalog_migrations::CODEX_6_SOL_LUNA_LEDGER,
-            provider_catalog_migrations::CODEX_6_SOL_LUNA_MIGRATION_ID,
         ),
         (
             ship_record_migration::LEDGER_TABLE,
@@ -341,7 +316,14 @@ pub async fn assert_final(database: &DatabaseConnection) {
             launch_binding_stage_skills_migration::LEDGER_TABLE,
             launch_binding_stage_skills_migration::MIGRATION_ID,
         ),
-    ] {
+    ]
+    .into_iter()
+    .chain(
+        provider_catalog_migrations::provider_catalog_migrations()
+            .unwrap()
+            .iter()
+            .map(|migration| (migration.ledger_table(), migration.migration_id())),
+    ) {
         let row = database
             .query_one_raw(Statement::from_string(
                 DbBackend::Sqlite,
@@ -364,4 +346,13 @@ pub async fn assert_final(database: &DatabaseConnection) {
         .await
         .unwrap()
         .is_empty());
+}
+
+/// Select a historical catalog step through the generic descriptor surface.
+pub fn catalog_step(step: u32) -> &'static ticketry_settings::ProviderCatalogMigration {
+    ticketry_settings::provider_catalog_migrations()
+        .unwrap()
+        .iter()
+        .find(|migration| migration.step() == step)
+        .expect("historical catalog step")
 }

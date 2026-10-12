@@ -116,7 +116,30 @@ pub(crate) fn digest(rows: &[Vec<Cell>]) -> String {
 fn canonical_json(value: &str) -> Result<String, String> {
     let value = serde_json::from_str::<serde_json::Value>(value)
         .map_err(|error| format!("a PostgreSQL JSON value is invalid: {error}"))?;
-    serde_json::to_string(&value).map_err(|error| format!("JSON could not be encoded: {error}"))
+    serde_json::to_string(&sorted_keys(value))
+        .map_err(|error| format!("JSON could not be encoded: {error}"))
+}
+
+/// Sort object keys at every depth. `serde_json::Map` keeps insertion order
+/// whenever any crate in the build enables its `preserve_order` feature, so
+/// the canonical form cannot rely on the map's own ordering.
+fn sorted_keys(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut entries = map.into_iter().collect::<Vec<_>>();
+            entries.sort_unstable_by(|(left, _), (right, _)| left.cmp(right));
+            serde_json::Value::Object(
+                entries
+                    .into_iter()
+                    .map(|(key, value)| (key, sorted_keys(value)))
+                    .collect(),
+            )
+        }
+        serde_json::Value::Array(values) => {
+            serde_json::Value::Array(values.into_iter().map(sorted_keys).collect())
+        }
+        scalar => scalar,
+    }
 }
 
 fn canonical_decimal(value: &str) -> Result<String, String> {
@@ -194,6 +217,14 @@ mod tests {
         assert_eq!(
             Cell::from_postgres(Kind::Json, Some("{\"b\":2,\"a\":1}".into())).unwrap(),
             Cell::Text("{\"a\":1,\"b\":2}".into())
+        );
+        assert_eq!(
+            Cell::from_postgres(
+                Kind::Json,
+                Some("[{\"z\":{\"y\":1,\"x\":2},\"a\":null}]".into())
+            )
+            .unwrap(),
+            Cell::Text("[{\"a\":null,\"z\":{\"x\":2,\"y\":1}}]".into())
         );
         assert_eq!(Cell::from_postgres(Kind::Text, None).unwrap(), Cell::Null);
         assert_eq!(

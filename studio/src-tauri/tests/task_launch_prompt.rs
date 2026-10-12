@@ -18,6 +18,7 @@ use ticketry_work_management::launch_policy::{
 
 const IMPLEMENT: &str = "00000000000000000000000000008959";
 const MODEL: &str = "00000000000000000000000000008958";
+const IMPLEMENTATION: &str = "00000000000000000000000000008957";
 const ROOT_ATTEMPT: &str = "a1000000000000000000000000000001";
 const RETRY_ATTEMPT: &str = "a1000000000000000000000000000002";
 const AUTO_START_TRANSITION: &str = "b1000000000000000000000000000001";
@@ -216,6 +217,14 @@ async fn seed(database: &sea_orm::DatabaseConnection, directory: &std::path::Pat
                 (issue_type_id,from_state_id,to_state_id,agent_allowed)
                 SELECT issue_type_id,state_id,'{IMPLEMENT}',1
                 FROM worktracker_issue WHERE id='{task}';
+            -- Run Now converts the Story into the project's Implementation
+            -- task type and launches with that type's Implement binding.
+            INSERT INTO worktracker_issuetype
+                (id,project_id,name,level,color,sort_order,start_state_id,workflow_revision,
+                 is_pathfind,created_at,updated_at)
+                SELECT '{IMPLEMENTATION}', project_id, 'Implementation', 'task', '', 3,
+                       '{IMPLEMENT}', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                FROM worktracker_issue WHERE id='{task}';
             INSERT INTO worktracker_agentmodel(id,provider_id,name)
                 SELECT '{MODEL}',id,'prompt-test-model'
                 FROM worktracker_provider WHERE slug='codex';
@@ -224,9 +233,8 @@ async fn seed(database: &sea_orm::DatabaseConnection, directory: &std::path::Pat
             INSERT INTO worktracker_launchbinding
                 (issue_type_id,state_id,prompt,required_skills,model_id,reasoning_id,
                  auto_start,subtree_run_enabled,created_at,updated_at)
-                SELECT issue_type_id,'{IMPLEMENT}','Initial policy.','[]','{MODEL}',NULL,
-                       1,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
-                FROM worktracker_issue WHERE id='{task}';
+                VALUES ('{IMPLEMENTATION}','{IMPLEMENT}','Initial policy.','[]','{MODEL}',NULL,
+                        1,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
             INSERT OR REPLACE INTO app_settings(scope,"key",value,updated_at)
                 VALUES ('host','provider_catalog',
                         '{{"global_default":{{"provider":"codex","model":"prompt-test-model","reasoning":null}}}}',

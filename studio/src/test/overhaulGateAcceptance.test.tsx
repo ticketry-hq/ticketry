@@ -23,7 +23,7 @@ function markedFiles(): string[] {
 }
 
 // Keep the integrated allocation contiguous: missing or unexpected cases fail.
-const acceptanceIds = Array.from({ length: 831 }, (_, index) =>
+const acceptanceIds = Array.from({ length: 832 }, (_, index) =>
   String(index + 1).padStart(2, "0"));
 
 describe("overhaul acceptance gate", () => {

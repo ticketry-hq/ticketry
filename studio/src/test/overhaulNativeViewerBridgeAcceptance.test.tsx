@@ -343,7 +343,18 @@ describe("native viewer attachment acceptance", () => {
       /- \(void\)keyDown:\(NSEvent \*\)event \{[\s\S]*?\n\}/,
     )?.[0];
     expect(keyDownMethod).toContain("[self.window makeFirstResponder:_webview]");
-    expect(keyDownMethod).toContain("ghostty_surface_key(_surface, key)");
+    expect(keyDownMethod).toContain("[self forwardKeyEvent:event]");
     expect(keyDownMethod).not.toContain("interpretKeyEvents");
+
+    const keyInputSource = await readFile(
+      `${process.cwd()}/src-tauri/native/libghostty_key_input.m`,
+      "utf8",
+    );
+    const forwardMethod = keyInputSource.match(
+      /- \(void\)forwardKeyEvent:\(NSEvent \*\)event \{[\s\S]*?\n\}/,
+    )?.[0];
+    expect(viewSource).toContain('#include "libghostty_key_input.m"');
+    expect(forwardMethod).toContain("ghostty_surface_key(_surface, key)");
+    expect(forwardMethod).not.toContain("interpretKeyEvents");
   });
 });

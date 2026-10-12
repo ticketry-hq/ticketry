@@ -829,6 +829,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 820 | A late historical run read preserves an already visible persisted Stage skill warning on the acknowledged terminal. |
 | 821 | A compact launch run ID reads its public GraphQL UUID warning without losing the terminal lifecycle presentation. |
 | 822 | Keeps the Name editor focused after its single-click entry engages the Details surface. |
+| 823 | The Conversations ended-today count includes a completed conversation that stays resumable after reload, counts a conversation reported by both reads once, and leaves out conversations that ended before today's window. |
 | 824 | Keeps a Details control focused when a modal it opened closes over the engaged surface. |
 | 825 | Retrying a modal chunk whose failed import the browser keeps cached requests a fresh chunk URL and opens the requested dialog without a page reload. |
 | 826 | The production native AppKit host keeps marked/consumed IME keys out of the real libghostty PTY while ordinary Shift+Enter remains ESC CR, Enter remains CR, Ctrl/Alt/Cmd retain their behavior and UTF-8 composition commits exactly once. |
@@ -837,6 +838,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 829 | A delayed historical run read respects newer stage-skill ownership through aliased run identity while accepting unrelated exit metadata. |
 | 830 | Fresh run reads after a handoff can clear warnings with null or successful checks and can publish a missing-skill warning. |
 | 831 | A pending older run read cannot erase a warning recreated after intervening warning creation and clearing. |
+| 832 | An engaged Command-arrow arrival on a document lands in navigation mode on the tab body, so the next Command-arrow leaves the editor. |
 
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a

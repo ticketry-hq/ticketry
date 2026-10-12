@@ -198,15 +198,11 @@ include `State catalog`, `State name`, `State group`, `State color for <name>`,
   restart persistence. Run `bun run --cwd studio test:e2e:desktop` on macOS;
   this is the authored fixture-execution path, not paid-provider proof.
 
-No current browser spec walks the Story guide, free-form Stage or Required skills,
-skill availability against a real home directory, or
-retained catalog/topology editor UI. Their component coverage and source
-behavior do not establish native interaction or installed-app persistence.
-Browser and desktop journeys are not executed by map authoring; Vitest
-acceptance cases exercise their documented test boundaries. The browser and
-desktop harnesses inherit the stale module-creation setup described in
-[Onboarding](onboarding.md), so these are authored coverage references rather
-than claims that the current journeys complete successfully.
+The feature suite authors browser journeys for the Details guide, Stage and
+Required skills, real disposable module skill directories, revision conflicts
+and guarded policy writes. Retained catalog/topology editors remain unmounted;
+the migrated catalog cases exercise public GraphQL and visible convergence.
+Runtime results and passing claims belong to the feature runner's recorded run.
 
 ## End-to-end suite
 
@@ -214,16 +210,16 @@ Suite: studio/e2e/features/workflows-and-issue-types.spec.ts
 
 | Sub-feature | Success | Cancel | Error | Empty | Entry points | Persistence |
 | --- | --- | --- | --- | --- | --- | --- |
-| `workflow-map-issue-types` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-state-catalog` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-transitions` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-agent-permissions` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-launch-bindings` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-entry-automation` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-stage-skills` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-stage-skill-availability` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-required-skills` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
-| `workflow-map-story-guide` | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy | @case-workflow-grill-policy |
+| `workflow-map-issue-types` | @case-workflow-issue-type-reorder @case-workflow-issue-type-lifecycle | @case-workflow-type-picker-choices | @case-workflow-issue-type-reorder-guard @case-workflow-story-birth-state | n/a: the project retains its built-in issue types; an empty project catalog is not a supported state | @case-workflow-type-picker-choices | @case-workflow-issue-type-reorder @case-workflow-issue-type-lifecycle |
+| `workflow-map-state-catalog` | @case-workflow-state-catalog-reorder @case-workflow-state-rename-recolour | n/a: retained catalog draft and deletion-confirmation editors have no production mount | @case-workflow-state-delete-guard @case-workflow-state-name-guard @case-workflow-state-group-guard @case-workflow-state-reorder-guard @case-workflow-missing-identity-guard | @case-workflow-unused-state | @case-workflow-unused-state | @case-workflow-state-catalog-reorder @case-workflow-state-rename-recolour @case-workflow-state-delete-guard |
+| `workflow-map-transitions` | @case-workflow-transition-listing @case-workflow-prune-unreachable-edge | n/a: topology impact confirmations have no production mount; mounted policy flags apply immediately | @case-workflow-move-outside-published-edges @case-workflow-transition-listing @case-workflow-revision-conflict | @case-workflow-transition-listing @case-workflow-unused-state | @case-workflow-transition-listing | @case-workflow-transition-listing @case-workflow-move-outside-published-edges @case-workflow-prune-unreachable-edge |
+| `workflow-map-agent-permissions` | @case-workflow-agent-permission @case-workflow-grill-policy | n/a: permission and handoff flags apply immediately, without a cancelable draft | @case-workflow-agent-permission @case-workflow-revision-conflict | @case-workflow-transition-listing | @case-workflow-agent-permission | @case-workflow-agent-permission @case-workflow-grill-policy @case-workflow-revision-conflict |
+| `workflow-map-launch-bindings` | @case-workflow-grill-policy @case-workflow-launch-profile | n/a: picker changes and blurred prompt edits apply immediately; closing does not roll them back | @case-workflow-grill-policy @case-workflow-binding-prompt-guard | @case-workflow-binding-prompt-guard | @case-workflow-grill-policy @case-workflow-binding-prompt-guard | @case-workflow-grill-policy @case-workflow-launch-profile |
+| `workflow-map-entry-automation` | @case-workflow-grill-policy @case-workflow-binding-prompt-guard | n/a: automation flags apply immediately, without a cancelable draft | @case-workflow-binding-prompt-guard @case-workflow-automation-provider-guard | @case-workflow-binding-prompt-guard | @case-workflow-grill-policy @case-workflow-binding-prompt-guard | @case-workflow-grill-policy @case-workflow-binding-prompt-guard |
+| `workflow-map-stage-skills` | @case-workflow-stage-skills | n/a: Enter or blur commits a tag and removal applies immediately | @case-workflow-stage-skills | @case-workflow-stage-skills | @case-workflow-stage-skills | @case-workflow-stage-skills |
+| `workflow-map-stage-skill-availability` | @case-workflow-skill-availability | n/a: read-only checks have no cancel action | @case-workflow-skill-availability | @case-workflow-stage-skills | @case-workflow-skill-availability | @case-workflow-skill-availability |
+| `workflow-map-required-skills` | @case-workflow-required-skills | n/a: Enter or blur commits a tag and removal applies immediately | @case-workflow-required-skills | @case-workflow-required-skills | @case-workflow-required-skills | @case-workflow-required-skills |
+| `workflow-map-story-guide` | @case-workflow-story-guide | @case-workflow-story-guide | @case-workflow-story-guide | @case-workflow-story-guide | @case-workflow-story-guide | @case-workflow-story-guide |
 
 ## Relevant code
 

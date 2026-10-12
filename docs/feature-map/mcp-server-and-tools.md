@@ -141,7 +141,7 @@ drives the packaged `ticketry-hook mcp` bridge. Run-authority cases launch the
 disposable Codex-compatible provider through **Run item**. Its `startCalls`
 control makes run-scoped calls while the provider is still live, then closes the
 bridge. No case uses the developer's socket or data directory. The eight
-convergence cases from `web-app.spec.ts` keep their exact titles. The
+convergence cases from `studio/e2e/web-app.spec.ts` keep their exact titles. The
 review-finding tools are proven by the [Review findings](review-findings.md) suite,
 and `execute_dependency_graph` by [Dependency-graph runs](dependency-graph-runs.md).
 

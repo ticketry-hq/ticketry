@@ -112,7 +112,7 @@ Run `bun run --cwd studio test:e2e:feature module-manager` for browser evidence 
 - `studio/src/features/module-creation`: Shared fields, validation, trust, identity-safe creation, folder-save/refresh retry and completion.
 - `studio/src/app/navigation/keymapBindings.ts`, `studio/src/app/navigation/useGlobalKeymap.ts`: Default chords and precedence.
 - `studio/src/shared/config/roadmapAvailability.ts`: Build-time Roadmap gate.
-- [Approved Module Manager specification](../../spec/0-2-0--d3bee32f/T2643--replace-the-modules-sidebar-with-a-full/SPEC.md).
+- Approved Module Manager specification: CODING-2643 (an untracked sprint artifact, not part of the repository).
 - [Context map](../../CONTEXT-MAP.md), [Studio glossary](../../studio/CONTEXT.md#language) and [Work Management glossary](../../studio/src-tauri/crates/worktracking/ticketry-work-management/src/work_management/CONTEXT.md#language): Existing ownership and terminology references.
 
 ## Gotchas

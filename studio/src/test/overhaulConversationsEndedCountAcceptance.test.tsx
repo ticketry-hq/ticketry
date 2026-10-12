@@ -83,7 +83,7 @@ function renderConversations() {
   );
 }
 
-describe("overhaul acceptance — Conversations ended-today count", () => {
+describe("[overhaul-823] overhaul acceptance — Conversations ended-today count", () => {
   beforeEach(() => {
     useStudioStore.setState({ selectedProjectId: "project-1" });
     useClientStore.setState({
@@ -112,7 +112,7 @@ describe("overhaul acceptance — Conversations ended-today count", () => {
     seedModuleOpenFixture("module-1", []);
   });
 
-  it("[overhaul-823] counts a completed conversation that is resumable after reload", async () => {
+  it("counts a completed conversation that is resumable after reload", async () => {
     const done = completedConversation("instant-run-1", hoursAgo(1));
     installReads({
       readModuleScratchEndedRuns: async () => [done.ended],
@@ -126,7 +126,7 @@ describe("overhaul acceptance — Conversations ended-today count", () => {
     ).toBeInTheDocument();
   });
 
-  it("[overhaul-823] counts one conversation once when both reads report it", async () => {
+  it("counts one conversation once when both reads report it", async () => {
     const reattachable: WorkItemEndedRunFixture = {
       agent_run_id: "instant-run-1",
       agent: "claude",
@@ -149,7 +149,7 @@ describe("overhaul acceptance — Conversations ended-today count", () => {
     ).toBeInTheDocument();
   });
 
-  it("[overhaul-823] leaves out conversations that ended before today's window", async () => {
+  it("leaves out conversations that ended before today's window", async () => {
     const old = completedConversation("instant-run-1", hoursAgo(25));
     let resumableRead = false;
     installReads({

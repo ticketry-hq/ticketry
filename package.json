@@ -8,6 +8,7 @@
     "studio"
   ],
   "scripts": {
+    "e2e:verify:test": "node --test scripts/e2e-verify/*.test.mjs",
     "catalog:build": "npm --prefix docs/eventcatalog run build",
     "catalog:dev": "npm --prefix docs/eventcatalog run dev",
     "catalog:model": "npm --prefix docs/modelcatalog run dev",

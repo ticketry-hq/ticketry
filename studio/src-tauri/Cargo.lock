@@ -7490,6 +7490,7 @@ version = "0.0.0"
 dependencies = [
  "async-graphql",
  "axum",
+ "chrono",
  "reqwest",
  "sea-orm",
  "serde",
@@ -7500,6 +7501,7 @@ dependencies = [
  "ticketry-entities",
  "ticketry-graphql-schema",
  "ticketry-settings",
+ "ticketry-work-management",
  "tokio",
  "uuid",
 ]

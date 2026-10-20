@@ -11,7 +11,7 @@
     "preview": "node scripts/run-eventcatalog.mjs preview"
   },
   "dependencies": {
-    "@eventcatalog/core": "4.3.3",
+    "@eventcatalog/core": "5.5.0",
     "vite": "8.1.5"
   }
 }
